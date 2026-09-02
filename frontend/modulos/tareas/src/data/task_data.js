@@ -236,3 +236,35 @@ export const starter_tasks = [
         attachment_name: "minuta.pdf"
     }
 ];
+
+
+// Defines the starter notification list shown in the top bar bell dropdown.
+export const notification_items = [
+    {
+        id: "notif_001",
+        type: "assignment",
+        actor_id: "david_urbina",
+        title: "David Urbina te asigno una tarea",
+        body: "Definir concepto creativo",
+        time_label: "Hace 10 min",
+        is_read: false
+    },
+    {
+        id: "notif_002",
+        type: "comment",
+        actor_id: "carla_ruiz",
+        title: "Carla Ruiz comento en Reunion de arranque",
+        body: "\"Quedamos en revisar el brief manana.\"",
+        time_label: "Hace 1 h",
+        is_read: false
+    },
+    {
+        id: "notif_003",
+        type: "status_changed",
+        actor_id: "ana_martinez",
+        title: "Ana Martinez marco una tarea como completada",
+        body: "Reunion de arranque",
+        time_label: "Ayer",
+        is_read: true
+    }
+];
