@@ -26,7 +26,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-boldapp-dev-key")
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1", "bold-app-p9nr.onrender.com").split(",")
+    for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,bold-app-p9nr.onrender.com").split(",")
     if host.strip()
 ]
 
