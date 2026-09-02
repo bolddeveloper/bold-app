@@ -31,14 +31,19 @@ ALLOWED_HOSTS = [
 ]
 
 
-# Define las aplicaciones instaladas del proyecto.
+# Define las aplicaciones instaladas del proyecto. "daphne" va primero
+# siguiendo la convencion de Channels: reemplaza el runserver de Django por
+# uno que sirve ASGI+WebSockets, asi que tambien funciona en desarrollo
+# local sin comandos extra.
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "channels",
     "rest_framework",
     "corsheaders",
     "boldApp",
@@ -153,3 +158,17 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
     "true" if DEBUG and "REDIS_URL" not in os.environ else "false",
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = True
+
+
+# Define la capa de canales de Django Channels (push en vivo por WebSocket),
+# reutilizando el mismo Redis que ya usa Celery. A diferencia de Celery, el
+# channel layer no tiene modo "eager": hace falta un Redis real incluso en
+# desarrollo local.
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [redis_url],
+        },
+    },
+}

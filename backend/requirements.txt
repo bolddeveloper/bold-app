@@ -3,8 +3,12 @@ djangorestframework==3.18.0
 dj-database-url==3.1.2
 django-cors-headers==4.9.0
 whitenoise==6.12.0
-gunicorn==26.2.0
 psycopg2-binary==2.9.12
 celery==5.6.3
-redis==8.1.0
+# Fijado por compatibilidad con channels-redis (versiones 6+ del cliente
+# redis provocan TimeoutError en conexiones largas como las de WebSocket).
+redis==5.0.8
 requests==2.33.1
+channels==4.3.2
+channels-redis==4.3.0
+daphne==4.2.3

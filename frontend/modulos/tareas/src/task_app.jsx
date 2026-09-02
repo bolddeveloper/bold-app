@@ -28,11 +28,17 @@ import { navigation_items, project_items, starter_tasks, team_members } from "./
 import {
     create_task as create_task_request,
     delete_task as delete_task_request,
+    get_demo_workspace_id,
     list_tasks as list_tasks_request,
     move_task as move_task_request,
     update_task as update_task_request
 } from "./services/api_client.js";
-import { publish_task_event } from "./services/realtime_adapter.js";
+import {
+    connect_realtime_stream,
+    disconnect_realtime_stream,
+    publish_task_event,
+    subscribe_to_task_events
+} from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
 
 
@@ -1361,24 +1367,53 @@ export default function task_app() {
     ]);
 
 
-    // Loads real tasks from the boldApp backend on mount; falls back to the
-    // static starter_tasks (already set as the initial state) if the
-    // backend is not reachable, so the demo still renders something.
+    // Loads real tasks from the boldApp backend on mount (falling back to
+    // the static starter_tasks already set as initial state if the backend
+    // is not reachable), then opens the live WebSocket connection so this
+    // client re-reads the task list whenever another client (a different
+    // browser/device) creates, updates, or deletes a task.
     use_effect(() => {
         let is_mounted = true;
 
-        list_tasks_request()
-            .then((backend_tasks) => {
-                if (is_mounted && backend_tasks.length) {
-                    set_tasks(backend_tasks);
+        function refresh_tasks_from_backend(on_failure_message) {
+            list_tasks_request()
+                .then((backend_tasks) => {
+                    if (is_mounted && backend_tasks.length) {
+                        set_tasks(backend_tasks);
+                    }
+                })
+                .catch((error) => {
+                    console.warn(on_failure_message, error);
+                });
+        }
+
+        function handle_incoming_event(envelope) {
+            const event_type = envelope?.event_type || "";
+            const is_task_or_comment_event = event_type.startsWith("task.") || event_type.startsWith("comment.");
+
+            if (is_task_or_comment_event) {
+                refresh_tasks_from_backend("No se pudo refrescar las tareas tras un evento en vivo.");
+            }
+        }
+
+        refresh_tasks_from_backend("No se pudo conectar con el backend, usando datos de ejemplo.");
+
+        const unsubscribe = subscribe_to_task_events(handle_incoming_event);
+
+        get_demo_workspace_id()
+            .then((workspace_id) => {
+                if (is_mounted) {
+                    connect_realtime_stream(workspace_id);
                 }
             })
             .catch((error) => {
-                console.warn("No se pudo conectar con el backend, usando datos de ejemplo.", error);
+                console.warn("No se pudo abrir la conexion en vivo con el backend.", error);
             });
 
         return () => {
             is_mounted = false;
+            unsubscribe();
+            disconnect_realtime_stream();
         };
     }, []);
 

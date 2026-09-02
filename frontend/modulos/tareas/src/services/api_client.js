@@ -193,6 +193,14 @@ function map_task_from_backend(backend_task, context, link_info) {
 }
 
 
+// Resolves the demo workspace id, so callers (e.g. task_app.jsx) can open
+// the live WebSocket connection without duplicating the lookup logic.
+export async function get_demo_workspace_id() {
+    const context = await resolve_demo_context();
+    return context.workspace.id;
+}
+
+
 // Lists tasks for the demo workspace from the real backend.
 export async function list_tasks(query_params = {}) {
     const context = await resolve_demo_context();

@@ -1,5 +1,8 @@
+import json
 import uuid
 from datetime import datetime, timezone
+
+from rest_framework.utils.encoders import JSONEncoder as DRFJSONEncoder
 
 
 # Define los tipos de evento, calcados de task_event_types en
@@ -21,6 +24,14 @@ EVENT_TYPE_CHOICES = [
 ]
 
 
+# Normaliza el payload a tipos planos de JSON (str/int/float/bool/None/
+# list/dict). Los serializers de DRF devuelven UUID/Decimal crudos en los
+# campos de relacion, que ni el serializador JSON real de Celery (fuera del
+# modo eager) ni el channel layer (msgpack) saben codificar.
+def _sanitize_payload(payload):
+    return json.loads(json.dumps(payload, cls=DRFJSONEncoder))
+
+
 # Arma el sobre normalizado del evento, con la misma forma que
 # create_task_event() en el frontend: event_id, event_type, entity_type,
 # entity_id, occurred_at, payload y source.
@@ -31,14 +42,19 @@ def build_event_envelope(event_type, entity_type, entity_id, payload):
         "entity_type": entity_type,
         "entity_id": str(entity_id),
         "occurred_at": datetime.now(timezone.utc).isoformat(),
-        "payload": payload,
+        "payload": _sanitize_payload(payload),
         "source": "bold_backend",
     }
 
 
 # Encola la entrega del evento hacia cada WebhookEndpoint activo del workspace
-# que este suscrito a ese event_type (o a todos, si event_types esta vacio).
+# que este suscrito a ese event_type (o a todos, si event_types esta vacio),
+# y lo transmite en vivo por WebSocket a los clientes conectados al mismo
+# workspace. Un solo punto de disparo alimenta ambos caminos.
 def dispatch_task_event(workspace_id, event_type, entity_type, entity_id, payload):
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
     from .models import WebhookEndpoint
     from .webhook_tasks import deliver_webhook
 
@@ -49,5 +65,12 @@ def dispatch_task_event(workspace_id, event_type, entity_type, entity_id, payloa
         if endpoint.event_types and event_type not in endpoint.event_types:
             continue
         deliver_webhook.delay(str(endpoint.id), envelope)
+
+    channel_layer = get_channel_layer()
+    if channel_layer is not None:
+        async_to_sync(channel_layer.group_send)(
+            f"workspace_{workspace_id}",
+            {"type": "task.event", "envelope": envelope},
+        )
 
     return envelope

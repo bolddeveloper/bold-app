@@ -1,0 +1,101 @@
+# Blueprint de Render para desplegar boldApp completo: backend (API REST +
+# WebSocket), worker de Celery (webhooks salientes), Redis (channel layer +
+# cola de Celery), Postgres, y el frontend como Static Site.
+#
+# Uso: en el dashboard de Render, "New" > "Blueprint", conectar este repo.
+# Render lee este archivo y crea los 5 recursos de abajo.
+#
+# IMPORTANTE: Render asigna el subdominio *.onrender.com segun el "name" de
+# cada servicio, siempre que no este ya tomado por otra cuenta. No existe en
+# el spec de blueprints una forma de referenciar la URL publica con esquema
+# (https://...) de un servicio desde otro, asi que ALLOWED_HOSTS,
+# CORS_ALLOWED_ORIGINS y VITE_API_BASE_URL de abajo estan escritos a mano
+# asumiendo los nombres "bold-app-backend"/"bold-app-frontend". Si Render le
+# agrega un sufijo a algun nombre (por colision), hay que actualizar esos
+# tres valores a mano desde el dashboard despues del primer deploy.
+#
+# Los "plan" de abajo son el nivel gratuito/mas chico disponible al momento
+# de escribir esto; ajustalos segun lo que tengas habilitado en tu cuenta.
+
+databases:
+  - name: bold-app-db
+    databaseName: boldapp
+    user: boldapp
+    plan: free
+
+services:
+  - type: keyvalue
+    name: bold-app-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: bold-app-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
+    preDeployCommand: "python manage.py migrate && python manage.py seed_demo_data"
+    startCommand: "daphne -b 0.0.0.0 -p $PORT config.asgi:application"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.11.15"
+      - key: ALLOWED_HOSTS
+        value: "bold-app-backend.onrender.com"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://bold-app-frontend.onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bold-app-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: bold-app-redis
+          property: connectionString
+
+  - type: worker
+    name: bold-app-worker
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config worker --loglevel=info"
+    envVars:
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: bold-app-backend
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.11.15"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bold-app-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: bold-app-redis
+          property: connectionString
+
+  - type: web
+    name: bold-app-frontend
+    runtime: static
+    rootDir: frontend/modulos/tareas
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: "https://bold-app-backend.onrender.com"
+      - key: VITE_DEMO_WORKSPACE_NAME
+        value: "Bold Demo"
+      - key: VITE_DEMO_USER_EMAIL
+        value: "ana@bold.gt"
