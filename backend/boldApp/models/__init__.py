@@ -8,6 +8,7 @@ from .projects import Project, ProjectMember, Section, TaskStatus
 from .tags import Tag, TaskTag
 from .tasks import Task, TaskDependency, TaskProject
 from .users import User
+from .webhooks import WebhookDelivery, WebhookEndpoint
 from .workspaces import Workspace, WorkspaceMember
 
 
@@ -27,6 +28,8 @@ __all__ = [
     "TaskStatus",
     "TaskTag",
     "User",
+    "WebhookDelivery",
+    "WebhookEndpoint",
     "Workspace",
     "WorkspaceMember",
 ]

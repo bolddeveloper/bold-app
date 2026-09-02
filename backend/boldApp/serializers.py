@@ -16,9 +16,12 @@ from .models import (
     TaskStatus,
     TaskTag,
     User,
+    WebhookDelivery,
+    WebhookEndpoint,
     Workspace,
     WorkspaceMember,
 )
+from .webhook_events import EVENT_TYPE_CHOICES
 
 
 # Define el serializer de usuarios; la contrasena es de solo escritura y se hashea al crear.
@@ -145,4 +148,37 @@ class TaskTagSerializer(serializers.ModelSerializer):
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
+        fields = "__all__"
+
+
+# Define el serializer de suscriptores de webhooks; el secreto de firma es de
+# solo lectura porque se genera automaticamente al crear el endpoint.
+class WebhookEndpointSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WebhookEndpoint
+        fields = [
+            "id",
+            "workspace",
+            "target_url",
+            "secret",
+            "event_types",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "secret", "created_at", "updated_at"]
+
+    def validate_event_types(self, value):
+        invalid_types = set(value) - set(EVENT_TYPE_CHOICES)
+        if invalid_types:
+            raise serializers.ValidationError(
+                f"Tipos de evento no reconocidos: {', '.join(sorted(invalid_types))}"
+            )
+        return value
+
+
+# Define el serializer de solo lectura del log de entregas de webhooks.
+class WebhookDeliverySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WebhookDelivery
         fields = "__all__"

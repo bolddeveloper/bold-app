@@ -16,6 +16,8 @@ from .models import (
     TaskStatus,
     TaskTag,
     User,
+    WebhookDelivery,
+    WebhookEndpoint,
     Workspace,
     WorkspaceMember,
 )
@@ -117,3 +119,15 @@ class TaskTagAdmin(admin.ModelAdmin):
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     list_display = ("title", "user", "type", "is_read", "created_at")
+
+
+# Define la vista de administracion de webhooks: suscriptores y su log de entregas.
+@admin.register(WebhookEndpoint)
+class WebhookEndpointAdmin(admin.ModelAdmin):
+    list_display = ("target_url", "workspace", "is_active", "created_at")
+
+
+@admin.register(WebhookDelivery)
+class WebhookDeliveryAdmin(admin.ModelAdmin):
+    list_display = ("event_type", "endpoint", "succeeded", "response_status_code", "attempt_number", "created_at")
+    list_filter = ("succeeded", "event_type")

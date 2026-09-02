@@ -135,3 +135,21 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
 }
+
+
+# Define la configuracion de Celery para la entrega asincrona de webhooks.
+# REDIS_URL lo provee Render al agregar el addon de Redis; en desarrollo,
+# si no hay Redis disponible, las tareas corren en modo "eager" (sincrono,
+# dentro del mismo proceso) para que la demo funcione sin infraestructura.
+redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = redis_url
+CELERY_RESULT_BACKEND = redis_url
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = os.environ.get(
+    "CELERY_TASK_ALWAYS_EAGER",
+    "true" if DEBUG and "REDIS_URL" not in os.environ else "false",
+).lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = True

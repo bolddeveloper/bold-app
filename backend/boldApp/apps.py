@@ -6,3 +6,6 @@ class BoldAppConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "boldApp"
     verbose_name = "Bold App"
+
+    def ready(self):
+        from . import signals  # noqa: F401
