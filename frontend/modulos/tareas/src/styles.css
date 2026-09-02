@@ -506,7 +506,8 @@ button {
 .compact_button,
 .dark_button,
 .icon_button,
-.text_tool_button {
+.text_tool_button,
+.danger_button {
     display: inline-flex;
     min-height: 38px;
     align-items: center;
@@ -516,6 +517,14 @@ button {
     font-size: 13px;
     font-weight: 800;
     white-space: nowrap;
+}
+
+.danger_button {
+    width: 100%;
+    padding: 0 18px;
+    border: 1px solid #f3caca;
+    background: #fff2f2;
+    color: var(--bold_red);
 }
 
 .primary_button {
@@ -1630,6 +1639,53 @@ button {
     border-radius: 999px;
     background: var(--bold_red);
     color: #ffffff;
+}
+
+.comment_list {
+    display: grid;
+    gap: 10px;
+}
+
+.comment_item {
+    display: grid;
+    grid-template-columns: 39px minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid #ebe8e4;
+    border-radius: 9px;
+    background: #ffffff;
+}
+
+.comment_item strong {
+    display: block;
+    color: #292d36;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.comment_item p {
+    margin: 3px 0 0;
+    color: #5a5f68;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.description_edit_form textarea {
+    width: 100%;
+    min-height: 96px;
+    padding: 10px 12px;
+    border: 1px solid #ebe8e4;
+    border-radius: 9px;
+    background: #ffffff;
+    font-family: inherit;
+    font-size: 14px;
+    color: #292d36;
+    resize: vertical;
+}
+
+.description_edit_form .modal_footer {
+    padding: 10px 0 0;
+    border-top: 0;
 }
 
 @media (max-width: 1020px) {

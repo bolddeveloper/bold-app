@@ -1,6 +1,18 @@
 import { create_task_event } from "./task_events.js";
 import { task_event_types } from "./task_events.js";
-import { project_items, team_members } from "../data/task_data.js";
+import { project_items, starter_tasks, team_members } from "../data/task_data.js";
+
+
+// Switches the whole client between the in-memory template data (default,
+// used for the demo) and the real boldApp backend. Every exported function
+// below keeps the exact same name/signature in both modes, so flipping this
+// one flag (VITE_USE_REAL_BACKEND=true) is the entire "rework" needed to
+// swap templates for real endpoints later.
+const use_real_backend = import.meta.env.VITE_USE_REAL_BACKEND === "true";
+
+export function is_using_real_backend() {
+    return use_real_backend;
+}
 
 
 // Defines the live API client configuration, pointed at the boldApp backend.
@@ -10,6 +22,114 @@ const api_client_config = {
     demo_user_email: import.meta.env.VITE_DEMO_USER_EMAIL || "ana@bold.gt"
 };
 
+
+// ---------------------------------------------------------------------------
+// Modo plantilla: almacen en memoria sembrado desde task_data.js. Ninguna de
+// estas funciones toca la red; existen solo para que la UI tenga un backend
+// con el que conversar mientras el backend real no esta en juego para la demo.
+// ---------------------------------------------------------------------------
+
+let template_tasks = starter_tasks.map((task_item) => ({
+    comments: [],
+    ...task_item,
+    subtasks: task_item.subtasks.map((subtask_item) => ({ ...subtask_item }))
+}));
+
+
+// Lists tasks from the in-memory template store.
+async function list_tasks_via_template() {
+    return template_tasks.map((task_item) => ({ ...task_item }));
+}
+
+
+// Adds a task to the in-memory template store.
+async function create_task_via_template(task_payload) {
+    const new_task = {
+        comments: [],
+        subtasks: [],
+        ...task_payload
+    };
+
+    template_tasks = [...template_tasks, new_task];
+
+    return { ...new_task };
+}
+
+
+// Merges the given fields into a task already in the template store.
+async function update_task_via_template(task_id, task_payload) {
+    template_tasks = template_tasks.map((task_item) => (
+        task_item.id === task_id ? { ...task_item, ...task_payload } : task_item
+    ));
+
+    return { ok: true };
+}
+
+
+// Moves a task to a different board column in the template store.
+async function move_task_via_template(task_id, section) {
+    template_tasks = template_tasks.map((task_item) => (
+        task_item.id === task_id ? { ...task_item, section } : task_item
+    ));
+
+    return { ok: true };
+}
+
+
+// Removes a task from the template store.
+async function delete_task_via_template(task_id) {
+    template_tasks = template_tasks.filter((task_item) => task_item.id !== task_id);
+
+    return { ok: true, deleted: true };
+}
+
+
+// Adds a comment to a task in the template store.
+export async function add_comment(task_id, comment_body, author_name) {
+    const new_comment = {
+        id: `comment_${Date.now()}`,
+        author_name,
+        body: comment_body,
+        created_at: new Date().toISOString()
+    };
+
+    template_tasks = template_tasks.map((task_item) => (
+        task_item.id === task_id
+            ? { ...task_item, comments: [...task_item.comments, new_comment] }
+            : task_item
+    ));
+
+    create_task_event(task_event_types.comment_created, task_id, new_comment);
+
+    return new_comment;
+}
+
+
+// Toggles one subtask's completed state on a task in the template store.
+export async function toggle_subtask(task_id, subtask_id) {
+    template_tasks = template_tasks.map((task_item) => {
+        if (task_item.id !== task_id) {
+            return task_item;
+        }
+
+        return {
+            ...task_item,
+            subtasks: task_item.subtasks.map((subtask_item) => (
+                subtask_item.id === subtask_id
+                    ? { ...subtask_item, completed: !subtask_item.completed }
+                    : subtask_item
+            ))
+        };
+    });
+
+    return { ok: true };
+}
+
+
+// ---------------------------------------------------------------------------
+// Modo backend real: llamadas HTTP contra la API de boldApp (Django REST
+// Framework). Queda intacto y listo para activarse con VITE_USE_REAL_BACKEND.
+// ---------------------------------------------------------------------------
 
 // Caches the resolved demo context (workspace/users/projects/sections/statuses)
 // so it only needs to be fetched once per page load.
@@ -188,6 +308,7 @@ function map_task_from_backend(backend_task, context, link_info) {
         completed: status_item ? status_item.is_final : false,
         tags: [],
         subtasks: [],
+        comments: [],
         attachment_name: null
     };
 }
@@ -202,7 +323,7 @@ export async function get_demo_workspace_id() {
 
 
 // Lists tasks for the demo workspace from the real backend.
-export async function list_tasks(query_params = {}) {
+async function list_tasks_via_backend() {
     const context = await resolve_demo_context();
     const tasks_response = await api_fetch(`/api/tasks/?workspace=${context.workspace.id}`);
     const backend_tasks = unwrap_list(tasks_response);
@@ -228,7 +349,7 @@ export async function list_tasks(query_params = {}) {
 
 // Creates a task through the real backend, then links it to its project and
 // board column via the task_projects bridge table.
-export async function create_task(task_payload) {
+async function create_task_via_backend(task_payload) {
     const context = await resolve_demo_context();
     const backend_payload = map_task_to_backend(task_payload, context);
     const created_task = await api_fetch("/api/tasks/", {
@@ -271,7 +392,7 @@ export async function create_task(task_payload) {
 
 
 // Updates a task's editable fields (and workflow status) through the real backend.
-export async function update_task(task_id, task_payload) {
+async function update_task_via_backend(task_id, task_payload) {
     const context = await resolve_demo_context();
     const status_map = context.section_and_status_map[task_payload.project_id]?.statuses_by_category || {};
     const backend_status = status_map[task_payload.section];
@@ -289,7 +410,7 @@ export async function update_task(task_id, task_payload) {
 
 
 // Moves a task between board columns by updating its task_projects link.
-export async function move_task(task_id, section) {
+async function move_task_via_backend(task_id, section) {
     const context = await resolve_demo_context();
     const link = task_link_cache[task_id];
 
@@ -310,7 +431,7 @@ export async function move_task(task_id, section) {
 
 
 // Deletes (soft-deletes) a task through the real backend.
-export async function delete_task(task_id) {
+async function delete_task_via_backend(task_id) {
     await api_fetch(`/api/tasks/${task_id}/`, {
         method: "DELETE"
     });
@@ -318,4 +439,30 @@ export async function delete_task(task_id) {
     delete task_link_cache[task_id];
 
     return { ok: true, deleted: true };
+}
+
+
+// ---------------------------------------------------------------------------
+// Interfaz publica: mismas firmas en ambos modos. task_app.jsx llama estas
+// funciones sin saber (ni le importa) si hay plantillas o backend real detras.
+// ---------------------------------------------------------------------------
+
+export async function list_tasks(query_params = {}) {
+    return use_real_backend ? list_tasks_via_backend(query_params) : list_tasks_via_template();
+}
+
+export async function create_task(task_payload) {
+    return use_real_backend ? create_task_via_backend(task_payload) : create_task_via_template(task_payload);
+}
+
+export async function update_task(task_id, task_payload) {
+    return use_real_backend ? update_task_via_backend(task_id, task_payload) : update_task_via_template(task_id, task_payload);
+}
+
+export async function move_task(task_id, section) {
+    return use_real_backend ? move_task_via_backend(task_id, section) : move_task_via_template(task_id, section);
+}
+
+export async function delete_task(task_id) {
+    return use_real_backend ? delete_task_via_backend(task_id) : delete_task_via_template(task_id);
 }

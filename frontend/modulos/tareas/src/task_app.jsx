@@ -26,11 +26,14 @@ import {
 } from "lucide-react";
 import { navigation_items, project_items, starter_tasks, team_members } from "./data/task_data.js";
 import {
+    add_comment as add_comment_request,
     create_task as create_task_request,
     delete_task as delete_task_request,
     get_demo_workspace_id,
+    is_using_real_backend,
     list_tasks as list_tasks_request,
     move_task as move_task_request,
+    toggle_subtask as toggle_subtask_request,
     update_task as update_task_request
 } from "./services/api_client.js";
 import {
@@ -991,8 +994,14 @@ function render_empty_tasks_state() {
 // Renders the task detail sheet for desktop and mobile.
 function render_task_detail_panel(props) {
     const {
+        handle_add_comment_submit,
+        handle_cancel_editing_description,
         handle_delete_task,
+        handle_save_description_submit,
+        handle_start_editing_description,
+        handle_toggle_subtask,
         handle_toggle_task,
+        is_editing_description,
         selected_task,
         set_active_modal
     } = props;
@@ -1070,9 +1079,27 @@ function render_task_detail_panel(props) {
                 <section className="detail_section">
                     <div className="section_title_row">
                         <h2>Descripcion</h2>
-                        <button type="button">Editar</button>
+                        {is_editing_description ? null : (
+                            <button type="button" onClick={() => handle_start_editing_description(selected_task.id)}>
+                                Editar
+                            </button>
+                        )}
                     </div>
-                    <p>{selected_task.description}</p>
+                    {is_editing_description ? (
+                        <form className="description_edit_form" onSubmit={(event) => handle_save_description_submit(event, selected_task.id)}>
+                            <textarea name="description" defaultValue={selected_task.description}></textarea>
+                            <footer className="modal_footer">
+                                <button className="secondary_button" type="button" onClick={handle_cancel_editing_description}>
+                                    Cancelar
+                                </button>
+                                <button className="primary_button" type="submit">
+                                    Guardar
+                                </button>
+                            </footer>
+                        </form>
+                    ) : (
+                        <p>{selected_task.description}</p>
+                    )}
                 </section>
 
                 <section className="detail_section">
@@ -1086,9 +1113,14 @@ function render_task_detail_panel(props) {
                     <div className="subtask_list">
                         {selected_task.subtasks.length ? selected_task.subtasks.map((subtask_item) => (
                             <div className="subtask_item" key={subtask_item.id}>
-                                <span className={`task_checkbox ${subtask_item.completed ? "task_checkbox_checked" : ""}`}>
+                                <button
+                                    className={`task_checkbox ${subtask_item.completed ? "task_checkbox_checked" : ""}`}
+                                    type="button"
+                                    aria-label="Completar subtarea"
+                                    onClick={() => handle_toggle_subtask(selected_task.id, subtask_item.id)}
+                                >
                                     {subtask_item.completed ? render_icon(check_icon, 13) : null}
-                                </span>
+                                </button>
                                 <span className={subtask_item.completed ? "completed_text" : ""}>{subtask_item.title}</span>
                             </div>
                         )) : (
@@ -1116,8 +1148,30 @@ function render_task_detail_panel(props) {
                 </section>
 
                 <section className="detail_section">
+                    <div className="section_title_row">
+                        <h2>Comentarios</h2>
+                        <span>{selected_task.comments?.length || 0}</span>
+                    </div>
+                    <div className="comment_list">
+                        {selected_task.comments?.length ? selected_task.comments.map((comment_item) => (
+                            <div className="comment_item" key={comment_item.id}>
+                                <span className="profile_avatar">
+                                    {comment_item.author_name.split(" ").map((name_part) => name_part[0]).join("").slice(0, 2).toUpperCase()}
+                                </span>
+                                <div>
+                                    <strong>{comment_item.author_name}</strong>
+                                    <p>{comment_item.body}</p>
+                                </div>
+                            </div>
+                        )) : (
+                            <p className="muted_meta">Aun no hay comentarios en esta tarea.</p>
+                        )}
+                    </div>
+                </section>
+
+                <section className="detail_section">
                     <button
-                        className="danger_menu_item"
+                        className="danger_button"
                         type="button"
                         onClick={() => handle_delete_task(selected_task.id)}
                     >
@@ -1125,13 +1179,13 @@ function render_task_detail_panel(props) {
                     </button>
                 </section>
 
-                <div className="comment_bar">
+                <form className="comment_bar" onSubmit={(event) => handle_add_comment_submit(event, selected_task.id)}>
                     <span className="profile_avatar">JS</span>
-                    <input type="text" placeholder="Escribe un comentario..." />
-                    <button type="button" aria-label="Enviar comentario">
+                    <input name="comment_body" type="text" placeholder="Escribe un comentario..." autoComplete="off" />
+                    <button type="submit" aria-label="Enviar comentario">
                         {render_icon(send_icon, 20)}
                     </button>
-                </div>
+                </form>
             </section>
         </div>
     );
@@ -1348,6 +1402,7 @@ export default function task_app() {
     const [search_query, set_search_query] = use_state("");
     const [tasks, set_tasks] = use_state(starter_tasks);
     const [selected_task_id, set_selected_task_id] = use_state(null);
+    const [is_editing_description, set_is_editing_description] = use_state(false);
 
     const filtered_tasks = use_memo(() => get_filtered_tasks(tasks, search_query), [
         tasks,
@@ -1398,17 +1453,28 @@ export default function task_app() {
 
         refresh_tasks_from_backend("No se pudo conectar con el backend, usando datos de ejemplo.");
 
-        const unsubscribe = subscribe_to_task_events(handle_incoming_event);
+        // Suscribirse a eventos y abrir el WebSocket solo tiene sentido
+        // contra el backend real: en modo plantilla no hay otros clientes
+        // de los que escuchar cambios, y las propias acciones locales ya
+        // actualizan el estado directamente. Sin este guard, el eco local
+        // de publish_task_event dispara un refetch que puede resolver
+        // antes que la propia mutacion (por ejemplo, al crear una tarea),
+        // pisando el estado optimista.
+        let unsubscribe = () => {};
 
-        get_demo_workspace_id()
-            .then((workspace_id) => {
-                if (is_mounted) {
-                    connect_realtime_stream(workspace_id);
-                }
-            })
-            .catch((error) => {
-                console.warn("No se pudo abrir la conexion en vivo con el backend.", error);
-            });
+        if (is_using_real_backend()) {
+            unsubscribe = subscribe_to_task_events(handle_incoming_event);
+
+            get_demo_workspace_id()
+                .then((workspace_id) => {
+                    if (is_mounted) {
+                        connect_realtime_stream(workspace_id);
+                    }
+                })
+                .catch((error) => {
+                    console.warn("No se pudo abrir la conexion en vivo con el backend.", error);
+                });
+        }
 
         return () => {
             is_mounted = false;
@@ -1431,6 +1497,7 @@ export default function task_app() {
     function handle_task_select(task_id) {
         set_selected_task_id(task_id);
         set_active_modal("detail");
+        set_is_editing_description(false);
     }
 
 
@@ -1499,6 +1566,83 @@ export default function task_app() {
     }
 
 
+    // Toggles one subtask's completed state, optimistically and through the backend.
+    function handle_toggle_subtask(task_id, subtask_id) {
+        set_tasks((current_tasks) => current_tasks.map((task_item) => {
+            if (task_item.id !== task_id) {
+                return task_item;
+            }
+
+            return {
+                ...task_item,
+                subtasks: task_item.subtasks.map((subtask_item) => (
+                    subtask_item.id === subtask_id
+                        ? { ...subtask_item, completed: !subtask_item.completed }
+                        : subtask_item
+                ))
+            };
+        }));
+
+        toggle_subtask_request(task_id, subtask_id).catch((error) => {
+            console.warn("No se pudo actualizar la subtarea en el backend.", error);
+        });
+    }
+
+
+    // Adds a comment to the selected task, optimistically and through the backend.
+    function handle_add_comment_submit(event, task_id) {
+        event.preventDefault();
+
+        const form_data = new FormData(event.currentTarget);
+        const comment_body = (form_data.get("comment_body") || "").toString().trim();
+
+        if (!comment_body) {
+            return;
+        }
+
+        event.currentTarget.reset();
+
+        add_comment_request(task_id, comment_body, "Joaquin Sierra")
+            .then((new_comment) => {
+                set_tasks((current_tasks) => current_tasks.map((task_item) => (
+                    task_item.id === task_id
+                        ? { ...task_item, comments: [...(task_item.comments || []), new_comment] }
+                        : task_item
+                )));
+            })
+            .catch((error) => {
+                console.warn("No se pudo agregar el comentario en el backend.", error);
+            });
+    }
+
+
+    // Opens/closes/saves the inline description editor in the task detail panel.
+    function handle_start_editing_description() {
+        set_is_editing_description(true);
+    }
+
+    function handle_cancel_editing_description() {
+        set_is_editing_description(false);
+    }
+
+    function handle_save_description_submit(event, task_id) {
+        event.preventDefault();
+
+        const form_data = new FormData(event.currentTarget);
+        const description = (form_data.get("description") || "").toString();
+
+        set_tasks((current_tasks) => current_tasks.map((task_item) => (
+            task_item.id === task_id ? { ...task_item, description } : task_item
+        )));
+        set_is_editing_description(false);
+
+        const updated_task = tasks.find((task_item) => task_item.id === task_id);
+        update_task_request(task_id, { ...updated_task, description }).catch((error) => {
+            console.warn("No se pudo guardar la descripcion en el backend.", error);
+        });
+    }
+
+
     // Renders the active modal requested by the application state.
     function render_active_modal() {
         if (active_modal === "task") {
@@ -1522,8 +1666,14 @@ export default function task_app() {
 
         if (selected_task) {
             return render_task_detail_panel({
+                handle_add_comment_submit,
+                handle_cancel_editing_description,
                 handle_delete_task,
+                handle_save_description_submit,
+                handle_start_editing_description,
+                handle_toggle_subtask,
                 handle_toggle_task,
+                is_editing_description,
                 selected_task,
                 set_active_modal
             });
