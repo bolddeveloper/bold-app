@@ -1,4 +1,4 @@
-import { createElement as create_element, useMemo as use_memo, useState as use_state } from "react";
+import { createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state } from "react";
 import {
     Archive as archive_icon,
     ArrowLeft as arrow_left_icon,
@@ -25,7 +25,13 @@ import {
     X as x_icon
 } from "lucide-react";
 import { navigation_items, project_items, starter_tasks, team_members } from "./data/task_data.js";
-import { create_task as create_task_request, move_task as move_task_request, update_task as update_task_request } from "./services/api_client.js";
+import {
+    create_task as create_task_request,
+    delete_task as delete_task_request,
+    list_tasks as list_tasks_request,
+    move_task as move_task_request,
+    update_task as update_task_request
+} from "./services/api_client.js";
 import { publish_task_event } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
 
@@ -979,6 +985,7 @@ function render_empty_tasks_state() {
 // Renders the task detail sheet for desktop and mobile.
 function render_task_detail_panel(props) {
     const {
+        handle_delete_task,
         handle_toggle_task,
         selected_task,
         set_active_modal
@@ -1100,6 +1107,16 @@ function render_task_detail_panel(props) {
                         </div>
                         {render_icon(download_icon, 17)}
                     </div>
+                </section>
+
+                <section className="detail_section">
+                    <button
+                        className="danger_menu_item"
+                        type="button"
+                        onClick={() => handle_delete_task(selected_task.id)}
+                    >
+                        Eliminar tarea
+                    </button>
                 </section>
 
                 <div className="comment_bar">
@@ -1344,6 +1361,28 @@ export default function task_app() {
     ]);
 
 
+    // Loads real tasks from the boldApp backend on mount; falls back to the
+    // static starter_tasks (already set as the initial state) if the
+    // backend is not reachable, so the demo still renders something.
+    use_effect(() => {
+        let is_mounted = true;
+
+        list_tasks_request()
+            .then((backend_tasks) => {
+                if (is_mounted && backend_tasks.length) {
+                    set_tasks(backend_tasks);
+                }
+            })
+            .catch((error) => {
+                console.warn("No se pudo conectar con el backend, usando datos de ejemplo.", error);
+            });
+
+        return () => {
+            is_mounted = false;
+        };
+    }, []);
+
+
     // Changes the active shell module and closes mobile navigation.
     function handle_module_change(module_id) {
         set_active_module(module_id);
@@ -1382,21 +1421,46 @@ export default function task_app() {
     }
 
 
-    // Creates a local task and sends the template event through the disabled client.
+    // Creates a task optimistically, then swaps its temporary id for the
+    // real backend id once create_task_request resolves.
     function handle_create_task_submit(event) {
         event.preventDefault();
 
         const form_data = new FormData(event.currentTarget);
         const new_task = build_new_task(form_data);
+        const temporary_id = new_task.id;
 
         set_tasks((current_tasks) => [
             ...current_tasks,
             new_task
         ]);
-        create_task_request(new_task);
         publish_task_event(create_task_event(task_event_types.task_created, new_task.id, new_task));
         set_active_modal(null);
         set_active_view("list");
+
+        create_task_request(new_task)
+            .then((created_task) => {
+                set_tasks((current_tasks) => current_tasks.map((task_item) => (
+                    task_item.id === temporary_id ? created_task : task_item
+                )));
+            })
+            .catch((error) => {
+                console.warn("No se pudo crear la tarea en el backend.", error);
+            });
+    }
+
+
+    // Deletes a task through the backend and removes it from local state.
+    function handle_delete_task(task_id) {
+        delete_task_request(task_id)
+            .then(() => {
+                set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.id !== task_id));
+                set_active_modal(null);
+                set_selected_task_id(null);
+            })
+            .catch((error) => {
+                console.warn("No se pudo eliminar la tarea en el backend.", error);
+            });
     }
 
 
@@ -1423,6 +1487,7 @@ export default function task_app() {
 
         if (selected_task) {
             return render_task_detail_panel({
+                handle_delete_task,
                 handle_toggle_task,
                 selected_task,
                 set_active_modal

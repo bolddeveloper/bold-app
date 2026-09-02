@@ -4,3 +4,4 @@ dist/
 .playwright-cli/
 output/
 npm-debug.log*
+.env
