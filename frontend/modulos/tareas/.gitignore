@@ -1,6 +1,5 @@
 node_modules/
 dist/
-*.log
 .vite/
 .playwright-cli/
 output/
