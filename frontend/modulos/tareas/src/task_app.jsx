@@ -163,8 +163,8 @@ const optional_column_items = [
 
 // Builds the grid-template-columns value matching the currently visible
 // optional columns, so the header and every row stay aligned.
-function get_task_table_columns_style(visible_fields, with_checkbox_column) {
-    const visible_widths = optional_column_items
+function get_task_table_columns_style(visible_fields, field_items, with_checkbox_column) {
+    const visible_widths = field_items
         .filter((column_item) => visible_fields[column_item.key])
         .map((column_item) => column_item.width);
     const checkbox_column = with_checkbox_column ? "32px " : "";
@@ -943,7 +943,11 @@ function render_sort_panel(props) {
 // Renders the "Personalizar" dropdown panel for toggling visible columns.
 function render_customize_panel(props) {
     const {
+        field_items,
+        handle_add_task_field,
         handle_close_task_tool,
+        handle_delete_task_field,
+        handle_rename_task_field,
         handle_toggle_visible_field,
         visible_fields
     } = props;
@@ -951,18 +955,40 @@ function render_customize_panel(props) {
     return (
         <div className="task_tool_panel">
             <h3>Campos visibles</h3>
-            <div className="filter_option_list">
-                {optional_column_items.map((column_item) => (
-                    <label className="filter_option" key={column_item.key}>
+            <div className="field_editor_list">
+                {field_items.map((field_item) => (
+                    <div className="field_editor_row" key={field_item.key}>
+                        <label className="field_visibility_toggle">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(visible_fields[field_item.key])}
+                                onChange={() => handle_toggle_visible_field(field_item.key)}
+                            />
+                            <span className="sr_only">Mostrar {field_item.label}</span>
+                        </label>
                         <input
-                            type="checkbox"
-                            checked={visible_fields[column_item.key]}
-                            onChange={() => handle_toggle_visible_field(column_item.key)}
+                            type="text"
+                            value={field_item.label}
+                            aria-label={`Nombre del campo ${field_item.label}`}
+                            onChange={(event) => handle_rename_task_field(field_item.key, event.target.value)}
                         />
-                        {column_item.label}
-                    </label>
+                        <button
+                            className="field_delete_button"
+                            type="button"
+                            aria-label={`Eliminar campo ${field_item.label}`}
+                            onClick={() => handle_delete_task_field(field_item.key)}
+                        >
+                            {render_icon(trash_icon, 14)}
+                        </button>
+                    </div>
                 ))}
             </div>
+            <form className="field_add_form" onSubmit={handle_add_task_field}>
+                <input name="field_label" type="text" placeholder="Nuevo campo" />
+                <button type="submit" aria-label="Agregar campo">
+                    {render_icon(plus_icon, 16)}
+                </button>
+            </form>
             <footer className="modal_footer">
                 <button className="primary_button" type="button" onClick={handle_close_task_tool}>
                     Guardar
@@ -982,9 +1008,13 @@ function render_tasks_module(props) {
         active_task_tool,
         active_view,
         current_user,
+        field_items,
         filtered_tasks,
+        handle_add_task_field,
         handle_clear_filters,
         handle_close_task_tool,
+        handle_delete_task_field,
+        handle_rename_task_field,
         handle_task_select,
         handle_toggle_compact_view,
         handle_toggle_filter_value,
@@ -1136,7 +1166,11 @@ function render_tasks_module(props) {
                             Personalizar
                         </button>
                         {active_task_tool === "customize" ? render_customize_panel({
+                            field_items,
+                            handle_add_task_field,
                             handle_close_task_tool,
+                            handle_delete_task_field,
+                            handle_rename_task_field,
                             handle_toggle_visible_field,
                             visible_fields
                         }) : null}
@@ -1162,6 +1196,7 @@ function render_tasks_module(props) {
                 completed_count,
                 completion_percent,
                 empty_state,
+                field_items,
                 filtered_tasks,
                 handle_task_select,
                 handle_toggle_task,
@@ -1218,6 +1253,7 @@ function render_list_view(props) {
         completed_count,
         completion_percent,
         empty_state,
+        field_items,
         filtered_tasks,
         handle_task_select,
         handle_toggle_task,
@@ -1246,15 +1282,16 @@ function render_list_view(props) {
                     </button>
                 </div>
 
-                <div className="task_table_header" style={get_task_table_columns_style(visible_fields, false)}>
+                <div className="task_table_header" style={get_task_table_columns_style(visible_fields, field_items, false)}>
                     <span>TAREA</span>
-                    {optional_column_items
+                    {field_items
                         .filter((column_item) => visible_fields[column_item.key])
-                        .map((column_item) => <span key={column_item.key}>{column_item.label}</span>)}
+                        .map((column_item) => <span key={column_item.key}>{column_item.label || "CAMPO"}</span>)}
                 </div>
 
                 {task_sections.map((section_item) => render_task_group({
                     filtered_tasks,
+                    field_items,
                     handle_task_select,
                     handle_toggle_task,
                     projects,
@@ -1296,6 +1333,7 @@ function render_list_view(props) {
 function render_task_group(props) {
     const {
         filtered_tasks,
+        field_items,
         handle_task_select,
         handle_toggle_task,
         projects,
@@ -1318,6 +1356,7 @@ function render_task_group(props) {
             {section_tasks.map((task_item) => render_task_row({
                 handle_task_select,
                 handle_toggle_task,
+                field_items,
                 projects,
                 task_item,
                 visible_fields
@@ -1330,6 +1369,7 @@ function render_task_group(props) {
 // Renders one task row in desktop list view.
 function render_task_row(props) {
     const {
+        field_items,
         handle_task_select,
         handle_toggle_task,
         projects,
@@ -1343,7 +1383,7 @@ function render_task_row(props) {
         <div
             className={`task_row ${task_item.completed ? "task_row_completed" : ""}`}
             key={task_item.id}
-            style={get_task_table_columns_style(visible_fields, true)}
+            style={get_task_table_columns_style(visible_fields, field_items, true)}
         >
             <button
                 className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
@@ -1356,30 +1396,54 @@ function render_task_row(props) {
             <button className="task_name_button" type="button" onClick={() => handle_task_select(task_item.id)}>
                 {task_item.title}
             </button>
-            {visible_fields.assignee ? (
-                <span className="task_assignee">
-                    {render_avatar(member_item, "avatar_small")}
-                </span>
-            ) : null}
-            {visible_fields.date ? <span className="task_date">{task_item.due_label}</span> : null}
-            {visible_fields.priority ? (
-                <span className={`task_badge priority_badge ${get_priority_class(task_item.priority)}`}>
-                    {task_item.priority}
-                </span>
-            ) : null}
-            {visible_fields.status ? (
-                <span className={`task_badge status_badge ${get_status_class(task_item.status)}`}>
-                    {task_item.status}
-                </span>
-            ) : null}
-            {visible_fields.project ? (
-                <span className="task_project_cell">
-                    {render_project_dot(project_item.color)}
-                    {project_item.label}
-                </span>
-            ) : null}
+            {field_items
+                .filter((field_item) => visible_fields[field_item.key])
+                .map((field_item) => render_task_field_cell(field_item, task_item, member_item, project_item))}
         </div>
     );
+}
+
+
+// Renders a desktop task table cell for built-in and user-added fields.
+function render_task_field_cell(field_item, task_item, member_item, project_item) {
+    if (field_item.key === "assignee") {
+        return (
+            <span className="task_assignee" key={field_item.key}>
+                {render_avatar(member_item, "avatar_small")}
+            </span>
+        );
+    }
+
+    if (field_item.key === "date") {
+        return <span className="task_date" key={field_item.key}>{task_item.due_label}</span>;
+    }
+
+    if (field_item.key === "priority") {
+        return (
+            <span className={`task_badge priority_badge ${get_priority_class(task_item.priority)}`} key={field_item.key}>
+                {task_item.priority}
+            </span>
+        );
+    }
+
+    if (field_item.key === "status") {
+        return (
+            <span className={`task_badge status_badge ${get_status_class(task_item.status)}`} key={field_item.key}>
+                {task_item.status}
+            </span>
+        );
+    }
+
+    if (field_item.key === "project") {
+        return (
+            <span className="task_project_cell" key={field_item.key}>
+                {render_project_dot(project_item.color)}
+                {project_item.label}
+            </span>
+        );
+    }
+
+    return <span className="task_custom_field_cell" key={field_item.key}>-</span>;
 }
 
 
@@ -2210,6 +2274,7 @@ export default function task_app() {
     const [is_compact_view, set_is_compact_view] = use_state(false);
     const [sort_field, set_sort_field] = use_state("due_day");
     const [sort_direction, set_sort_direction] = use_state("asc");
+    const [field_items, set_field_items] = use_state(optional_column_items);
     const [active_filters, set_active_filters] = use_state({
         assignee_ids: [],
         priorities: [],
@@ -2462,6 +2527,50 @@ export default function task_app() {
             ...current_fields,
             [field_key]: !current_fields[field_key]
         }));
+    }
+
+    function handle_rename_task_field(field_key, label) {
+        set_field_items((current_fields) => current_fields.map((field_item) => (
+            field_item.key === field_key ? { ...field_item, label } : field_item
+        )));
+    }
+
+    function handle_delete_task_field(field_key) {
+        set_field_items((current_fields) => current_fields.filter((field_item) => field_item.key !== field_key));
+        set_visible_fields((current_fields) => {
+            const next_fields = { ...current_fields };
+
+            delete next_fields[field_key];
+
+            return next_fields;
+        });
+    }
+
+    function handle_add_task_field(event) {
+        event.preventDefault();
+
+        const form_data = new FormData(event.currentTarget);
+        const field_label = (form_data.get("field_label") || "").toString().trim();
+
+        if (!field_label) {
+            return;
+        }
+
+        const field_key = `custom_${Date.now()}`;
+
+        set_field_items((current_fields) => [
+            ...current_fields,
+            {
+                key: field_key,
+                label: field_label.toUpperCase(),
+                width: "150px"
+            }
+        ]);
+        set_visible_fields((current_fields) => ({
+            ...current_fields,
+            [field_key]: true
+        }));
+        event.currentTarget.reset();
     }
 
 
@@ -3038,9 +3147,13 @@ export default function task_app() {
                     active_task_tool,
                     active_view,
                     current_user,
+                    field_items,
                     filtered_tasks,
+                    handle_add_task_field,
                     handle_clear_filters,
                     handle_close_task_tool,
+                    handle_delete_task_field,
+                    handle_rename_task_field,
                     handle_task_select,
                     handle_toggle_compact_view,
                     handle_toggle_filter_value,

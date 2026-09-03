@@ -737,6 +737,18 @@ button {
     font-weight: 900;
 }
 
+.sr_only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .filter_group {
     margin-bottom: 14px;
 }
@@ -794,6 +806,71 @@ button {
 .sort_option_active {
     background: #ffe9e9;
     color: var(--bold_red);
+}
+
+.field_editor_list {
+    display: grid;
+    gap: 8px;
+}
+
+.field_editor_row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 8px;
+}
+
+.field_visibility_toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.field_editor_row input[type="text"],
+.field_add_form input {
+    width: 100%;
+    height: 34px;
+    min-width: 0;
+    border: 1px solid #dedad5;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #2c3038;
+    font-size: 12px;
+    font-weight: 800;
+    outline: 0;
+    padding: 0 10px;
+}
+
+.field_delete_button,
+.field_add_form button {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 7px;
+    background: #f5f2ee;
+    color: #7a808a;
+}
+
+.field_delete_button:hover {
+    background: #ffe9e9;
+    color: var(--bold_red);
+}
+
+.field_add_form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.field_add_form button {
+    width: 32px;
+    height: 34px;
+    background: var(--bold_red);
+    color: #ffffff;
 }
 
 .task_tool_panel .modal_footer {
@@ -994,6 +1071,16 @@ button {
     gap: 8px;
     overflow: hidden;
     color: #2c3038;
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task_custom_field_cell {
+    min-width: 0;
+    overflow: hidden;
+    color: #8d929c;
     font-size: 13px;
     font-weight: 700;
     text-overflow: ellipsis;
