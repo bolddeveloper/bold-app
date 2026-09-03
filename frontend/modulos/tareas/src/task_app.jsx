@@ -713,6 +713,7 @@ function render_mobile_header(props) {
                     className="mobile_more_button"
                     type="button"
                     aria-label="Mas opciones"
+                    data-project-menu-trigger="true"
                     onClick={() => set_active_modal(selected_task ? "project_menu" : null)}
                 >
                     {selected_task ? render_icon(more_horizontal_icon, 21) : <span>JS</span>}
@@ -985,7 +986,13 @@ function render_tasks_module(props) {
                         {render_icon(plus_icon, 17)}
                         Agregar tarea
                     </button>
-                    <button className="icon_button" type="button" aria-label="Mas opciones" onClick={() => set_active_modal("project_menu")}>
+                    <button
+                        className="icon_button"
+                        type="button"
+                        aria-label="Mas opciones"
+                        data-project-menu-trigger="true"
+                        onClick={() => set_active_modal("project_menu")}
+                    >
                         {render_icon(more_horizontal_icon, 22)}
                     </button>
                 </div>
@@ -1684,8 +1691,8 @@ function render_task_form_modal(props) {
     }
 
     return (
-        <div className="modal_overlay">
-            <div className="form_modal task_form_modal">
+        <div className="modal_overlay" onClick={handle_close}>
+            <div className="form_modal task_form_modal" onClick={(event) => event.stopPropagation()}>
                 <header className="modal_header">
                     <h2>{is_edit_mode ? "Editar tarea" : "Crear nueva tarea"}</h2>
                     <button type="button" aria-label="Cerrar" onClick={handle_close}>
@@ -1935,8 +1942,14 @@ function render_task_form_modal(props) {
 // Renders the sharing modal based on the desktop reference asset.
 function render_share_modal(set_active_modal) {
     return (
-        <div className="modal_overlay">
-            <section className="form_modal share_modal" role="dialog" aria-modal="true" aria-label="Compartir proyecto">
+        <div className="modal_overlay" onClick={() => set_active_modal(null)}>
+            <section
+                className="form_modal share_modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Compartir proyecto"
+                onClick={(event) => event.stopPropagation()}
+            >
                 <header className="modal_header">
                     <h2>Compartir "Lanzamiento Q4"</h2>
                     <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
@@ -1994,8 +2007,15 @@ function render_project_modal(props) {
     } = props;
 
     return (
-        <div className="modal_overlay">
-            <form className="form_modal project_form_modal" role="dialog" aria-modal="true" aria-label="Crear proyecto" onSubmit={handle_submit}>
+        <div className="modal_overlay" onClick={() => set_active_modal(null)}>
+            <form
+                className="form_modal project_form_modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Crear proyecto"
+                onSubmit={handle_submit}
+                onClick={(event) => event.stopPropagation()}
+            >
                 <header className="modal_header">
                     <h2>Crear nuevo proyecto</h2>
                     <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
@@ -2224,9 +2244,54 @@ export default function task_app() {
     }, [active_modal]);
 
 
+    // Closes floating panels when the user clicks outside their trigger/content.
+    use_effect(() => {
+        const has_open_floating_panel = active_task_tool || is_notifications_open || active_modal === "project_menu";
+
+        if (!has_open_floating_panel) {
+            return undefined;
+        }
+
+        function handle_document_pointer_down(event) {
+            const target = event.target;
+
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            if (active_task_tool && !target.closest(".task_tool_anchor")) {
+                set_active_task_tool(null);
+            }
+
+            if (is_notifications_open && !target.closest(".notifications_panel") && !target.closest(".bell_button")) {
+                set_is_notifications_open(false);
+            }
+
+            if (
+                active_modal === "project_menu"
+                && !target.closest(".project_menu_popover")
+                && !target.closest("[data-project-menu-trigger='true']")
+            ) {
+                set_active_modal(null);
+            }
+        }
+
+        document.addEventListener("pointerdown", handle_document_pointer_down);
+
+        return () => {
+            document.removeEventListener("pointerdown", handle_document_pointer_down);
+        };
+    }, [
+        active_modal,
+        active_task_tool,
+        is_notifications_open
+    ]);
+
+
     // Opens/closes one of the Ordenar/Filtrar/Personalizar dropdown panels,
     // closing the others if one is already open.
     function handle_toggle_task_tool(tool_id) {
+        set_is_notifications_open(false);
         set_active_task_tool((current_tool) => (current_tool === tool_id ? null : tool_id));
     }
 
@@ -2237,6 +2302,7 @@ export default function task_app() {
 
     // Opens/closes the notifications dropdown panel from the top bar bell.
     function handle_toggle_notifications() {
+        set_active_task_tool(null);
         set_is_notifications_open((current_value) => !current_value);
     }
 
