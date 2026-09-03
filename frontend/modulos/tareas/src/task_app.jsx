@@ -989,8 +989,6 @@ function render_tasks_module(props) {
     const {
         active_filters,
         active_quick_popover,
-        active_task_tool,
-        active_view,
         board_columns = default_board_columns,
         dragged_task_id,
         active_task_scope,
@@ -1016,7 +1014,6 @@ function render_tasks_module(props) {
         handle_toggle_visible_field,
         is_adding_column,
         new_column_name,
-        search_query,
         selected_task,
         selected_task_id,
         is_compact_view,
@@ -3381,8 +3378,8 @@ export default function task_app() {
                 completed: next_completed
             };
 
-            update_task_request(task_item.id, updated_task).catch(() => {});
-            move_task_request(task_item.id, next_section).catch(() => {});
+            update_task_request(task_item.id, updated_task).catch(() => { });
+            move_task_request(task_item.id, next_section).catch(() => { });
             publish_task_event(create_task_event(task_event_types.task_status_changed, task_item.id, updated_task));
 
             return updated_task;
@@ -3493,7 +3490,7 @@ export default function task_app() {
         // de publish_task_event dispara un refetch que puede resolver
         // antes que la propia mutacion (por ejemplo, al crear una tarea),
         // pisando el estado optimista.
-        let unsubscribe = () => {};
+        let unsubscribe = () => { };
 
         if (is_using_real_backend()) {
             unsubscribe = subscribe_to_task_events(handle_incoming_event);
