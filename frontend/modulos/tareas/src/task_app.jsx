@@ -405,7 +405,7 @@ function render_navigation_item(item, active_module, handle_module_change, optio
             <span className="navigation_icon">
                 {item.id === "tasks" && is_active ? render_icon(check_icon, 16) : render_icon(item_icon, 17)}
             </span>
-            <span>{item.label}</span>
+            <span className={item.id === "tasks" ? "navigation_task_label" : ""}>{item.label}</span>
             {item.id === "tasks" ? (
                 <span className={`navigation_chevron ${is_expanded ? "navigation_chevron_open" : ""}`}>
                     {render_icon(chevron_down_icon, 18)}

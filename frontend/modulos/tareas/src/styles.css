@@ -159,6 +159,10 @@ button {
     height: 22px;
 }
 
+.navigation_task_label {
+    padding-left: 5px;
+}
+
 .navigation_item_active .navigation_icon {
     border-radius: 7px;
     background: var(--bold_red);
