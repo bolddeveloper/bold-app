@@ -24,12 +24,32 @@
 
 html {
     min-height: 100%;
+    scrollbar-width: none;
 }
 
 body {
     min-height: 100%;
     margin: 0;
     background: #f4f3f1;
+    -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;
+}
+
+.notification_list,
+.task_form_body,
+.form_modal {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.notification_list::-webkit-scrollbar,
+.task_form_body::-webkit-scrollbar,
+.form_modal::-webkit-scrollbar {
+    display: none;
 }
 
 button,
