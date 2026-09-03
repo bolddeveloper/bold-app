@@ -24,12 +24,32 @@
 
 html {
     min-height: 100%;
+    scrollbar-width: none;
 }
 
 body {
     min-height: 100%;
     margin: 0;
     background: #f4f3f1;
+    -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;
+}
+
+.notification_list,
+.task_form_body,
+.form_modal {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.notification_list::-webkit-scrollbar,
+.task_form_body::-webkit-scrollbar,
+.form_modal::-webkit-scrollbar {
+    display: none;
 }
 
 button,
@@ -159,6 +179,10 @@ button {
     height: 22px;
 }
 
+.navigation_task_label {
+    padding-left: 5px;
+}
+
 .navigation_item_active .navigation_icon {
     border-radius: 7px;
     background: var(--bold_red);
@@ -224,12 +248,17 @@ button {
     gap: 12px;
     width: 100%;
     min-height: 44px;
-    padding: 0 5px;
+    padding: 0 10px;
     border: 0;
     background: transparent;
     color: #ffffff;
     font-size: 14px;
     font-weight: 800;
+}
+
+.my_tasks_button_active {
+    border-radius: 7px;
+    background: #666468;
 }
 
 .projects_heading {
@@ -319,7 +348,7 @@ button {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    background: var(--bold_red);
+    background: var(--avatar_color, var(--bold_red));
     color: #ffffff;
     font-size: 11px;
     font-weight: 900;
@@ -2001,8 +2030,9 @@ button {
 }
 
 .color_swatch_active {
-    outline: 3px solid var(--bold_red);
+    outline: 3px solid var(--project_color);
     outline-offset: 3px;
+    box-shadow: 0 0 0 1px #ffffff;
 }
 
 .privacy_card {
