@@ -349,23 +349,28 @@ function render_project_dot(color) {
 
 
 // Renders one navigation item in the sidebar.
-function render_navigation_item(item, active_module, handle_module_change) {
+function render_navigation_item(item, active_module, handle_module_change, options = {}) {
     const is_active = active_module === item.id;
     const item_icon = icon_map[item.icon] || home_icon;
+    const is_expandable = Boolean(options.is_expandable);
+    const is_expanded = Boolean(options.is_expanded);
+    const handle_click = options.on_click || (() => handle_module_change(item.id));
 
     return (
         <button
-            className={`navigation_item ${is_active ? "navigation_item_active" : ""}`}
+            className={`navigation_item ${is_active ? "navigation_item_active" : ""} ${is_expandable ? "navigation_item_expandable" : ""}`}
             key={item.id}
             type="button"
-            onClick={() => handle_module_change(item.id)}
+            aria-expanded={is_expandable ? is_expanded : undefined}
+            aria-controls={options.controls_id}
+            onClick={handle_click}
         >
             <span className="navigation_icon">
                 {item.id === "tasks" && is_active ? render_icon(check_icon, 16) : render_icon(item_icon, 17)}
             </span>
             <span>{item.label}</span>
             {item.id === "tasks" ? (
-                <span className="navigation_chevron">
+                <span className={`navigation_chevron ${is_expanded ? "navigation_chevron_open" : ""}`}>
                     {render_icon(chevron_down_icon, 18)}
                 </span>
             ) : null}
@@ -394,15 +399,54 @@ function render_project_item(project_item, selected_project_id) {
 }
 
 
+// Renders the workspace and project links nested below the Tareas item.
+function render_tasks_workspace_menu(set_active_modal) {
+    return (
+        <div className="workspace_panel" id="tasks_workspace_menu">
+            <p className="sidebar_label">WORKSPACE</p>
+            <button className="workspace_selector" type="button">
+                <span className="workspace_badge">B</span>
+                <span>BOLD Workspace</span>
+                {render_icon(chevron_down_icon, 16)}
+            </button>
+
+            <button className="my_tasks_button" type="button">
+                {render_project_dot("#ef3c3c")}
+                <span>Mis tareas</span>
+            </button>
+
+            <div className="projects_heading">
+                <p className="sidebar_label">PROYECTOS</p>
+                <button
+                    className="sidebar_add_button"
+                    type="button"
+                    aria-label="Crear proyecto"
+                    onClick={() => set_active_modal("project")}
+                >
+                    {render_icon(plus_icon, 18)}
+                </button>
+            </div>
+
+            <div className="project_list">
+                {project_items.map((project_item) => render_project_item(project_item, "launch_q4"))}
+            </div>
+        </div>
+    );
+}
+
+
 // Renders the desktop and mobile sidebar navigation.
 function render_sidebar(props) {
     const {
         active_module,
         handle_module_change,
+        handle_tasks_menu_toggle,
         is_sidebar_open,
+        is_tasks_menu_open,
         set_active_modal,
         set_is_sidebar_open
     } = props;
+    const primary_navigation_items = navigation_items.slice(0, 2);
 
     return (
         <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`}>
@@ -421,38 +465,24 @@ function render_sidebar(props) {
             <div className="sidebar_section">
                 <p className="sidebar_label">NAVEGACION</p>
                 <nav className="navigation_list" aria-label="Principal">
-                    {navigation_items.slice(0, 2).map((item) => render_navigation_item(item, active_module, handle_module_change))}
+                    {primary_navigation_items.map((item) => {
+                        if (item.id !== "tasks") {
+                            return render_navigation_item(item, active_module, handle_module_change);
+                        }
+
+                        return (
+                            <div className="tasks_navigation_group" key={item.id}>
+                                {render_navigation_item(item, active_module, handle_module_change, {
+                                    controls_id: "tasks_workspace_menu",
+                                    is_expandable: true,
+                                    is_expanded: is_tasks_menu_open,
+                                    on_click: handle_tasks_menu_toggle
+                                })}
+                                {is_tasks_menu_open ? render_tasks_workspace_menu(set_active_modal) : null}
+                            </div>
+                        );
+                    })}
                 </nav>
-            </div>
-
-            <div className="workspace_panel">
-                <p className="sidebar_label">WORKSPACE</p>
-                <button className="workspace_selector" type="button">
-                    <span className="workspace_badge">B</span>
-                    <span>BOLD Workspace</span>
-                    {render_icon(chevron_down_icon, 16)}
-                </button>
-
-                <button className="my_tasks_button" type="button">
-                    {render_project_dot("#ef3c3c")}
-                    <span>Mis tareas</span>
-                </button>
-
-                <div className="projects_heading">
-                    <p className="sidebar_label">PROYECTOS</p>
-                    <button
-                        className="sidebar_add_button"
-                        type="button"
-                        aria-label="Crear proyecto"
-                        onClick={() => set_active_modal("project")}
-                    >
-                        {render_icon(plus_icon, 18)}
-                    </button>
-                </div>
-
-                <div className="project_list">
-                    {project_items.map((project_item) => render_project_item(project_item, "launch_q4"))}
-                </div>
             </div>
 
             <div className="sidebar_section sidebar_secondary">
@@ -1908,6 +1938,7 @@ export default function task_app() {
     const [active_view, set_active_view] = use_state("list");
     const [active_modal, set_active_modal] = use_state(null);
     const [is_sidebar_open, set_is_sidebar_open] = use_state(false);
+    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
     const [tasks, set_tasks] = use_state(starter_tasks);
     const [selected_task_id, set_selected_task_id] = use_state(null);
@@ -2107,6 +2138,13 @@ export default function task_app() {
         set_is_sidebar_open(false);
         set_selected_task_id(null);
         set_active_modal(null);
+    }
+
+    function handle_tasks_menu_toggle() {
+        set_active_module("tasks");
+        set_selected_task_id(null);
+        set_active_modal(null);
+        set_is_tasks_menu_open((current_value) => !current_value);
     }
 
 
@@ -2393,7 +2431,9 @@ export default function task_app() {
             {render_sidebar({
                 active_module,
                 handle_module_change,
+                handle_tasks_menu_toggle,
                 is_sidebar_open,
+                is_tasks_menu_open,
                 set_active_modal,
                 set_is_sidebar_open
             })}

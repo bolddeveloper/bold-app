@@ -124,6 +124,11 @@ button {
     gap: 8px;
 }
 
+.tasks_navigation_group {
+    display: grid;
+    gap: 8px;
+}
+
 .navigation_item {
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 18px;
@@ -163,11 +168,17 @@ button {
 .navigation_chevron {
     display: inline-flex;
     justify-content: flex-end;
+    transition: transform 160ms ease;
+}
+
+.navigation_chevron_open {
+    transform: rotate(180deg);
 }
 
 .workspace_panel {
-    margin-top: 8px;
-    padding: 18px 14px 20px;
+    margin-left: 12px;
+    padding: 14px 10px 16px 16px;
+    border-left: 2px solid rgba(255, 255, 255, 0.14);
     border-radius: 9px;
     background: #363638;
 }
