@@ -338,6 +338,73 @@ function build_project_id(project_name, projects) {
 }
 
 
+// Escapes one value for CSV export.
+function get_csv_cell(value) {
+    const cell_value = (value ?? "").toString();
+
+    return `"${cell_value.replace(/"/g, '""')}"`;
+}
+
+
+// Builds a CSV file body for the tasks in one project.
+function build_tasks_csv(tasks, projects) {
+    const header = [
+        "Tarea",
+        "Descripcion",
+        "Proyecto",
+        "Responsable",
+        "Fecha",
+        "Prioridad",
+        "Estado",
+        "Completada"
+    ];
+    const rows = tasks.map((task_item) => {
+        const project_item = get_project(task_item.project_id, projects);
+        const member_item = get_member(task_item.assignee_id);
+
+        return [
+            task_item.title,
+            task_item.description,
+            project_item.label,
+            member_item?.name || "Sin responsable",
+            task_item.due_label,
+            task_item.priority,
+            task_item.status,
+            task_item.completed ? "Si" : "No"
+        ];
+    });
+
+    return [header, ...rows].map((row) => row.map(get_csv_cell).join(",")).join("\n");
+}
+
+
+// Converts a label into a filesystem-friendly filename segment.
+function get_file_safe_name(label) {
+    return label
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "proyecto";
+}
+
+
+// Triggers a CSV download in the browser.
+function download_text_file(filename, file_body, mime_type) {
+    const blob = new Blob([file_body], { type: mime_type });
+    const download_url = URL.createObjectURL(blob);
+    const download_link = document.createElement("a");
+
+    download_link.href = download_url;
+    download_link.download = filename;
+    document.body.appendChild(download_link);
+    download_link.click();
+    download_link.remove();
+    URL.revokeObjectURL(download_url);
+}
+
+
 // Renders a Lucide icon through React createElement so aliases can stay in snake case.
 function render_icon(icon_component, size = 18) {
     return create_element(icon_component, {
@@ -2000,8 +2067,11 @@ function render_share_modal(set_active_modal) {
 // Renders the create project modal shown from the sidebar add button.
 function render_project_modal(props) {
     const {
+        action_label = "Crear proyecto",
         handle_project_color_change,
         handle_submit,
+        initial_project_name = "",
+        modal_title = "Crear nuevo proyecto",
         project_form_color,
         set_active_modal
     } = props;
@@ -2017,7 +2087,7 @@ function render_project_modal(props) {
                 onClick={(event) => event.stopPropagation()}
             >
                 <header className="modal_header">
-                    <h2>Crear nuevo proyecto</h2>
+                    <h2>{modal_title}</h2>
                     <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
                         {render_icon(x_icon, 22)}
                     </button>
@@ -2025,7 +2095,13 @@ function render_project_modal(props) {
                 <div className="form_grid">
                     <label className="form_field form_field_full">
                         <span>Nombre del proyecto</span>
-                        <input name="project_name" type="text" placeholder="Ej. Campana de octubre" required />
+                        <input
+                            name="project_name"
+                            type="text"
+                            placeholder="Ej. Campana de octubre"
+                            defaultValue={initial_project_name}
+                            required
+                        />
                     </label>
                     <label className="form_field form_field_full">
                         <span>Workspace</span>
@@ -2061,7 +2137,7 @@ function render_project_modal(props) {
                         Cancelar
                     </button>
                     <button className="primary_button" type="submit">
-                        Crear proyecto
+                        {action_label}
                     </button>
                 </footer>
             </form>
@@ -2071,15 +2147,24 @@ function render_project_modal(props) {
 
 
 // Renders the project overflow menu from the desktop reference.
-function render_project_menu(set_active_modal) {
+function render_project_menu(props) {
+    const {
+        handle_archive_project,
+        handle_delete_project,
+        handle_duplicate_project,
+        handle_export_project_csv,
+        handle_open_project_edit,
+        handle_save_project_template
+    } = props;
+
     return (
         <div className="project_menu_popover">
-            <button type="button">Editar detalles del proyecto <span>Ctrl+E</span></button>
-            <button type="button">Duplicar proyecto <span>Ctrl+D</span></button>
-            <button type="button">Guardar como plantilla</button>
-            <button type="button">Exportar como CSV <span>CSV</span></button>
-            <button type="button">Archivar proyecto</button>
-            <button className="danger_menu_item" type="button" onClick={() => set_active_modal(null)}>Eliminar proyecto</button>
+            <button type="button" onClick={handle_open_project_edit}>Editar detalles del proyecto <span>Ctrl+E</span></button>
+            <button type="button" onClick={handle_duplicate_project}>Duplicar proyecto <span>Ctrl+D</span></button>
+            <button type="button" onClick={handle_save_project_template}>Guardar como plantilla</button>
+            <button type="button" onClick={handle_export_project_csv}>Exportar como CSV <span>CSV</span></button>
+            <button type="button" onClick={handle_archive_project}>Archivar proyecto</button>
+            <button className="danger_menu_item" type="button" onClick={handle_delete_project}>Eliminar proyecto</button>
         </div>
     );
 }
@@ -2124,6 +2209,9 @@ export default function task_app() {
     const [notifications, set_notifications] = use_state(notification_items);
 
     const current_user = use_memo(() => get_member(current_user_id), []);
+    const active_projects = use_memo(() => projects.filter((project_item) => !project_item.archived), [
+        projects
+    ]);
     const selected_project = use_memo(() => get_project(active_project_id, projects), [
         active_project_id,
         projects
@@ -2165,6 +2253,9 @@ export default function task_app() {
         selected_task_id,
         tasks
     ]);
+    const default_task_project_id = active_projects.some((project_item) => project_item.id === active_project_id)
+        ? active_project_id
+        : active_projects[0]?.id || active_project_id;
 
 
     // Loads real tasks from the boldApp backend on mount (falling back to
@@ -2538,6 +2629,122 @@ export default function task_app() {
         set_active_modal(null);
     }
 
+    function handle_open_project_edit() {
+        set_project_form_color(selected_project.color);
+        set_active_modal("project_edit");
+    }
+
+    function handle_save_project_edits(event) {
+        event.preventDefault();
+
+        const form_data = new FormData(event.currentTarget);
+        const project_name = (form_data.get("project_name") || "").toString().trim();
+
+        if (!project_name) {
+            return;
+        }
+
+        set_projects((current_projects) => current_projects.map((project_item) => (
+            project_item.id === selected_project.id
+                ? { ...project_item, label: project_name, color: project_form_color }
+                : project_item
+        )));
+        set_active_modal(null);
+    }
+
+    function handle_duplicate_project() {
+        const duplicated_project = {
+            ...selected_project,
+            id: build_project_id(`${selected_project.label} copia`, projects),
+            label: `${selected_project.label} copia`,
+            archived: false
+        };
+        const created_at = Date.now();
+        const copied_tasks = tasks
+            .filter((task_item) => task_item.project_id === selected_project.id)
+            .map((task_item, index) => ({
+                ...task_item,
+                id: `task_${created_at}_${index}`,
+                project_id: duplicated_project.id,
+                completed: false,
+                section: task_item.section === "completed" ? "todo" : task_item.section,
+                status: task_item.section === "completed" ? "Pend." : task_item.status
+            }));
+
+        set_projects((current_projects) => [
+            ...current_projects,
+            duplicated_project
+        ]);
+        set_tasks((current_tasks) => [
+            ...current_tasks,
+            ...copied_tasks
+        ]);
+        set_active_project_id(duplicated_project.id);
+        set_active_task_scope("project");
+        set_active_view("list");
+        set_active_modal(null);
+    }
+
+    function handle_save_project_template() {
+        set_notifications((current_notifications) => [
+            {
+                id: `notif_template_${Date.now()}`,
+                type: "status_changed",
+                actor_id: current_user_id,
+                title: "Proyecto guardado como plantilla",
+                body: `${selected_project.label} ya esta disponible como plantilla local.`,
+                time_label: "Ahora",
+                is_read: false
+            },
+            ...current_notifications
+        ]);
+        set_active_modal(null);
+    }
+
+    function handle_export_project_csv() {
+        const project_tasks = tasks.filter((task_item) => task_item.project_id === selected_project.id);
+        const csv_body = build_tasks_csv(project_tasks, projects);
+        const filename = `${get_file_safe_name(selected_project.label)}-tareas.csv`;
+
+        download_text_file(filename, csv_body, "text/csv;charset=utf-8");
+        set_active_modal(null);
+    }
+
+    function handle_archive_project() {
+        const next_project = active_projects.find((project_item) => project_item.id !== selected_project.id);
+
+        set_projects((current_projects) => current_projects.map((project_item) => (
+            project_item.id === selected_project.id ? { ...project_item, archived: true } : project_item
+        )));
+
+        if (next_project) {
+            set_active_project_id(next_project.id);
+            set_active_task_scope("project");
+        } else {
+            set_active_task_scope("my_tasks");
+        }
+
+        set_active_view("list");
+        set_active_modal(null);
+    }
+
+    function handle_delete_project() {
+        const next_project = active_projects.find((project_item) => project_item.id !== selected_project.id);
+
+        set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== selected_project.id));
+        set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.project_id !== selected_project.id));
+
+        if (next_project) {
+            set_active_project_id(next_project.id);
+            set_active_task_scope("project");
+        } else {
+            set_active_task_scope("my_tasks");
+        }
+
+        set_active_view("list");
+        set_active_modal(null);
+    }
+
 
     // Deletes a task through the backend and removes it from local state.
     function handle_delete_task(task_id) {
@@ -2662,8 +2869,8 @@ export default function task_app() {
                 handle_submit: handle_create_task_submit,
                 handle_update_draft_subtask,
                 mode: "create",
-                projects,
-                default_project_id: active_project_id,
+                projects: active_projects,
+                default_project_id: default_task_project_id,
                 set_active_modal
             });
         }
@@ -2681,8 +2888,27 @@ export default function task_app() {
             });
         }
 
+        if (active_modal === "project_edit") {
+            return render_project_modal({
+                action_label: "Guardar cambios",
+                handle_project_color_change: set_project_form_color,
+                handle_submit: handle_save_project_edits,
+                initial_project_name: selected_project.label,
+                modal_title: "Editar detalles del proyecto",
+                project_form_color,
+                set_active_modal
+            });
+        }
+
         if (active_modal === "project_menu") {
-            return render_project_menu(set_active_modal);
+            return render_project_menu({
+                handle_archive_project,
+                handle_delete_project,
+                handle_duplicate_project,
+                handle_export_project_csv,
+                handle_open_project_edit,
+                handle_save_project_template
+            });
         }
 
         if (selected_task && edit_draft) {
@@ -2699,8 +2925,8 @@ export default function task_app() {
                 handle_toggle_subtask,
                 handle_toggle_task,
                 mode: "edit",
-                projects,
-                default_project_id: active_project_id,
+                projects: active_projects,
+                default_project_id: default_task_project_id,
                 selected_task,
                 set_active_modal
             });
@@ -2725,7 +2951,7 @@ export default function task_app() {
                 is_sidebar_open,
                 is_tasks_menu_open,
                 current_user,
-                projects,
+                projects: active_projects,
                 set_is_sidebar_open
             })}
 
