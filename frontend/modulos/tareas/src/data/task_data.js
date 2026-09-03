@@ -149,8 +149,8 @@ export const starter_tasks = [
     },
     {
         id: "task_004",
-        title: "Disenar piezas de lanzamiento",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed tempor arcu vitae ex dignissim, non gravida orci porttitor.",
+        title: "Diseñar piezas de lanzamiento",
+        description: "Diseñar las piezas gráficas para el lanzamiento de la campaña de Q4 incluyendo key visual, banners para web y anuncios para redes sociales.",
         project_id: "launch_q4",
         section: "in_progress",
         assignee_id: "david_urbina",
@@ -160,26 +160,40 @@ export const starter_tasks = [
         status: "Activa",
         completed: false,
         tags: [
-            "Diseno"
+            "Diseño"
         ],
         subtasks: [
             {
                 id: "subtask_004",
-                title: "Adaptar formatos para Instagram",
+                title: "Definir concepto visual y moodboard",
                 completed: true
             },
             {
                 id: "subtask_005",
-                title: "Preparar versiones para pauta",
+                title: "Diseñar key visual principal",
                 completed: true
             },
             {
                 id: "subtask_006",
-                title: "Validar piezas con el cliente",
+                title: "Preparar banners y adaptaciones",
                 completed: false
             }
         ],
-        attachment_name: "brief-campana.pdf"
+        attachments: [
+            {
+                id: "att_001",
+                name: "brief-campaña.pdf",
+                size: "2.4 MB",
+                type: "pdf"
+            },
+            {
+                id: "att_002",
+                name: "referencias-visuales.zip",
+                size: "8.1 MB",
+                type: "zip"
+            }
+        ],
+        attachment_name: "brief-campaña.pdf"
     },
     {
         id: "task_005",
