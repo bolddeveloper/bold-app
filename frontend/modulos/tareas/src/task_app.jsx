@@ -75,8 +75,8 @@ const view_items = [
 ];
 
 
-// Defines the workflow sections used by the task project.
-const task_sections = [
+// Defines the default workflow sections used to seed the editable sections state.
+const default_task_sections = [
     {
         id: "in_progress",
         label: "En curso"
@@ -828,7 +828,8 @@ function render_filter_panel(props) {
         active_filters,
         handle_clear_filters,
         handle_close_task_tool,
-        handle_toggle_filter_value
+        handle_toggle_filter_value,
+        sections
     } = props;
 
     return (
@@ -852,7 +853,7 @@ function render_filter_panel(props) {
             <div className="filter_group">
                 <span className="filter_group_label">Estado</span>
                 <div className="filter_option_list">
-                    {task_sections.map((section_item) => (
+                    {sections.map((section_item) => (
                         <label className="filter_option" key={section_item.id}>
                             <input
                                 type="checkbox"
@@ -999,6 +1000,56 @@ function render_customize_panel(props) {
 }
 
 
+// Renders the "Secciones" dropdown panel for adding/renaming/deleting workflow sections.
+function render_sections_panel(props) {
+    const {
+        handle_add_section,
+        handle_close_task_tool,
+        handle_delete_section,
+        handle_rename_section,
+        sections
+    } = props;
+
+    return (
+        <div className="task_tool_panel">
+            <h3>Secciones</h3>
+            <div className="field_editor_list">
+                {sections.map((section_item) => (
+                    <div className="section_editor_row" key={section_item.id}>
+                        <input
+                            type="text"
+                            value={section_item.label}
+                            aria-label={`Nombre de la seccion ${section_item.label}`}
+                            onChange={(event) => handle_rename_section(section_item.id, event.target.value)}
+                        />
+                        <button
+                            className="field_delete_button"
+                            type="button"
+                            aria-label={`Eliminar seccion ${section_item.label}`}
+                            disabled={sections.length <= 1}
+                            onClick={() => handle_delete_section(section_item.id)}
+                        >
+                            {render_icon(trash_icon, 14)}
+                        </button>
+                    </div>
+                ))}
+            </div>
+            <form className="field_add_form" onSubmit={handle_add_section}>
+                <input name="section_label" type="text" placeholder="Nueva seccion" />
+                <button type="submit" aria-label="Agregar seccion">
+                    {render_icon(plus_icon, 16)}
+                </button>
+            </form>
+            <footer className="modal_footer">
+                <button className="primary_button" type="button" onClick={handle_close_task_tool}>
+                    Guardar
+                </button>
+            </footer>
+        </div>
+    );
+}
+
+
 // Renders the task project header and active project view.
 function render_tasks_module(props) {
     const {
@@ -1010,10 +1061,13 @@ function render_tasks_module(props) {
         current_user,
         field_items,
         filtered_tasks,
+        handle_add_section,
         handle_add_task_field,
         handle_clear_filters,
         handle_close_task_tool,
+        handle_delete_section,
         handle_delete_task_field,
+        handle_rename_section,
         handle_rename_task_field,
         handle_task_select,
         handle_toggle_compact_view,
@@ -1026,6 +1080,7 @@ function render_tasks_module(props) {
         projects,
         search_query,
         scoped_tasks,
+        sections,
         selected_project,
         set_active_modal,
         set_active_view,
@@ -1154,7 +1209,8 @@ function render_tasks_module(props) {
                             active_filters,
                             handle_clear_filters,
                             handle_close_task_tool,
-                            handle_toggle_filter_value
+                            handle_toggle_filter_value,
+                            sections
                         }) : null}
                     </div>
                     <div className="task_tool_anchor">
@@ -1173,6 +1229,22 @@ function render_tasks_module(props) {
                             handle_rename_task_field,
                             handle_toggle_visible_field,
                             visible_fields
+                        }) : null}
+                    </div>
+                    <div className="task_tool_anchor">
+                        <button
+                            className={`text_tool_button ${active_task_tool === "sections" ? "text_tool_button_active" : ""}`}
+                            type="button"
+                            onClick={() => handle_toggle_task_tool("sections")}
+                        >
+                            Secciones
+                        </button>
+                        {active_task_tool === "sections" ? render_sections_panel({
+                            handle_add_section,
+                            handle_close_task_tool,
+                            handle_delete_section,
+                            handle_rename_section,
+                            sections
                         }) : null}
                     </div>
                     <button
@@ -1202,6 +1274,7 @@ function render_tasks_module(props) {
                 handle_toggle_task,
                 is_compact_view,
                 projects,
+                sections,
                 set_active_modal,
                 tasks: scoped_tasks,
                 visible_fields
@@ -1212,7 +1285,8 @@ function render_tasks_module(props) {
                 filtered_tasks,
                 handle_task_select,
                 handle_toggle_task,
-                projects
+                projects,
+                sections
             }) : null}
 
             {active_view === "timeline" ? render_timeline_view() : null}
@@ -1259,6 +1333,7 @@ function render_list_view(props) {
         handle_toggle_task,
         is_compact_view,
         projects,
+        sections,
         set_active_modal,
         tasks,
         visible_fields
@@ -1289,7 +1364,7 @@ function render_list_view(props) {
                         .map((column_item) => <span key={column_item.key}>{column_item.label || "CAMPO"}</span>)}
                 </div>
 
-                {task_sections.map((section_item) => render_task_group({
+                {sections.map((section_item) => render_task_group({
                     filtered_tasks,
                     field_items,
                     handle_task_select,
@@ -1316,7 +1391,7 @@ function render_list_view(props) {
             </div>
 
             <div className="mobile_task_stack mobile_only">
-                {task_sections.map((section_item) => render_mobile_section({
+                {sections.map((section_item) => render_mobile_section({
                     filtered_tasks,
                     handle_task_select,
                     handle_toggle_task,
@@ -1529,7 +1604,8 @@ function render_board_view(props) {
         filtered_tasks,
         handle_task_select,
         handle_toggle_task,
-        projects
+        projects,
+        sections
     } = props;
 
     if (!filtered_tasks.length) {
@@ -1538,7 +1614,7 @@ function render_board_view(props) {
 
     return (
         <div className="board_view">
-            {task_sections.map((section_item) => {
+            {sections.map((section_item) => {
                 const section_tasks = get_tasks_by_section(filtered_tasks, section_item.id);
 
                 return (
@@ -1818,6 +1894,7 @@ function render_task_form_modal(props) {
         mode,
         projects,
         default_project_id,
+        sections,
         selected_task,
         set_active_modal
     } = props;
@@ -1888,15 +1965,15 @@ function render_task_form_modal(props) {
                                     value={edit_draft.section}
                                     onChange={(event) => handle_edit_field_change("section", event.target.value)}
                                 >
-                                    <option value="todo">Por hacer</option>
-                                    <option value="in_progress">En curso</option>
-                                    <option value="completed">Completadas</option>
+                                    {sections.map((section_item) => (
+                                        <option key={section_item.id} value={section_item.id}>{section_item.label}</option>
+                                    ))}
                                 </select>
                             ) : (
                                 <select name="section" defaultValue="todo">
-                                    <option value="todo">Por hacer</option>
-                                    <option value="in_progress">En curso</option>
-                                    <option value="completed">Completadas</option>
+                                    {sections.map((section_item) => (
+                                        <option key={section_item.id} value={section_item.id}>{section_item.label}</option>
+                                    ))}
                                 </select>
                             )}
                         </label>
@@ -2275,6 +2352,7 @@ export default function task_app() {
     const [sort_field, set_sort_field] = use_state("due_day");
     const [sort_direction, set_sort_direction] = use_state("asc");
     const [field_items, set_field_items] = use_state(optional_column_items);
+    const [sections, set_sections] = use_state(default_task_sections);
     const [active_filters, set_active_filters] = use_state({
         assignee_ids: [],
         priorities: [],
@@ -2571,6 +2649,57 @@ export default function task_app() {
             [field_key]: true
         }));
         event.currentTarget.reset();
+    }
+
+
+    // Renames a workflow section (board column / list group).
+    function handle_rename_section(section_id, label) {
+        set_sections((current_sections) => current_sections.map((section_item) => (
+            section_item.id === section_id ? { ...section_item, label } : section_item
+        )));
+    }
+
+    // Adds a new workflow section from the "Secciones" panel form.
+    function handle_add_section(event) {
+        event.preventDefault();
+
+        const form_data = new FormData(event.currentTarget);
+        const section_label = (form_data.get("section_label") || "").toString().trim();
+
+        if (!section_label) {
+            return;
+        }
+
+        const section_id = `section_${Date.now()}`;
+
+        set_sections((current_sections) => [
+            ...current_sections,
+            {
+                id: section_id,
+                label: section_label
+            }
+        ]);
+        event.currentTarget.reset();
+    }
+
+    // Deletes a workflow section, moving its tasks into the first remaining
+    // section so they stay visible instead of disappearing from every view.
+    function handle_delete_section(section_id) {
+        if (sections.length <= 1) {
+            return;
+        }
+
+        const remaining_sections = sections.filter((section_item) => section_item.id !== section_id);
+        const fallback_section_id = remaining_sections[0].id;
+
+        set_sections(remaining_sections);
+        set_tasks((current_tasks) => current_tasks.map((task_item) => (
+            task_item.section === section_id ? { ...task_item, section: fallback_section_id } : task_item
+        )));
+        set_active_filters((current_filters) => ({
+            ...current_filters,
+            sections: current_filters.sections.filter((filter_section_id) => filter_section_id !== section_id)
+        }));
     }
 
 
@@ -3027,6 +3156,7 @@ export default function task_app() {
                 mode: "create",
                 projects: active_projects,
                 default_project_id: default_task_project_id,
+                sections,
                 set_active_modal
             });
         }
@@ -3084,6 +3214,7 @@ export default function task_app() {
                 mode: "edit",
                 projects: active_projects,
                 default_project_id: default_task_project_id,
+                sections,
                 selected_task,
                 set_active_modal
             });
@@ -3149,10 +3280,13 @@ export default function task_app() {
                     current_user,
                     field_items,
                     filtered_tasks,
+                    handle_add_section,
                     handle_add_task_field,
                     handle_clear_filters,
                     handle_close_task_tool,
+                    handle_delete_section,
                     handle_delete_task_field,
+                    handle_rename_section,
                     handle_rename_task_field,
                     handle_task_select,
                     handle_toggle_compact_view,
@@ -3165,6 +3299,7 @@ export default function task_app() {
                     projects,
                     search_query,
                     scoped_tasks,
+                    sections,
                     selected_project,
                     set_active_modal,
                     set_active_view,

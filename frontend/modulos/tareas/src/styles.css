@@ -826,7 +826,15 @@ button {
     justify-content: center;
 }
 
+.section_editor_row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 8px;
+}
+
 .field_editor_row input[type="text"],
+.section_editor_row input[type="text"],
 .field_add_form input {
     width: 100%;
     height: 34px;
@@ -857,6 +865,16 @@ button {
 .field_delete_button:hover {
     background: #ffe9e9;
     color: var(--bold_red);
+}
+
+.field_delete_button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.field_delete_button:disabled:hover {
+    background: #f5f2ee;
+    color: #7a808a;
 }
 
 .field_add_form {
