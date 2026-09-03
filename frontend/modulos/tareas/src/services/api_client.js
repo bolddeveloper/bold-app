@@ -266,7 +266,7 @@ function map_task_to_backend(local_task, context) {
     const backend_assignee = context.user_map[local_task.assignee_id];
     const status_map = context.section_and_status_map[local_task.project_id]?.statuses_by_category || {};
     const backend_status = status_map[local_task.section];
-    const due_day = String(local_task.due_day || 8).padStart(2, "0");
+    const due_day = local_task.due_day ? String(local_task.due_day).padStart(2, "0") : null;
 
     return {
         workspace: context.workspace.id,
@@ -279,7 +279,7 @@ function map_task_to_backend(local_task, context) {
         // The mock dataset hardcodes September (see the "Septiembre 2026"
         // calendar header in task_app.jsx); this mirrors that same demo-only
         // assumption instead of solving general date handling.
-        due_date: `2026-09-${due_day}`,
+        due_date: due_day ? `2026-09-${due_day}` : null,
         position: build_position_value()
     };
 }
@@ -394,16 +394,20 @@ async function create_task_via_backend(task_payload) {
 // Updates a task's editable fields (and workflow status) through the real backend.
 async function update_task_via_backend(task_id, task_payload) {
     const context = await resolve_demo_context();
+    const backend_assignee = context.user_map[task_payload.assignee_id];
     const status_map = context.section_and_status_map[task_payload.project_id]?.statuses_by_category || {};
     const backend_status = status_map[task_payload.section];
+    const due_day = task_payload.due_day ? String(task_payload.due_day).padStart(2, "0") : null;
 
     return api_fetch(`/api/tasks/${task_id}/`, {
         method: "PATCH",
         body: JSON.stringify({
+            assignee: backend_assignee ? backend_assignee.id : null,
             title: task_payload.title,
             description: task_payload.description,
             priority: task_payload.priority,
-            status: backend_status ? backend_status.id : null
+            status: backend_status ? backend_status.id : null,
+            due_date: due_day ? `2026-09-${due_day}` : null
         })
     });
 }

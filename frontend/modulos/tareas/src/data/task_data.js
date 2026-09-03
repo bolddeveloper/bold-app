@@ -11,6 +11,11 @@ export const navigation_items = [
         icon: "check"
     },
     {
+        id: "schedules",
+        label: "Cronogramas",
+        icon: "gantt"
+    },
+    {
         id: "inbox",
         label: "Bandeja de entrada",
         icon: "inbox"
@@ -150,7 +155,7 @@ export const starter_tasks = [
     {
         id: "task_004",
         title: "Disenar piezas de lanzamiento",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed tempor arcu vitae ex dignissim, non gravida orci porttitor.",
+        description: "Disenar las piezas graficas para el lanzamiento de la campana de Q4 incluyendo key visual, banners para web y anuncios para redes sociales.",
         project_id: "launch_q4",
         section: "in_progress",
         assignee_id: "david_urbina",
@@ -162,24 +167,37 @@ export const starter_tasks = [
         tags: [
             "Diseno"
         ],
+        dependency_label: "Bloquea: Publicar campana",
         subtasks: [
             {
                 id: "subtask_004",
-                title: "Adaptar formatos para Instagram",
+                title: "Definir concepto visual y moodboard",
                 completed: true
             },
             {
                 id: "subtask_005",
-                title: "Preparar versiones para pauta",
+                title: "Disenar key visual principal",
                 completed: true
             },
             {
                 id: "subtask_006",
-                title: "Validar piezas con el cliente",
+                title: "Preparar banners y adaptaciones",
                 completed: false
             }
         ],
-        attachment_name: "brief-campana.pdf"
+        attachment_name: "brief-campana.pdf",
+        attachments: [
+            {
+                id: "attachment_004_pdf",
+                name: "brief-campana.pdf",
+                size_label: "2.4 MB"
+            },
+            {
+                id: "attachment_004_zip",
+                name: "referencias-visuales.zip",
+                size_label: "8.1 MB"
+            }
+        ]
     },
     {
         id: "task_005",
