@@ -51,6 +51,13 @@ export const project_items = [
 // Defines the workspace users shown in task cards and project sharing.
 export const team_members = [
     {
+        id: "joaquin_sierra",
+        name: "Joaquin Sierra",
+        email: "joaquin@bold.gt",
+        initials: "JS",
+        color: "#e73535"
+    },
+    {
         id: "ana_martinez",
         name: "Ana Martinez",
         email: "ana@bold.gt",
@@ -153,7 +160,7 @@ export const starter_tasks = [
         description: "Diseñar las piezas gráficas para el lanzamiento de la campaña de Q4 incluyendo key visual, banners para web y anuncios para redes sociales.",
         project_id: "launch_q4",
         section: "in_progress",
-        assignee_id: "david_urbina",
+        assignee_id: "joaquin_sierra",
         due_day: 8,
         due_label: "8 sep",
         priority: "Alta",
