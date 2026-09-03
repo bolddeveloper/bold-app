@@ -484,22 +484,28 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 
 
 // Renders a project item in the sidebar workspace list.
-function render_project_item(project_item, selected_project_id, handle_project_select) {
+function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_open) {
     const is_active = selected_project_id === project_item.id;
 
     return (
-        <button
+        <div
             className={`project_item ${is_active ? "project_item_active" : ""}`}
             key={project_item.id}
-            type="button"
-            onClick={() => handle_project_select(project_item.id)}
         >
-            {render_project_dot(project_item.color)}
-            <span>{project_item.label}</span>
-            {is_active ? (
-                <span className="project_more">•••</span>
-            ) : null}
-        </button>
+            <button className="project_item_button" type="button" onClick={() => handle_project_select(project_item.id)}>
+                {render_project_dot(project_item.color)}
+                <span>{project_item.label}</span>
+            </button>
+            <button
+                className="project_more_button"
+                type="button"
+                aria-label={`Opciones de ${project_item.label}`}
+                data-project-menu-trigger="true"
+                onClick={(event) => handle_project_menu_open(project_item.id, event)}
+            >
+                {render_icon(more_horizontal_icon, 16)}
+            </button>
+        </div>
     );
 }
 
@@ -511,6 +517,7 @@ function render_tasks_workspace_menu(props) {
         active_task_scope,
         handle_my_tasks_select,
         handle_open_project_modal,
+        handle_project_menu_open,
         handle_project_select,
         projects
     } = props;
@@ -549,7 +556,8 @@ function render_tasks_workspace_menu(props) {
                 {projects.map((project_item) => render_project_item(
                     project_item,
                     active_task_scope === "project" ? active_project_id : null,
-                    handle_project_select
+                    handle_project_select,
+                    handle_project_menu_open
                 ))}
             </div>
         </div>
@@ -566,6 +574,7 @@ function render_sidebar(props) {
         handle_module_change,
         handle_my_tasks_select,
         handle_open_project_modal,
+        handle_project_menu_open,
         handle_project_select,
         handle_tasks_menu_toggle,
         is_sidebar_open,
@@ -611,6 +620,7 @@ function render_sidebar(props) {
                                     active_task_scope,
                                     handle_my_tasks_select,
                                     handle_open_project_modal,
+                                    handle_project_menu_open,
                                     handle_project_select,
                                     projects
                                 }) : null}
@@ -752,6 +762,8 @@ function render_top_bar(props) {
 function render_mobile_header(props) {
     const {
         active_module,
+        active_project_id,
+        handle_project_menu_open,
         selected_task,
         set_active_modal,
         set_is_sidebar_open
@@ -781,7 +793,7 @@ function render_mobile_header(props) {
                     type="button"
                     aria-label="Mas opciones"
                     data-project-menu-trigger="true"
-                    onClick={() => set_active_modal(selected_task ? "project_menu" : null)}
+                    onClick={() => selected_task ? handle_project_menu_open(active_project_id) : set_active_modal(null)}
                 >
                     {selected_task ? render_icon(more_horizontal_icon, 21) : <span>JS</span>}
                 </button>
@@ -965,6 +977,7 @@ function render_customize_panel(props) {
 function render_tasks_module(props) {
     const {
         active_filters,
+        active_project_id,
         active_task_scope,
         active_task_tool,
         active_view,
@@ -978,6 +991,7 @@ function render_tasks_module(props) {
         handle_toggle_task,
         handle_toggle_task_tool,
         handle_toggle_visible_field,
+        handle_project_menu_open,
         is_compact_view,
         projects,
         search_query,
@@ -1058,7 +1072,7 @@ function render_tasks_module(props) {
                         type="button"
                         aria-label="Mas opciones"
                         data-project-menu-trigger="true"
-                        onClick={() => set_active_modal("project_menu")}
+                        onClick={(event) => handle_project_menu_open(active_project_id, event)}
                     >
                         {render_icon(more_horizontal_icon, 22)}
                     </button>
@@ -2154,11 +2168,12 @@ function render_project_menu(props) {
         handle_duplicate_project,
         handle_export_project_csv,
         handle_open_project_edit,
-        handle_save_project_template
+        handle_save_project_template,
+        project_menu_position
     } = props;
 
     return (
-        <div className="project_menu_popover">
+        <div className="project_menu_popover" style={project_menu_position || undefined}>
             <button type="button" onClick={handle_open_project_edit}>Editar detalles del proyecto <span>Ctrl+E</span></button>
             <button type="button" onClick={handle_duplicate_project}>Duplicar proyecto <span>Ctrl+D</span></button>
             <button type="button" onClick={handle_save_project_template}>Guardar como plantilla</button>
@@ -2181,6 +2196,8 @@ export default function task_app() {
     const [projects, set_projects] = use_state(project_items);
     const [active_project_id, set_active_project_id] = use_state("launch_q4");
     const [active_task_scope, set_active_task_scope] = use_state("project");
+    const [project_menu_project_id, set_project_menu_project_id] = use_state("launch_q4");
+    const [project_menu_position, set_project_menu_position] = use_state(null);
     const [project_form_color, set_project_form_color] = use_state(project_color_options[0]);
     const [tasks, set_tasks] = use_state(starter_tasks);
     const [selected_task_id, set_selected_task_id] = use_state(null);
@@ -2214,6 +2231,11 @@ export default function task_app() {
     ]);
     const selected_project = use_memo(() => get_project(active_project_id, projects), [
         active_project_id,
+        projects
+    ]);
+    const project_menu_target = use_memo(() => get_project(project_menu_project_id || active_project_id, projects), [
+        active_project_id,
+        project_menu_project_id,
         projects
     ]);
     const scoped_tasks = use_memo(() => {
@@ -2363,6 +2385,7 @@ export default function task_app() {
                 && !target.closest(".project_menu_popover")
                 && !target.closest("[data-project-menu-trigger='true']")
             ) {
+                set_project_menu_position(null);
                 set_active_modal(null);
             }
         }
@@ -2483,6 +2506,23 @@ export default function task_app() {
     function handle_open_project_modal() {
         set_project_form_color(project_color_options[0]);
         set_active_modal("project");
+    }
+
+    function handle_project_menu_open(project_id, event = null) {
+        const trigger_rect = event?.currentTarget?.getBoundingClientRect();
+        const menu_width = 330;
+        const menu_left = trigger_rect
+            ? Math.min(trigger_rect.right + 10, window.innerWidth - menu_width - 16)
+            : null;
+
+        set_project_menu_project_id(project_id);
+        set_project_menu_position(trigger_rect ? {
+            top: `${Math.min(Math.max(20, trigger_rect.top - 12), window.innerHeight - 340)}px`,
+            left: `${Math.max(16, menu_left)}px`,
+            right: "auto",
+            bottom: "auto"
+        } : null);
+        set_active_modal("project_menu");
     }
 
 
@@ -2630,7 +2670,8 @@ export default function task_app() {
     }
 
     function handle_open_project_edit() {
-        set_project_form_color(selected_project.color);
+        set_project_form_color(project_menu_target.color);
+        set_project_menu_position(null);
         set_active_modal("project_edit");
     }
 
@@ -2645,23 +2686,24 @@ export default function task_app() {
         }
 
         set_projects((current_projects) => current_projects.map((project_item) => (
-            project_item.id === selected_project.id
+            project_item.id === project_menu_target.id
                 ? { ...project_item, label: project_name, color: project_form_color }
                 : project_item
         )));
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
     function handle_duplicate_project() {
         const duplicated_project = {
-            ...selected_project,
-            id: build_project_id(`${selected_project.label} copia`, projects),
-            label: `${selected_project.label} copia`,
+            ...project_menu_target,
+            id: build_project_id(`${project_menu_target.label} copia`, projects),
+            label: `${project_menu_target.label} copia`,
             archived: false
         };
         const created_at = Date.now();
         const copied_tasks = tasks
-            .filter((task_item) => task_item.project_id === selected_project.id)
+            .filter((task_item) => task_item.project_id === project_menu_target.id)
             .map((task_item, index) => ({
                 ...task_item,
                 id: `task_${created_at}_${index}`,
@@ -2682,6 +2724,7 @@ export default function task_app() {
         set_active_project_id(duplicated_project.id);
         set_active_task_scope("project");
         set_active_view("list");
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
@@ -2692,56 +2735,60 @@ export default function task_app() {
                 type: "status_changed",
                 actor_id: current_user_id,
                 title: "Proyecto guardado como plantilla",
-                body: `${selected_project.label} ya esta disponible como plantilla local.`,
+                body: `${project_menu_target.label} ya esta disponible como plantilla local.`,
                 time_label: "Ahora",
                 is_read: false
             },
             ...current_notifications
         ]);
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
     function handle_export_project_csv() {
-        const project_tasks = tasks.filter((task_item) => task_item.project_id === selected_project.id);
+        const project_tasks = tasks.filter((task_item) => task_item.project_id === project_menu_target.id);
         const csv_body = build_tasks_csv(project_tasks, projects);
-        const filename = `${get_file_safe_name(selected_project.label)}-tareas.csv`;
+        const filename = `${get_file_safe_name(project_menu_target.label)}-tareas.csv`;
 
         download_text_file(filename, csv_body, "text/csv;charset=utf-8");
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
     function handle_archive_project() {
-        const next_project = active_projects.find((project_item) => project_item.id !== selected_project.id);
+        const next_project = active_projects.find((project_item) => project_item.id !== project_menu_target.id);
 
         set_projects((current_projects) => current_projects.map((project_item) => (
-            project_item.id === selected_project.id ? { ...project_item, archived: true } : project_item
+            project_item.id === project_menu_target.id ? { ...project_item, archived: true } : project_item
         )));
 
-        if (next_project) {
+        if (active_project_id === project_menu_target.id && next_project) {
             set_active_project_id(next_project.id);
             set_active_task_scope("project");
-        } else {
+        } else if (active_project_id === project_menu_target.id) {
             set_active_task_scope("my_tasks");
         }
 
         set_active_view("list");
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
     function handle_delete_project() {
-        const next_project = active_projects.find((project_item) => project_item.id !== selected_project.id);
+        const next_project = active_projects.find((project_item) => project_item.id !== project_menu_target.id);
 
-        set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== selected_project.id));
-        set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.project_id !== selected_project.id));
+        set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_menu_target.id));
+        set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.project_id !== project_menu_target.id));
 
-        if (next_project) {
+        if (active_project_id === project_menu_target.id && next_project) {
             set_active_project_id(next_project.id);
             set_active_task_scope("project");
-        } else {
+        } else if (active_project_id === project_menu_target.id) {
             set_active_task_scope("my_tasks");
         }
 
         set_active_view("list");
+        set_project_menu_position(null);
         set_active_modal(null);
     }
 
@@ -2893,7 +2940,7 @@ export default function task_app() {
                 action_label: "Guardar cambios",
                 handle_project_color_change: set_project_form_color,
                 handle_submit: handle_save_project_edits,
-                initial_project_name: selected_project.label,
+                initial_project_name: project_menu_target.label,
                 modal_title: "Editar detalles del proyecto",
                 project_form_color,
                 set_active_modal
@@ -2907,7 +2954,8 @@ export default function task_app() {
                 handle_duplicate_project,
                 handle_export_project_csv,
                 handle_open_project_edit,
-                handle_save_project_template
+                handle_save_project_template,
+                project_menu_position
             });
         }
 
@@ -2946,6 +2994,7 @@ export default function task_app() {
                 handle_module_change,
                 handle_my_tasks_select,
                 handle_open_project_modal,
+                handle_project_menu_open,
                 handle_project_select,
                 handle_tasks_menu_toggle,
                 is_sidebar_open,
@@ -2966,7 +3015,9 @@ export default function task_app() {
 
             <main className="main_workspace">
                 {render_mobile_header({
+                    active_project_id,
                     active_module,
+                    handle_project_menu_open,
                     selected_task,
                     set_active_modal,
                     set_is_sidebar_open
@@ -2982,6 +3033,7 @@ export default function task_app() {
                 })}
                 {active_module === "tasks" ? render_tasks_module({
                     active_filters,
+                    active_project_id,
                     active_task_scope,
                     active_task_tool,
                     active_view,
@@ -2995,6 +3047,7 @@ export default function task_app() {
                     handle_toggle_task,
                     handle_toggle_task_tool,
                     handle_toggle_visible_field,
+                    handle_project_menu_open,
                     is_compact_view,
                     projects,
                     search_query,
