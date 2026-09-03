@@ -186,6 +186,16 @@ function get_member(member_id) {
 }
 
 
+// Resolves all collaborators assigned to a task (falling back to assignee_id if none set).
+function get_task_collaborators(task) {
+    if (!task) return [];
+    const ids = task.collaborator_ids && task.collaborator_ids.length
+        ? task.collaborator_ids
+        : (task.assignee_id ? [task.assignee_id] : []);
+    return ids.map((id) => get_member(id)).filter(Boolean);
+}
+
+
 // Finds a project by id for labels and color rendering.
 function get_project(project_id) {
     return project_items.find((project_item) => project_item.id === project_id) || project_items[0];
@@ -846,11 +856,894 @@ function render_customize_panel(props) {
 }
 
 
+
+// ─── COMPONENTES DEL PLAN MAESTRO ────────────────────────────────────────────
+
+// SVG for list toggle: 3 circular dots with 3 rounded horizontal lines (exact match to visual reference)
+function ListToggleIcon() {
+    return (
+        <svg width="26" height="20" viewBox="0 0 26 20" fill="currentColor" aria-hidden="true">
+            <circle cx="3" cy="3.5" r="2.5" />
+            <rect x="8.5" y="1.5" width="16.5" height="4" rx="2" />
+            <circle cx="3" cy="10" r="2.5" />
+            <rect x="8.5" y="8" width="16.5" height="4" rx="2" />
+            <circle cx="3" cy="16.5" r="2.5" />
+            <rect x="8.5" y="14.5" width="16.5" height="4" rx="2" />
+        </svg>
+    );
+}
+
+// SVG for columns toggle: 3 vertical outlined rounded rectangles (exact match to visual reference)
+function ColumnsToggleIcon() {
+    return (
+        <svg width="24" height="22" viewBox="0 0 24 22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="5" height="19" rx="2" />
+            <rect x="9.5" y="1.5" width="5" height="19" rx="2" />
+            <rect x="17.5" y="1.5" width="5" height="19" rx="2" />
+        </svg>
+    );
+}
+
+// Toggle icon switch Lista ↔ Columnas (matching user reference image)
+function render_view_switch(active_view, set_active_view) {
+    return (
+        <div className="view_switch_toggle" role="group" aria-label="Cambiar estilo de visualización">
+            <button
+                type="button"
+                className={`toggle_side ${active_view === "list" ? "view_list_active" : ""}`}
+                aria-pressed={active_view === "list"}
+                title="Vista en lista"
+                onClick={() => set_active_view("list")}
+            >
+                <ListToggleIcon />
+            </button>
+            <button
+                type="button"
+                className={`toggle_side ${active_view === "board" ? "view_board_active" : ""}`}
+                aria-pressed={active_view === "board"}
+                title="Vista en columnas"
+                onClick={() => set_active_view("board")}
+            >
+                <ColumnsToggleIcon />
+            </button>
+        </div>
+    );
+}
+
+
+// Inline priority quick-change popover (Image 5 of design reference).
+function QuickPriorityPopover({ current_priority, on_close, on_select }) {
+    const options = [
+        { value: "Alta", dot: "#e22323", label: "ALTA" },
+        { value: "Media", dot: "#f59e0b", label: "MEDIA" },
+        { value: "Baja", dot: "#9ca3af", label: "BAJA" }
+    ];
+    return (
+        <div className="quick_popover_bubble" role="menu">
+            {options.map((opt) => (
+                <button
+                    key={opt.value}
+                    type="button"
+                    className="quick_popover_item_btn"
+                    role="menuitem"
+                    onClick={() => { on_select(opt.value); on_close(); }}
+                >
+                    <span className="quick_popover_circle" style={{ background: opt.dot }}></span>
+                    <span>{opt.label}</span>
+                    {current_priority === opt.value ? (
+                        <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>
+                    ) : null}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+
+// Inline status quick-change popover (Image 5 of design reference).
+function QuickStatusPopover({ current_status, on_close, on_select }) {
+    const options = [
+        { value: "Activa", dot: "#3b82f6", label: "ACTIVA" },
+        { value: "Pend.", dot: "#f59e0b", label: "PENDIENTE" },
+        { value: "Inactiva", dot: "#9ca3af", label: "INACTIVA" },
+        { value: "Lista", dot: "#22c55e", label: "LISTA" }
+    ];
+    return (
+        <div className="quick_popover_bubble" role="menu">
+            {options.map((opt) => (
+                <button
+                    key={opt.value}
+                    type="button"
+                    className="quick_popover_item_btn"
+                    role="menuitem"
+                    onClick={() => { on_select(opt.value); on_close(); }}
+                >
+                    <span className="quick_popover_circle" style={{ background: opt.dot }}></span>
+                    <span>{opt.label}</span>
+                    {current_status === opt.value ? (
+                        <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>
+                    ) : null}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+
+// Custom calendar date picker popover (Images 2 & 4 of design reference).
+function CustomDatePicker({ current_day, on_apply, on_clear }) {
+    const [view_month, set_view_month] = use_state(8); // 0-indexed, 8 = septiembre
+    const [view_year, set_view_year] = use_state(2025);
+    const [picked_day, set_picked_day] = use_state(current_day || null);
+
+    const days_in_month = new Date(view_year, view_month + 1, 0).getDate();
+    const first_weekday = new Date(view_year, view_month, 1).getDay();
+    const blanks = Array.from({ length: first_weekday });
+    const day_cells = Array.from({ length: days_in_month }, (_, i) => i + 1);
+
+    function go_prev() {
+        if (view_month === 0) { set_view_month(11); set_view_year((y) => y - 1); }
+        else set_view_month((m) => m - 1);
+    }
+    function go_next() {
+        if (view_month === 11) { set_view_month(0); set_view_year((y) => y + 1); }
+        else set_view_month((m) => m + 1);
+    }
+
+    return (
+        <div className="custom_datepicker_popover" onClick={(e) => e.stopPropagation()}>
+            <div className="custom_datepicker_nav">
+                <button type="button" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
+                <span>{month_names_es[view_month]} {view_year}</span>
+                <button type="button" onClick={go_next}>{render_icon(chevron_right_icon, 16)}</button>
+            </div>
+            <div className="custom_datepicker_grid">
+                {["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"].map((d) => (
+                    <span key={d} className="day_header_cell">{d}</span>
+                ))}
+                {blanks.map((_, i) => <span key={`b${i}`}></span>)}
+                {day_cells.map((d) => (
+                    <button
+                        key={d}
+                        type="button"
+                        className={`day_cell ${picked_day === d ? "day_cell_active" : ""}`}
+                        onClick={() => set_picked_day(d)}
+                    >
+                        {d}
+                    </button>
+                ))}
+            </div>
+            <div className="custom_datepicker_actions">
+                <button type="button" className="dp_clear_btn" onClick={() => { set_picked_day(null); on_clear && on_clear(); }}>
+                    Quitar fecha
+                </button>
+                <button
+                    type="button"
+                    className="dp_apply_btn"
+                    onClick={() => on_apply && on_apply(picked_day, view_month, view_year)}
+                >
+                    Aplicar
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
+// Right-side task detail sidebar panel (Image 3 of design reference).
+function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, selected_task }) {
+    const [comment_text, set_comment_text] = use_state("");
+    const member_item = get_member(selected_task.assignee_id);
+    const project_item = get_project(selected_task.project_id);
+    const subtasks = selected_task.subtasks || [];
+    const done_count = subtasks.filter((s) => s.completed).length;
+    const subtask_pct = subtasks.length ? Math.round((done_count / subtasks.length) * 100) : 0;
+
+    const status_colors = {
+        "Activa": "#3b82f6",
+        "Pend.": "#f59e0b",
+        "Inactiva": "#9ca3af",
+        "Lista": "#22c55e"
+    };
+    const status_color = status_colors[selected_task.status] || "#9ca3af";
+
+    return (
+        <div className="task_detail_panel_card">
+            <div className="detail_top_eyebrow_row">
+                <span style={{ fontSize: "11px", color: "#9ca3af", fontWeight: 600, letterSpacing: "0.08em" }}>DETALLE DE TAREA</span>
+                <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                        type="button"
+                        className="detail_action_btn"
+                        title="Editar tarea"
+                        onClick={() => handle_open_edit_task(selected_task.id)}
+                    >
+                        {render_icon(pencil_icon, 15)}
+                    </button>
+                    <button type="button" className="detail_action_btn" title="Cerrar panel" onClick={on_close}>
+                        {render_icon(x_icon, 16)}
+                    </button>
+                </div>
+            </div>
+
+            <div className="detail_title_row">
+                <button
+                    type="button"
+                    className={`task_checkbox ${selected_task.completed ? "task_checkbox_checked" : ""}`}
+                    onClick={() => handle_toggle_task(selected_task.id)}
+                    aria-label="Completar tarea"
+                >
+                    {selected_task.completed ? render_icon(check_icon, 12) : null}
+                </button>
+                <h2 className="detail_task_title">{selected_task.title}</h2>
+                <span
+                    className="status_pill_badge"
+                    style={{ background: `${status_color}1a`, color: status_color, border: `1px solid ${status_color}55` }}
+                >
+                    {selected_task.status}
+                </span>
+            </div>
+
+            <div className="detail_meta_grid">
+                <span className="meta_label">Colaboradores</span>
+                <span className="meta_value" style={{ flexWrap: "wrap" }}>
+                    {get_task_collaborators(selected_task).length > 0 ? (
+                        <span style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            {get_task_collaborators(selected_task).map((collab) => (
+                                <span key={collab.id} className="collaborator_mini_pill" title={collab.name}>
+                                    {render_avatar(collab, "avatar_tiny")}
+                                    <span>{collab.name}</span>
+                                </span>
+                            ))}
+                        </span>
+                    ) : (
+                        <span style={{ color: "#9ca3af" }}>Sin asignar</span>
+                    )}
+                </span>
+
+                <span className="meta_label">Fecha límite</span>
+                <span className="meta_value">{selected_task.due_label || "Sin fecha"}</span>
+
+                <span className="meta_label">Proyecto</span>
+                <span className="meta_value">
+                    {render_project_dot(project_item?.color)}
+                    {project_item?.label || "Sin proyecto"}
+                </span>
+
+                <span className="meta_label">Prioridad</span>
+                <span className="meta_value">
+                    <span className={`priority_pill_badge priority_pill_${(selected_task.priority || "alta").toLowerCase()}`}>
+                        {selected_task.priority || "Alta"}
+                    </span>
+                </span>
+            </div>
+
+            {/* Apartado visual de colaboradores del proyecto en el detalle */}
+            <div className="detail_collaborators_card">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                        COLABORADORES ({get_task_collaborators(selected_task).length})
+                    </span>
+                    <button
+                        type="button"
+                        className="detail_add_collab_link"
+                        onClick={() => handle_open_edit_task(selected_task.id)}
+                        title="Modificar colaboradores de la tarea"
+                    >
+                        {render_icon(user_plus_icon, 13)}
+                        <span>Modificar</span>
+                    </button>
+                </div>
+
+                {get_task_collaborators(selected_task).length > 0 ? (
+                    <div className="detail_collab_list">
+                        {get_task_collaborators(selected_task).map((c) => (
+                            <div key={c.id} className="detail_collab_row">
+                                {render_avatar(c, "avatar_small")}
+                                <div className="detail_collab_info">
+                                    <strong className="detail_collab_name">{c.name}</strong>
+                                    <small className="detail_collab_email">{c.email}</small>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="detail_collab_empty" onClick={() => handle_open_edit_task(selected_task.id)}>
+                        {render_icon(user_plus_icon, 16)}
+                        <span>Haz clic para asignar colaboradores a esta tarea</span>
+                    </div>
+                )}
+            </div>
+
+            {selected_task.description ? (
+                <div className="detail_description_block">
+                    <p className="meta_label" style={{ marginBottom: "6px" }}>Descripción</p>
+                    <p style={{ fontSize: "13px", color: "#374151", lineHeight: 1.6 }}>{selected_task.description}</p>
+                </div>
+            ) : null}
+
+            {subtasks.length > 0 ? (
+                <div className="detail_subtasks_block">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em" }}>SUBTAREAS</span>
+                        <span className="subtasks_badge">{done_count} de {subtasks.length}</span>
+                    </div>
+                    <div className="subtasks_progress_bar">
+                        <div className="subtasks_progress_fill" style={{ width: `${subtask_pct}%` }}></div>
+                    </div>
+                    {subtasks.map((sub) => (
+                        <div key={sub.id} className="subtask_check_row">
+                            <button
+                                type="button"
+                                className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}
+                                onClick={() => handle_toggle_subtask(selected_task.id, sub.id)}
+                            >
+                                {sub.completed ? render_icon(check_icon, 11) : null}
+                            </button>
+                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>{sub.title}</span>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+
+            <div className="detail_comment_input_box">
+                <input
+                    type="text"
+                    className="detail_comment_input"
+                    placeholder="Escribe un comentario..."
+                    value={comment_text}
+                    onChange={(e) => set_comment_text(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && comment_text.trim()) {
+                            handle_add_comment(selected_task.id, comment_text);
+                            set_comment_text("");
+                        }
+                    }}
+                />
+                <button
+                    type="button"
+                    className="detail_comment_send_btn"
+                    disabled={!comment_text.trim()}
+                    onClick={() => {
+                        if (comment_text.trim()) {
+                            handle_add_comment(selected_task.id, comment_text);
+                            set_comment_text("");
+                        }
+                    }}
+                >
+                    {render_icon(arrow_up_icon, 15)}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
+// Selector de colaboradores para los modales de Crear y Editar tarea
+function CollaboratorsSelector({ on_change, selected_ids = [] }) {
+    const [is_picker_open, set_is_picker_open] = use_state(false);
+
+    function toggle_member(member_id) {
+        if (selected_ids.includes(member_id)) {
+            on_change(selected_ids.filter((id) => id !== member_id));
+        } else {
+            on_change([...selected_ids, member_id]);
+        }
+    }
+
+    function remove_member(e, member_id) {
+        e.stopPropagation();
+        on_change(selected_ids.filter((id) => id !== member_id));
+    }
+
+    const assigned_members = selected_ids.map((id) => get_member(id)).filter(Boolean);
+
+    return (
+        <div className="bold_field_group collaborators_field_group">
+            <div className="collaborators_field_header">
+                <label className="bold_field_label">
+                    Colaboradores asignados ({assigned_members.length})
+                </label>
+                <div style={{ position: "relative" }}>
+                    <button
+                        type="button"
+                        className="add_collaborator_btn"
+                        onClick={() => set_is_picker_open((v) => !v)}
+                    >
+                        {render_icon(user_plus_icon, 14)}
+                        <span>Agregar colaborador</span>
+                    </button>
+
+                    {is_picker_open ? (
+                        <div className="collaborator_picker_dropdown">
+                            <div className="picker_title">Personas del proyecto</div>
+                            <div className="picker_list">
+                                {team_members.map((member) => {
+                                    const is_assigned = selected_ids.includes(member.id);
+                                    return (
+                                        <button
+                                            key={member.id}
+                                            type="button"
+                                            className={`picker_member_row ${is_assigned ? "is_selected" : ""}`}
+                                            onClick={() => toggle_member(member.id)}
+                                        >
+                                            {render_avatar(member, "avatar_small")}
+                                            <div className="picker_member_text">
+                                                <strong>{member.name}</strong>
+                                                <small>{member.email}</small>
+                                            </div>
+                                            {is_assigned ? (
+                                                <span className="picker_check">{render_icon(check_icon, 14)}</span>
+                                            ) : null}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <button
+                                type="button"
+                                className="picker_done_btn"
+                                onClick={() => set_is_picker_open(false)}
+                            >
+                                Listo
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+
+            <div className="collaborators_chips_container">
+                {assigned_members.length > 0 ? (
+                    assigned_members.map((member) => (
+                        <span key={member.id} className="collaborator_chip">
+                            {render_avatar(member, "avatar_tiny")}
+                            <span className="chip_name">{member.name}</span>
+                            <button
+                                type="button"
+                                className="chip_remove_btn"
+                                aria-label={`Quitar a ${member.name}`}
+                                onClick={(e) => remove_member(e, member.id)}
+                            >
+                                {render_icon(x_icon, 12)}
+                            </button>
+                        </span>
+                    ))
+                ) : (
+                    <div
+                        className="collaborators_empty_hint"
+                        onClick={() => set_is_picker_open(true)}
+                    >
+                        {render_icon(user_plus_icon, 16)}
+                        <span>Haz clic en "Agregar colaborador" para asignar personas del proyecto</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+
+// "Editar Tarea" modal (Image 2 of design reference).
+function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_edit_field_change, handle_remove_edit_attachment, handle_toggle_subtask, on_cancel, on_save, selected_task }) {
+    const [show_datepicker, set_show_datepicker] = use_state(false);
+    const [subtask_menu_id, set_subtask_menu_id] = use_state(null);
+    const subtasks = selected_task.subtasks || [];
+    const done_count = subtasks.filter((s) => s.completed).length;
+
+    const current_collaborators = edit_draft.collaborator_ids && edit_draft.collaborator_ids.length
+        ? edit_draft.collaborator_ids
+        : (edit_draft.assignee_id ? [edit_draft.assignee_id] : []);
+
+    return (
+        <div className="bold_modal_backdrop" onClick={on_cancel}>
+            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Editar tarea">
+                <div className="bold_modal_header">
+                    <div>
+                        <p className="modal_eyebrow">EDITAR TAREA</p>
+                        <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0, color: "#111827" }}>
+                            {edit_draft.title || "Tarea sin nombre"}
+                        </h2>
+                    </div>
+                    <button type="button" className="modal_close_btn" onClick={on_cancel} aria-label="Cerrar modal">
+                        {render_icon(x_icon, 20)}
+                    </button>
+                </div>
+
+                <form className="bold_modal_body" onSubmit={on_save}>
+                    {/* Nombre */}
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Nombre de la tarea</label>
+                        <input
+                            className="bold_text_input"
+                            type="text"
+                            value={edit_draft.title || ""}
+                            onChange={(e) => handle_edit_field_change("title", e.target.value)}
+                            placeholder="Nombre de la tarea"
+                        />
+                    </div>
+
+                    {/* Proyecto & Sección */}
+                    <div className="bold_field_row_2">
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Proyecto</label>
+                            <select
+                                className="bold_select_input"
+                                value={edit_draft.project_id || ""}
+                                onChange={(e) => handle_edit_field_change("project_id", e.target.value)}
+                            >
+                                {project_items.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Sección</label>
+                            <select
+                                className="bold_select_input"
+                                value={edit_draft.section || "todo"}
+                                onChange={(e) => handle_edit_field_change("section", e.target.value)}
+                            >
+                                {board_columns.map((col) => (
+                                    <option key={col.id} value={col.id}>{col.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Fecha límite */}
+                    <div className="bold_field_group" style={{ position: "relative" }}>
+                        <label className="bold_field_label">Fecha límite</label>
+                        <button
+                            type="button"
+                            className="bold_date_trigger_btn"
+                            onClick={() => set_show_datepicker((v) => !v)}
+                        >
+                            {render_icon(calendar_days_icon, 15)}
+                            {edit_draft.due_day ? `${edit_draft.due_day} sep 2025` : "Seleccionar fecha"}
+                        </button>
+                        {show_datepicker ? (
+                            <CustomDatePicker
+                                current_day={edit_draft.due_day}
+                                on_clear={() => { handle_edit_field_change("due_day", null); set_show_datepicker(false); }}
+                                on_apply={(day, month, year) => {
+                                    handle_edit_field_change("due_day", day);
+                                    handle_edit_field_change("due_label", `${day} ${month_abbrev_es[month]} ${year}`);
+                                    set_show_datepicker(false);
+                                }}
+                            />
+                        ) : null}
+                    </div>
+
+                    {/* Colaboradores asignados al proyecto */}
+                    <CollaboratorsSelector
+                        selected_ids={current_collaborators}
+                        on_change={(new_ids) => {
+                            handle_edit_field_change("collaborator_ids", new_ids);
+                            handle_edit_field_change("assignee_id", new_ids[0] || null);
+                        }}
+                    />
+
+                    {/* Prioridad & Estado */}
+                    <div className="bold_field_row_2">
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Prioridad</label>
+                            <div className="bold_pill_select_wrap">
+                                {["Alta", "Media", "Baja"].map((p) => (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        className={`pill_select_btn ${edit_draft.priority === p ? "pill_select_active" : ""}`}
+                                        onClick={() => handle_edit_field_change("priority", p)}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Estado</label>
+                            <div className="bold_pill_select_wrap">
+                                {["Activa", "Pend.", "Lista", "Inactiva"].map((s) => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        className={`pill_select_btn ${edit_draft.status === s ? "pill_select_active" : ""}`}
+                                        onClick={() => handle_edit_field_change("status", s)}
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Descripción */}
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Descripción</label>
+                        <textarea
+                            className="bold_textarea_input"
+                            rows={3}
+                            value={edit_draft.description || ""}
+                            onChange={(e) => handle_edit_field_change("description", e.target.value)}
+                            placeholder="Añade una descripción..."
+                        />
+                    </div>
+
+                    {/* Subtareas */}
+                    <div className="bold_field_group">
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                            <span className="bold_field_label" style={{ margin: 0 }}>Subtareas</span>
+                            <span className="subtasks_badge">{done_count} de {subtasks.length}</span>
+                        </div>
+                        {subtasks.map((sub) => (
+                            <div key={sub.id} className="subtask_edit_row">
+                                <button
+                                    type="button"
+                                    className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}
+                                    onClick={() => handle_toggle_subtask(sub.id)}
+                                >
+                                    {sub.completed ? render_icon(check_icon, 11) : null}
+                                </button>
+                                <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>{sub.title}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Adjuntos */}
+                    {edit_attachments.length > 0 ? (
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Archivos adjuntos</label>
+                            {edit_attachments.map((att) => (
+                                <div key={att.id} className="attachment_row_item">
+                                    <span className="attachment_file_badge">{att.name.split(".").pop().toUpperCase()}</span>
+                                    <span className="attachment_file_name">{att.name}</span>
+                                    <button
+                                        type="button"
+                                        className="attachment_remove_btn"
+                                        onClick={() => handle_remove_edit_attachment(att.id)}
+                                    >
+                                        {render_icon(x_icon, 14)}
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" className="attachment_add_more_btn" onClick={handle_add_edit_attachment}>
+                                {render_icon(paperclip_icon, 14)} Agregar más archivos
+                            </button>
+                        </div>
+                    ) : (
+                        <button type="button" className="attachment_dropzone" onClick={handle_add_edit_attachment}>
+                            {render_icon(paperclip_icon, 18)}
+                            <span>Agregar archivos adjuntos</span>
+                        </button>
+                    )}
+
+                    <footer className="bold_modal_footer">
+                        <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
+                        <button type="submit" className="primary_button">Guardar cambios</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+
+// "Nueva Tarea" creation modal (Image 4 of design reference).
+function CreateTaskModal({ board_columns, on_cancel, on_create }) {
+    const [title, set_title] = use_state("");
+    const [project_id, set_project_id] = use_state(project_items[0]?.id || "");
+    const [section, set_section] = use_state("todo");
+    const [collaborator_ids, set_collaborator_ids] = use_state([]);
+    const [due_day, set_due_day] = use_state(null);
+    const [due_month, set_due_month] = use_state(8);
+    const [due_year, set_due_year] = use_state(2025);
+    const [priority, set_priority] = use_state("Media");
+    const [status, set_status] = use_state("Pend.");
+    const [description, set_description] = use_state("");
+    const [subtasks, set_subtasks] = use_state([]);
+    const [attachments, set_attachments] = use_state([]);
+    const [show_datepicker, set_show_datepicker] = use_state(false);
+
+    function handle_submit(e) {
+        e.preventDefault();
+        if (!title.trim()) return;
+        const col = board_columns.find((c) => c.id === section);
+        const new_task = {
+            id: `task_${Date.now()}`,
+            title: title.trim(),
+            project_id,
+            section,
+            assignee_id: collaborator_ids[0] || null,
+            collaborator_ids,
+            due_day: due_day || null,
+            due_label: due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : null,
+            priority,
+            status: col?.status || status,
+            completed: section === "completed",
+            description: description.trim(),
+            subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ ...s, completed: false })),
+            attachment_name: attachments.length ? attachments[attachments.length - 1].name : null,
+            tags: []
+        };
+        on_create(new_task);
+    }
+
+    return (
+        <div className="bold_modal_backdrop" onClick={on_cancel}>
+            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Nueva tarea">
+                <div className="bold_modal_header">
+                    <div>
+                        <p className="modal_eyebrow">NUEVA TAREA</p>
+                        <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0, color: "#111827" }}>Crear nueva tarea</h2>
+                    </div>
+                    <button type="button" className="modal_close_btn" onClick={on_cancel} aria-label="Cerrar modal">
+                        {render_icon(x_icon, 20)}
+                    </button>
+                </div>
+
+                <form className="bold_modal_body" onSubmit={handle_submit}>
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Nombre de la tarea *</label>
+                        <input
+                            className="bold_text_input"
+                            type="text"
+                            value={title}
+                            onChange={(e) => set_title(e.target.value)}
+                            placeholder="¿Qué hay que hacer?"
+                            autoFocus
+                            required
+                        />
+                    </div>
+
+                    <div className="bold_field_row_2">
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Proyecto</label>
+                            <select className="bold_select_input" value={project_id} onChange={(e) => set_project_id(e.target.value)}>
+                                {project_items.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Sección</label>
+                            <select className="bold_select_input" value={section} onChange={(e) => set_section(e.target.value)}>
+                                {board_columns.map((col) => (
+                                    <option key={col.id} value={col.id}>{col.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="bold_field_group" style={{ position: "relative" }}>
+                        <label className="bold_field_label">Fecha límite</label>
+                        <button type="button" className="bold_date_trigger_btn" onClick={() => set_show_datepicker((v) => !v)}>
+                            {render_icon(calendar_days_icon, 15)}
+                            {due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : "Seleccionar fecha"}
+                        </button>
+                        {show_datepicker ? (
+                            <CustomDatePicker
+                                current_day={due_day}
+                                on_clear={() => { set_due_day(null); set_show_datepicker(false); }}
+                                on_apply={(day, month, year) => {
+                                    set_due_day(day);
+                                    set_due_month(month);
+                                    set_due_year(year);
+                                    set_show_datepicker(false);
+                                }}
+                            />
+                        ) : null}
+                    </div>
+
+                    {/* Botón y selector de colaboradores del proyecto */}
+                    <CollaboratorsSelector
+                        selected_ids={collaborator_ids}
+                        on_change={set_collaborator_ids}
+                    />
+
+                    <div className="bold_field_row_2">
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Prioridad</label>
+                            <div className="bold_pill_select_wrap">
+                                {["Alta", "Media", "Baja"].map((p) => (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        className={`pill_select_btn ${priority === p ? "pill_select_active" : ""}`}
+                                        onClick={() => set_priority(p)}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Estado</label>
+                            <div className="bold_pill_select_wrap">
+                                {["Activa", "Pend.", "Lista", "Inactiva"].map((s) => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        className={`pill_select_btn ${status === s ? "pill_select_active" : ""}`}
+                                        onClick={() => set_status(s)}
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Descripción</label>
+                        <textarea
+                            className="bold_textarea_input"
+                            rows={3}
+                            value={description}
+                            onChange={(e) => set_description(e.target.value)}
+                            placeholder="Añade una descripción..."
+                        />
+                    </div>
+
+                    {/* Subtareas */}
+                    {subtasks.length > 0 ? (
+                        <div className="bold_field_group">
+                            <label className="bold_field_label">Subtareas</label>
+                            {subtasks.map((sub) => (
+                                <div key={sub.id} className="subtask_edit_row">
+                                    <input
+                                        className="bold_text_input"
+                                        type="text"
+                                        value={sub.title}
+                                        onChange={(e) => set_subtasks((ss) => ss.map((s) => s.id === sub.id ? { ...s, title: e.target.value } : s))}
+                                        placeholder="Nombre de la subtarea"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="attachment_remove_btn"
+                                        onClick={() => set_subtasks((ss) => ss.filter((s) => s.id !== sub.id))}
+                                    >
+                                        {render_icon(trash_icon, 14)}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+                    <button
+                        type="button"
+                        className="add_subtask_link_btn"
+                        onClick={() => set_subtasks((ss) => [...ss, { id: `ns_${Date.now()}`, title: "" }])}
+                    >
+                        {render_icon(plus_icon, 14)} Agregar subtarea
+                    </button>
+
+                    {/* Adjuntos */}
+                    <button
+                        type="button"
+                        className="attachment_dropzone"
+                        onClick={() => set_attachments((aa) => [...aa, { id: `f_${Date.now()}`, name: `archivo_${aa.length + 1}.pdf` }])}
+                    >
+                        {render_icon(paperclip_icon, 18)}
+                        <span>{attachments.length > 0 ? `${attachments.length} archivo(s) adjunto(s)` : "Agregar archivos adjuntos"}</span>
+                    </button>
+
+                    <footer className="bold_modal_footer">
+                        <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
+                        <button type="submit" className="primary_button" disabled={!title.trim()}>Crear tarea</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 // Renders the task project header and active project view.
 function render_tasks_module(props) {
     const {
         active_filters,
         active_quick_popover,
+        active_section = "tasks",
         active_task_tool,
         active_view,
         board_columns = default_board_columns,
@@ -878,6 +1771,7 @@ function render_tasks_module(props) {
         selected_task,
         selected_task_id,
         set_active_modal,
+        set_active_section,
         set_active_view,
         set_is_adding_column,
         set_new_column_name,
@@ -937,119 +1831,175 @@ function render_tasks_module(props) {
             </div>
 
             <div className="task_tabs_row">
-                <div className="view_tabs" role="tablist" aria-label="Cambiar vista">
-                    {render_view_switch(active_view, set_active_view)}
-                </div>
-                <div className="task_tools">
-                    <div className="task_tool_anchor">
-                        <button
-                            className={`text_tool_button ${active_task_tool === "sort" ? "text_tool_button_active" : ""}`}
-                            type="button"
-                            onClick={() => handle_toggle_task_tool("sort")}
-                        >
-                            Ordenar
-                        </button>
-                        {active_task_tool === "sort" ? render_sort_panel({
-                            handle_close_task_tool,
-                            set_sort_direction,
-                            set_sort_field,
-                            sort_direction,
-                            sort_field
-                        }) : null}
+                {/* 1 & 2. Navegación principal: Tareas | Cronograma | Calendario */}
+                <nav className="main_section_nav_tabs" role="tablist" aria-label="Navegación principal">
+                    <button
+                        className={`main_nav_tab_btn ${active_section === "tasks" ? "main_nav_tab_active" : ""}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={active_section === "tasks"}
+                        onClick={() => set_active_section("tasks")}
+                    >
+                        Tareas
+                    </button>
+                    <button
+                        className={`main_nav_tab_btn ${active_section === "timeline" ? "main_nav_tab_active" : ""}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={active_section === "timeline"}
+                        onClick={() => set_active_section("timeline")}
+                    >
+                        Cronograma
+                    </button>
+                    <button
+                        className={`main_nav_tab_btn ${active_section === "calendar" ? "main_nav_tab_active" : ""}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={active_section === "calendar"}
+                        onClick={() => set_active_section("calendar")}
+                    >
+                        Calendario
+                    </button>
+                </nav>
+
+                {/* 3 & 4 & 5. Dentro del apartado Tareas: Acciones de tareas — Personalizar — Botón de visualización */}
+                {active_section === "tasks" ? (
+                    <div className="task_tools">
+                        <div className="task_tool_anchor">
+                            <button
+                                className={`text_tool_button ${active_task_tool === "sort" ? "text_tool_button_active" : ""}`}
+                                type="button"
+                                onClick={() => handle_toggle_task_tool("sort")}
+                            >
+                                Ordenar
+                            </button>
+                            {active_task_tool === "sort" ? render_sort_panel({
+                                handle_close_task_tool,
+                                set_sort_direction,
+                                set_sort_field,
+                                sort_direction,
+                                sort_field
+                            }) : null}
+                        </div>
+                        <div className="task_tool_anchor">
+                            <button
+                                className={`text_tool_button ${active_task_tool === "filter" ? "text_tool_button_active" : ""}`}
+                                type="button"
+                                onClick={() => handle_toggle_task_tool("filter")}
+                            >
+                                Filtrar
+                            </button>
+                            {active_task_tool === "filter" ? render_filter_panel({
+                                active_filters,
+                                handle_clear_filters,
+                                handle_close_task_tool,
+                                handle_toggle_filter_value
+                            }) : null}
+                        </div>
+                        <div className="task_tool_anchor">
+                            <button
+                                className={`text_tool_button ${active_task_tool === "customize" ? "text_tool_button_active" : ""}`}
+                                type="button"
+                                onClick={() => handle_toggle_task_tool("customize")}
+                            >
+                                Personalizar
+                            </button>
+                            {active_task_tool === "customize" ? render_customize_panel({
+                                handle_close_task_tool,
+                                handle_toggle_visible_field,
+                                visible_fields
+                            }) : null}
+                        </div>
+
+                        {/* Botón de visualización Lista ↔ Columnas al lado derecho de Personalizar */}
+                        {render_view_switch(active_view, set_active_view)}
                     </div>
-                    <div className="task_tool_anchor">
-                        <button
-                            className={`text_tool_button ${active_task_tool === "filter" ? "text_tool_button_active" : ""}`}
-                            type="button"
-                            onClick={() => handle_toggle_task_tool("filter")}
-                        >
-                            Filtrar
-                        </button>
-                        {active_task_tool === "filter" ? render_filter_panel({
-                            active_filters,
-                            handle_clear_filters,
-                            handle_close_task_tool,
-                            handle_toggle_filter_value
-                        }) : null}
-                    </div>
-                    <div className="task_tool_anchor">
-                        <button
-                            className={`text_tool_button ${active_task_tool === "customize" ? "text_tool_button_active" : ""}`}
-                            type="button"
-                            onClick={() => handle_toggle_task_tool("customize")}
-                        >
-                            Personalizar
-                        </button>
-                        {active_task_tool === "customize" ? render_customize_panel({
-                            handle_close_task_tool,
-                            handle_toggle_visible_field,
-                            visible_fields
-                        }) : null}
-                    </div>
-                </div>
-                <button className="mobile_filter_button" type="button" onClick={() => set_search_query(search_query ? "" : "zzz")}>
-                    {render_icon(sliders_icon, 15)}
-                    Filtrar
-                </button>
+                ) : null}
+
+                {active_section === "tasks" ? (
+                    <button className="mobile_filter_button" type="button" onClick={() => set_search_query(search_query ? "" : "zzz")}>
+                        {render_icon(sliders_icon, 15)}
+                        Filtrar
+                    </button>
+                ) : null}
                 <button className="mobile_floating_add" type="button" aria-label="Agregar tarea" onClick={() => set_active_modal("task")}>
                     {render_icon(plus_icon, 28)}
                 </button>
             </div>
 
-            <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
-                <div className="tasks_main_area">
-                    {active_view === "list" ? render_list_view({
-                        active_quick_popover,
-                        board_columns,
-                        completed_count,
-                        completion_percent,
-                        filtered_tasks,
-                        handle_open_edit_task,
-                        handle_quick_change,
-                        handle_task_select,
-                        handle_toggle_quick_popover,
-                        handle_toggle_task,
-                        selected_task_id,
-                        set_active_modal,
-                        tasks,
-                        visible_fields
-                    }) : null}
+            {/* Vista según el apartado activo */}
+            {active_section === "tasks" ? (
+                <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
+                    <div className="tasks_main_area">
+                        {active_view === "list" ? render_list_view({
+                            active_quick_popover,
+                            board_columns,
+                            completed_count,
+                            completion_percent,
+                            filtered_tasks,
+                            handle_open_edit_task,
+                            handle_quick_change,
+                            handle_task_select,
+                            handle_toggle_quick_popover,
+                            handle_toggle_task,
+                            selected_task_id,
+                            set_active_modal,
+                            tasks,
+                            visible_fields
+                        }) : null}
 
-                    {active_view === "board" ? render_board_view({
-                        active_quick_popover,
-                        board_columns,
-                        dragged_task_id,
-                        filtered_tasks,
-                        handle_add_column,
-                        handle_column_drop,
-                        handle_drag_start,
-                        handle_open_edit_task,
-                        handle_quick_change,
-                        handle_task_select,
-                        handle_toggle_quick_popover,
-                        handle_toggle_task,
-                        is_adding_column,
-                        new_column_name,
-                        selected_task_id,
-                        set_is_adding_column,
-                        set_new_column_name
-                    }) : null}
-                </div>
-
-                {selected_task ? (
-                    <div className="task_detail_sidebar">
-                        <TaskDetailPanel
-                            handle_add_comment={handle_add_comment}
-                            handle_delete_task={handle_delete_task}
-                            handle_open_edit_task={handle_open_edit_task}
-                            handle_toggle_subtask={handle_toggle_subtask}
-                            handle_toggle_task={handle_toggle_task}
-                            on_close={() => handle_task_select(null)}
-                            selected_task={selected_task}
-                        />
+                        {active_view === "board" ? render_board_view({
+                            active_quick_popover,
+                            board_columns,
+                            dragged_task_id,
+                            filtered_tasks,
+                            handle_add_column,
+                            handle_column_drop,
+                            handle_drag_start,
+                            handle_open_edit_task,
+                            handle_quick_change,
+                            handle_task_select,
+                            handle_toggle_quick_popover,
+                            handle_toggle_task,
+                            is_adding_column,
+                            new_column_name,
+                            selected_task_id,
+                            set_is_adding_column,
+                            set_new_column_name
+                        }) : null}
                     </div>
-                ) : null}
-            </div>
+
+                    {selected_task ? (
+                        <div className="task_detail_sidebar">
+                            <TaskDetailPanel
+                                handle_add_comment={handle_add_comment}
+                                handle_delete_task={handle_delete_task}
+                                handle_open_edit_task={handle_open_edit_task}
+                                handle_toggle_subtask={handle_toggle_subtask}
+                                handle_toggle_task={handle_toggle_task}
+                                on_close={() => handle_task_select(null)}
+                                selected_task={selected_task}
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {active_section === "timeline" ? (
+                <div className="timeline_view_wrapper">
+                    {render_timeline_view(filtered_tasks, handle_task_select)}
+                </div>
+            ) : null}
+
+            {active_section === "calendar" ? (
+                <div className="calendar_view_wrapper">
+                    {render_calendar_view({
+                        filtered_tasks,
+                        handle_task_select,
+                        set_active_modal
+                    })}
+                </div>
+            ) : null}
         </section>
     );
 }
@@ -1226,7 +2176,11 @@ function render_task_row(props) {
         <div
             className={`task_row ${task_item.completed ? "task_row_completed" : ""} ${is_selected ? "task_row_selected" : ""}`}
             key={task_item.id}
-            style={get_task_table_columns_style(visible_fields, true)}
+            style={{
+                ...get_task_table_columns_style(visible_fields, true),
+                cursor: "pointer"
+            }}
+            onClick={() => handle_task_select(task_item.id)}
         >
             <button
                 className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
@@ -1240,13 +2194,22 @@ function render_task_row(props) {
                 {task_item.completed ? render_icon(check_icon, 13) : null}
             </button>
 
-            <button
-                className="task_name_button"
-                type="button"
-                onClick={() => handle_task_select(task_item.id)}
+            <div
+                className="task_name_cell"
+                style={{ width: "100%", height: "100%", display: "flex", alignItems: "center" }}
             >
-                {task_item.title}
-            </button>
+                <button
+                    className="task_name_button"
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handle_task_select(task_item.id);
+                    }}
+                    style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
+                >
+                    {task_item.title}
+                </button>
+            </div>
 
             {visible_fields.assignee ? (
                 <span className="task_assignee">
@@ -1368,16 +2331,32 @@ function render_task_card(props) {
     const project_item = get_project(task_item.project_id);
 
     return (
-        <article className={`task_card ${task_item.priority === "Alta" && !task_item.completed ? "task_card_alert" : ""}`} key={task_item.id}>
+        <article
+            className={`task_card ${task_item.priority === "Alta" && !task_item.completed ? "task_card_alert" : ""}`}
+            key={task_item.id}
+            onClick={() => handle_task_select(task_item.id)}
+            style={{ cursor: "pointer" }}
+        >
             <button
                 className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
                 type="button"
                 aria-label="Completar tarea"
-                onClick={() => handle_toggle_task(task_item.id)}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    handle_toggle_task(task_item.id);
+                }}
             >
                 {task_item.completed ? render_icon(check_icon, 13) : null}
             </button>
-            <button className="task_card_content" type="button" onClick={() => handle_task_select(task_item.id)}>
+            <button
+                className="task_card_content"
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    handle_task_select(task_item.id);
+                }}
+                style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
+            >
                 <span className="task_card_title">{task_item.title}</span>
                 <span className="mobile_badge_row">
                     <span className={`task_badge status_badge ${get_status_class(task_item.status)}`}>
@@ -1512,6 +2491,8 @@ function render_board_card(props) {
             key={task_item.id}
             draggable={Boolean(handle_drag_start)}
             onDragStart={handle_drag_start ? () => handle_drag_start(task_item.id) : undefined}
+            onClick={() => handle_task_select(task_item.id)}
+            style={{ cursor: "pointer" }}
         >
             <div className="board_card_topline">
                 {render_project_dot(project_item.color)}
@@ -1520,15 +2501,26 @@ function render_board_card(props) {
                     className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
                     type="button"
                     aria-label="Completar tarea"
-                    onClick={() => handle_toggle_task(task_item.id)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handle_toggle_task(task_item.id);
+                    }}
                 >
                     {task_item.completed ? render_icon(check_icon, 13) : null}
                 </button>
             </div>
-            <button className="board_title_button" type="button" onClick={() => handle_task_select(task_item.id)}>
+            <button
+                className="board_title_button"
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    handle_task_select(task_item.id);
+                }}
+                style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
+            >
                 {task_item.title}
             </button>
-            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+            <p>{task_item.description || "Sin descripción adicional."}</p>
             <footer>
                 {render_avatar(member_item, "avatar_small")}
                 <span>{task_item.due_label}</span>
@@ -1541,13 +2533,63 @@ function render_board_card(props) {
 }
 
 
-// Renders the placeholder for the timeline/Gantt view, not built yet.
-function render_timeline_view() {
+// Renders the timeline/Gantt view for the Cronograma apartado.
+function render_timeline_view(filtered_tasks, handle_task_select) {
+    const days = Array.from({ length: 30 }, (_, i) => i + 1);
+
+    if (!filtered_tasks.length) {
+        return render_empty_tasks_state();
+    }
+
     return (
-        <div className="placeholder_card timeline_placeholder">
-            <span className="placeholder_icon">{render_icon(gantt_chart_icon, 36)}</span>
-            <h2>Cronograma en construccion</h2>
-            <p>La vista de linea de tiempo para este proyecto todavia no esta disponible en esta demo.</p>
+        <div className="timeline_view_card">
+            <div className="timeline_header">
+                <div className="timeline_col_label">TAREA</div>
+                <div className="timeline_days_track_header">
+                    {days.map((d) => (
+                        <div key={d} className={`timeline_day_header_cell ${d === today_day_of_month ? "timeline_day_today" : ""}`}>
+                            <span className="timeline_day_num">{d}</span>
+                            <span className="timeline_day_sub">sep</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="timeline_body">
+                {filtered_tasks.map((task_item) => {
+                    const member_item = get_member(task_item.assignee_id);
+                    const due = task_item.due_day || 15;
+                    const duration = Math.min(due, 4);
+                    const start_day = Math.max(1, due - duration + 1);
+                    const left_pct = ((start_day - 1) / 30) * 100;
+                    const width_pct = Math.max(8, (duration / 30) * 100);
+
+                    return (
+                        <div className="timeline_row" key={task_item.id}>
+                            <div className="timeline_row_title_col">
+                                <button
+                                    type="button"
+                                    className="timeline_task_link"
+                                    onClick={() => handle_task_select(task_item.id)}
+                                >
+                                    {task_item.title}
+                                </button>
+                            </div>
+                            <div className="timeline_row_track">
+                                <div
+                                    className={`timeline_bar ${get_priority_class(task_item.priority)}`}
+                                    style={{ left: `${left_pct}%`, width: `${width_pct}%` }}
+                                    onClick={() => handle_task_select(task_item.id)}
+                                    title={`${task_item.title} (${task_item.due_label || `${due} sep`})`}
+                                >
+                                    <span className="timeline_bar_text">{task_item.title}</span>
+                                    {member_item ? render_avatar(member_item, "avatar_tiny") : null}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -1649,1273 +2691,6 @@ function render_empty_tasks_state() {
             <button className="primary_button" type="button">
                 Limpiar filtros
             </button>
-        </div>
-    );
-}
-
-
-// 1. View Switch Toggle (Image 1)
-function render_view_switch(active_view, set_active_view) {
-    return (
-        <button
-            className={`view_switch_toggle ${active_view === "list" ? "view_list_active" : "view_board_active"}`}
-            type="button"
-            aria-label="Cambiar vista Lista o Tablero"
-            title={`Cambiar a ${active_view === "list" ? "Tablero" : "Lista"}`}
-            onClick={() => set_active_view(active_view === "list" ? "board" : "list")}
-        >
-            <span className="toggle_side toggle_left">
-                {render_icon(layout_list_icon, 18)}
-            </span>
-            <span className="toggle_side toggle_right">
-                {render_icon(columns_icon, 18)}
-            </span>
-        </button>
-    );
-}
-
-// 2. Quick Priority Popover (Image 5)
-function QuickPriorityPopover(props) {
-    const { current_priority, on_close, on_select } = props;
-    const options = [
-        { label: "ALTA", value: "Alta", color: "#fca5a5", checkColor: "#e22323" },
-        { label: "MEDIA", value: "Media", color: "#fde047", checkColor: "#b45309" },
-        { label: "BAJA", value: "Baja", color: "#cbd5e1", checkColor: "#475569" }
-    ];
-
-    return (
-        <div className="quick_popover_bubble" onClick={(e) => e.stopPropagation()}>
-            {options.map((opt) => (
-                <button
-                    key={opt.value}
-                    type="button"
-                    className="quick_popover_item_btn"
-                    onClick={() => {
-                        on_select(opt.value);
-                        on_close();
-                    }}
-                >
-                    <span className="quick_popover_circle" style={{ background: opt.color }} />
-                    <span style={{ color: opt.value.toLowerCase() === (current_priority || "").toLowerCase() ? opt.checkColor : "inherit" }}>
-                        {opt.label}
-                    </span>
-                    {opt.value.toLowerCase() === (current_priority || "").toLowerCase() ? (
-                        <span className="quick_popover_check_icon" style={{ color: opt.checkColor }}>✓</span>
-                    ) : null}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-// 3. Quick Status Popover (Image 5)
-function QuickStatusPopover(props) {
-    const { current_status, on_close, on_select } = props;
-    const options = [
-        { label: "ACTIVA", value: "Activa", color: "#93c5fd", checkColor: "#0284c7" },
-        { label: "PENDIENTE", value: "Pend.", color: "#fde047", checkColor: "#b45309" },
-        { label: "INACTIVA", value: "Inactiva", color: "#cbd5e1", checkColor: "#64748b" },
-        { label: "LISTA", value: "Lista", color: "#86efac", checkColor: "#15803d" }
-    ];
-
-    return (
-        <div className="quick_popover_bubble" onClick={(e) => e.stopPropagation()}>
-            {options.map((opt) => (
-                <button
-                    key={opt.value}
-                    type="button"
-                    className="quick_popover_item_btn"
-                    onClick={() => {
-                        on_select(opt.value);
-                        on_close();
-                    }}
-                >
-                    <span className="quick_popover_circle" style={{ background: opt.color }} />
-                    <span style={{ color: opt.value.toLowerCase() === (current_status || "").toLowerCase() ? opt.checkColor : "inherit" }}>
-                        {opt.label}
-                    </span>
-                    {opt.value.toLowerCase() === (current_status || "").toLowerCase() ? (
-                        <span className="quick_popover_check_icon" style={{ color: opt.checkColor }}>✓</span>
-                    ) : null}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-// 4. Custom Date Picker Popover (Section 13)
-function CustomDatePicker(props) {
-    const {
-        due_day,
-        due_month = 8,
-        due_year = 2026,
-        on_close,
-        on_save
-    } = props;
-
-    const [temp_year, set_temp_year] = use_state(due_year);
-    const [temp_month, set_temp_month] = use_state(due_month);
-    const [temp_day, set_temp_day] = use_state(due_day);
-
-    const days_in_month = new Date(temp_year, temp_month + 1, 0).getDate();
-    const first_weekday = (new Date(temp_year, temp_month, 1).getDay() + 6) % 7;
-
-    function handle_change_month(new_month) {
-        let m = new_month;
-        let y = temp_year;
-        if (m < 0) {
-            m = 11;
-            y -= 1;
-        } else if (m > 11) {
-            m = 0;
-            y += 1;
-        }
-        set_temp_month(m);
-        set_temp_year(y);
-        const max_days = new Date(y, m + 1, 0).getDate();
-        if (temp_day && temp_day > max_days) {
-            set_temp_day(max_days);
-        }
-    }
-
-    return (
-        <div className="custom_datepicker_popover" onClick={(e) => e.stopPropagation()}>
-            <div className="custom_datepicker_nav">
-                <button
-                    type="button"
-                    className="icon_button"
-                    aria-label="Mes anterior"
-                    onClick={() => handle_change_month(temp_month - 1)}
-                >
-                    {render_icon(chevron_left_icon, 16)}
-                </button>
-                <div style={{ display: "flex", gap: "6px" }}>
-                    <select
-                        value={temp_month}
-                        onChange={(e) => handle_change_month(Number(e.target.value))}
-                    >
-                        {month_names_es.map((m_name, idx) => (
-                            <option key={idx} value={idx}>{m_name}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={temp_year}
-                        onChange={(e) => {
-                            const y = Number(e.target.value);
-                            set_temp_year(y);
-                            const max_d = new Date(y, temp_month + 1, 0).getDate();
-                            if (temp_day && temp_day > max_d) set_temp_day(max_d);
-                        }}
-                    >
-                        {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                            <option key={y} value={y}>{y}</option>
-                        ))}
-                    </select>
-                </div>
-                <button
-                    type="button"
-                    className="icon_button"
-                    aria-label="Mes siguiente"
-                    onClick={() => handle_change_month(temp_month + 1)}
-                >
-                    {render_icon(chevron_right_icon, 16)}
-                </button>
-            </div>
-
-            <div className="custom_datepicker_grid">
-                {["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"].map((d) => (
-                    <span key={d} className="custom_datepicker_weekday">{d}</span>
-                ))}
-                {Array.from({ length: first_weekday }).map((_, i) => (
-                    <div key={`blank_${i}`} />
-                ))}
-                {Array.from({ length: days_in_month }).map((_, i) => {
-                    const day_num = i + 1;
-                    const is_selected = temp_day === day_num;
-                    return (
-                        <button
-                            key={day_num}
-                            type="button"
-                            className={`custom_datepicker_day_btn ${is_selected ? "active_day" : ""}`}
-                            onClick={() => set_temp_day(day_num)}
-                        >
-                            {day_num}
-                        </button>
-                    );
-                })}
-            </div>
-
-            <div className="custom_datepicker_actions">
-                <button
-                    type="button"
-                    className="custom_datepicker_clear_btn"
-                    onClick={() => {
-                        on_save(null, temp_month, temp_year);
-                        on_close();
-                    }}
-                >
-                    Quitar fecha
-                </button>
-                <button
-                    type="button"
-                    className="custom_datepicker_apply_btn"
-                    onClick={() => {
-                        on_save(temp_day, temp_month, temp_year);
-                        on_close();
-                    }}
-                >
-                    Aplicar
-                </button>
-            </div>
-        </div>
-    );
-}
-
-// 5. Task Detail Panel (Image 3 - Right Side)
-function TaskDetailPanel(props) {
-    const {
-        handle_add_comment,
-        handle_delete_task,
-        handle_open_edit_task,
-        handle_toggle_subtask,
-        handle_toggle_task,
-        on_close,
-        selected_task
-    } = props;
-
-    const [comment_text, set_comment_text] = use_state("");
-
-    if (!selected_task) return null;
-
-    const member_item = get_member(selected_task.assignee_id);
-    const project_item = get_project(selected_task.project_id);
-    const subtasks = selected_task.subtasks || [];
-    const completed_subtasks = subtasks.filter((s) => s.completed).length;
-    const progress_pct = subtasks.length ? Math.round((completed_subtasks / subtasks.length) * 100) : 0;
-
-    function handle_comment_submit(e) {
-        if (e) e.preventDefault();
-        const trimmed = comment_text.trim();
-        if (!trimmed) return;
-        handle_add_comment(selected_task.id, trimmed);
-        set_comment_text("");
-    }
-
-    const due_display = selected_task.due_day
-        ? `${selected_task.due_day} de ${month_names_es[selected_task.due_month ?? 8] || "septiembre"}`
-        : "Sin fecha";
-
-    return (
-        <aside className="task_detail_panel_card" role="region" aria-label="Detalle de tarea">
-            <div className="detail_top_eyebrow_row">
-                <span className="detail_eyebrow_text">DETALLE DE TAREA</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <button
-                        className="task_edit_pencil_btn"
-                        type="button"
-                        title="Editar tarea"
-                        onClick={() => handle_open_edit_task(selected_task.id)}
-                    >
-                        {render_icon(pencil_icon, 16)}
-                    </button>
-                    <button
-                        className="detail_close_circle_btn"
-                        type="button"
-                        aria-label="Cerrar detalle"
-                        onClick={on_close}
-                    >
-                        {render_icon(x_icon, 16)}
-                    </button>
-                </div>
-            </div>
-
-            <div className="detail_title_row">
-                <button
-                    className={`task_checkbox ${selected_task.completed ? "task_checkbox_checked" : ""}`}
-                    type="button"
-                    aria-label="Completar tarea"
-                    onClick={() => handle_toggle_task(selected_task.id)}
-                >
-                    {selected_task.completed ? render_icon(check_icon, 14) : null}
-                </button>
-                <h2>{selected_task.title}</h2>
-            </div>
-
-            <div>
-                <span className={`status_pill_badge status_pill_${(selected_task.status || "pend").toLowerCase().replace(".", "")}`}>
-                    {selected_task.status || "PEND."}
-                </span>
-            </div>
-
-            <div className="detail_meta_grid">
-                <div className="detail_meta_item">
-                    <span className="meta_label">Responsable</span>
-                    <span className="meta_val">
-                        {render_avatar(member_item, "avatar_small")}
-                        {member_item?.name || "Sin asignar"}
-                    </span>
-                </div>
-                <div className="detail_meta_item">
-                    <span className="meta_label">Fecha límite</span>
-                    <span className="meta_val">
-                        {selected_task.due_day ? (
-                            <span className="detail_day_badge">{selected_task.due_day}</span>
-                        ) : null}
-                        {due_display}
-                    </span>
-                </div>
-                <div className="detail_meta_item">
-                    <span className="meta_label">Proyecto</span>
-                    <span className="meta_val">
-                        {render_project_dot(project_item.color)}
-                        {project_item.label}
-                    </span>
-                </div>
-                <div className="detail_meta_item">
-                    <span className="meta_label">Prioridad</span>
-                    <span className="meta_val">
-                        <span className={`priority_pill_badge priority_pill_${(selected_task.priority || "alta").toLowerCase()}`}>
-                            {(selected_task.priority || "ALTA").toUpperCase()}
-                        </span>
-                    </span>
-                </div>
-            </div>
-
-            {selected_task.description ? (
-                <div>
-                    <h4 style={{ fontSize: "12px", fontWeight: 800, color: "#797f8c", margin: "0 0 6px 0", textTransform: "uppercase" }}>Descripción</h4>
-                    <p style={{ margin: 0, fontSize: "13px", color: "#374151", lineHeight: 1.5 }}>{selected_task.description}</p>
-                </div>
-            ) : null}
-
-            <div className="detail_dependency_box">
-                <strong>DEPENDENCIA</strong>
-                <span>Bloquea: Publicar campaña</span>
-            </div>
-
-            <div className="detail_subtasks_block">
-                <div className="detail_subtasks_header">
-                    <h4>Subtareas</h4>
-                    <span>{completed_subtasks} de {subtasks.length}</span>
-                </div>
-                <div className="detail_subtasks_progress_bar">
-                    <div className="detail_subtasks_progress_fill" style={{ width: `${progress_pct}%` }} />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
-                    {subtasks.length ? subtasks.map((st) => (
-                        <div key={st.id} className={`detail_subtask_row ${st.completed ? "completed" : ""}`}>
-                            <button
-                                type="button"
-                                className={`task_checkbox ${st.completed ? "task_checkbox_checked" : ""}`}
-                                onClick={() => handle_toggle_subtask(selected_task.id, st.id)}
-                            >
-                                {st.completed ? render_icon(check_icon, 12) : null}
-                            </button>
-                            <span>{st.title}</span>
-                        </div>
-                    )) : (
-                        <span style={{ fontSize: "13px", color: "#9499a5" }}>Sin subtareas asociadas.</span>
-                    )}
-                </div>
-            </div>
-
-            <div className="detail_files_block">
-                <h4>Archivos</h4>
-                {selected_task.attachments && selected_task.attachments.length > 0 ? (
-                    selected_task.attachments.map((att) => (
-                        <div key={att.id} className="detail_file_item" style={{ marginBottom: 6 }}>
-                            <span className={att.type === "zip" ? "file_badge_zip" : "file_badge_pdf"}>
-                                {(att.type || "pdf").toUpperCase()}
-                            </span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <strong style={{ display: "block", fontSize: "13px", color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</strong>
-                                <small style={{ color: "#64748b", fontSize: "11px" }}>{att.size}</small>
-                            </div>
-                        </div>
-                    ))
-                ) : selected_task.attachment_name ? (
-                    <div className="detail_file_item">
-                        <span className="file_badge_pdf">PDF</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <strong style={{ display: "block", fontSize: "13px", color: "#1e293b" }}>{selected_task.attachment_name}</strong>
-                            <small style={{ color: "#64748b", fontSize: "11px" }}>2.4 MB</small>
-                        </div>
-                    </div>
-                ) : (
-                    <span style={{ fontSize: "13px", color: "#9499a5" }}>Sin archivos adjuntos.</span>
-                )}
-            </div>
-
-            {selected_task.comments && selected_task.comments.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <h4 style={{ fontSize: "12px", fontWeight: 800, color: "#797f8c", margin: 0, textTransform: "uppercase" }}>Comentarios</h4>
-                    {selected_task.comments.map((comm) => (
-                        <div key={comm.id} style={{ background: "#f8fafc", padding: "8px 10px", borderRadius: "8px", fontSize: "12px" }}>
-                            <strong style={{ color: "#1e293b" }}>{comm.author_name}: </strong>
-                            <span style={{ color: "#475569" }}>{comm.body}</span>
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-
-            <form onSubmit={handle_comment_submit} className="detail_comment_input_box">
-                <input
-                    type="text"
-                    value={comment_text}
-                    onChange={(e) => set_comment_text(e.target.value)}
-                    placeholder="Escribe un comentario..."
-                />
-                <button type="submit" className="detail_comment_submit_btn" aria-label="Enviar comentario">
-                    {render_icon(arrow_up_icon, 14)}
-                </button>
-            </form>
-        </aside>
-    );
-}
-
-// 6. Modal Editar Tarea (Image 2)
-function EditTaskModal(props) {
-    const {
-        board_columns,
-        handle_delete_task,
-        handle_save_edit_task,
-        selected_task,
-        set_active_modal
-    } = props;
-
-    // Temporary local state
-    const [title, set_title] = use_state(selected_task?.title || "");
-    const [project_id, set_project_id] = use_state(selected_task?.project_id || "launch_q4");
-    const [section, set_section] = use_state(selected_task?.section || "in_progress");
-    const [assignee_id, set_assignee_id] = use_state(selected_task?.assignee_id || "david_urbina");
-    const [due_day, set_due_day] = use_state(selected_task?.due_day || 8);
-    const [due_month, set_due_month] = use_state(selected_task?.due_month ?? 8);
-    const [due_year, set_due_year] = use_state(selected_task?.due_year ?? 2026);
-    const [priority, set_priority] = use_state(selected_task?.priority || "Alta");
-    const [status, set_status] = use_state(selected_task?.status || "Activa");
-    const [description, set_description] = use_state(selected_task?.description || "");
-
-    const [is_calendar_open, set_is_calendar_open] = use_state(false);
-
-    // Subtasks state
-    const [subtasks, set_subtasks] = use_state(
-        Array.isArray(selected_task?.subtasks) && selected_task.subtasks.length > 0
-            ? selected_task.subtasks.map((s) => ({ ...s }))
-            : [
-                { id: "sub_1", title: "Definir concepto visual y moodboard", completed: true },
-                { id: "sub_2", title: "Diseñar key visual principal", completed: true },
-                { id: "sub_3", title: "Preparar banners y adaptaciones", completed: false }
-            ]
-    );
-    const [new_subtask_input, set_new_subtask_input] = use_state("");
-    const [is_adding_subtask, set_is_adding_subtask] = use_state(false);
-    const [active_subtask_menu_id, set_active_subtask_menu_id] = use_state(null);
-    const [editing_subtask_id, set_editing_subtask_id] = use_state(null);
-    const [editing_subtask_text, set_editing_subtask_text] = use_state("");
-
-    // Attachments state
-    const initial_attachments = Array.isArray(selected_task?.attachments) && selected_task.attachments.length > 0
-        ? selected_task.attachments
-        : [
-            { id: "att_1", name: "brief-campaña.pdf", size: "2.4 MB", type: "pdf" },
-            { id: "att_2", name: "referencias-visuales.zip", size: "8.1 MB", type: "zip" }
-        ];
-    const [attachments, set_attachments] = use_state(initial_attachments);
-
-    // Close popovers on window click
-    use_effect(() => {
-        function handle_click_outside(e) {
-            if (active_subtask_menu_id && !e.target.closest(".subtask_menu_container")) {
-                set_active_subtask_menu_id(null);
-            }
-            if (is_calendar_open && !e.target.closest(".bold_date_picker_container")) {
-                set_is_calendar_open(false);
-            }
-        }
-        window.addEventListener("click", handle_click_outside);
-        return () => window.removeEventListener("click", handle_click_outside);
-    }, [active_subtask_menu_id, is_calendar_open]);
-
-    const completed_subtasks_count = subtasks.filter((s) => s.completed).length;
-    const current_assignee = get_member(assignee_id);
-
-    function handle_toggle_subtask_item(subtask_id) {
-        set_subtasks((curr) => curr.map((s) => (
-            s.id === subtask_id ? { ...s, completed: !s.completed } : s
-        )));
-    }
-
-    function handle_add_subtask_confirm() {
-        const trimmed = new_subtask_input.trim();
-        if (!trimmed) return;
-        set_subtasks((curr) => [
-            ...curr,
-            { id: `subtask_${Date.now()}`, title: trimmed, completed: false }
-        ]);
-        set_new_subtask_input("");
-        set_is_adding_subtask(false);
-    }
-
-    function handle_delete_subtask_item(subtask_id) {
-        set_subtasks((curr) => curr.filter((s) => s.id !== subtask_id));
-        set_active_subtask_menu_id(null);
-    }
-
-    function handle_save_edited_subtask(subtask_id) {
-        const trimmed = editing_subtask_text.trim();
-        if (!trimmed) return;
-        set_subtasks((curr) => curr.map((s) => (
-            s.id === subtask_id ? { ...s, title: trimmed } : s
-        )));
-        set_editing_subtask_id(null);
-        set_editing_subtask_text("");
-    }
-
-    function handle_files_selected(e) {
-        const files = e.target.files;
-        if (!files || !files.length) return;
-        const new_items = Array.from(files).map((f) => {
-            const ext = f.name.split(".").pop().toLowerCase();
-            const size_mb = (f.size / (1024 * 1024)).toFixed(1);
-            return {
-                id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                name: f.name,
-                size: `${Number(size_mb) > 0 ? size_mb : "0.1"} MB`,
-                type: ext === "zip" || ext === "rar" ? "zip" : ext === "pdf" ? "pdf" : "file"
-            };
-        });
-        set_attachments((curr) => [...curr, ...new_items]);
-        e.target.value = "";
-    }
-
-    function handle_remove_attachment(att_id) {
-        set_attachments((curr) => curr.filter((a) => a.id !== att_id));
-    }
-
-    function handle_save_changes() {
-        const date_label = due_day ? `${due_day} ${month_abbrev_es[due_month] || "sep"}` : "Sin fecha";
-        const is_completed = section === "completed" || status === "Lista";
-
-        const updated_task = {
-            ...selected_task,
-            title: title.trim() || selected_task.title,
-            project_id,
-            section,
-            assignee_id,
-            due_day,
-            due_month,
-            due_year,
-            due_label: date_label,
-            priority,
-            status,
-            description,
-            completed: is_completed,
-            subtasks,
-            attachments,
-            attachment_name: attachments.length ? attachments[0].name : null
-        };
-
-        handle_save_edit_task(updated_task);
-        set_active_modal(null);
-    }
-
-    const due_display = due_day
-        ? `${due_day} de ${month_names_es[due_month] || "septiembre"}`
-        : "Seleccionar fecha";
-
-    return (
-        <div className="bold_modal_backdrop" onClick={() => set_active_modal(null)}>
-            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()}>
-                <header className="bold_modal_header">
-                    <div>
-                        <span className="bold_modal_eyebrow">EDITAR TAREA</span>
-                        <h2 className="bold_modal_title">{selected_task?.title || "Editar tarea"}</h2>
-                    </div>
-                    <button
-                        type="button"
-                        className="bold_modal_close_btn"
-                        aria-label="Cerrar modal"
-                        onClick={() => set_active_modal(null)}
-                    >
-                        {render_icon(x_icon, 18)}
-                    </button>
-                </header>
-
-                <div className="bold_modal_body">
-                    <div className="bold_field_group">
-                        <label>Nombre de la tarea</label>
-                        <input
-                            type="text"
-                            className="bold_input_text"
-                            value={title}
-                            onChange={(e) => set_title(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Proyecto</label>
-                            <select
-                                className="bold_select_box"
-                                value={project_id}
-                                onChange={(e) => set_project_id(e.target.value)}
-                            >
-                                {project_items.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="bold_field_group">
-                            <label>Sección</label>
-                            <select
-                                className="bold_select_box"
-                                value={section}
-                                onChange={(e) => {
-                                    const next_sec = e.target.value;
-                                    set_section(next_sec);
-                                    if (next_sec === "completed") set_status("Lista");
-                                    else if (next_sec === "in_progress") set_status("Activa");
-                                    else set_status("Pend.");
-                                }}
-                            >
-                                {board_columns.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Responsable</label>
-                            <div className="bold_pill_select_wrap">
-                                {render_avatar(current_assignee, "avatar_small")}
-                                <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: "#1f2937" }}>
-                                    {current_assignee?.name || "Sin asignar"}
-                                </span>
-                                <span className="chevron_icon">{render_icon(chevron_down_icon, 14)}</span>
-                                <select
-                                    value={assignee_id}
-                                    onChange={(e) => set_assignee_id(e.target.value)}
-                                >
-                                    {team_members.map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="bold_field_group bold_date_picker_container" style={{ position: "relative" }}>
-                            <label>Fecha límite</label>
-                            <button
-                                type="button"
-                                className="bold_date_trigger_btn"
-                                onClick={() => set_is_calendar_open(!is_calendar_open)}
-                            >
-                                {render_icon(calendar_days_icon, 16)}
-                                <span>{due_display}</span>
-                                {render_icon(calendar_days_icon, 16)}
-                            </button>
-
-                            {is_calendar_open ? (
-                                <CustomDatePicker
-                                    due_day={due_day}
-                                    due_month={due_month}
-                                    due_year={due_year}
-                                    on_close={() => set_is_calendar_open(false)}
-                                    on_save={(d, m, y) => {
-                                        set_due_day(d);
-                                        set_due_month(m);
-                                        set_due_year(y);
-                                    }}
-                                />
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Prioridad</label>
-                            <div className="bold_pill_select_wrap">
-                                <span className={`priority_pill_badge priority_pill_${priority.toLowerCase()}`}>
-                                    {priority.toUpperCase()}
-                                </span>
-                                <span className="chevron_icon">{render_icon(chevron_down_icon, 14)}</span>
-                                <select
-                                    value={priority}
-                                    onChange={(e) => set_priority(e.target.value)}
-                                >
-                                    <option value="Alta">Alta</option>
-                                    <option value="Media">Media</option>
-                                    <option value="Baja">Baja</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="bold_field_group">
-                            <label>Estado</label>
-                            <div className="bold_pill_select_wrap">
-                                <span className={`status_pill_badge status_pill_${status.toLowerCase().replace(".", "")}`}>
-                                    {status.toUpperCase()}
-                                </span>
-                                <span className="chevron_icon">{render_icon(chevron_down_icon, 14)}</span>
-                                <select
-                                    value={status}
-                                    onChange={(e) => set_status(e.target.value)}
-                                >
-                                    <option value="Activa">Activa</option>
-                                    <option value="Pend.">Pendiente</option>
-                                    <option value="Inactiva">Inactiva</option>
-                                    <option value="Lista">Lista</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bold_field_group">
-                        <label>Descripción</label>
-                        <textarea
-                            rows={3}
-                            className="bold_textarea"
-                            value={description}
-                            onChange={(e) => set_description(e.target.value)}
-                            placeholder="Instrucciones, detalles o notas importantes..."
-                        />
-                    </div>
-
-                    <div className="bold_field_group">
-                        <div className="subtasks_section_header">
-                            <label>Subtareas</label>
-                            <span className="subtasks_badge_count">{completed_subtasks_count} de {subtasks.length}</span>
-                        </div>
-
-                        <div className="subtasks_list_box">
-                            {subtasks.map((st) => (
-                                <div key={st.id} className={`subtask_item_card ${st.completed ? "completed" : ""}`}>
-                                    <button
-                                        type="button"
-                                        className={`task_checkbox ${st.completed ? "task_checkbox_checked" : ""}`}
-                                        onClick={() => handle_toggle_subtask_item(st.id)}
-                                    >
-                                        {st.completed ? render_icon(check_icon, 13) : null}
-                                    </button>
-
-                                    {editing_subtask_id === st.id ? (
-                                        <input
-                                            autoFocus
-                                            type="text"
-                                            className="bold_input_text"
-                                            style={{ padding: "4px 8px", fontSize: 13 }}
-                                            value={editing_subtask_text}
-                                            onChange={(e) => set_editing_subtask_text(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter") handle_save_edited_subtask(st.id);
-                                                if (e.key === "Escape") set_editing_subtask_id(null);
-                                            }}
-                                            onBlur={() => handle_save_edited_subtask(st.id)}
-                                        />
-                                    ) : (
-                                        <span className="subtask_title" style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1f2937" }}>
-                                            {st.title}
-                                        </span>
-                                    )}
-
-                                    {st.completed ? (
-                                        <span className="subtask_check_circle_green">
-                                            {render_icon(check_circle_icon, 16)}
-                                        </span>
-                                    ) : (
-                                        <span style={{ marginLeft: "auto", color: "#cbd5e1" }}>
-                                            <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", border: "1.5px solid #cbd5e1" }}></span>
-                                        </span>
-                                    )}
-
-                                    <div className="subtask_menu_container" style={{ position: "relative" }}>
-                                        <button
-                                            type="button"
-                                            className="subtask_menu_dots_btn"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                set_active_subtask_menu_id(active_subtask_menu_id === st.id ? null : st.id);
-                                            }}
-                                        >
-                                            {render_icon(more_vertical_icon, 16)}
-                                        </button>
-
-                                        {active_subtask_menu_id === st.id ? (
-                                            <div className="subtask_dots_popover" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        set_editing_subtask_id(st.id);
-                                                        set_editing_subtask_text(st.title);
-                                                        set_active_subtask_menu_id(null);
-                                                    }}
-                                                >
-                                                    {render_icon(pencil_icon, 13)}
-                                                    Editar
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="danger_item"
-                                                    onClick={() => handle_delete_subtask_item(st.id)}
-                                                >
-                                                    {render_icon(trash_icon, 13)}
-                                                    Eliminar
-                                                </button>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {is_adding_subtask ? (
-                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        className="bold_input_text"
-                                        placeholder="Descripción de la subtarea..."
-                                        value={new_subtask_input}
-                                        onChange={(e) => set_new_subtask_input(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") handle_add_subtask_confirm();
-                                            if (e.key === "Escape") set_is_adding_subtask(false);
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="bold_btn_submit"
-                                        style={{ padding: "8px 14px", fontSize: 12 }}
-                                        onClick={handle_add_subtask_confirm}
-                                    >
-                                        Agregar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="bold_btn_cancel"
-                                        style={{ padding: "8px 12px", fontSize: 12 }}
-                                        onClick={() => set_is_adding_subtask(false)}
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
-                            ) : (
-                                <button
-                                    type="button"
-                                    style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 6,
-                                        background: "none",
-                                        border: "none",
-                                        color: "#e22323",
-                                        fontSize: 13,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                        padding: "4px 0",
-                                        alignSelf: "flex-start"
-                                    }}
-                                    onClick={() => set_is_adding_subtask(true)}
-                                >
-                                    {render_icon(plus_icon, 15)}
-                                    Agregar subtarea
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="bold_field_group">
-                        <label>Archivos adjuntos</label>
-                        {attachments.map((att) => (
-                            <div key={att.id} className="detail_file_item" style={{ marginBottom: 6 }}>
-                                <span className={att.type === "zip" ? "file_badge_zip" : "file_badge_pdf"}>
-                                    {(att.type || "pdf").toUpperCase()}
-                                </span>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <strong style={{ display: "block", fontSize: 13, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</strong>
-                                    <small style={{ color: "#64748b", fontSize: 11 }}>{att.size}</small>
-                                </div>
-                                <button
-                                    type="button"
-                                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
-                                    onClick={() => handle_remove_attachment(att.id)}
-                                >
-                                    {render_icon(x_icon, 15)}
-                                </button>
-                            </div>
-                        ))}
-
-                        <label className="attachments_dropzone_box">
-                            <input
-                                type="file"
-                                multiple
-                                style={{ display: "none" }}
-                                onChange={handle_files_selected}
-                            />
-                            <span style={{ display: "inline-flex", padding: 8, background: "#fee2e2", color: "#e22323", borderRadius: 8 }}>
-                                {render_icon(paperclip_icon, 18)}
-                            </span>
-                            <div className="attachments_dropzone_text">
-                                <strong>Agregar más archivos</strong>
-                                <small>Puedes seleccionar varios archivos</small>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <footer className="bold_modal_footer">
-                    <button
-                        type="button"
-                        className="bold_btn_cancel"
-                        onClick={() => set_active_modal(null)}
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="button"
-                        className="bold_btn_submit"
-                        onClick={handle_save_changes}
-                    >
-                        Guardar cambios
-                    </button>
-                </footer>
-            </div>
-        </div>
-    );
-}
-
-// 7. Modal Crear Nueva Tarea (Image 4)
-function CreateTaskModal(props) {
-    const {
-        board_columns,
-        handle_create_task,
-        set_active_modal
-    } = props;
-
-    const [title, set_title] = use_state("");
-    const [project_id, set_project_id] = use_state("launch_q4");
-    const [section, set_section] = use_state(board_columns[0]?.id || "todo");
-    const [assignee_id, set_assignee_id] = use_state("david_urbina");
-    const [due_day, set_due_day] = use_state(null);
-    const [due_month, set_due_month] = use_state(8);
-    const [due_year, set_due_year] = use_state(2026);
-    const [priority, set_priority] = use_state("Alta");
-    const [description, set_description] = use_state("");
-
-    const [is_calendar_open, set_is_calendar_open] = use_state(false);
-    const [subtasks, set_subtasks] = use_state([
-        { id: `subtask_${Date.now()}`, title: "", completed: false }
-    ]);
-    const [attachments, set_attachments] = use_state([]);
-
-    const current_assignee = get_member(assignee_id);
-
-    function handle_update_subtask_title(id, text) {
-        set_subtasks((curr) => curr.map((s) => (s.id === id ? { ...s, title: text } : s)));
-    }
-
-    function handle_remove_subtask_row(id) {
-        set_subtasks((curr) => curr.filter((s) => s.id !== id));
-    }
-
-    function handle_add_subtask_row() {
-        set_subtasks((curr) => [
-            ...curr,
-            { id: `subtask_${Date.now()}_${Math.random()}`, title: "", completed: false }
-        ]);
-    }
-
-    function handle_files_selected(e) {
-        const files = e.target.files;
-        if (!files || !files.length) return;
-        const new_items = Array.from(files).map((f) => {
-            const ext = f.name.split(".").pop().toLowerCase();
-            const size_mb = (f.size / (1024 * 1024)).toFixed(1);
-            return {
-                id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                name: f.name,
-                size: `${Number(size_mb) > 0 ? size_mb : "0.1"} MB`,
-                type: ext === "zip" || ext === "rar" ? "zip" : ext === "pdf" ? "pdf" : "file"
-            };
-        });
-        set_attachments((curr) => [...curr, ...new_items]);
-        e.target.value = "";
-    }
-
-    function handle_submit() {
-        const trimmed_title = title.trim();
-        if (!trimmed_title) return;
-
-        const date_label = due_day ? `${due_day} ${month_abbrev_es[due_month] || "sep"}` : "Sin fecha";
-        const valid_subtasks = subtasks.filter((s) => s.title.trim().length > 0);
-
-        const new_task = {
-            id: `task_${Date.now()}`,
-            title: trimmed_title,
-            project_id,
-            section,
-            assignee_id,
-            due_day,
-            due_month,
-            due_year,
-            due_label: date_label,
-            priority,
-            status: section === "completed" ? "Lista" : section === "in_progress" ? "Activa" : "Pend.",
-            description,
-            completed: section === "completed",
-            tags: ["General"],
-            subtasks: valid_subtasks,
-            attachments,
-            attachment_name: attachments.length ? attachments[0].name : null,
-            comments: []
-        };
-
-        handle_create_task(new_task);
-        set_active_modal(null);
-    }
-
-    const due_display = due_day
-        ? `${due_day} de ${month_names_es[due_month] || "septiembre"}`
-        : "Seleccionar fecha";
-
-    return (
-        <div className="bold_modal_backdrop" onClick={() => set_active_modal(null)}>
-            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()}>
-                <header className="bold_modal_header">
-                    <div>
-                        <span className="bold_modal_eyebrow">NUEVA TAREA</span>
-                        <h2 className="bold_modal_title">Crear nueva tarea</h2>
-                    </div>
-                    <button
-                        type="button"
-                        className="bold_modal_close_btn"
-                        aria-label="Cerrar modal"
-                        onClick={() => set_active_modal(null)}
-                    >
-                        {render_icon(x_icon, 18)}
-                    </button>
-                </header>
-
-                <div className="bold_modal_body">
-                    <div className="bold_field_group">
-                        <label>Nombre de la tarea</label>
-                        <input
-                            type="text"
-                            className="bold_input_text"
-                            placeholder="Ej. Preparar presentación para el cliente"
-                            value={title}
-                            onChange={(e) => set_title(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Proyecto</label>
-                            <select
-                                className="bold_select_box"
-                                value={project_id}
-                                onChange={(e) => set_project_id(e.target.value)}
-                            >
-                                {project_items.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="bold_field_group">
-                            <label>Sección</label>
-                            <select
-                                className="bold_select_box"
-                                value={section}
-                                onChange={(e) => set_section(e.target.value)}
-                            >
-                                {board_columns.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Responsable</label>
-                            <div className="bold_pill_select_wrap">
-                                {render_avatar(current_assignee, "avatar_small")}
-                                <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: "#1f2937" }}>
-                                    {current_assignee?.name || "Sin asignar"}
-                                </span>
-                                <span className="chevron_icon">{render_icon(chevron_down_icon, 14)}</span>
-                                <select
-                                    value={assignee_id}
-                                    onChange={(e) => set_assignee_id(e.target.value)}
-                                >
-                                    {team_members.map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="bold_field_group bold_date_picker_container" style={{ position: "relative" }}>
-                            <label>Fecha límite</label>
-                            <button
-                                type="button"
-                                className="bold_date_trigger_btn"
-                                onClick={() => set_is_calendar_open(!is_calendar_open)}
-                            >
-                                {render_icon(calendar_days_icon, 16)}
-                                <span>{due_display}</span>
-                                {render_icon(calendar_days_icon, 16)}
-                            </button>
-
-                            {is_calendar_open ? (
-                                <CustomDatePicker
-                                    due_day={due_day}
-                                    due_month={due_month}
-                                    due_year={due_year}
-                                    on_close={() => set_is_calendar_open(false)}
-                                    on_save={(d, m, y) => {
-                                        set_due_day(d);
-                                        set_due_month(m);
-                                        set_due_year(y);
-                                    }}
-                                />
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label>Prioridad</label>
-                            <div className="bold_pill_select_wrap">
-                                <span className={`priority_pill_badge priority_pill_${priority.toLowerCase()}`}>
-                                    {priority.toUpperCase()}
-                                </span>
-                                <span className="chevron_icon">{render_icon(chevron_down_icon, 14)}</span>
-                                <select
-                                    value={priority}
-                                    onChange={(e) => set_priority(e.target.value)}
-                                >
-                                    <option value="Alta">Alta</option>
-                                    <option value="Media">Media</option>
-                                    <option value="Baja">Baja</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="bold_field_group">
-                            <label>Sección por defecto</label>
-                            <span style={{ fontSize: 13, color: "#64748b", padding: "10px 0" }}>
-                                Asignada según sección seleccionada
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="bold_field_group">
-                        <label>Descripción</label>
-                        <textarea
-                            rows={3}
-                            className="bold_textarea"
-                            value={description}
-                            onChange={(e) => set_description(e.target.value)}
-                            placeholder="Agrega contexto, instrucciones o enlaces importantes..."
-                        />
-                    </div>
-
-                    <div className="bold_field_group">
-                        <label>Subtareas</label>
-                        <div className="subtasks_list_box">
-                            {subtasks.map((st) => (
-                                <div key={st.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid #cbd5e1" }}></span>
-                                    <input
-                                        type="text"
-                                        className="bold_input_text"
-                                        placeholder="Descripción de la subtarea"
-                                        value={st.title}
-                                        onChange={(e) => handle_update_subtask_title(st.id, e.target.value)}
-                                    />
-                                    <button
-                                        type="button"
-                                        style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
-                                        onClick={() => handle_remove_subtask_row(st.id)}
-                                    >
-                                        {render_icon(trash_icon, 15)}
-                                    </button>
-                                </div>
-                            ))}
-                            <button
-                                type="button"
-                                style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    background: "none",
-                                    border: "none",
-                                    color: "#e22323",
-                                    fontSize: 13,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    padding: "4px 0",
-                                    alignSelf: "flex-start"
-                                }}
-                                onClick={handle_add_subtask_row}
-                            >
-                                {render_icon(plus_icon, 15)}
-                                Agregar subtarea
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="bold_field_group">
-                        <label>Archivos adjuntos</label>
-                        {attachments.map((att) => (
-                            <div key={att.id} className="detail_file_item" style={{ marginBottom: 6 }}>
-                                <span className={att.type === "zip" ? "file_badge_zip" : "file_badge_pdf"}>
-                                    {(att.type || "pdf").toUpperCase()}
-                                </span>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <strong style={{ display: "block", fontSize: 13, color: "#1e293b" }}>{att.name}</strong>
-                                    <small style={{ color: "#64748b", fontSize: 11 }}>{att.size}</small>
-                                </div>
-                            </div>
-                        ))}
-
-                        <label className="attachments_dropzone_box">
-                            <input
-                                type="file"
-                                multiple
-                                style={{ display: "none" }}
-                                onChange={handle_files_selected}
-                            />
-                            <span style={{ display: "inline-flex", padding: 8, background: "#fee2e2", color: "#e22323", borderRadius: 8 }}>
-                                {render_icon(paperclip_icon, 18)}
-                            </span>
-                            <div className="attachments_dropzone_text">
-                                <strong>Arrastra archivos aquí o haz clic para seleccionar</strong>
-                                <small>Puedes seleccionar varios archivos</small>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <footer className="bold_modal_footer">
-                    <button
-                        type="button"
-                        className="bold_btn_cancel"
-                        onClick={() => set_active_modal(null)}
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="button"
-                        className="bold_btn_submit"
-                        onClick={handle_submit}
-                    >
-                        Crear tarea
-                    </button>
-                </footer>
-            </div>
         </div>
     );
 }
@@ -3149,6 +2924,8 @@ export default function task_app() {
     const [is_adding_column, set_is_adding_column] = use_state(false);
     const [new_column_name, set_new_column_name] = use_state("");
     const [schedule_view, set_schedule_view] = use_state("timeline");
+    const [active_quick_popover, set_active_quick_popover] = use_state(null);
+    const [active_section, set_active_section] = use_state("tasks");
 
     function handle_drag_start(task_id) {
         set_dragged_task_id(task_id);
@@ -3211,16 +2988,9 @@ export default function task_app() {
     ]);
 
     const selected_task = use_memo(() => {
-        if (active_modal !== "detail") {
-            return null;
-        }
-
+        if (!selected_task_id) return null;
         return tasks.find((task_item) => task_item.id === selected_task_id) || null;
-    }, [
-        active_modal,
-        selected_task_id,
-        tasks
-    ]);
+    }, [selected_task_id, tasks]);
 
 
     // Loads real tasks from the boldApp backend on mount (falling back to
@@ -3365,7 +3135,15 @@ export default function task_app() {
 
     // Changes the active shell module and closes mobile navigation.
     function handle_module_change(module_id) {
-        set_active_module(module_id);
+        if (module_id === "schedules") {
+            set_active_module("tasks");
+            set_active_section("timeline");
+        } else {
+            set_active_module(module_id);
+            if (module_id === "tasks") {
+                set_active_section("tasks");
+            }
+        }
         set_is_sidebar_open(false);
         set_selected_task_id(null);
         set_active_modal(null);
@@ -3373,20 +3151,31 @@ export default function task_app() {
 
     function handle_tasks_menu_toggle() {
         set_active_module("tasks");
+        set_active_section("tasks");
         set_selected_task_id(null);
         set_active_modal(null);
         set_is_tasks_menu_open((current_value) => !current_value);
     }
 
 
-    // Opens the "Editar tarea" modal from any project view, seeding the
-    // edit draft (and its original snapshot, used for dirty-field
-    // highlighting) from the selected task's current values.
+    // Opens the task detail sidebar panel (right side split view).
     function handle_task_select(task_id) {
-        const task_item = tasks.find((current_task) => current_task.id === task_id);
+        if (!task_id) {
+            set_selected_task_id(null);
+            return;
+        }
+        set_selected_task_id(task_id);
+        set_active_quick_popover(null);
+    }
+
+
+    // Opens the "Editar tarea" modal and seeds the draft.
+    function handle_open_edit_task(task_id) {
+        const task_item = tasks.find((t) => t.id === task_id);
+        if (!task_item) return;
         const draft_snapshot = {
             title: task_item.title,
-            description: task_item.description,
+            description: task_item.description || "",
             project_id: task_item.project_id,
             section: task_item.section,
             assignee_id: task_item.assignee_id,
@@ -3394,12 +3183,54 @@ export default function task_app() {
             priority: task_item.priority,
             status: task_item.status
         };
-
         set_selected_task_id(task_id);
         set_edit_draft(draft_snapshot);
         set_edit_original(draft_snapshot);
         set_edit_attachments(task_item.attachment_name ? [{ id: "existing_attachment", name: task_item.attachment_name }] : []);
-        set_active_modal("detail");
+        set_active_modal("edit_task");
+    }
+
+
+    // Toggles / closes a quick priority or status popover in the table row.
+    function handle_toggle_quick_popover(task_id, popover_type) {
+        if (!task_id) {
+            set_active_quick_popover(null);
+            return;
+        }
+        set_active_quick_popover((current) =>
+            current?.taskId === task_id && current?.type === popover_type
+                ? null
+                : { taskId: task_id, type: popover_type }
+        );
+    }
+
+
+    // Applies a quick priority or status change from the inline popover.
+    function handle_quick_change(task_id, field, value) {
+        set_tasks((current_tasks) => current_tasks.map((task_item) => {
+            if (task_item.id !== task_id) return task_item;
+            const updated = { ...task_item, [field]: value };
+            update_task_request(task_id, updated).catch(() => {});
+            return updated;
+        }));
+        set_active_quick_popover(null);
+    }
+
+
+    // Adds a comment to a task from the detail panel input bar.
+    function handle_add_comment(task_id, comment_text) {
+        if (!comment_text.trim()) return;
+        add_comment_request(task_id, comment_text, "Joaquín Sierra")
+            .then((new_comment) => {
+                set_tasks((current_tasks) => current_tasks.map((task_item) =>
+                    task_item.id === task_id
+                        ? { ...task_item, comments: [...(task_item.comments || []), new_comment] }
+                        : task_item
+                ));
+            })
+            .catch((error) => {
+                console.warn("No se pudo agregar el comentario.", error);
+            });
     }
 
 
@@ -3606,19 +3437,47 @@ export default function task_app() {
 
     // Renders the active modal requested by the application state.
     function render_active_modal() {
+        // New Master-Plan Crear modal
         if (active_modal === "task") {
-            return render_task_form_modal({
-                draft_attachments,
-                draft_subtasks,
-                handle_add_draft_attachment,
-                handle_add_draft_subtask,
-                handle_remove_draft_attachment,
-                handle_remove_draft_subtask,
-                handle_submit: handle_create_task_submit,
-                handle_update_draft_subtask,
-                mode: "create",
-                set_active_modal
-            });
+            return (
+                <CreateTaskModal
+                    board_columns={board_columns}
+                    on_cancel={() => set_active_modal(null)}
+                    on_create={(new_task) => {
+                        const temporary_id = new_task.id;
+                        set_tasks((current_tasks) => [...current_tasks, new_task]);
+                        set_active_modal(null);
+                        set_active_view("list");
+                        create_task_request(new_task)
+                            .then((created_task) => {
+                                set_tasks((current_tasks) => current_tasks.map((t) =>
+                                    t.id === temporary_id ? created_task : t
+                                ));
+                            })
+                            .catch((error) => {
+                                console.warn("No se pudo crear la tarea.", error);
+                            });
+                    }}
+                />
+            );
+        }
+
+        // New Master-Plan Editar modal
+        if (active_modal === "edit_task" && selected_task && edit_draft) {
+            return (
+                <EditTaskModal
+                    board_columns={board_columns}
+                    edit_attachments={edit_attachments}
+                    edit_draft={edit_draft}
+                    handle_add_edit_attachment={handle_add_edit_attachment}
+                    handle_edit_field_change={handle_edit_field_change}
+                    handle_remove_edit_attachment={handle_remove_edit_attachment}
+                    handle_toggle_subtask={(subtask_id) => handle_toggle_subtask(selected_task.id, subtask_id)}
+                    on_cancel={() => { set_active_modal(null); }}
+                    on_save={(event) => handle_save_task_edits(event, selected_task.id)}
+                    selected_task={selected_task}
+                />
+            );
         }
 
         if (active_modal === "share") {
@@ -3631,25 +3490,6 @@ export default function task_app() {
 
         if (active_modal === "project_menu") {
             return render_project_menu(set_active_modal);
-        }
-
-        if (selected_task && edit_draft) {
-            return render_task_form_modal({
-                edit_attachments,
-                edit_draft,
-                edit_original,
-                handle_add_comment_submit,
-                handle_add_edit_attachment,
-                handle_delete_task,
-                handle_edit_field_change,
-                handle_remove_edit_attachment,
-                handle_submit: (event) => handle_save_task_edits(event, selected_task.id),
-                handle_toggle_subtask,
-                handle_toggle_task,
-                mode: "edit",
-                selected_task,
-                set_active_modal
-            });
         }
 
         return null;
@@ -3696,27 +3536,36 @@ export default function task_app() {
                 })}
                 {active_module === "tasks" ? render_tasks_module({
                     active_filters,
+                    active_quick_popover,
+                    active_section,
                     active_task_tool,
                     active_view,
                     board_columns,
                     dragged_task_id,
                     filtered_tasks,
                     handle_add_column,
+                    handle_add_comment,
                     handle_clear_filters,
                     handle_close_task_tool,
                     handle_column_drop,
+                    handle_delete_task,
                     handle_drag_start,
+                    handle_open_edit_task,
+                    handle_quick_change,
                     handle_task_select,
-                    handle_toggle_compact_view,
                     handle_toggle_filter_value,
+                    handle_toggle_quick_popover,
+                    handle_toggle_subtask,
                     handle_toggle_task,
                     handle_toggle_task_tool,
                     handle_toggle_visible_field,
                     is_adding_column,
-                    is_compact_view,
                     new_column_name,
                     search_query,
+                    selected_task,
+                    selected_task_id,
                     set_active_modal,
+                    set_active_section,
                     set_active_view,
                     set_is_adding_column,
                     set_new_column_name,
