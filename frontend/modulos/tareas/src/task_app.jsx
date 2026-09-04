@@ -357,6 +357,77 @@ function render_icon(icon_component, size = 18) {
 }
 
 
+// Parses a task's due_label (e.g. "10 sep" or "10 sep 2026") and returns
+// a Date object at midnight for that deadline.  Falls back to the current
+// year when the label does not include one.
+function parse_due_date(task_item) {
+    if (!task_item || !task_item.due_day) return null;
+    const now_year = new Date().getFullYear();
+    let due_month = 8; // default: September (index 8, same as starter data)
+    let due_year  = now_year;
+
+    if (task_item.due_label) {
+        const parts = task_item.due_label.trim().split(/\s+/);
+        // Formats: "10 sep"  →  ["10","sep"]
+        //          "10 sep 2026"  →  ["10","sep","2026"]
+        if (parts.length >= 2) {
+            const month_index = month_abbrev_es.indexOf(parts[1].toLowerCase());
+            if (month_index !== -1) due_month = month_index;
+        }
+        if (parts.length >= 3) {
+            const parsed_year = parseInt(parts[2], 10);
+            if (!isNaN(parsed_year)) due_year = parsed_year;
+        }
+    }
+
+    const d = new Date(due_year, due_month, task_item.due_day);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+
+// Calculates how many calendar days remain until a task's real deadline.
+// Returns null when no due date is set or the task is already completed.
+function get_days_remaining(task_item) {
+    if (!task_item || !task_item.due_day || task_item.completed) return null;
+    const due = parse_due_date(task_item);
+    if (!due) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff_ms = due.getTime() - today.getTime();
+    return Math.round(diff_ms / (1000 * 60 * 60 * 24));
+}
+
+
+// Renders a compact badge showing days remaining/overdue for a task.
+function render_days_badge(task_item) {
+    const days = get_days_remaining(task_item);
+    if (days === null) return null;
+
+    let badge_class = "days_badge";
+    let label;
+
+    if (days === 0) {
+        badge_class += " days_badge_today";
+        label = "Hoy";
+    } else if (days > 0) {
+        badge_class += " days_badge_future";
+        label = `+${days}d`;
+    } else {
+        badge_class += " days_badge_overdue";
+        label = `${days}d`;
+    }
+
+    const tooltip = days > 0
+        ? `Faltan ${days} día(s)`
+        : days === 0
+            ? "Vence hoy"
+            : `Vencida hace ${Math.abs(days)} día(s)`;
+
+    return <span className={badge_class} title={tooltip}>{label}</span>;
+}
+
+
 // Renders the small Bold logo mark used in the navigation shell.
 function render_logo() {
     return (
@@ -2352,7 +2423,8 @@ function render_task_row(props) {
                     }}
                     style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
                 >
-                    {task_item.title}
+                    <span className="task_name_button_inner">{task_item.title}</span>
+                    {render_days_badge(task_item)}
                 </button>
             </div>
 
@@ -2525,7 +2597,10 @@ function render_task_card(props) {
                 }}
                 style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
             >
-                <span className="task_card_title">{task_item.title}</span>
+                <span className="task_card_title">
+                    <span className="task_card_title_text">{task_item.title}</span>
+                    {render_days_badge(task_item)}
+                </span>
                 <span className="mobile_badge_row">
                     <span className={`task_badge status_badge ${get_status_class(task_item.status)}`}>
                         {task_item.status}
@@ -2720,7 +2795,8 @@ function render_board_card(props) {
                 }}
                 style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
             >
-                {task_item.title}
+                <span className="board_title_text">{task_item.title}</span>
+                {render_days_badge(task_item)}
             </button>
             <p>{task_item.description || "Sin descripción adicional."}</p>
             <footer>
@@ -2775,6 +2851,7 @@ function render_timeline_view(filtered_tasks, handle_task_select) {
                                     onClick={() => handle_task_select(task_item.id)}
                                 >
                                     {task_item.title}
+                                    {render_days_badge(task_item)}
                                 </button>
                             </div>
                             <div className="timeline_row_track">

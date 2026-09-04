@@ -6645,7 +6645,8 @@ button {
 .task_name_button {
     width: 100%;
     cursor: pointer;
-    display: block;
+    display: flex;
+    align-items: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -6665,6 +6666,9 @@ button {
     cursor: pointer;
     width: 100%;
     text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .task_card {
@@ -8481,4 +8485,114 @@ button {
     cursor: pointer;
     font-weight: 800;
     padding: 12px 18px;
+}
+
+/* ─── Days-remaining badge ─────────────────────────────────────────── */
+
+.days_badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+    margin-left: 6px;
+    border: 1px solid transparent;
+    transition: opacity 0.15s ease;
+    cursor: default;
+    user-select: none;
+}
+
+/* Future: muted blue-green */
+.days_badge_future {
+    background: #e8f4fd;
+    color: #2e7db8;
+    border-color: #b3d9f5;
+}
+
+/* Today: amber warning */
+.days_badge_today {
+    background: #fff7e6;
+    color: #d97706;
+    border-color: #fcd34d;
+    animation: days_pulse 2s ease-in-out infinite;
+}
+
+/* Overdue: urgent red */
+.days_badge_overdue {
+    background: #fff0f0;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+@keyframes days_pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.65; }
+}
+
+/* List view: make the task name cell flex so title + badge align inline */
+.task_name_button {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.task_name_button_inner {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Board view: title button flex alignment */
+.board_title_button {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: nowrap;
+}
+
+.board_title_text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+}
+
+/* Mobile card: title flex alignment */
+.task_card_title {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: nowrap;
+}
+
+.task_card_title_text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+}
+
+/* Timeline view: title column flex alignment */
+.timeline_task_link {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.timeline_task_title_text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
