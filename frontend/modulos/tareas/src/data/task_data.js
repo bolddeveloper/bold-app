@@ -84,7 +84,7 @@ export const starter_tasks = [
     {
         id: "task_001",
         title: "Definir concepto creativo",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae augue sit amet ipsum volutpat porta.",
+        description: "Definir la idea central, el tono y los mensajes que guiaran todas las piezas de la campana de lanzamiento.",
         project_id: "launch_q4",
         section: "todo",
         assignee_id: "ana_martinez",
@@ -99,12 +99,12 @@ export const starter_tasks = [
         subtasks: [
             {
                 id: "subtask_001",
-                title: "Lorem ipsum dolor sit amet",
+                title: "Revisar objetivos y audiencia de la campana",
                 completed: true
             },
             {
                 id: "subtask_002",
-                title: "Consectetur adipiscing elit",
+                title: "Presentar dos rutas creativas al equipo",
                 completed: false
             }
         ],
@@ -113,7 +113,7 @@ export const starter_tasks = [
     {
         id: "task_002",
         title: "Preparar calendario de contenidos",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam posuere lectus eu tellus tempus cursus.",
+        description: "Organizar las publicaciones de septiembre por canal, formato, responsable y fecha de entrega.",
         project_id: "launch_q4",
         section: "todo",
         assignee_id: "carla_ruiz",
@@ -128,7 +128,7 @@ export const starter_tasks = [
         subtasks: [
             {
                 id: "subtask_003",
-                title: "Lorem ipsum dolor sit amet",
+                title: "Definir temas y fechas de publicacion",
                 completed: false
             }
         ],
@@ -137,7 +137,7 @@ export const starter_tasks = [
     {
         id: "task_003",
         title: "Validar presupuesto de pauta",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla facilisi cras ac tellus quis justo porta.",
+        description: "Revisar la distribucion del presupuesto entre canales y confirmar que la inversion cumpla los objetivos de alcance.",
         project_id: "launch_q4",
         section: "todo",
         assignee_id: "",
@@ -202,7 +202,7 @@ export const starter_tasks = [
     {
         id: "task_005",
         title: "Configurar campana en Meta",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque tempor odio a eros dictum, at mattis urna fermentum.",
+        description: "Configurar audiencias, ubicaciones, presupuesto y seguimiento de conversiones para la campana en Meta Ads.",
         project_id: "launch_q4",
         section: "in_progress",
         assignee_id: "ana_martinez",
@@ -220,7 +220,7 @@ export const starter_tasks = [
     {
         id: "task_006",
         title: "Aprobar mensajes principales",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus tincidunt leo at nibh viverra viverra.",
+        description: "Validar los titulares, llamados a la accion y mensajes principales antes de producir las piezas finales.",
         project_id: "launch_q4",
         section: "completed",
         assignee_id: "carla_ruiz",
@@ -238,7 +238,7 @@ export const starter_tasks = [
     {
         id: "task_007",
         title: "Reunion de arranque",
-        description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec semper justo a lacus ullamcorper commodo.",
+        description: "Alinear objetivos, responsables, entregables y fechas clave con todo el equipo del proyecto.",
         project_id: "launch_q4",
         section: "completed",
         assignee_id: "ana_martinez",

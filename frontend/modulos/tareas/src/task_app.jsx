@@ -111,17 +111,17 @@ const placeholder_content = {
     home: {
         title: "Inicio",
         eyebrow: "BOLD WORKSPACE",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non sem sed mauris faucibus facilisis."
+        body: "Consulta la actividad reciente y accede rapidamente a tus proyectos y tareas pendientes."
     },
     inbox: {
         title: "Bandeja de entrada",
         eyebrow: "ACTUALIZACIONES",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent dictum erat nec lectus interdum."
+        body: "Revisa asignaciones, menciones y cambios recientes relacionados con tu trabajo."
     },
     reports: {
         title: "Informes",
         eyebrow: "REPORTES",
-        body: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse vitae justo vel nisi vehicula."
+        body: "Consulta el progreso de los proyectos, las tareas completadas y la carga del equipo."
     }
 };
 
@@ -845,7 +845,7 @@ function render_placeholder_module(active_module) {
             <div className="placeholder_card">
                 <span className="placeholder_icon">{render_icon(file_text_icon, 36)}</span>
                 <h2>Modulo vacio</h2>
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec at arcu sed velit bibendum.</p>
+                <p>Esta seccion estara disponible cuando existan datos para mostrar.</p>
             </div>
         </section>
     );
