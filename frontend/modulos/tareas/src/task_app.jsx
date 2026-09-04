@@ -1854,7 +1854,6 @@ function render_tasks_module(props) {
         handle_start_edit_column,
         is_adding_column,
         new_column_name,
-        search_query,
         selected_task,
         selected_task_id,
         set_active_modal,
@@ -3413,8 +3412,8 @@ function TaskAppContent() {
                 completed: next_completed
             };
 
-            update_task_request(task_item.id, updated_task).catch(() => {});
-            move_task_request(task_item.id, next_section).catch(() => {});
+            update_task_request(task_item.id, updated_task).catch(() => { });
+            move_task_request(task_item.id, next_section).catch(() => { });
             publish_task_event(create_task_event(task_event_types.task_status_changed, task_item.id, updated_task));
 
             return updated_task;
@@ -3525,7 +3524,7 @@ function TaskAppContent() {
         // de publish_task_event dispara un refetch que puede resolver
         // antes que la propia mutacion (por ejemplo, al crear una tarea),
         // pisando el estado optimista.
-        let unsubscribe = () => {};
+        let unsubscribe = () => { };
 
         if (is_using_real_backend()) {
             unsubscribe = subscribe_to_task_events(handle_incoming_event);
