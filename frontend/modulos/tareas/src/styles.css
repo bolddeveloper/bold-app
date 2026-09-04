@@ -640,6 +640,15 @@ button {
     gap: 16px;
 }
 
+/* Keep scrolling available while hiding native scrollbar chrome. */
+* {
+    scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
+}
+
 .view_shortcuts {
     display: flex;
     align-items: center;
@@ -4549,6 +4558,23 @@ button {
     font-weight: 600;
 }
 
+.subtask_text_input {
+    min-width: 0;
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    outline: 0;
+    padding: 5px 7px;
+}
+
+.subtask_text_input:focus {
+    border-color: #e2dfda;
+    background: #ffffff;
+    color: #252a34;
+}
+
 .task_detail_files {
     display: grid;
     gap: 8px;
@@ -8386,6 +8412,10 @@ button {
     font-size: 15px;
 }
 
+.my_tasks_button_active {
+    color: var(--bold_red);
+}
+
 .submenu_dot {
     width: 10px;
     height: 10px;
@@ -8424,12 +8454,76 @@ button {
     gap: 7px;
 }
 
+.project_item_wrap {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    align-items: center;
+    gap: 4px;
+}
+
 .project_item {
-    grid-template-columns: 14px minmax(0, 1fr) 22px;
+    grid-template-columns: 14px minmax(0, 1fr);
     min-height: 40px;
     padding: 0 12px;
     border-radius: 10px;
     font-size: 14px;
+}
+
+.project_more {
+    display: none;
+}
+
+.project_more_button {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.project_more_button:hover,
+.project_item_wrap:focus-within .project_more_button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.sidebar_project_menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 90;
+    display: grid;
+    width: 190px;
+    padding: 8px;
+    border: 1px solid #e5e1dc;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar_project_menu button {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #2c3038;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.sidebar_project_menu button:hover {
+    background: #f4f3f1;
+}
+
+.sidebar_project_menu .danger_menu_item {
+    color: var(--bold_red);
 }
 
 .project_dot {
@@ -9118,5 +9212,108 @@ button {
         grid-column: 2;
         justify-content: flex-end;
         padding: 0 16px 12px;
+    }
+}
+
+/* Resizable task detail and zoom-safe task content. */
+.tasks_workspace_split {
+    gap: 0;
+    overflow: hidden;
+}
+
+.tasks_main_area {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.task_table_card,
+.board_view {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+
+.task_table_card:focus-visible,
+.board_view:focus-visible,
+.task_detail_resizer:focus-visible {
+    outline: 2px solid var(--bold_red);
+    outline-offset: -2px;
+}
+
+.task_detail_resizer {
+    position: relative;
+    width: 18px;
+    align-self: stretch;
+    flex: 0 0 18px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.task_detail_resizer::after {
+    content: "";
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 8px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--bold_line);
+}
+
+.task_detail_resizer:hover::after,
+.task_detail_resizer:focus-visible::after {
+    background: var(--bold_red);
+}
+
+.task_detail_sidebar {
+    min-width: 0;
+    flex: 0 0 auto;
+}
+
+.task_detail_panel_card,
+.detail_title_row,
+.detail_meta_grid,
+.detail_collaborators_card,
+.detail_collab_row,
+.detail_collab_info {
+    min-width: 0;
+}
+
+.detail_title_row {
+    flex-wrap: wrap;
+}
+
+.detail_task_title,
+.meta_value,
+.detail_collab_name,
+.detail_collab_email,
+.detail_description_block {
+    overflow-wrap: anywhere;
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+    .tasks_workspace_split {
+        flex-direction: row;
+        padding: 16px;
+    }
+
+    .task_detail_sidebar {
+        position: sticky;
+        inset: auto;
+        top: 16px;
+        z-index: auto;
+        max-height: calc(100vh - 80px);
+        padding: 0;
+        background: transparent;
+    }
+}
+
+@media (max-width: 760px) {
+    .task_detail_resizer {
+        display: none;
+    }
+
+    .task_detail_sidebar {
+        width: 100% !important;
     }
 }

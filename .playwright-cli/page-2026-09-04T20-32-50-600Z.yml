@@ -1,0 +1,218 @@
+- generic [ref=f2e3]:
+  - complementary [ref=f2e4]:
+    - generic "Bold" [ref=f2e6]: bold
+    - generic [ref=f2e10]:
+      - paragraph [ref=f2e11]: NAVEGACION
+      - navigation "Principal" [ref=f2e12]:
+        - button "Inicio" [ref=f2e13] [cursor=pointer]
+        - generic [ref=f2e19]:
+          - button "Tareas" [expanded] [ref=f2e20] [cursor=pointer]
+          - generic [ref=f2e28]:
+            - button "Mis tareas" [ref=f2e29] [cursor=pointer]
+            - generic [ref=f2e32]:
+              - paragraph [ref=f2e33]: WORKSPACE
+              - button "B BOLD Workspace" [ref=f2e34] [cursor=pointer]:
+                - generic [ref=f2e35]: B
+                - generic [ref=f2e36]: BOLD Workspace
+            - generic [ref=f2e39]:
+              - generic [ref=f2e40]:
+                - paragraph [ref=f2e41]: PROYECTOS
+                - button "Crear proyecto" [ref=f2e42] [cursor=pointer]
+              - generic [ref=f2e44]:
+                - generic [ref=f2e45]:
+                  - button "Lanzamiento Q4" [ref=f2e46] [cursor=pointer]
+                  - button "Opciones de Lanzamiento Q4" [ref=f2e49] [cursor=pointer]
+                - generic [ref=f2e54]:
+                  - button "Contenido mensual" [ref=f2e55] [cursor=pointer]
+                  - button "Opciones de Contenido mensual" [ref=f2e58] [cursor=pointer]
+                - generic [ref=f2e63]:
+                  - button "Rediseno web" [ref=f2e64] [cursor=pointer]
+                  - button "Opciones de Rediseno web" [ref=f2e67] [cursor=pointer]
+                - generic [ref=f2e72]:
+                  - button "Campanas activas" [ref=f2e73] [cursor=pointer]
+                  - button "Opciones de Campanas activas" [ref=f2e76] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=f2e81] [cursor=pointer]
+        - button "Informes" [ref=f2e87] [cursor=pointer]
+    - generic [ref=f2e92]:
+      - generic [ref=f2e93]: AM
+      - generic [ref=f2e94]:
+        - strong [ref=f2e95]: Ana Martinez
+        - generic [ref=f2e96]: Administrador
+      - button "Perfil" [ref=f2e97] [cursor=pointer]
+  - main [ref=f2e102]:
+    - generic [ref=f2e103]:
+      - searchbox [ref=f2e108]
+      - generic [ref=f2e109]:
+        - button "Notificaciones" [ref=f2e111] [cursor=pointer]
+        - generic [ref=f2e116]: AM
+    - generic [ref=f2e117]:
+      - generic [ref=f2e118]:
+        - generic [ref=f2e119]:
+          - paragraph [ref=f2e120]: TAREAS / BOLD WORKSPACE / PROYECTOS / MARKETING
+          - heading "Lanzamiento Q4" [level=1] [ref=f2e121]
+          - paragraph [ref=f2e122]: Campaña y entregables del último trimestre
+        - generic [ref=f2e123]:
+          - generic "Miembros del proyecto" [ref=f2e124]:
+            - generic [ref=f2e125]: AM
+            - generic [ref=f2e126]: DU
+            - generic [ref=f2e127]: CR
+            - generic [ref=f2e128]: "+2"
+          - button "Compartir" [ref=f2e129] [cursor=pointer]
+          - button "Agregar tarea" [ref=f2e130] [cursor=pointer]
+          - button "Más opciones" [ref=f2e132] [cursor=pointer]
+      - generic [ref=f2e137]:
+        - tablist "Navegación principal" [ref=f2e138]:
+          - tab "Tareas" [selected] [ref=f2e139] [cursor=pointer]
+          - tab "Cronograma" [ref=f2e140] [cursor=pointer]
+          - tab "Calendario" [ref=f2e141] [cursor=pointer]
+        - generic [ref=f2e142]:
+          - button "Ordenar" [ref=f2e144] [cursor=pointer]
+          - button "Filtrar" [ref=f2e146] [cursor=pointer]
+          - button "Personalizar" [ref=f2e148] [cursor=pointer]
+          - group "Cambiar estilo de visualización" [ref=f2e149] [cursor=pointer]:
+            - button "Vista en lista" [ref=f2e150]
+            - button "Vista en columnas" [active] [pressed] [ref=f2e158]
+      - generic [ref=f2e163]:
+        - region "Tablero de tareas desplazable" [ref=f2e463]:
+          - generic [ref=f2e464]:
+            - generic [ref=f2e465]:
+              - heading "Por hacer" [level=2] [ref=f2e466]
+              - generic [ref=f2e467]: "3"
+            - generic [ref=f2e468]:
+              - article [ref=f2e469] [cursor=pointer]:
+                - generic [ref=f2e470]:
+                  - generic [ref=f2e472]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e473]
+                - button "Definir concepto creativo +6d" [ref=f2e474]:
+                  - generic [ref=f2e475]: Definir concepto creativo
+                  - generic "Faltan 6 día(s)" [ref=f2e476]: +6d
+                - paragraph [ref=f2e477]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae augue sit amet ipsum volutpat porta.
+                - generic [ref=f2e478]:
+                  - generic [ref=f2e479]: AM
+                  - generic [ref=f2e480]: 10 sep
+                  - generic [ref=f2e481]: Alta
+              - article [ref=f2e482] [cursor=pointer]:
+                - generic [ref=f2e483]:
+                  - generic [ref=f2e485]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e486]
+                - button "Preparar calendario de contenidos +8d" [ref=f2e487]:
+                  - generic [ref=f2e488]: Preparar calendario de contenidos
+                  - generic "Faltan 8 día(s)" [ref=f2e489]: +8d
+                - paragraph [ref=f2e490]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam posuere lectus eu tellus tempus cursus.
+                - generic [ref=f2e491]:
+                  - generic [ref=f2e492]: CR
+                  - generic [ref=f2e493]: 12 sep
+                  - generic [ref=f2e494]: Media
+              - article [ref=f2e495] [cursor=pointer]:
+                - generic [ref=f2e496]:
+                  - generic [ref=f2e498]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e499]
+                - button "Validar presupuesto de pauta +9d" [ref=f2e500]:
+                  - generic [ref=f2e501]: Validar presupuesto de pauta
+                  - generic "Faltan 9 día(s)" [ref=f2e502]: +9d
+                - paragraph [ref=f2e503]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla facilisi cras ac tellus quis justo porta.
+                - generic [ref=f2e504]:
+                  - generic [ref=f2e507]: 13 sep
+                  - generic [ref=f2e508]: Alta
+          - generic [ref=f2e509]:
+            - generic [ref=f2e510]:
+              - heading "En curso" [level=2] [ref=f2e511]
+              - generic [ref=f2e512]: "2"
+            - generic [ref=f2e513]:
+              - article [ref=f2e514] [cursor=pointer]:
+                - generic [ref=f2e515]:
+                  - generic [ref=f2e517]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e518]
+                - button "Disenar piezas de lanzamiento +4d" [ref=f2e519]:
+                  - generic [ref=f2e520]: Disenar piezas de lanzamiento
+                  - generic "Faltan 4 día(s)" [ref=f2e521]: +4d
+                - paragraph [ref=f2e522]: Disenar las piezas graficas para el lanzamiento de la campana de Q4 incluyendo key visual, banners para web y anuncios para redes sociales.
+                - generic [ref=f2e523]:
+                  - generic [ref=f2e524]: DU
+                  - generic [ref=f2e525]: 8 sep
+                  - generic [ref=f2e526]: Alta
+              - article [ref=f2e527] [cursor=pointer]:
+                - generic [ref=f2e528]:
+                  - generic [ref=f2e530]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e531]
+                - button "Configurar campana en Meta +5d" [ref=f2e532]:
+                  - generic [ref=f2e533]: Configurar campana en Meta
+                  - generic "Faltan 5 día(s)" [ref=f2e534]: +5d
+                - paragraph [ref=f2e535]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque tempor odio a eros dictum, at mattis urna fermentum.
+                - generic [ref=f2e536]:
+                  - generic [ref=f2e537]: AM
+                  - generic [ref=f2e538]: 9 sep
+                  - generic [ref=f2e539]: Media
+          - generic [ref=f2e540]:
+            - generic [ref=f2e541]:
+              - heading "Completadas" [level=2] [ref=f2e542]
+              - generic [ref=f2e543]: "2"
+            - generic [ref=f2e544]:
+              - article [ref=f2e545] [cursor=pointer]:
+                - generic [ref=f2e546]:
+                  - generic [ref=f2e548]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e549]
+                - button "Reunion de arranque" [ref=f2e552]
+                - paragraph [ref=f2e554]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec semper justo a lacus ullamcorper commodo.
+                - generic [ref=f2e555]:
+                  - generic [ref=f2e556]: AM
+                  - generic [ref=f2e557]: 2 sep
+                  - generic [ref=f2e558]: Baja
+              - article [ref=f2e559] [cursor=pointer]:
+                - generic [ref=f2e560]:
+                  - generic [ref=f2e562]: Lanzamiento Q4
+                  - button "Completar tarea" [ref=f2e563]
+                - button "Aprobar mensajes principales" [ref=f2e566]
+                - paragraph [ref=f2e568]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus tincidunt leo at nibh viverra viverra.
+                - generic [ref=f2e569]:
+                  - generic [ref=f2e570]: CR
+                  - generic [ref=f2e571]: 4 sep
+                  - generic [ref=f2e572]: Media
+          - button "Nueva sección" [ref=f2e574] [cursor=pointer]
+        - separator "Cambiar ancho del detalle de tarea" [ref=f2e389]
+        - generic [ref=f2e391]:
+          - generic [ref=f2e392]:
+            - generic [ref=f2e393]: DETALLE DE TAREA
+            - generic [ref=f2e394]:
+              - button "Editar tarea" [ref=f2e395] [cursor=pointer]
+              - button "Eliminar tarea" [ref=f2e399] [cursor=pointer]
+              - button "Cerrar panel" [ref=f2e403] [cursor=pointer]
+          - generic [ref=f2e407]:
+            - button "Completar tarea" [ref=f2e408] [cursor=pointer]
+            - heading "Definir concepto creativo" [level=2] [ref=f2e409]
+            - generic [ref=f2e410] [cursor=pointer]: Pend.
+          - generic [ref=f2e411]:
+            - generic [ref=f2e412]: Colaboradores
+            - generic "Ana Martinez" [ref=f2e415]: AM
+            - generic [ref=f2e418]: Fecha límite
+            - generic [ref=f2e419]: 10 sep
+            - generic [ref=f2e420]: Proyecto
+            - generic [ref=f2e421]: Lanzamiento Q4
+            - generic [ref=f2e423]: Prioridad
+            - generic [ref=f2e424]: Alta
+          - generic [ref=f2e426]:
+            - generic [ref=f2e427]:
+              - generic [ref=f2e428]: COLABORADORES (1)
+              - button "Modificar" [ref=f2e429] [cursor=pointer]
+            - generic [ref=f2e435]:
+              - generic [ref=f2e436]: AM
+              - generic [ref=f2e437]:
+                - strong [ref=f2e438]: Ana Martinez
+                - generic [ref=f2e439]: ana@bold.gt
+          - generic [ref=f2e440]:
+            - paragraph [ref=f2e441]: Descripción
+            - paragraph [ref=f2e442]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae augue sit amet ipsum volutpat porta.
+          - generic [ref=f2e443]:
+            - generic [ref=f2e444]:
+              - generic [ref=f2e445]: SUBTAREAS
+              - generic [ref=f2e446]: 1 de 2
+            - generic [ref=f2e449]:
+              - button [ref=f2e450] [cursor=pointer]
+              - generic [ref=f2e453]: Lorem ipsum dolor sit amet
+            - generic [ref=f2e454]:
+              - button [ref=f2e455] [cursor=pointer]
+              - generic [ref=f2e456]: Consectetur adipiscing elit
+          - paragraph [ref=f2e457]: Aun no hay comentarios.
+          - generic [ref=f2e458]:
+            - textbox "Escribe un comentario..." [ref=f2e459]
+            - button [disabled] [ref=f2e460]

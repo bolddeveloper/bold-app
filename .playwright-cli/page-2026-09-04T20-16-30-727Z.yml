@@ -1,0 +1,181 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic "Bold" [ref=f1e6]: bold
+    - generic [ref=f1e10]:
+      - paragraph [ref=f1e11]: NAVEGACION
+      - navigation "Principal" [ref=f1e12]:
+        - button "Inicio" [ref=f1e13] [cursor=pointer]
+        - generic [ref=f1e19]:
+          - button "Tareas" [expanded] [ref=f1e20] [cursor=pointer]
+          - generic [ref=f1e28]:
+            - button "Mis tareas" [ref=f1e29] [cursor=pointer]
+            - generic [ref=f1e32]:
+              - paragraph [ref=f1e33]: WORKSPACE
+              - button "B BOLD Workspace" [ref=f1e34] [cursor=pointer]:
+                - generic [ref=f1e35]: B
+                - generic [ref=f1e36]: BOLD Workspace
+            - generic [ref=f1e39]:
+              - generic [ref=f1e40]:
+                - paragraph [ref=f1e41]: PROYECTOS
+                - button "Crear proyecto" [ref=f1e42] [cursor=pointer]
+              - generic [ref=f1e44]:
+                - generic [ref=f1e45]:
+                  - button "Lanzamiento Q4" [ref=f1e46] [cursor=pointer]
+                  - button "Opciones de Lanzamiento Q4" [ref=f1e49] [cursor=pointer]
+                - generic [ref=f1e54]:
+                  - button "Contenido mensual" [ref=f1e55] [cursor=pointer]
+                  - button "Opciones de Contenido mensual" [ref=f1e58] [cursor=pointer]
+                - generic [ref=f1e63]:
+                  - button "Rediseno web" [ref=f1e64] [cursor=pointer]
+                  - button "Opciones de Rediseno web" [ref=f1e67] [cursor=pointer]
+                - generic [ref=f1e72]:
+                  - button "Campanas activas" [ref=f1e73] [cursor=pointer]
+                  - button "Opciones de Campanas activas" [ref=f1e76] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=f1e81] [cursor=pointer]
+        - button "Informes" [ref=f1e87] [cursor=pointer]
+    - generic [ref=f1e92]:
+      - generic [ref=f1e93]: AM
+      - generic [ref=f1e94]:
+        - strong [ref=f1e95]: Ana Martinez
+        - generic [ref=f1e96]: Administrador
+      - button "Perfil" [ref=f1e97] [cursor=pointer]
+  - main [ref=f1e102]:
+    - generic [ref=f1e103]:
+      - searchbox [ref=f1e108]
+      - generic [ref=f1e109]:
+        - button "Notificaciones" [ref=f1e111] [cursor=pointer]
+        - generic [ref=f1e116]: AM
+    - generic [ref=f1e117]:
+      - generic [ref=f1e118]:
+        - generic [ref=f1e119]:
+          - paragraph [ref=f1e120]: TAREAS / BOLD WORKSPACE / PROYECTOS / MARKETING
+          - heading "Mis tareas" [level=1] [ref=f1e389]
+          - paragraph [ref=f1e122]: Tareas asignadas a ti
+        - generic [ref=f1e123]:
+          - generic "Miembros del proyecto" [ref=f1e124]:
+            - generic [ref=f1e125]: AM
+            - generic [ref=f1e126]: DU
+            - generic [ref=f1e127]: CR
+            - generic [ref=f1e128]: "+2"
+          - button "Compartir" [ref=f1e129] [cursor=pointer]
+          - button "Agregar tarea" [ref=f1e130] [cursor=pointer]
+          - button "Más opciones" [ref=f1e132] [cursor=pointer]
+      - generic [ref=f1e137]:
+        - tablist "Navegación principal" [ref=f1e138]:
+          - tab "Tareas" [selected] [ref=f1e139] [cursor=pointer]
+          - tab "Cronograma" [ref=f1e140] [cursor=pointer]
+          - tab "Calendario" [ref=f1e141] [cursor=pointer]
+        - generic [ref=f1e142]:
+          - button "Ordenar" [ref=f1e144] [cursor=pointer]
+          - button "Filtrar" [ref=f1e146] [cursor=pointer]
+          - button "Personalizar" [ref=f1e148] [cursor=pointer]
+          - group "Cambiar estilo de visualización" [ref=f1e149] [cursor=pointer]:
+            - button "Vista en lista" [pressed] [ref=f1e150]
+            - button "Vista en columnas" [ref=f1e158]
+      - generic [ref=f1e163]:
+        - generic [ref=f1e166]:
+          - generic [ref=f1e167]:
+            - generic [ref=f1e168]: TAREA
+            - generic [ref=f1e169]: RESPONSABLE
+            - generic [ref=f1e170]: FECHA
+            - generic [ref=f1e171]: PRIORIDAD
+            - generic [ref=f1e172]: ESTADO
+          - generic [ref=f1e173]:
+            - button "POR HACER 1" [ref=f1e390] [cursor=pointer]:
+              - strong [ref=f1e178]: POR HACER
+              - generic [ref=f1e179]: "1"
+            - generic [ref=f1e180] [cursor=pointer]:
+              - button "Completar tarea" [ref=f1e181]
+              - button "Definir concepto creativo +6d" [active] [ref=f1e183]:
+                - generic [ref=f1e184]: Definir concepto creativo
+                - generic "Faltan 6 día(s)" [ref=f1e185]: +6d
+              - generic "Acciones de tarea" [ref=f1e186]:
+                - button "Editar Definir concepto creativo" [ref=f1e187]
+                - button "Eliminar Definir concepto creativo" [ref=f1e191]
+              - generic [ref=f1e195]: AM
+              - generic [ref=f1e197]: 10 sep
+              - button "ALTA" [ref=f1e199]
+              - button "PEND." [ref=f1e203]
+          - generic [ref=f1e259]:
+            - button "EN CURSO 1" [ref=f1e391] [cursor=pointer]:
+              - strong [ref=f1e264]: EN CURSO
+              - generic [ref=f1e265]: "1"
+            - generic [ref=f1e292] [cursor=pointer]:
+              - button "Completar tarea" [ref=f1e293]
+              - button "Configurar campana en Meta +5d" [ref=f1e295]:
+                - generic [ref=f1e296]: Configurar campana en Meta
+                - generic "Faltan 5 día(s)" [ref=f1e297]: +5d
+              - generic "Acciones de tarea" [ref=f1e298]:
+                - button "Editar Configurar campana en Meta" [ref=f1e299]
+                - button "Eliminar Configurar campana en Meta" [ref=f1e303]
+              - generic [ref=f1e307]: AM
+              - generic [ref=f1e309]: 9 sep
+              - button "MEDIA" [ref=f1e311]
+              - button "ACTIVA" [ref=f1e315]
+          - generic [ref=f1e318]:
+            - button "COMPLETADAS 1" [ref=f1e392] [cursor=pointer]:
+              - strong [ref=f1e323]: COMPLETADAS
+              - generic [ref=f1e324]: "1"
+            - generic [ref=f1e325] [cursor=pointer]:
+              - button "Completar tarea" [ref=f1e326]
+              - button "Reunion de arranque" [ref=f1e330]
+              - generic "Acciones de tarea" [ref=f1e332]:
+                - button "Editar Reunion de arranque" [ref=f1e333]
+                - button "Eliminar Reunion de arranque" [ref=f1e337]
+              - generic [ref=f1e341]: AM
+              - generic [ref=f1e343]: 2 sep
+              - button "BAJA" [ref=f1e345]
+              - button "LISTA" [ref=f1e349]
+          - button "+ Agregar tarea" [ref=f1e379] [cursor=pointer]
+          - button "+ Nueva sección" [ref=f1e381] [cursor=pointer]
+          - generic [ref=f1e382]:
+            - generic [ref=f1e383]:
+              - strong [ref=f1e384]: 3 tareas
+              - generic [ref=f1e385]: 1 completadas
+            - strong [ref=f1e388]: 33%
+        - generic [ref=f1e394]:
+          - generic [ref=f1e395]:
+            - generic [ref=f1e396]: DETALLE DE TAREA
+            - generic [ref=f1e397]:
+              - button "Editar tarea" [ref=f1e398] [cursor=pointer]
+              - button "Eliminar tarea" [ref=f1e402] [cursor=pointer]
+              - button "Cerrar panel" [ref=f1e406] [cursor=pointer]
+          - generic [ref=f1e410]:
+            - button "Completar tarea" [ref=f1e411] [cursor=pointer]
+            - heading "Definir concepto creativo" [level=2] [ref=f1e412]
+            - generic [ref=f1e413] [cursor=pointer]: Pend.
+          - generic [ref=f1e414]:
+            - generic [ref=f1e415]: Colaboradores
+            - generic "Ana Martinez" [ref=f1e418]: AM
+            - generic [ref=f1e421]: Fecha límite
+            - generic [ref=f1e422]: 10 sep
+            - generic [ref=f1e423]: Proyecto
+            - generic [ref=f1e424]: Lanzamiento Q4
+            - generic [ref=f1e426]: Prioridad
+            - generic [ref=f1e427]: Alta
+          - generic [ref=f1e429]:
+            - generic [ref=f1e430]:
+              - generic [ref=f1e431]: COLABORADORES (1)
+              - button "Modificar" [ref=f1e432] [cursor=pointer]
+            - generic [ref=f1e438]:
+              - generic [ref=f1e439]: AM
+              - generic [ref=f1e440]:
+                - strong [ref=f1e441]: Ana Martinez
+                - generic [ref=f1e442]: ana@bold.gt
+          - generic [ref=f1e443]:
+            - paragraph [ref=f1e444]: Descripción
+            - paragraph [ref=f1e445]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae augue sit amet ipsum volutpat porta.
+          - generic [ref=f1e446]:
+            - generic [ref=f1e447]:
+              - generic [ref=f1e448]: SUBTAREAS
+              - generic [ref=f1e449]: 1 de 2
+            - generic [ref=f1e452]:
+              - button [ref=f1e453] [cursor=pointer]
+              - generic [ref=f1e456]: Lorem ipsum dolor sit amet
+            - generic [ref=f1e457]:
+              - button [ref=f1e458] [cursor=pointer]
+              - generic [ref=f1e459]: Consectetur adipiscing elit
+          - paragraph [ref=f1e460]: Aun no hay comentarios.
+          - generic [ref=f1e461]:
+            - textbox "Escribe un comentario..." [ref=f1e462]
+            - button [disabled] [ref=f1e463]

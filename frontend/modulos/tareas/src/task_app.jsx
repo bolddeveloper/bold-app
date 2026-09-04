@@ -161,6 +161,10 @@ const default_status_items = ["Activa", "Pend.", "Lista", "Inactiva"];
 const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 const comments_storage_key = "bold_task_comments_by_task";
+const current_user = team_members.find((member_item) => (
+    member_item.email === (import.meta.env.VITE_DEMO_USER_EMAIL || "ana@bold.gt")
+)) || team_members[0];
+const current_user_id = current_user?.id;
 
 
 // Defines the optional desktop list columns and their labels/widths, in the
@@ -500,14 +504,15 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 
 
 // Renders a project item in the sidebar workspace list.
-function render_project_item(project_item, selected_project_id) {
+function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id) {
     const is_active = selected_project_id === project_item.id;
 
     return (
+        <div className="project_item_wrap dismissible_popover" key={project_item.id}>
         <button
             className={`project_item ${is_active ? "project_item_active" : ""}`}
-            key={project_item.id}
             type="button"
+            onClick={() => handle_project_select(project_item.id)}
         >
             {render_project_dot(project_item.color)}
             <span>{project_item.label}</span>
@@ -515,15 +520,38 @@ function render_project_item(project_item, selected_project_id) {
                 <span className="project_more">•••</span>
             ) : null}
         </button>
+            <button
+                className="project_more_button"
+                type="button"
+                aria-label={`Opciones de ${project_item.label}`}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    handle_project_menu_toggle(project_item.id);
+                }}
+            >
+                {render_icon(more_horizontal_icon, 18)}
+            </button>
+            {active_project_menu_id === project_item.id ? (
+                <div className="sidebar_project_menu">
+                    <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "edit")}>Editar proyecto</button>
+                    <button className="danger_menu_item" type="button" onClick={() => handle_project_menu_toggle(project_item.id, "delete")}>Eliminar proyecto</button>
+                </div>
+            ) : null}
+        </div>
     );
+}
+
+function get_split_content_width(split_element) {
+    const styles = window.getComputedStyle(split_element);
+    return split_element.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
 }
 
 
 // Renders the task workspace content nested below Tareas.
-function render_tasks_workspace_menu(handle_module_change, set_active_modal, projects) {
+function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope) {
     return (
         <div className="tasks_submenu" id="tasks_workspace_menu">
-            <button className="my_tasks_button" type="button" onClick={() => handle_module_change("tasks")}>
+            <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
                 <span className="submenu_dot"></span>
                 <span>Mis tareas</span>
             </button>
@@ -551,7 +579,7 @@ function render_tasks_workspace_menu(handle_module_change, set_active_modal, pro
                 </div>
 
                 <div className="project_list">
-                    {projects.map((project_item) => render_project_item(project_item, "launch_q4"))}
+                    {projects.map((project_item) => render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id))}
                 </div>
             </div>
         </div>
@@ -562,12 +590,18 @@ function render_tasks_workspace_menu(handle_module_change, set_active_modal, pro
 // Renders the desktop and mobile sidebar navigation.
 function render_sidebar(props) {
     const {
+        active_project_menu_id,
         active_module,
         handle_module_change,
+        handle_my_tasks_select,
+        handle_project_menu_toggle,
+        handle_project_select,
         handle_tasks_menu_toggle,
         is_sidebar_open,
         is_tasks_menu_open,
         projects,
+        selected_project_id,
+        task_scope,
         set_active_modal,
         set_is_sidebar_open
     } = props;
@@ -604,7 +638,7 @@ function render_sidebar(props) {
                                         is_expanded: is_tasks_menu_open,
                                         on_click: handle_tasks_menu_toggle
                                     })}
-                                    {is_tasks_menu_open ? render_tasks_workspace_menu(handle_module_change, set_active_modal, projects) : null}
+                                    {is_tasks_menu_open ? render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope) : null}
                                 </div>
                             );
                         })}
@@ -613,9 +647,9 @@ function render_sidebar(props) {
             </div>
 
             <div className="sidebar_footer">
-                <span className="profile_avatar">JS</span>
+                <span className="profile_avatar">{current_user.initials}</span>
                 <div className="profile_text">
-                    <strong>Joaquin Sierra</strong>
+                    <strong>{current_user.name}</strong>
                     <span>Administrador</span>
                 </div>
                 <button className="profile_menu_button" type="button" aria-label="Perfil">
@@ -725,7 +759,7 @@ function render_top_bar(props) {
                         notifications
                     }) : null}
                 </div>
-                <span className="soft_avatar">JS</span>
+                <span className="soft_avatar">{current_user.initials}</span>
             </div>
         </header>
     );
@@ -766,7 +800,7 @@ function render_mobile_header(props) {
                     aria-label="Mas opciones"
                     onClick={() => set_active_modal(selected_task ? "project_menu" : null)}
                 >
-                    {selected_task ? render_icon(more_horizontal_icon, 21) : <span>JS</span>}
+                    {selected_task ? render_icon(more_horizontal_icon, 21) : <span>{current_user.initials}</span>}
                 </button>
             </div>
         </header>
@@ -1701,6 +1735,19 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
 function CollaboratorsSelector({ on_change, selected_ids = [] }) {
     const [is_picker_open, set_is_picker_open] = use_state(false);
 
+    use_effect(() => {
+        if (!is_picker_open) return undefined;
+
+        function handle_outside_pointer_down(event) {
+            if (!event.target.closest(".collaborator_picker_anchor")) {
+                set_is_picker_open(false);
+            }
+        }
+
+        document.addEventListener("pointerdown", handle_outside_pointer_down);
+        return () => document.removeEventListener("pointerdown", handle_outside_pointer_down);
+    }, [is_picker_open]);
+
     function toggle_member(member_id) {
         if (selected_ids.includes(member_id)) {
             on_change(selected_ids.filter((id) => id !== member_id));
@@ -1722,7 +1769,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
                 <label className="bold_field_label">
                     Colaboradores asignados ({assigned_members.length})
                 </label>
-                <div style={{ position: "relative" }}>
+                <div className="collaborator_picker_anchor" style={{ position: "relative" }}>
                     <button
                         type="button"
                         className="add_collaborator_btn"
@@ -1801,9 +1848,9 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
 
 
 // "Editar Tarea" modal (Image 2 of design reference).
-function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_edit_field_change, handle_remove_edit_attachment, handle_toggle_subtask, on_cancel, on_save, selected_task, status_options }) {
+function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options }) {
     const [show_datepicker, set_show_datepicker] = use_state(false);
-    const subtasks = Array.isArray(selected_task.subtasks) ? selected_task.subtasks : [];
+    const subtasks = Array.isArray(edit_draft.subtasks) ? edit_draft.subtasks : [];
     const done_count = subtasks.filter((s) => s.completed).length;
 
     const current_collaborators = edit_draft.collaborator_ids && edit_draft.collaborator_ids.length
@@ -1847,7 +1894,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                                 value={edit_draft.project_id || ""}
                                 onChange={(e) => handle_edit_field_change("project_id", e.target.value)}
                             >
-                                {project_items.map((p) => (
+                                {projects.map((p) => (
                                     <option key={p.id} value={p.id}>{p.label}</option>
                                 ))}
                             </select>
@@ -1938,13 +1985,28 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                                 <button
                                     type="button"
                                     className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}
-                                    onClick={() => handle_toggle_subtask(sub.id)}
+                                    onClick={() => handle_toggle_edit_subtask(sub.id)}
                                 >
                                     {sub.completed ? render_icon(check_icon, 11) : null}
                                 </button>
-                                <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>{sub.title}</span>
+                                <input
+                                    className={`subtask_text subtask_text_input ${sub.completed ? "subtask_text_done" : ""}`}
+                                    value={sub.title}
+                                    onChange={(event) => handle_edit_subtask_title_change(sub.id, event.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    className="attachment_remove_btn"
+                                    aria-label={`Eliminar ${sub.title || "subtarea"}`}
+                                    onClick={() => handle_remove_edit_subtask(sub.id)}
+                                >
+                                    {render_icon(trash_icon, 14)}
+                                </button>
                             </div>
                         ))}
+                        <button type="button" className="attachment_add_more_btn" onClick={handle_add_edit_subtask}>
+                            {render_icon(plus_icon, 14)} Agregar subtarea
+                        </button>
                     </div>
 
                     {/* Adjuntos */}
@@ -1987,9 +2049,9 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
 
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, on_cancel, on_create, status_options }) {
+function CreateTaskModal({ board_columns, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options }) {
     const [title, set_title] = use_state("");
-    const [project_id, set_project_id] = use_state(project_items[0]?.id || "");
+    const [project_id, set_project_id] = use_state(selected_project_id);
     const [section, set_section] = use_state("todo");
     const [collaborator_ids, set_collaborator_ids] = use_state([]);
     const [due_day, set_due_day] = use_state(null);
@@ -2057,7 +2119,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, status_options }
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
                             <select className="bold_select_input" value={project_id} onChange={(e) => set_project_id(e.target.value)}>
-                                {project_items.map((p) => (
+                                {projects.map((p) => (
                                     <option key={p.id} value={p.id}>{p.label}</option>
                                 ))}
                             </select>
@@ -2200,6 +2262,8 @@ function render_tasks_module(props) {
         handle_column_drop,
         handle_delete_task,
         handle_delete_column,
+        handle_detail_resize_key_down,
+        handle_detail_resize_start,
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
@@ -2215,8 +2279,10 @@ function render_tasks_module(props) {
         handle_start_edit_column,
         is_adding_column,
         new_column_name,
+        selected_project,
         selected_task,
         selected_task_id,
+        task_detail_width,
         set_active_modal,
         set_active_section,
         set_active_view,
@@ -2234,8 +2300,9 @@ function render_tasks_module(props) {
         visible_fields
     } = props;
 
-    const completed_count = tasks.filter((task_item) => task_item.completed).length;
-    const completion_percent = tasks.length ? Math.round((completed_count / tasks.length) * 100) : 0;
+    const project_tasks = filtered_tasks;
+    const completed_count = project_tasks.filter((task_item) => task_item.completed).length;
+    const completion_percent = project_tasks.length ? Math.round((completed_count / project_tasks.length) * 100) : 0;
 
     return (
         <section className="tasks_module">
@@ -2245,8 +2312,8 @@ function render_tasks_module(props) {
                         TAREAS / BOLD WORKSPACE
                         <span className="desktop_breadcrumb_tail"> / PROYECTOS / MARKETING</span>
                     </p>
-                    <h1>Lanzamiento Q4</h1>
-                    <p className="project_subtitle">Campaña y entregables del último trimestre</p>
+                    <h1>{selected_project.label}</h1>
+                    <p className="project_subtitle">{selected_project.description || "Campaña y entregables del último trimestre"}</p>
                     <button className="mobile_workspace_selector" type="button">
                         <span className="workspace_badge">B</span>
                         <span>BOLD Workspace</span>
@@ -2410,7 +2477,7 @@ function render_tasks_module(props) {
                             set_active_modal,
                             set_new_column_name,
                             status_options,
-                            tasks,
+                            tasks: project_tasks,
                             visible_fields
                         }) : null}
 
@@ -2435,6 +2502,7 @@ function render_tasks_module(props) {
                             is_adding_column,
                             new_column_name,
                             selected_task_id,
+                            set_active_modal,
                             set_editing_column_id,
                             set_is_adding_column,
                             set_editing_column_name,
@@ -2443,7 +2511,19 @@ function render_tasks_module(props) {
                     </div>
 
                     {selected_task ? (
-                        <div className="task_detail_sidebar">
+                        <>
+                        <div
+                            className="task_detail_resizer"
+                            role="separator"
+                            aria-label="Cambiar ancho del detalle de tarea"
+                            aria-orientation="vertical"
+                            aria-valuemin={320}
+                            aria-valuenow={task_detail_width}
+                            tabIndex={0}
+                            onKeyDown={handle_detail_resize_key_down}
+                            onPointerDown={handle_detail_resize_start}
+                        />
+                        <div className="task_detail_sidebar" style={{ width: `min(${task_detail_width}px, 50%)` }}>
                             <TaskDetailPanel
                                 handle_add_comment={handle_add_comment}
                                 handle_delete_task={handle_delete_task}
@@ -2454,20 +2534,21 @@ function render_tasks_module(props) {
                                 selected_task={selected_task}
                             />
                         </div>
+                        </>
                     ) : null}
                 </div>
             ) : null}
 
             {active_section === "timeline" ? (
                 <div className="timeline_view_wrapper">
-                    {render_timeline_view(filtered_tasks, handle_task_select)}
+                    {render_timeline_view(project_tasks, handle_task_select)}
                 </div>
             ) : null}
 
             {active_section === "calendar" ? (
                 <div className="calendar_view_wrapper">
                     {render_calendar_view({
-                        filtered_tasks,
+                        filtered_tasks: project_tasks,
                         handle_task_select,
                         set_active_modal
                     })}
@@ -2522,10 +2603,10 @@ function render_list_view(props) {
         is_adding_column,
         new_column_name,
         selected_task_id,
+        set_active_modal,
         set_editing_column_id,
         set_editing_column_name,
         set_is_adding_column,
-        set_active_modal,
         set_new_column_name,
         status_options,
         tasks,
@@ -2534,7 +2615,7 @@ function render_list_view(props) {
     const field_items = optional_column_items;
 
     if (!filtered_tasks.length) {
-        return render_empty_tasks_state();
+        return render_empty_tasks_state(set_active_modal);
     }
 
     return (
@@ -2543,7 +2624,7 @@ function render_list_view(props) {
                 {render_progress_card(tasks, completed_count, completion_percent)}
             </div>
 
-            <div className="task_table_card desktop_only">
+            <div className="task_table_card desktop_only" tabIndex={0} role="region" aria-label="Lista de tareas desplazable">
                 <div className="task_table_header" style={get_task_table_columns_style(visible_fields, false, field_items)}>
                     <span>TAREA</span>
                     <span aria-hidden="true"></span>
@@ -2999,6 +3080,7 @@ function render_board_view(props) {
         handle_toggle_task,
         is_adding_column,
         new_column_name,
+        set_active_modal,
         set_editing_column_id,
         set_editing_column_name,
         set_is_adding_column,
@@ -3006,13 +3088,13 @@ function render_board_view(props) {
     } = props;
 
     if (!filtered_tasks.length) {
-        return render_empty_tasks_state();
+        return render_empty_tasks_state(set_active_modal);
     }
 
     const columns_to_render = board_columns && board_columns.length ? board_columns : default_board_columns;
 
     return (
-        <div className="board_view">
+        <div className="board_view" tabIndex={0} role="region" aria-label="Tablero de tareas desplazable">
             {columns_to_render.map((section_item) => {
                 const section_tasks = get_tasks_by_section(filtered_tasks, section_item.id);
 
@@ -3319,16 +3401,16 @@ function render_calendar_view(props) {
 
 
 // Renders the empty task state shown when active filters remove all items.
-function render_empty_tasks_state() {
+function render_empty_tasks_state(set_active_modal) {
     return (
         <div className="empty_tasks_state">
             <div className="empty_search_icon">
                 {render_icon(search_icon, 96)}
             </div>
             <h2>No encontramos tareas</h2>
-            <p>Prueba cambiando o eliminando los filtros activos.</p>
-            <button className="primary_button" type="button">
-                Limpiar filtros
+            <p>Agrega una tarea o ajusta los filtros activos.</p>
+            <button className="primary_button" type="button" onClick={() => set_active_modal?.("task")}>
+                Agregar tarea
             </button>
         </div>
     );
@@ -3415,6 +3497,7 @@ function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_co
 // Renders the create project modal shown from the sidebar add button.
 function render_project_modal(props) {
     const {
+        editing_project,
         handle_create_project,
         project_color,
         project_people_ids,
@@ -3435,7 +3518,7 @@ function render_project_modal(props) {
                 <header className="project_create_header">
                     <h2>
                         {render_icon(folder_icon, 34)}
-                        Crear nuevo proyecto
+                        {editing_project ? "Editar proyecto" : "Crear nuevo proyecto"}
                     </h2>
                     <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
                         {render_icon(x_icon, 30)}
@@ -3445,12 +3528,12 @@ function render_project_modal(props) {
                 <form className="project_create_body" onSubmit={handle_create_project}>
                     <label className="project_create_step">
                         <span><strong>1</strong> Nombre del proyecto</span>
-                        <input name="project_name" type="text" placeholder="Ej. Campana de lanzamiento Q4" required />
+                        <input name="project_name" type="text" placeholder="Ej. Campana de lanzamiento Q4" defaultValue={editing_project?.label || ""} required />
                     </label>
 
                     <label className="project_create_step">
                         <span><strong>2</strong> Descripcion</span>
-                        <textarea name="project_description" rows="4" placeholder="Describe brevemente el objetivo y alcance del proyecto..."></textarea>
+                        <textarea name="project_description" rows="4" placeholder="Describe brevemente el objetivo y alcance del proyecto..." defaultValue={editing_project?.description || ""}></textarea>
                     </label>
 
                     <section className="project_create_step">
@@ -3477,15 +3560,15 @@ function render_project_modal(props) {
                         <div className="project_create_grid_3">
                             <label>
                                 Fecha de inicio
-                                <input name="project_start" type="date" />
+                                <input name="project_start" type="date" defaultValue={editing_project?.start_date || ""} />
                             </label>
                             <label>
                                 Fecha de fin
-                                <input name="project_end" type="date" />
+                                <input name="project_end" type="date" defaultValue={editing_project?.end_date || ""} />
                             </label>
                             <label>
                                 Estado inicial
-                                <select name="project_status" defaultValue="Activo">
+                                <select name="project_status" defaultValue={editing_project?.status || "Activo"}>
                                     <option>Activo</option>
                                     <option>Pendiente</option>
                                     <option>Inactivo</option>
@@ -3494,7 +3577,7 @@ function render_project_modal(props) {
                         </div>
                         <label className="project_create_full_select">
                             Prioridad
-                            <select name="project_priority" defaultValue="Media">
+                            <select name="project_priority" defaultValue={editing_project?.priority || "Media"}>
                                 {priority_items.map((priority_item) => <option key={priority_item}>{priority_item}</option>)}
                             </select>
                         </label>
@@ -3535,7 +3618,7 @@ function render_project_modal(props) {
 
                     <footer className="project_create_footer">
                         <button type="button" onClick={() => set_active_modal(null)}>Cancelar</button>
-                        <button type="submit">Crear proyecto</button>
+                        <button type="submit">{editing_project ? "Guardar cambios" : "Crear proyecto"}</button>
                     </footer>
                 </form>
             </section>
@@ -3708,6 +3791,11 @@ function TaskAppContent() {
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
+    const [selected_project_id, set_selected_project_id] = use_state("launch_q4");
+    const [task_scope, set_task_scope] = use_state("project");
+    const [task_detail_width, set_task_detail_width] = use_state(390);
+    const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
+    const [editing_project_id, set_editing_project_id] = use_state(null);
     const [inbox_tab, set_inbox_tab] = use_state("activity");
     const [selected_inbox_id, set_selected_inbox_id] = use_state(null);
     const [saved_inbox_ids, set_saved_inbox_ids] = use_state([]);
@@ -3727,6 +3815,17 @@ function TaskAppContent() {
         localStorage.setItem(projects_storage_key, JSON.stringify(projects));
     }, [projects]);
 
+    use_effect(() => {
+        function clamp_detail_width() {
+            const split_element = document.querySelector(".tasks_workspace_split");
+            if (!split_element || window.innerWidth <= 760) return;
+            set_task_detail_width((current_width) => Math.min(current_width, get_split_content_width(split_element) / 2));
+        }
+
+        window.addEventListener("resize", clamp_detail_width);
+        return () => window.removeEventListener("resize", clamp_detail_width);
+    }, []);
+
     function toggle_project_person(member_id) {
         set_project_people_ids((current_ids) => (
             current_ids.includes(member_id)
@@ -3744,24 +3843,59 @@ function TaskAppContent() {
             return;
         }
 
-        set_projects((current_projects) => [
-            ...current_projects,
-            {
-                id: `project_${Date.now()}`,
-                label,
-                description: (form_data.get("project_description") || "").toString(),
-                color: project_color,
-                start_date: form_data.get("project_start") || "",
-                end_date: form_data.get("project_end") || "",
-                status: form_data.get("project_status") || "Activo",
-                priority: form_data.get("project_priority") || "Media",
-                member_ids: project_people_ids
-            }
-        ]);
+        const project_payload = {
+            id: editing_project_id || `project_${Date.now()}`,
+            label,
+            description: (form_data.get("project_description") || "").toString(),
+            color: project_color,
+            start_date: form_data.get("project_start") || "",
+            end_date: form_data.get("project_end") || "",
+            status: form_data.get("project_status") || "Activo",
+            priority: form_data.get("project_priority") || "Media",
+            member_ids: project_people_ids
+        };
+
+        set_projects((current_projects) => (
+            editing_project_id
+                ? current_projects.map((project_item) => project_item.id === editing_project_id ? { ...project_item, ...project_payload } : project_item)
+                : [...current_projects, project_payload]
+        ));
+        set_selected_project_id(project_payload.id);
         set_project_color(project_color_options[0]);
         set_project_people_ids(team_members.map((member_item) => member_item.id));
         set_project_people_query("");
+        set_editing_project_id(null);
         set_active_modal(null);
+    }
+
+    function handle_project_select(project_id) {
+        set_selected_project_id(project_id);
+        set_task_scope("project");
+        set_active_module("tasks");
+        set_active_section("tasks");
+        set_selected_task_id(null);
+        set_active_project_menu_id(null);
+    }
+
+    function handle_project_menu_toggle(project_id, action = "toggle") {
+        if (action === "edit") {
+            const project_item = projects.find((item) => item.id === project_id);
+            set_editing_project_id(project_id);
+            set_project_color(project_item?.color || project_color_options[0]);
+            set_project_people_ids(project_item?.member_ids || team_members.map((member_item) => member_item.id));
+            set_active_project_menu_id(null);
+            set_active_modal("project");
+            return;
+        }
+
+        if (action === "delete") {
+            set_delete_target({ type: "project", id: project_id });
+            set_active_project_menu_id(null);
+            set_active_modal("delete_confirm");
+            return;
+        }
+
+        set_active_project_menu_id((current_id) => current_id === project_id ? null : project_id);
     }
 
     function handle_drag_start(task_id) {
@@ -3845,15 +3979,28 @@ function TaskAppContent() {
     const filtered_tasks = use_memo(() => {
         const by_search = get_filtered_tasks(tasks, search_query);
         const by_filters = get_tasks_matching_active_filters(by_search, active_filters);
+        const scoped_tasks = task_scope === "mine"
+            ? by_filters.filter((task_item) => (
+                task_item.assignee_id === current_user_id || task_item.collaborator_ids?.includes(current_user_id)
+            ))
+            : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(by_filters, sort_field, sort_direction);
+        return get_sorted_tasks(scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
+        selected_project_id,
         sort_direction,
         sort_field,
+        task_scope,
         tasks
     ]);
+
+    const selected_project = use_memo(() => (
+        task_scope === "mine"
+            ? { id: "my_tasks", label: "Mis tareas", description: "Tareas asignadas a ti" }
+            : projects.find((project_item) => project_item.id === selected_project_id) || projects[0] || project_items[0]
+    ), [projects, selected_project_id, task_scope]);
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
@@ -3865,6 +4012,24 @@ function TaskAppContent() {
         const default_notification = notifications.find((notification_item) => !notification_item.is_read) || notifications[0];
         set_selected_inbox_id(default_notification.id);
     }, [notifications, selected_inbox_id]);
+
+    use_effect(() => {
+        function handle_pointer_down(event) {
+            if (event.target.closest(".task_tool_anchor, .quick_popover_container, .project_menu_popover, .project_item_wrap")) {
+                return;
+            }
+
+            set_is_notifications_open(false);
+            set_active_task_tool(null);
+            set_active_quick_popover(null);
+            set_inbox_filter_menu(null);
+            set_active_project_menu_id(null);
+            set_active_modal((current_modal) => current_modal === "project_menu" ? null : current_modal);
+        }
+
+        document.addEventListener("pointerdown", handle_pointer_down);
+        return () => document.removeEventListener("pointerdown", handle_pointer_down);
+    }, []);
 
 
     // Loads real tasks from the boldApp backend on mount (falling back to
@@ -4068,6 +4233,14 @@ function TaskAppContent() {
         set_is_tasks_menu_open((current_value) => !current_value);
     }
 
+    function handle_my_tasks_select() {
+        set_task_scope("mine");
+        set_active_module("tasks");
+        set_active_section("tasks");
+        set_selected_task_id(null);
+        set_is_sidebar_open(false);
+    }
+
 
     // Opens the task detail sidebar panel (right side split view).
     function handle_task_select(task_id) {
@@ -4077,6 +4250,36 @@ function TaskAppContent() {
         }
         set_selected_task_id(task_id);
         set_active_quick_popover(null);
+    }
+
+    function handle_detail_resize_start(event) {
+        if (window.innerWidth <= 760) return;
+        event.preventDefault();
+        event.currentTarget.focus();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        const split_width = get_split_content_width(event.currentTarget.parentElement);
+        const detail_width = event.currentTarget.nextElementSibling.getBoundingClientRect().width;
+        const start_x = event.clientX;
+
+        function handle_pointer_move(move_event) {
+            set_task_detail_width(Math.min(split_width / 2, Math.max(320, detail_width + start_x - move_event.clientX)));
+        }
+
+        function handle_pointer_up() {
+            window.removeEventListener("pointermove", handle_pointer_move);
+            window.removeEventListener("pointerup", handle_pointer_up);
+        }
+
+        window.addEventListener("pointermove", handle_pointer_move);
+        window.addEventListener("pointerup", handle_pointer_up);
+    }
+
+    function handle_detail_resize_key_down(event) {
+        if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        const max_width = get_split_content_width(event.currentTarget.parentElement) / 2;
+        const direction = event.key === "ArrowLeft" ? 16 : -16;
+        set_task_detail_width((current_width) => Math.min(max_width, Math.max(320, current_width + direction)));
     }
 
 
@@ -4090,10 +4293,12 @@ function TaskAppContent() {
             project_id: task_item.project_id,
             section: task_item.section,
             assignee_id: task_item.assignee_id,
+            collaborator_ids: Array.isArray(task_item.collaborator_ids) ? task_item.collaborator_ids : [],
             due_day: task_item.due_day,
             due_label: task_item.due_label || "",
             priority: task_item.priority,
-            status: task_item.status
+            status: task_item.status,
+            subtasks: (Array.isArray(task_item.subtasks) ? task_item.subtasks : []).map((subtask_item) => ({ ...subtask_item }))
         };
         set_selected_task_id(task_id);
         set_edit_draft(draft_snapshot);
@@ -4141,7 +4346,7 @@ function TaskAppContent() {
         const new_comment = {
             id: `comment_${Date.now()}`,
             task_id,
-            author_name: "Joaquin Sierra",
+            author_name: current_user.name,
             body,
             created_at: new Date().toISOString()
         };
@@ -4154,7 +4359,7 @@ function TaskAppContent() {
             return { ...task_item, comments };
         }));
 
-        add_comment_request(task_id, body, "Joaquin Sierra").catch((error) => {
+        add_comment_request(task_id, body, current_user.name).catch((error) => {
             console.warn("No se pudo sincronizar el comentario.", error);
         });
     }
@@ -4190,7 +4395,7 @@ function TaskAppContent() {
     }
 
     function handle_request_delete_project() {
-        set_delete_target({ type: "project", id: "launch_q4" });
+        set_delete_target({ type: "project", id: selected_project_id });
         set_active_modal("delete_confirm");
     }
 
@@ -4209,10 +4414,12 @@ function TaskAppContent() {
     }
 
     function handle_confirm_delete_project(project_id) {
+        const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0];
         set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_id));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
-            task_item.project_id === project_id ? { ...task_item, project_id: project_items[0].id } : task_item
+            task_item.project_id === project_id ? { ...task_item, project_id: fallback_project.id } : task_item
         )));
+        set_selected_project_id(fallback_project.id);
         set_active_modal(null);
         set_delete_target(null);
     }
@@ -4238,6 +4445,40 @@ function TaskAppContent() {
         toggle_subtask_request(task_id, subtask_id).catch((error) => {
             console.warn("No se pudo actualizar la subtarea en el backend.", error);
         });
+    }
+
+    function handle_edit_subtask_title_change(subtask_id, title) {
+        set_edit_draft((current_draft) => ({
+            ...current_draft,
+            subtasks: current_draft.subtasks.map((subtask_item) => (
+                subtask_item.id === subtask_id ? { ...subtask_item, title } : subtask_item
+            ))
+        }));
+    }
+
+    function handle_add_edit_subtask() {
+        set_edit_draft((current_draft) => ({
+            ...current_draft,
+            subtasks: [...current_draft.subtasks, { id: `subtask_${Date.now()}`, title: "", completed: false }]
+        }));
+    }
+
+    function handle_remove_edit_subtask(subtask_id) {
+        set_edit_draft((current_draft) => ({
+            ...current_draft,
+            subtasks: current_draft.subtasks.filter((subtask_item) => subtask_item.id !== subtask_id)
+        }));
+    }
+
+    function handle_toggle_edit_subtask(subtask_id) {
+        set_edit_draft((current_draft) => ({
+            ...current_draft,
+            subtasks: current_draft.subtasks.map((subtask_item) => (
+                subtask_item.id === subtask_id
+                    ? { ...subtask_item, completed: !subtask_item.completed }
+                    : subtask_item
+            ))
+        }));
     }
 
 
@@ -4274,7 +4515,6 @@ function TaskAppContent() {
         )));
         publish_task_event(create_task_event(task_event_types.task_updated, task_id, updated_fields));
         set_active_modal(null);
-        set_selected_task_id(null);
 
         update_task_request(task_id, updated_fields).catch((error) => {
             console.warn("No se pudo guardar los cambios de la tarea en el backend.", error);
@@ -4308,6 +4548,8 @@ function TaskAppContent() {
                                 console.warn("No se pudo crear la tarea.", error);
                             });
                     }}
+                    projects={projects}
+                    selected_project_id={selected_project_id}
                     status_options={status_options}
                 />
             );
@@ -4321,12 +4563,15 @@ function TaskAppContent() {
                     edit_attachments={edit_attachments}
                     edit_draft={edit_draft}
                     handle_add_edit_attachment={handle_add_edit_attachment}
+                    handle_add_edit_subtask={handle_add_edit_subtask}
                     handle_edit_field_change={handle_edit_field_change}
+                    handle_edit_subtask_title_change={handle_edit_subtask_title_change}
                     handle_remove_edit_attachment={handle_remove_edit_attachment}
-                    handle_toggle_subtask={(subtask_id) => handle_toggle_subtask(selected_task.id, subtask_id)}
+                    handle_remove_edit_subtask={handle_remove_edit_subtask}
+                    handle_toggle_edit_subtask={handle_toggle_edit_subtask}
                     on_cancel={() => { set_active_modal(null); }}
                     on_save={(event) => handle_save_task_edits(event, selected_task.id)}
-                    selected_task={selected_task}
+                    projects={projects}
                     status_options={status_options}
                 />
             );
@@ -4338,11 +4583,15 @@ function TaskAppContent() {
 
         if (active_modal === "project") {
             return render_project_modal({
+                editing_project: projects.find((project_item) => project_item.id === editing_project_id) || null,
                 handle_create_project,
                 project_color,
                 project_people_ids,
                 project_people_query,
-                set_active_modal,
+                set_active_modal: (modal_id) => {
+                    if (modal_id === null) set_editing_project_id(null);
+                    set_active_modal(modal_id);
+                },
                 set_project_color,
                 set_project_people_query,
                 toggle_project_person
@@ -4380,12 +4629,18 @@ function TaskAppContent() {
     return (
         <div className={`app_shell ${is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
             {render_sidebar({
+                active_project_menu_id,
                 active_module,
                 handle_module_change,
+                handle_my_tasks_select,
+                handle_project_menu_toggle,
+                handle_project_select,
                 handle_tasks_menu_toggle,
                 is_sidebar_open,
                 is_tasks_menu_open,
                 projects,
+                selected_project_id,
+                task_scope,
                 set_active_modal,
                 set_is_sidebar_open
             })}
@@ -4434,6 +4689,8 @@ function TaskAppContent() {
                     handle_column_drop,
                     handle_delete_column,
                     handle_delete_task: handle_request_delete_task,
+                    handle_detail_resize_key_down,
+                    handle_detail_resize_start,
                     handle_drag_start,
                     handle_open_edit_task,
                     handle_quick_change,
@@ -4449,9 +4706,11 @@ function TaskAppContent() {
                     handle_toggle_visible_field,
                     is_adding_column,
                     new_column_name,
+                    selected_project,
                     search_query,
                     selected_task,
                     selected_task_id,
+                    task_detail_width,
                     set_active_modal,
                     set_active_section,
                     set_active_view,
