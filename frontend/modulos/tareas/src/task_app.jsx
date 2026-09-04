@@ -2,8 +2,10 @@ import { Component as react_component, createElement as create_element, useEffec
 import {
     ArrowLeft as arrow_left_icon,
     ArrowUp as arrow_up_icon,
+    Archive as archive_icon,
     BarChart3 as bar_chart_icon,
     Bell as bell_icon,
+    Bookmark as bookmark_icon,
     CalendarDays as calendar_days_icon,
     Check as check_icon,
     CheckCircle2 as check_circle_icon,
@@ -16,6 +18,7 @@ import {
     GanttChart as gantt_chart_icon,
     Home as home_icon,
     Inbox as inbox_icon,
+    ExternalLink as external_link_icon,
     LayoutList as layout_list_icon,
     Link as link_icon,
     Menu as menu_icon,
@@ -784,6 +787,364 @@ function render_placeholder_module(active_module) {
                 <span className="placeholder_icon">{render_icon(file_text_icon, 36)}</span>
                 <h2>Modulo vacio</h2>
                 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec at arcu sed velit bibendum.</p>
+            </div>
+        </section>
+    );
+}
+
+const inbox_tabs = [
+    { id: "activity", label: "Actividad" },
+    { id: "saved", label: "Guardadas" },
+    { id: "archived", label: "Archivadas" },
+    { id: "mentions", label: "@Menciones" }
+];
+
+const inbox_type_options = [
+    { id: "all", label: "Todas" },
+    { id: "assignment", label: "Asignaciones" },
+    { id: "mention", label: "Menciones" },
+    { id: "comment", label: "Comentarios" },
+    { id: "date_changed", label: "Cambios de fecha" },
+    { id: "completed", label: "Tareas completadas" },
+    { id: "status_changed", label: "Cambios de estado" },
+    { id: "dependency", label: "Dependencias" }
+];
+
+const inbox_sort_options = [
+    { id: "recent", label: "Mas recientes" },
+    { id: "oldest", label: "Mas antiguas" },
+    { id: "priority", label: "Mayor prioridad" }
+];
+
+const inbox_state_options = [
+    { id: "all", label: "Todas" },
+    { id: "unread", label: "No leidas" },
+    { id: "read", label: "Leidas" }
+];
+
+const inbox_type_labels = {
+    assignment: "Asignacion",
+    mention: "Mencion",
+    comment: "Comentario",
+    date_changed: "Cambio de fecha",
+    completed: "Tarea completada",
+    status_changed: "Cambio de estado",
+    dependency: "Dependencia"
+};
+
+
+function get_inbox_task(notification_item, tasks) {
+    const searchable_text = `${notification_item.body || ""} ${notification_item.title || ""}`.toLowerCase();
+
+    return tasks.find((task_item) => searchable_text.includes(task_item.title.toLowerCase())) || tasks[0] || null;
+}
+
+function get_inbox_type(notification_item) {
+    if (notification_item.title.includes("@")) return "mention";
+    if (notification_item.type === "status_changed" && /complet/i.test(notification_item.title)) return "completed";
+    return notification_item.type || "status_changed";
+}
+
+
+function get_inbox_activities(notifications, tasks) {
+    return notifications.map((notification_item, index) => {
+        const task_item = get_inbox_task(notification_item, tasks);
+        const actor = team_members.find((member_item) => member_item.id === notification_item.actor_id) || null;
+        const project = get_project(task_item?.project_id);
+        const type = get_inbox_type(notification_item);
+
+        return {
+            ...notification_item,
+            order: index,
+            type,
+            task: task_item,
+            actor,
+            project,
+            group_label: notification_item.time_label === "Ayer" ? "AYER" : "HOY",
+            is_mention: type === "mention" || notification_item.type === "comment",
+            priority_rank: priority_rank[task_item?.priority] || 0
+        };
+    });
+}
+
+
+function render_inbox_module(props) {
+    const {
+        archived_inbox_ids,
+        handle_inbox_activity_select,
+        handle_inbox_bulk_archive,
+        handle_inbox_bulk_read_state,
+        handle_inbox_bulk_save,
+        handle_mark_notifications_read,
+        handle_open_inbox_task,
+        handle_toggle_inbox_read,
+        handle_toggle_inbox_archive,
+        handle_toggle_inbox_saved,
+        inbox_filter_menu,
+        inbox_filters,
+        inbox_query,
+        inbox_selected_ids,
+        inbox_view,
+        inbox_tab,
+        notifications,
+        saved_inbox_ids,
+        selected_inbox_id,
+        set_inbox_filter_menu,
+        set_inbox_filters,
+        set_inbox_query,
+        set_inbox_selected_ids,
+        set_inbox_tab,
+        set_inbox_view,
+        set_is_notifications_open,
+        tasks
+    } = props;
+    const activities = get_inbox_activities(notifications, tasks);
+    const active_filter_count = [
+        inbox_filters.state !== "all",
+        inbox_filters.type !== "all",
+        inbox_filters.project_id !== "all"
+    ].filter(Boolean).length;
+    const unread_count = notifications.filter((notification_item) => !notification_item.is_read && !archived_inbox_ids.includes(notification_item.id)).length;
+    const visible_activities = activities.filter((activity) => {
+        if (inbox_tab === "saved") return saved_inbox_ids.includes(activity.id) && !archived_inbox_ids.includes(activity.id);
+        if (inbox_tab === "archived") return archived_inbox_ids.includes(activity.id);
+        if (inbox_tab === "mentions") return activity.is_mention && !archived_inbox_ids.includes(activity.id);
+        return !archived_inbox_ids.includes(activity.id);
+    }).filter((activity) => {
+        const searchable_text = [
+            activity.title,
+            activity.body,
+            activity.actor?.name,
+            activity.project.label,
+            activity.task?.title
+        ].join(" ").toLowerCase();
+        const query_match = !inbox_query.trim() || searchable_text.includes(inbox_query.trim().toLowerCase());
+        const state_match = inbox_filters.state === "all"
+            || (inbox_filters.state === "unread" && !activity.is_read)
+            || (inbox_filters.state === "read" && activity.is_read);
+        const type_match = inbox_filters.type === "all" || activity.type === inbox_filters.type || (inbox_filters.type === "mention" && activity.is_mention);
+        const project_match = inbox_filters.project_id === "all" || activity.project.id === inbox_filters.project_id;
+
+        return query_match && state_match && type_match && project_match;
+    }).sort((activity_a, activity_b) => {
+        if (inbox_filters.sort === "oldest") return activity_b.order - activity_a.order;
+        if (inbox_filters.sort === "priority") return activity_b.priority_rank - activity_a.priority_rank;
+        return activity_a.order - activity_b.order;
+    });
+    const selected_activity = visible_activities.find((activity) => activity.id === selected_inbox_id)
+        || activities.find((activity) => activity.id === selected_inbox_id)
+        || visible_activities[0]
+        || activities[0]
+        || null;
+    const grouped_activities = ["HOY", "AYER"].map((group_label) => ({
+        group_label,
+        items: visible_activities.filter((activity) => activity.group_label === group_label)
+    })).filter((group) => group.items.length);
+    const selected_visible_count = inbox_selected_ids.filter((id) => visible_activities.some((activity) => activity.id === id)).length;
+
+    return (
+        <section className="inbox_module">
+            <header className="inbox_header">
+                <div>
+                    <h1>Bandeja de entrada</h1>
+                    <p>Mantente al dia con la actividad de tus tareas y proyectos</p>
+                </div>
+                <div className="inbox_header_actions">
+                    <span className="inbox_unread_count">{unread_count} sin leer</span>
+                    <button className="secondary_button" type="button" onClick={handle_mark_notifications_read}>
+                        Marcar todas como leidas
+                    </button>
+                    <button className="secondary_button" type="button" onClick={() => set_is_notifications_open((current) => !current)}>
+                    {render_icon(bell_icon, 17)}
+                    Configurar notificaciones
+                    </button>
+                </div>
+            </header>
+
+            <div className="inbox_card">
+                <nav className="inbox_tabs" aria-label="Bandeja">
+                    {inbox_tabs.map((tab_item) => (
+                        <button
+                            className={`inbox_tab ${inbox_tab === tab_item.id ? "inbox_tab_active" : ""}`}
+                            key={tab_item.id}
+                            type="button"
+                            onClick={() => set_inbox_tab(tab_item.id)}
+                        >
+                            {tab_item.label}
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="inbox_body">
+                    <div className="inbox_list_panel">
+                        <div className="inbox_toolbar">
+                            <label className="inbox_search_box">
+                                {render_icon(search_icon, 16)}
+                                <input
+                                    type="search"
+                                    value={inbox_query}
+                                    placeholder="Buscar en actividad..."
+                                    onChange={(event) => set_inbox_query(event.target.value)}
+                                />
+                            </label>
+                            <div className="task_tool_anchor">
+                                <button className={`secondary_button ${active_filter_count ? "inbox_filter_active" : ""}`} type="button" onClick={() => set_inbox_filter_menu(inbox_filter_menu === "filters" ? null : "filters")}>
+                                    {render_icon(sliders_icon, 16)}
+                                    Filtrar{active_filter_count ? ` ${active_filter_count}` : ""}
+                                </button>
+                                {inbox_filter_menu === "filters" ? (
+                                    <div className="task_tool_panel inbox_dropdown">
+                                        <label className="filter_group_label">Estado</label>
+                                        <select value={inbox_filters.state} onChange={(event) => set_inbox_filters((current) => ({ ...current, state: event.target.value }))}>
+                                            {inbox_state_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                                        </select>
+                                        <label className="filter_group_label">Tipo</label>
+                                        <select value={inbox_filters.type} onChange={(event) => set_inbox_filters((current) => ({ ...current, type: event.target.value }))}>
+                                            {inbox_type_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                                        </select>
+                                        <label className="filter_group_label">Proyecto</label>
+                                        <select value={inbox_filters.project_id} onChange={(event) => set_inbox_filters((current) => ({ ...current, project_id: event.target.value }))}>
+                                            <option value="all">Todos los proyectos</option>
+                                            {project_items.map((project_item) => <option key={project_item.id} value={project_item.id}>{project_item.label}</option>)}
+                                        </select>
+                                        <button className="link_button" type="button" onClick={() => set_inbox_filters((current) => ({ ...current, state: "all", type: "all", project_id: "all" }))}>
+                                            Limpiar filtros
+                                        </button>
+                                    </div>
+                                ) : null}
+                            </div>
+                            <div className="task_tool_anchor">
+                                <button className="secondary_button" type="button" onClick={() => set_inbox_filter_menu(inbox_filter_menu === "sort" ? null : "sort")}>
+                                    {inbox_sort_options.find((option) => option.id === inbox_filters.sort)?.label || "Mas recientes"}
+                                    {render_icon(chevron_down_icon, 16)}
+                                </button>
+                                {inbox_filter_menu === "sort" ? (
+                                    <div className="task_tool_panel inbox_dropdown inbox_dropdown_small">
+                                        {inbox_sort_options.map((option) => (
+                                            <button
+                                                className={`sort_option ${inbox_filters.sort === option.id ? "sort_option_active" : ""}`}
+                                                key={option.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    set_inbox_filters((current) => ({ ...current, sort: option.id }));
+                                                    set_inbox_filter_menu(null);
+                                                }}
+                                            >
+                                                {option.label}
+                                                {inbox_filters.sort === option.id ? render_icon(check_icon, 14) : null}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                            <button className="secondary_button" type="button" onClick={() => set_inbox_view(inbox_view === "detail" ? "compact" : "detail")}>
+                                {render_icon(layout_list_icon, 17)}
+                                {inbox_view === "detail" ? "Vista detallada" : "Vista compacta"}
+                            </button>
+                        </div>
+
+                        {selected_visible_count ? (
+                            <div className="inbox_bulk_bar">
+                                <span>{selected_visible_count} seleccionada(s)</span>
+                                <button type="button" onClick={() => handle_inbox_bulk_read_state(true)}>Marcar leidas</button>
+                                <button type="button" onClick={() => handle_inbox_bulk_read_state(false)}>Marcar no leidas</button>
+                                <button type="button" onClick={handle_inbox_bulk_save}>Guardar</button>
+                                <button type="button" onClick={handle_inbox_bulk_archive}>Archivar</button>
+                            </div>
+                        ) : null}
+
+                        <div className="inbox_activity_list">
+                            {grouped_activities.length ? grouped_activities.map((group) => (
+                                <section className="inbox_group" key={group.group_label}>
+                                    <h2>{group.group_label}</h2>
+                                    {group.items.map((activity) => {
+                                        const is_selected = selected_activity?.id === activity.id;
+                                        const activity_icon = notification_type_icons[activity.type] || inbox_icon;
+                                        const is_saved = saved_inbox_ids.includes(activity.id);
+                                        const is_checked = inbox_selected_ids.includes(activity.id);
+
+                                        return (
+                                            <article
+                                                className={`inbox_activity ${is_selected ? "inbox_activity_selected" : ""} ${activity.is_read ? "" : "inbox_activity_unread"} ${inbox_view === "compact" ? "inbox_activity_compact" : ""}`}
+                                                key={activity.id}
+                                            >
+                                                <label className="inbox_select_check">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={is_checked}
+                                                        onChange={(event) => {
+                                                            set_inbox_selected_ids((current_ids) => event.target.checked
+                                                                ? [...current_ids, activity.id]
+                                                                : current_ids.filter((id) => id !== activity.id));
+                                                        }}
+                                                    />
+                                                </label>
+                                                <button className="inbox_activity_main" type="button" onClick={() => handle_inbox_activity_select(activity.id)}>
+                                                    <span className={`inbox_unread_dot ${activity.is_read ? "inbox_unread_dot_read" : ""}`}></span>
+                                                    <span className="inbox_activity_avatar" style={{ "--avatar_color": activity.actor?.color || "#f7dddd" }}>
+                                                        {activity.actor ? activity.actor.initials : render_icon(activity_icon, 17)}
+                                                    </span>
+                                                    <span className="inbox_activity_text">
+                                                        <strong>{inbox_view === "compact" ? activity.body : activity.title}</strong>
+                                                        <span>{inbox_view === "compact" ? activity.title : `${activity.actor?.name || "Sistema"} · ${inbox_type_labels[activity.type] || "Actividad"} · ${activity.body}`}</span>
+                                                    </span>
+                                                    <time>{activity.time_label}</time>
+                                                </button>
+                                                <div className="inbox_activity_actions">
+                                                    <button className={is_saved ? "inbox_saved_button" : ""} type="button" aria-label="Guardar actividad" onClick={() => handle_toggle_inbox_saved(activity.id)}>
+                                                        {render_icon(bookmark_icon, is_saved ? 18 : 17)}
+                                                    </button>
+                                                    <button type="button" aria-label={activity.is_read ? "Marcar como no leida" : "Marcar como leida"} onClick={() => handle_toggle_inbox_read(activity.id)}>
+                                                        {render_icon(activity.is_read ? bell_icon : check_icon, 17)}
+                                                    </button>
+                                                    <button type="button" aria-label="Archivar actividad" onClick={() => handle_toggle_inbox_archive(activity.id)}>
+                                                        {render_icon(archive_icon, 17)}
+                                                    </button>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </section>
+                            )) : (
+                                <div className="inbox_empty">
+                                    <strong>No hay actividad aqui</strong>
+                                    <span>Las actualizaciones apareceran cuando existan notificaciones.</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <aside className="inbox_detail_panel">
+                        {selected_activity ? (
+                            <>
+                                <span className="inbox_status_badge">{selected_activity.task?.status || "Activa"}</span>
+                                <h2>{selected_activity.task?.title || selected_activity.body}</h2>
+                                <div className="inbox_detail_meta">
+                                    <span>{render_avatar(selected_activity.actor, "avatar_small")}</span>
+                                    <div>
+                                        <small>Responsable</small>
+                                        <strong>{selected_activity.actor?.name || "Sin responsable"}</strong>
+                                    </div>
+                                    <span className="inbox_meta_icon">{render_icon(calendar_days_icon, 17)}</span>
+                                    <div>
+                                        <small>Fecha limite</small>
+                                        <strong>{selected_activity.task?.due_label || "Sin fecha"}</strong>
+                                    </div>
+                                    <span>{render_project_dot(selected_activity.project.color)}</span>
+                                    <div>
+                                        <small>Proyecto</small>
+                                        <strong>{selected_activity.project.label}</strong>
+                                    </div>
+                                </div>
+                                <p>{selected_activity.task?.description || selected_activity.body}</p>
+                                <button className="primary_button inbox_open_task_button" type="button" onClick={() => handle_open_inbox_task(selected_activity.task?.id)}>
+                                    Abrir tarea
+                                    {render_icon(external_link_icon, 18)}
+                                </button>
+                            </>
+                        ) : null}
+                    </aside>
+                </div>
             </div>
         </section>
     );
@@ -3347,6 +3708,20 @@ function TaskAppContent() {
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
+    const [inbox_tab, set_inbox_tab] = use_state("activity");
+    const [selected_inbox_id, set_selected_inbox_id] = use_state(null);
+    const [saved_inbox_ids, set_saved_inbox_ids] = use_state([]);
+    const [archived_inbox_ids, set_archived_inbox_ids] = use_state([]);
+    const [inbox_query, set_inbox_query] = use_state("");
+    const [inbox_filter_menu, set_inbox_filter_menu] = use_state(null);
+    const [inbox_view, set_inbox_view] = use_state("detail");
+    const [inbox_selected_ids, set_inbox_selected_ids] = use_state([]);
+    const [inbox_filters, set_inbox_filters] = use_state({
+        sort: "recent",
+        state: "all",
+        type: "all",
+        project_id: "all"
+    });
 
     use_effect(() => {
         localStorage.setItem(projects_storage_key, JSON.stringify(projects));
@@ -3485,6 +3860,12 @@ function TaskAppContent() {
         return tasks.find((task_item) => task_item.id === selected_task_id) || null;
     }, [selected_task_id, tasks]);
 
+    use_effect(() => {
+        if (selected_inbox_id || !notifications.length) return;
+        const default_notification = notifications.find((notification_item) => !notification_item.is_read) || notifications[0];
+        set_selected_inbox_id(default_notification.id);
+    }, [notifications, selected_inbox_id]);
+
 
     // Loads real tasks from the boldApp backend on mount (falling back to
     // the static starter_tasks already set as initial state if the backend
@@ -3573,6 +3954,60 @@ function TaskAppContent() {
             ...notification_item,
             is_read: true
         })));
+    }
+
+    function handle_inbox_activity_select(notification_id) {
+        set_selected_inbox_id(notification_id);
+        set_notifications((current_notifications) => current_notifications.map((notification_item) => (
+            notification_item.id === notification_id ? { ...notification_item, is_read: true } : notification_item
+        )));
+    }
+
+    function handle_toggle_inbox_saved(notification_id) {
+        set_saved_inbox_ids((current_ids) => (
+            current_ids.includes(notification_id)
+                ? current_ids.filter((id) => id !== notification_id)
+                : [...current_ids, notification_id]
+        ));
+    }
+
+    function handle_toggle_inbox_archive(notification_id) {
+        set_archived_inbox_ids((current_ids) => (
+            current_ids.includes(notification_id)
+                ? current_ids.filter((id) => id !== notification_id)
+                : [...current_ids, notification_id]
+        ));
+        set_inbox_selected_ids((current_ids) => current_ids.filter((id) => id !== notification_id));
+    }
+
+    function handle_toggle_inbox_read(notification_id) {
+        set_notifications((current_notifications) => current_notifications.map((notification_item) => (
+            notification_item.id === notification_id ? { ...notification_item, is_read: !notification_item.is_read } : notification_item
+        )));
+    }
+
+    function handle_inbox_bulk_read_state(is_read) {
+        set_notifications((current_notifications) => current_notifications.map((notification_item) => (
+            inbox_selected_ids.includes(notification_item.id) ? { ...notification_item, is_read } : notification_item
+        )));
+        set_inbox_selected_ids([]);
+    }
+
+    function handle_inbox_bulk_save() {
+        set_saved_inbox_ids((current_ids) => Array.from(new Set([...current_ids, ...inbox_selected_ids])));
+        set_inbox_selected_ids([]);
+    }
+
+    function handle_inbox_bulk_archive() {
+        inbox_selected_ids.forEach((notification_id) => handle_toggle_inbox_archive(notification_id));
+        set_inbox_selected_ids([]);
+    }
+
+    function handle_open_inbox_task(task_id) {
+        set_active_module("tasks");
+        set_active_section("tasks");
+        set_active_view("list");
+        set_selected_task_id(task_id || null);
     }
 
 
@@ -4032,6 +4467,34 @@ function TaskAppContent() {
                     status_options,
                     tasks,
                     visible_fields
+                }) : active_module === "inbox" ? render_inbox_module({
+                    archived_inbox_ids,
+                    handle_inbox_activity_select,
+                    handle_inbox_bulk_archive,
+                    handle_inbox_bulk_read_state,
+                    handle_inbox_bulk_save,
+                    handle_mark_notifications_read,
+                    handle_open_inbox_task,
+                    handle_toggle_inbox_read,
+                    handle_toggle_inbox_archive,
+                    handle_toggle_inbox_saved,
+                    inbox_filter_menu,
+                    inbox_filters,
+                    inbox_query,
+                    inbox_selected_ids,
+                    inbox_view,
+                    inbox_tab,
+                    notifications,
+                    saved_inbox_ids,
+                    selected_inbox_id,
+                    set_inbox_filter_menu,
+                    set_inbox_filters,
+                    set_inbox_query,
+                    set_inbox_selected_ids,
+                    set_inbox_tab,
+                    set_inbox_view,
+                    set_is_notifications_open,
+                    tasks
                 }) : active_module === "schedules" ? render_schedules_module({
                     filtered_tasks,
                     handle_task_select,
