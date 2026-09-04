@@ -1,0 +1,252 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic "Bold" [ref=e6]: bold
+    - generic [ref=e10]:
+      - paragraph [ref=e11]: NAVEGACION
+      - navigation "Principal" [ref=e12]:
+        - button "Inicio" [ref=e13] [cursor=pointer]
+        - generic [ref=e19]:
+          - button "Tareas" [expanded] [ref=e20] [cursor=pointer]
+          - generic [ref=e28]:
+            - button "Mis tareas" [ref=e29] [cursor=pointer]
+            - generic [ref=e32]:
+              - paragraph [ref=e33]: WORKSPACE
+              - button "B BOLD Workspace" [ref=e34] [cursor=pointer]:
+                - generic [ref=e35]: B
+                - generic [ref=e36]: BOLD Workspace
+            - generic [ref=e39]:
+              - generic [ref=e40]:
+                - paragraph [ref=e41]: PROYECTOS
+                - button "Crear proyecto" [ref=e42] [cursor=pointer]
+              - generic [ref=e44]:
+                - generic [ref=e45]:
+                  - button "Lanzamiento Q4" [ref=e46] [cursor=pointer]
+                  - button "Opciones de Lanzamiento Q4" [ref=e49] [cursor=pointer]
+                - generic [ref=e54]:
+                  - button "Contenido mensual" [ref=e55] [cursor=pointer]
+                  - button "Opciones de Contenido mensual" [ref=e58] [cursor=pointer]
+                - generic [ref=e63]:
+                  - button "Rediseno web" [ref=e64] [cursor=pointer]
+                  - button "Opciones de Rediseno web" [ref=e67] [cursor=pointer]
+                - generic [ref=e72]:
+                  - button "Campanas activas" [ref=e73] [cursor=pointer]
+                  - button "Opciones de Campanas activas" [ref=e76] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=e81] [cursor=pointer]
+        - button "Informes" [ref=e87] [cursor=pointer]
+    - generic [ref=e92]:
+      - generic [ref=e93]: AM
+      - generic [ref=e94]:
+        - strong [ref=e95]: Ana Martinez
+        - generic [ref=e96]: Administrador
+      - button "Perfil" [ref=e97] [cursor=pointer]
+  - main [ref=e102]:
+    - generic [ref=e103]:
+      - searchbox [ref=e108]
+      - generic [ref=e109]:
+        - button "Notificaciones" [ref=e111] [cursor=pointer]
+        - generic [ref=e116]: AM
+    - generic [ref=e117]:
+      - generic [ref=e118]:
+        - generic [ref=e119]:
+          - paragraph [ref=e120]: TAREAS / BOLD WORKSPACE / PROYECTOS / MARKETING
+          - heading "Lanzamiento Q4" [level=1] [ref=e121]
+          - paragraph [ref=e122]: Campaña y entregables del último trimestre
+        - generic [ref=e123]:
+          - generic "Miembros del proyecto" [ref=e124]:
+            - generic [ref=e125]: AM
+            - generic [ref=e126]: DU
+            - generic [ref=e127]: CR
+            - generic [ref=e128]: "+2"
+          - button "Compartir" [ref=e129] [cursor=pointer]
+          - button "Agregar tarea" [ref=e130] [cursor=pointer]
+          - button "Más opciones" [ref=e132] [cursor=pointer]
+      - tablist "Navegación principal" [ref=e138]:
+        - tab "Tareas" [ref=e139] [cursor=pointer]
+        - tab "Cronograma" [selected] [ref=e140] [cursor=pointer]
+        - tab "Calendario" [ref=e141] [cursor=pointer]
+      - generic [ref=e389]:
+        - generic [ref=e391]:
+          - generic [ref=e392]:
+            - generic [ref=e393]: TAREA
+            - generic [ref=e394]:
+              - generic [ref=e395]:
+                - generic [ref=e396]: "1"
+                - generic [ref=e397]: sep
+              - generic [ref=e398]:
+                - generic [ref=e399]: "2"
+                - generic [ref=e400]: sep
+              - generic [ref=e401]:
+                - generic [ref=e402]: "3"
+                - generic [ref=e403]: sep
+              - generic [ref=e404]:
+                - generic [ref=e405]: "4"
+                - generic [ref=e406]: sep
+              - generic [ref=e407]:
+                - generic [ref=e408]: "5"
+                - generic [ref=e409]: sep
+              - generic [ref=e410]:
+                - generic [ref=e411]: "6"
+                - generic [ref=e412]: sep
+              - generic [ref=e413]:
+                - generic [ref=e414]: "7"
+                - generic [ref=e415]: sep
+              - generic [ref=e416]:
+                - generic [ref=e417]: "8"
+                - generic [ref=e418]: sep
+              - generic [ref=e419]:
+                - generic [ref=e420]: "9"
+                - generic [ref=e421]: sep
+              - generic [ref=e422]:
+                - generic [ref=e423]: "10"
+                - generic [ref=e424]: sep
+              - generic [ref=e425]:
+                - generic [ref=e426]: "11"
+                - generic [ref=e427]: sep
+              - generic [ref=e428]:
+                - generic [ref=e429]: "12"
+                - generic [ref=e430]: sep
+              - generic [ref=e431]:
+                - generic [ref=e432]: "13"
+                - generic [ref=e433]: sep
+              - generic [ref=e434]:
+                - generic [ref=e435]: "14"
+                - generic [ref=e436]: sep
+              - generic [ref=e437]:
+                - generic [ref=e438]: "15"
+                - generic [ref=e439]: sep
+              - generic [ref=e440]:
+                - generic [ref=e441]: "16"
+                - generic [ref=e442]: sep
+              - generic [ref=e443]:
+                - generic [ref=e444]: "17"
+                - generic [ref=e445]: sep
+              - generic [ref=e446]:
+                - generic [ref=e447]: "18"
+                - generic [ref=e448]: sep
+              - generic [ref=e449]:
+                - generic [ref=e450]: "19"
+                - generic [ref=e451]: sep
+              - generic [ref=e452]:
+                - generic [ref=e453]: "20"
+                - generic [ref=e454]: sep
+              - generic [ref=e455]:
+                - generic [ref=e456]: "21"
+                - generic [ref=e457]: sep
+              - generic [ref=e458]:
+                - generic [ref=e459]: "22"
+                - generic [ref=e460]: sep
+              - generic [ref=e461]:
+                - generic [ref=e462]: "23"
+                - generic [ref=e463]: sep
+              - generic [ref=e464]:
+                - generic [ref=e465]: "24"
+                - generic [ref=e466]: sep
+              - generic [ref=e467]:
+                - generic [ref=e468]: "25"
+                - generic [ref=e469]: sep
+              - generic [ref=e470]:
+                - generic [ref=e471]: "26"
+                - generic [ref=e472]: sep
+              - generic [ref=e473]:
+                - generic [ref=e474]: "27"
+                - generic [ref=e475]: sep
+              - generic [ref=e476]:
+                - generic [ref=e477]: "28"
+                - generic [ref=e478]: sep
+              - generic [ref=e479]:
+                - generic [ref=e480]: "29"
+                - generic [ref=e481]: sep
+              - generic [ref=e482]:
+                - generic [ref=e483]: "30"
+                - generic [ref=e484]: sep
+          - generic [ref=e485]:
+            - generic [ref=e486]:
+              - button "Reunion de arranque" [ref=e488] [cursor=pointer]
+              - generic "Reunion de arranque (2 sep)" [ref=e490] [cursor=pointer]:
+                - generic [ref=e491]: Reunion de arranque
+                - generic [ref=e492]: AM
+            - generic [ref=e493]:
+              - button "Aprobar mensajes principales" [ref=e495] [cursor=pointer]
+              - generic "Aprobar mensajes principales (4 sep)" [ref=e497] [cursor=pointer]:
+                - generic [ref=e498]: Aprobar mensajes principales
+                - generic [ref=e499]: CR
+            - generic [ref=e500]:
+              - button "Disenar piezas de lanzamiento +4d" [ref=e502] [cursor=pointer]:
+                - text: Disenar piezas de lanzamiento
+                - generic "Faltan 4 día(s)" [ref=e503]: +4d
+              - generic "Disenar piezas de lanzamiento (8 sep)" [ref=e505] [cursor=pointer]:
+                - generic [ref=e506]: Disenar piezas de lanzamiento
+                - generic [ref=e507]: DU
+            - generic [ref=e508]:
+              - button "Configurar campana en Meta +5d" [ref=e510] [cursor=pointer]:
+                - text: Configurar campana en Meta
+                - generic "Faltan 5 día(s)" [ref=e511]: +5d
+              - generic "Configurar campana en Meta (9 sep)" [ref=e513] [cursor=pointer]:
+                - generic [ref=e514]: Configurar campana en Meta
+                - generic [ref=e515]: AM
+            - generic [ref=e516]:
+              - button "Definir concepto creativo +6d" [active] [ref=e518] [cursor=pointer]:
+                - text: Definir concepto creativo
+                - generic "Faltan 6 día(s)" [ref=e519]: +6d
+              - generic "Definir concepto creativo (10 sep)" [ref=e521] [cursor=pointer]:
+                - generic [ref=e522]: Definir concepto creativo
+                - generic [ref=e523]: AM
+            - generic [ref=e524]:
+              - button "Preparar calendario de contenidos +8d" [ref=e526] [cursor=pointer]:
+                - text: Preparar calendario de contenidos
+                - generic "Faltan 8 día(s)" [ref=e527]: +8d
+              - generic "Preparar calendario de contenidos (12 sep)" [ref=e529] [cursor=pointer]:
+                - generic [ref=e530]: Preparar calendario de contenidos
+                - generic [ref=e531]: CR
+            - generic [ref=e532]:
+              - button "Validar presupuesto de pauta +9d" [ref=e534] [cursor=pointer]:
+                - text: Validar presupuesto de pauta
+                - generic "Faltan 9 día(s)" [ref=e535]: +9d
+              - generic "Validar presupuesto de pauta (13 sep)" [ref=e537] [cursor=pointer]: Validar presupuesto de pauta
+        - separator "Cambiar ancho del detalle de tarea" [ref=e539]
+        - generic [ref=e541]:
+          - generic [ref=e542]:
+            - generic [ref=e543]: DETALLE DE TAREA
+            - generic [ref=e544]:
+              - button "Editar tarea" [ref=e545] [cursor=pointer]
+              - button "Eliminar tarea" [ref=e549] [cursor=pointer]
+              - button "Cerrar panel" [ref=e553] [cursor=pointer]
+          - generic [ref=e557]:
+            - button "Completar tarea" [ref=e558] [cursor=pointer]
+            - heading "Definir concepto creativo" [level=2] [ref=e559]
+            - generic [ref=e560] [cursor=pointer]: Pend.
+          - generic [ref=e561]:
+            - generic [ref=e562]: Colaboradores
+            - generic "Ana Martinez" [ref=e565]: AM
+            - generic [ref=e568]: Fecha límite
+            - generic [ref=e569]: 10 sep
+            - generic [ref=e570]: Proyecto
+            - generic [ref=e571]: Lanzamiento Q4
+            - generic [ref=e573]: Prioridad
+            - generic [ref=e574]: Alta
+          - generic [ref=e576]:
+            - generic [ref=e577]:
+              - generic [ref=e578]: COLABORADORES (1)
+              - button "Modificar" [ref=e579] [cursor=pointer]
+            - generic [ref=e585]:
+              - generic [ref=e586]: AM
+              - generic [ref=e587]:
+                - strong [ref=e588]: Ana Martinez
+                - generic [ref=e589]: ana@bold.gt
+          - generic [ref=e590]:
+            - paragraph [ref=e591]: Descripción
+            - paragraph [ref=e592]: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae augue sit amet ipsum volutpat porta.
+          - generic [ref=e593]:
+            - generic [ref=e594]:
+              - generic [ref=e595]: SUBTAREAS
+              - generic [ref=e596]: 1 de 2
+            - generic [ref=e599]:
+              - button [ref=e600] [cursor=pointer]
+              - generic [ref=e603]: Lorem ipsum dolor sit amet
+            - generic [ref=e604]:
+              - button [ref=e605] [cursor=pointer]
+              - generic [ref=e606]: Consectetur adipiscing elit
+          - paragraph [ref=e607]: Aun no hay comentarios.
+          - generic [ref=e608]:
+            - textbox "Escribe un comentario..." [ref=e609]
+            - button [disabled] [ref=e610]

@@ -4156,6 +4156,174 @@ button {
     }
 }
 
+/* Project-scoped conversation shown only below the timeline. */
+.timeline_comments_section {
+    margin-top: 16px;
+    padding: 20px;
+    border: 1px solid var(--bold_line);
+    border-radius: 8px;
+    background: var(--bold_surface);
+}
+
+.timeline_comments_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.timeline_comments_header p {
+    margin: 0 0 4px;
+    color: var(--bold_muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.timeline_comments_header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.timeline_comments_header > span {
+    min-width: 28px;
+    padding: 4px 8px;
+    border-radius: 14px;
+    background: #f1f3f6;
+    color: var(--bold_muted);
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.timeline_comments_list {
+    display: grid;
+    gap: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-right: 4px;
+}
+
+.timeline_comments_list:focus-visible {
+    outline: 2px solid var(--bold_red);
+    outline-offset: 2px;
+}
+
+.timeline_comments_empty {
+    margin: 24px 0;
+    color: var(--bold_muted);
+    text-align: center;
+}
+
+.timeline_comment_composer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 8px;
+    border: 1px solid var(--bold_line);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.timeline_comment_composer > input {
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+}
+
+.timeline_comment_composer > button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: var(--bold_red);
+    color: #fff;
+}
+
+.timeline_comment_composer > button:disabled {
+    opacity: 0.4;
+}
+
+@media (max-width: 560px) {
+    .timeline_comments_section {
+        padding: 16px;
+    }
+}
+
+.detail_comments_list {
+    max-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-right: 4px;
+}
+
+.detail_comment_images,
+.detail_comment_image_previews {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.detail_comment_images img,
+.detail_comment_image_previews img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.detail_comment_image_previews span {
+    position: relative;
+}
+
+.detail_comment_image_previews button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(17, 24, 39, 0.78);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.detail_comment_image_button {
+    display: inline-flex;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.detail_comment_image_button:hover {
+    background: #fee2e2;
+    color: var(--bold_red);
+}
+
+.detail_comment_image_button input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
 /* Compact create-project modal pass (-25% approx). */
 .project_create_overlay {
     padding: 14px;

@@ -18,6 +18,7 @@ import {
     GanttChart as gantt_chart_icon,
     Home as home_icon,
     Inbox as inbox_icon,
+    ImagePlus as image_plus_icon,
     ExternalLink as external_link_icon,
     LayoutList as layout_list_icon,
     Link as link_icon,
@@ -161,6 +162,7 @@ const default_status_items = ["Activa", "Pend.", "Lista", "Inactiva"];
 const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 const comments_storage_key = "bold_task_comments_by_task";
+const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
 const current_user = team_members.find((member_item) => (
     member_item.email === (import.meta.env.VITE_DEMO_USER_EMAIL || "ana@bold.gt")
 )) || team_members[0];
@@ -218,10 +220,14 @@ function get_saved_comments_by_task() {
 
 
 function save_task_comments(task_id, comments) {
-    localStorage.setItem(comments_storage_key, JSON.stringify({
-        ...get_saved_comments_by_task(),
-        [task_id]: comments
-    }));
+    try {
+        localStorage.setItem(comments_storage_key, JSON.stringify({
+            ...get_saved_comments_by_task(),
+            [task_id]: comments
+        }));
+    } catch (error) {
+        console.warn("No se pudieron guardar los comentarios localmente.", error);
+    }
 }
 
 
@@ -539,6 +545,25 @@ function render_project_item(project_item, selected_project_id, handle_project_s
             ) : null}
         </div>
     );
+}
+
+function get_saved_timeline_comments() {
+    try {
+        const saved_comments = JSON.parse(localStorage.getItem(timeline_comments_storage_key));
+        return saved_comments && typeof saved_comments === "object" && !Array.isArray(saved_comments) ? saved_comments : {};
+    } catch (_error) {
+        return {};
+    }
+}
+
+function read_image_files(file_list) {
+    return Promise.all([...file_list]
+        .filter((file) => file.type.startsWith("image/"))
+        .map((file) => new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({ id: `comment_image_${Date.now()}_${file.name}`, name: file.name, url: reader.result });
+            reader.readAsDataURL(file);
+        })));
 }
 
 function get_split_content_width(split_element) {
@@ -1517,8 +1542,9 @@ function CustomDatePicker({ current_day, on_apply, on_clear }) {
 
 
 // Right-side task detail sidebar panel (Image 3 of design reference).
-function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, selected_task }) {
+function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, selected_task, show_comments = true }) {
     const [comment_text, set_comment_text] = use_state("");
+    const [comment_images, set_comment_images] = use_state([]);
     const member_item = get_member(selected_task.assignee_id);
     const project_item = get_project(selected_task.project_id);
     const subtasks = Array.isArray(selected_task.subtasks) ? selected_task.subtasks : [];
@@ -1534,6 +1560,18 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
         "Lista": "#22c55e"
     };
     const status_color = status_colors[selected_task.status] || "#9ca3af";
+
+    function submit_comment() {
+        if (!comment_text.trim() && !comment_images.length) return;
+        handle_add_comment(selected_task.id, comment_text, comment_images);
+        set_comment_text("");
+        set_comment_images([]);
+    }
+
+    function handle_comment_images(event) {
+        read_image_files(event.target.files).then((images) => set_comment_images((current_images) => [...current_images, ...images]));
+        event.target.value = "";
+    }
 
     return (
         <div className="task_detail_panel_card">
@@ -1682,12 +1720,17 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                 </div>
             ) : null}
 
-            {comments.length ? (
+            {show_comments ? <>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
                         <div className="detail_comment_item" key={comment_item.id}>
                             <strong>{comment_item.author_name || "Joaquin Sierra"}</strong>
-                            <p>{comment_item.body}</p>
+                            {comment_item.body ? <p>{comment_item.body}</p> : null}
+                            {comment_item.images?.length ? (
+                                <div className="detail_comment_images">
+                                    {comment_item.images.map((image) => <img key={image.id} src={image.url} alt={image.name} />)}
+                                </div>
+                            ) : null}
                             {comment_item.created_at ? (
                                 <small>{new Date(comment_item.created_at).toLocaleString()}</small>
                             ) : null}
@@ -1698,7 +1741,24 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                 <p className="detail_comments_empty">Aun no hay comentarios.</p>
             )}
 
+            {comment_images.length ? (
+                <div className="detail_comment_image_previews">
+                    {comment_images.map((image) => (
+                        <span key={image.id}>
+                            <img src={image.url} alt={image.name} />
+                            <button type="button" aria-label={`Quitar ${image.name}`} onClick={() => set_comment_images((images) => images.filter((item) => item.id !== image.id))}>
+                                {render_icon(x_icon, 12)}
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+
             <div className="detail_comment_input_box">
+                <label className="detail_comment_image_button" title="Adjuntar imagen">
+                    {render_icon(image_plus_icon, 16)}
+                    <input type="file" accept="image/*" multiple onChange={handle_comment_images} />
+                </label>
                 <input
                     type="text"
                     className="detail_comment_input"
@@ -1706,26 +1766,21 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                     value={comment_text}
                     onChange={(e) => set_comment_text(e.target.value)}
                     onKeyDown={(e) => {
-                        if (e.key === "Enter" && comment_text.trim()) {
-                            handle_add_comment(selected_task.id, comment_text);
-                            set_comment_text("");
+                        if (e.key === "Enter" && (comment_text.trim() || comment_images.length)) {
+                            submit_comment();
                         }
                     }}
                 />
                 <button
                     type="button"
                     className="detail_comment_send_btn"
-                    disabled={!comment_text.trim()}
-                    onClick={() => {
-                        if (comment_text.trim()) {
-                            handle_add_comment(selected_task.id, comment_text);
-                            set_comment_text("");
-                        }
-                    }}
+                    disabled={!comment_text.trim() && !comment_images.length}
+                    onClick={submit_comment}
                 >
                     {render_icon(arrow_up_icon, 15)}
                 </button>
             </div>
+            </> : null}
         </div>
     );
 }
@@ -2257,6 +2312,7 @@ function render_tasks_module(props) {
         filtered_tasks,
         handle_add_column,
         handle_add_comment,
+        handle_add_timeline_comment,
         handle_clear_filters,
         handle_close_task_tool,
         handle_column_drop,
@@ -2283,6 +2339,7 @@ function render_tasks_module(props) {
         selected_task,
         selected_task_id,
         task_detail_width,
+        timeline_comments,
         set_active_modal,
         set_active_section,
         set_active_view,
@@ -2510,38 +2567,40 @@ function render_tasks_module(props) {
                         }) : null}
                     </div>
 
-                    {selected_task ? (
-                        <>
-                        <div
-                            className="task_detail_resizer"
-                            role="separator"
-                            aria-label="Cambiar ancho del detalle de tarea"
-                            aria-orientation="vertical"
-                            aria-valuemin={320}
-                            aria-valuenow={task_detail_width}
-                            tabIndex={0}
-                            onKeyDown={handle_detail_resize_key_down}
-                            onPointerDown={handle_detail_resize_start}
-                        />
-                        <div className="task_detail_sidebar" style={{ width: `min(${task_detail_width}px, 50%)` }}>
-                            <TaskDetailPanel
-                                handle_add_comment={handle_add_comment}
-                                handle_delete_task={handle_delete_task}
-                                handle_open_edit_task={handle_open_edit_task}
-                                handle_toggle_subtask={handle_toggle_subtask}
-                                handle_toggle_task={handle_toggle_task}
-                                on_close={() => handle_task_select(null)}
-                                selected_task={selected_task}
-                            />
-                        </div>
-                        </>
-                    ) : null}
+                    <TaskDetailSidebar
+                        handle_add_comment={handle_add_comment}
+                        handle_delete_task={handle_delete_task}
+                        handle_detail_resize_key_down={handle_detail_resize_key_down}
+                        handle_detail_resize_start={handle_detail_resize_start}
+                        handle_open_edit_task={handle_open_edit_task}
+                        handle_task_select={handle_task_select}
+                        handle_toggle_subtask={handle_toggle_subtask}
+                        handle_toggle_task={handle_toggle_task}
+                        selected_task={selected_task}
+                        task_detail_width={task_detail_width}
+                    />
                 </div>
             ) : null}
 
             {active_section === "timeline" ? (
-                <div className="timeline_view_wrapper">
-                    {render_timeline_view(project_tasks, handle_task_select)}
+                <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
+                    <div className="tasks_main_area timeline_view_wrapper">
+                        {render_timeline_view(project_tasks, handle_task_select)}
+                        <TimelineComments comments={timeline_comments} on_add_comment={handle_add_timeline_comment} />
+                    </div>
+                    <TaskDetailSidebar
+                        handle_add_comment={handle_add_comment}
+                        handle_delete_task={handle_delete_task}
+                        handle_detail_resize_key_down={handle_detail_resize_key_down}
+                        handle_detail_resize_start={handle_detail_resize_start}
+                        handle_open_edit_task={handle_open_edit_task}
+                        handle_task_select={handle_task_select}
+                        handle_toggle_subtask={handle_toggle_subtask}
+                        handle_toggle_task={handle_toggle_task}
+                        selected_task={selected_task}
+                        show_comments={false}
+                        task_detail_width={task_detail_width}
+                    />
                 </div>
             ) : null}
 
@@ -3417,6 +3476,120 @@ function render_empty_tasks_state(set_active_modal) {
 }
 
 
+function TimelineComments({ comments, on_add_comment }) {
+    const [comment_text, set_comment_text] = use_state("");
+    const [comment_images, set_comment_images] = use_state([]);
+
+    function submit_comment() {
+        if (!comment_text.trim() && !comment_images.length) return;
+        on_add_comment(comment_text, comment_images);
+        set_comment_text("");
+        set_comment_images([]);
+    }
+
+    function handle_images(event) {
+        read_image_files(event.target.files).then((images) => set_comment_images((current_images) => [...current_images, ...images]));
+        event.target.value = "";
+    }
+
+    return (
+        <section className="timeline_comments_section" aria-labelledby="timeline_comments_title">
+            <header className="timeline_comments_header">
+                <div>
+                    <p>CONVERSACION DEL PROYECTO</p>
+                    <h2 id="timeline_comments_title">Comentarios del cronograma</h2>
+                </div>
+                <span>{comments.length}</span>
+            </header>
+
+            {comments.length ? (
+                <div className="timeline_comments_list" tabIndex={0} role="region" aria-label="Historial de comentarios del cronograma">
+                    {comments.map((comment_item) => (
+                        <article className="detail_comment_item" key={comment_item.id}>
+                            <strong>{comment_item.author_name}</strong>
+                            {comment_item.body ? <p>{comment_item.body}</p> : null}
+                            {comment_item.images?.length ? (
+                                <div className="detail_comment_images">
+                                    {comment_item.images.map((image) => <img key={image.id} src={image.url} alt={image.name} />)}
+                                </div>
+                            ) : null}
+                            <small>{new Date(comment_item.created_at).toLocaleString()}</small>
+                        </article>
+                    ))}
+                </div>
+            ) : (
+                <p className="timeline_comments_empty">Aun no hay comentarios en este cronograma.</p>
+            )}
+
+            {comment_images.length ? (
+                <div className="detail_comment_image_previews">
+                    {comment_images.map((image) => (
+                        <span key={image.id}>
+                            <img src={image.url} alt={image.name} />
+                            <button type="button" aria-label={`Quitar ${image.name}`} onClick={() => set_comment_images((images) => images.filter((item) => item.id !== image.id))}>
+                                {render_icon(x_icon, 12)}
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+
+            <div className="timeline_comment_composer">
+                <label className="detail_comment_image_button" title="Adjuntar imagen">
+                    {render_icon(image_plus_icon, 18)}
+                    <input type="file" accept="image/*" multiple onChange={handle_images} />
+                </label>
+                <input
+                    type="text"
+                    value={comment_text}
+                    placeholder="Escribe un comentario para el cronograma..."
+                    onChange={(event) => set_comment_text(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") submit_comment();
+                    }}
+                />
+                <button type="button" aria-label="Enviar comentario" disabled={!comment_text.trim() && !comment_images.length} onClick={submit_comment}>
+                    {render_icon(arrow_up_icon, 16)}
+                </button>
+            </div>
+        </section>
+    );
+}
+
+
+function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_detail_resize_key_down, handle_detail_resize_start, handle_open_edit_task, handle_task_select, handle_toggle_subtask, handle_toggle_task, selected_task, show_comments = true, task_detail_width }) {
+    if (!selected_task) return null;
+
+    return (
+        <>
+            <div
+                className="task_detail_resizer"
+                role="separator"
+                aria-label="Cambiar ancho del detalle de tarea"
+                aria-orientation="vertical"
+                aria-valuemin={320}
+                aria-valuenow={task_detail_width}
+                tabIndex={0}
+                onKeyDown={handle_detail_resize_key_down}
+                onPointerDown={handle_detail_resize_start}
+            />
+            <div className="task_detail_sidebar" style={{ width: `min(${task_detail_width}px, 50%)` }}>
+                <TaskDetailPanel
+                    handle_add_comment={handle_add_comment}
+                    handle_delete_task={handle_delete_task}
+                    handle_open_edit_task={handle_open_edit_task}
+                    handle_toggle_subtask={handle_toggle_subtask}
+                    handle_toggle_task={handle_toggle_task}
+                    on_close={() => handle_task_select(null)}
+                    selected_task={selected_task}
+                    show_comments={show_comments}
+                />
+            </div>
+        </>
+    );
+}
+
+
 // Renders the sharing modal based on the desktop reference asset.
 function render_share_modal(set_active_modal) {
     return (
@@ -3810,10 +3983,19 @@ function TaskAppContent() {
         type: "all",
         project_id: "all"
     });
+    const [timeline_comments_by_scope, set_timeline_comments_by_scope] = use_state(get_saved_timeline_comments);
 
     use_effect(() => {
         localStorage.setItem(projects_storage_key, JSON.stringify(projects));
     }, [projects]);
+
+    use_effect(() => {
+        try {
+            localStorage.setItem(timeline_comments_storage_key, JSON.stringify(timeline_comments_by_scope));
+        } catch (error) {
+            console.warn("No se pudieron guardar los comentarios del cronograma.", error);
+        }
+    }, [timeline_comments_by_scope]);
 
     use_effect(() => {
         function clamp_detail_width() {
@@ -4001,6 +4183,9 @@ function TaskAppContent() {
             ? { id: "my_tasks", label: "Mis tareas", description: "Tareas asignadas a ti" }
             : projects.find((project_item) => project_item.id === selected_project_id) || projects[0] || project_items[0]
     ), [projects, selected_project_id, task_scope]);
+
+    const timeline_scope_id = task_scope === "mine" ? "my_tasks" : selected_project_id;
+    const timeline_comments = timeline_comments_by_scope[timeline_scope_id] || [];
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
@@ -4339,15 +4524,16 @@ function TaskAppContent() {
     }
 
 
-    function handle_add_comment(task_id, comment_text) {
+    function handle_add_comment(task_id, comment_text, images = []) {
         const body = comment_text.trim();
-        if (!body) return;
+        if (!body && !images.length) return;
 
         const new_comment = {
             id: `comment_${Date.now()}`,
             task_id,
             author_name: current_user.name,
             body,
+            images,
             created_at: new Date().toISOString()
         };
 
@@ -4359,9 +4545,11 @@ function TaskAppContent() {
             return { ...task_item, comments };
         }));
 
-        add_comment_request(task_id, body, current_user.name).catch((error) => {
-            console.warn("No se pudo sincronizar el comentario.", error);
-        });
+        if (body) {
+            add_comment_request(task_id, body, current_user.name).catch((error) => {
+                console.warn("No se pudo sincronizar el comentario.", error);
+            });
+        }
     }
 
 
@@ -4397,6 +4585,25 @@ function TaskAppContent() {
     function handle_request_delete_project() {
         set_delete_target({ type: "project", id: selected_project_id });
         set_active_modal("delete_confirm");
+    }
+
+    function handle_add_timeline_comment(comment_text, images = []) {
+        const body = comment_text.trim();
+        if (!body && !images.length) return;
+
+        const new_comment = {
+            id: `timeline_comment_${Date.now()}`,
+            author_id: current_user.id,
+            author_name: current_user.name,
+            body,
+            images,
+            created_at: new Date().toISOString()
+        };
+
+        set_timeline_comments_by_scope((current_comments) => ({
+            ...current_comments,
+            [timeline_scope_id]: [...(current_comments[timeline_scope_id] || []), new_comment]
+        }));
     }
 
     // Deletes a task through the backend and removes it from local state.
@@ -4684,6 +4891,7 @@ function TaskAppContent() {
                     filtered_tasks,
                     handle_add_column,
                     handle_add_comment,
+                    handle_add_timeline_comment,
                     handle_clear_filters,
                     handle_close_task_tool,
                     handle_column_drop,
@@ -4711,6 +4919,7 @@ function TaskAppContent() {
                     selected_task,
                     selected_task_id,
                     task_detail_width,
+                    timeline_comments,
                     set_active_modal,
                     set_active_section,
                     set_active_view,
