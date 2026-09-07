@@ -24,6 +24,7 @@ import {
     Link as link_icon,
     Menu as menu_icon,
     MessageCircle as message_circle_icon,
+    Moon as moon_icon,
     MoreHorizontal as more_horizontal_icon,
     Paperclip as paperclip_icon,
     Pencil as pencil_icon,
@@ -32,6 +33,7 @@ import {
     SlidersHorizontal as sliders_icon,
     Trash2 as trash_icon,
     UserPlus as user_plus_icon,
+    Sun as sun_icon,
     X as x_icon
 } from "lucide-react";
 import { navigation_items, notification_items, project_items, starter_tasks, team_members } from "./data/task_data.js";
@@ -165,6 +167,7 @@ const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
+const theme_storage_key = "bold_color_theme";
 const current_user = team_members.find((member_item) => (
     member_item.email === (import.meta.env.VITE_DEMO_USER_EMAIL || "ana@bold.gt")
 )) || team_members[0];
@@ -750,10 +753,12 @@ function render_top_bar(props) {
         handle_close_notifications,
         handle_mark_notifications_read,
         handle_toggle_notifications,
+        is_dark_mode,
         is_notifications_open,
         notifications,
         search_query,
-        set_search_query
+        set_search_query,
+        set_is_dark_mode
     } = props;
     const has_unread_notifications = notifications.some((notification_item) => !notification_item.is_read);
 
@@ -770,6 +775,15 @@ function render_top_bar(props) {
                 />
             </label>
             <div className="top_bar_actions">
+                <button
+                    className="theme_toggle_button"
+                    type="button"
+                    aria-label={is_dark_mode ? "Activar modo claro" : "Activar modo oscuro"}
+                    title={is_dark_mode ? "Modo claro" : "Modo oscuro"}
+                    onClick={() => set_is_dark_mode((current_value) => !current_value)}
+                >
+                    <span className="theme_toggle_icon">{render_icon(is_dark_mode ? sun_icon : moon_icon, 17)}</span>
+                </button>
                 <div className="task_tool_anchor">
                     <button
                         className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}`}
@@ -3917,6 +3931,14 @@ class TaskAppErrorBoundary extends react_component {
 
 function TaskAppContent() {
     const [active_module, set_active_module] = use_state("tasks");
+    const [is_dark_mode, set_is_dark_mode] = use_state(() => {
+        try {
+            const saved_theme = localStorage.getItem(theme_storage_key);
+            return saved_theme ? saved_theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        } catch (_error) {
+            return false;
+        }
+    });
     const [active_view, set_active_view] = use_state("list");
     const [active_modal, set_active_modal] = use_state(null);
     const [is_sidebar_open, set_is_sidebar_open] = use_state(false);
@@ -3945,6 +3967,15 @@ function TaskAppContent() {
     const status_options = default_status_items;
     const [collapsed_sections, set_collapsed_sections] = use_state([]);
     const [is_notifications_open, set_is_notifications_open] = use_state(false);
+
+    use_effect(() => {
+        try {
+            localStorage.setItem(theme_storage_key, is_dark_mode ? "dark" : "light");
+        } catch (_error) {
+            // The selected theme still works for this session when storage is unavailable.
+        }
+        document.documentElement.style.colorScheme = is_dark_mode ? "dark" : "light";
+    }, [is_dark_mode]);
     const [projects, set_projects] = use_state(() => {
         try {
             const saved_projects = JSON.parse(localStorage.getItem(projects_storage_key));
@@ -4836,7 +4867,7 @@ function TaskAppContent() {
 
     // Returns the full shell with the focused tasks module.
     return (
-        <div className={`app_shell ${is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
+        <div className={`app_shell ${is_dark_mode ? "theme_dark" : ""} ${is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
             {render_sidebar({
                 active_project_menu_id,
                 active_module,
@@ -4874,10 +4905,12 @@ function TaskAppContent() {
                     handle_close_notifications,
                     handle_mark_notifications_read,
                     handle_toggle_notifications,
+                    is_dark_mode,
                     is_notifications_open,
                     notifications,
                     search_query,
-                    set_search_query
+                    set_search_query,
+                    set_is_dark_mode
                 })}
                 {active_module === "home" ? <HomeModule
                     currentUser={current_user}

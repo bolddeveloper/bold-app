@@ -9529,3 +9529,208 @@ button {
         animation: none;
     }
 }
+
+.theme_toggle_button {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #dedbd7;
+    border-radius: 50%;
+    background: #f7f6f5;
+    color: #444a53;
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.theme_toggle_button:hover {
+    color: var(--bold_red);
+    transform: translateY(-2px);
+}
+
+.theme_toggle_button:active {
+    transform: scale(.92);
+}
+
+.theme_toggle_icon {
+    display: grid;
+    place-items: center;
+    transition: transform 300ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.theme_dark .theme_toggle_icon {
+    transform: rotate(180deg);
+}
+
+.theme_dark {
+    --bold_surface: #22262e;
+    --bold_surface_soft: #292e37;
+    --bold_line: #393f49;
+    --bold_muted: #a9b0bb;
+    background: #171a20;
+    color: #edf0f4;
+}
+
+.theme_dark .main_workspace {
+    background: #171a20;
+    color: #edf0f4;
+}
+
+.theme_dark .top_bar,
+.theme_dark .mobile_header {
+    border-color: var(--bold_line);
+    background: #1e2229;
+}
+
+.theme_dark .search_box,
+.theme_dark .theme_toggle_button,
+.theme_dark input,
+.theme_dark textarea,
+.theme_dark select {
+    border-color: var(--bold_line);
+    background: #292e37;
+    color: #edf0f4;
+}
+
+.theme_dark .search_box input,
+.theme_dark .bell_button {
+    color: #edf0f4;
+}
+
+.theme_dark .theme_toggle_button {
+    color: #ffd166;
+    box-shadow: 0 0 20px rgba(255, 209, 102, .1);
+}
+
+.theme_dark .bell_button:hover,
+.theme_dark .bell_button_active {
+    background: #303640;
+}
+
+.theme_dark .bell_unread_dot {
+    border-color: #1e2229;
+}
+
+.theme_dark :is(.home_metric, .home_card, .reports_metric, .reports_card, .task_table_card, .board_column, .board_card, .timeline_view, .timeline_view_card, .calendar_view, .placeholder_card, .inbox_card, .inbox_list_panel, .inbox_detail_panel, .task_detail_panel, .task_tool_panel, .form_modal, .project_create_modal) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: #edf0f4;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .2);
+}
+
+.theme_dark .home_metric_primary {
+    background: linear-gradient(145deg, #343a45, #292e37);
+}
+
+.theme_dark :is(.home_project, .home_quick_add, .home_shortcuts button, .inbox_item, .inbox_activity, .task_row, .subtask_row, .board_task_card, .calendar_day, .timeline_task, .timeline_header, .timeline_row, .field_control, .task_form_control, .detail_collaborators_card, .detail_collab_row, .detail_collab_empty) {
+    border-color: var(--bold_line);
+    background-color: var(--bold_surface_soft);
+    color: #edf0f4;
+}
+
+.theme_dark :is(.home_task, .home_tabs, .home_activity_item, .reports_project, .task_row, .inbox_item, .notification_item, .modal_header, .modal_footer) {
+    border-color: var(--bold_line);
+}
+
+.theme_dark :is(h1, h2, h3, .project_title_group, .task_title, .notification_title, .inbox_activity_text strong, .inbox_detail_meta strong, .detail_collab_name, .form_field, .timeline_task_link) {
+    color: #f4f6f8;
+}
+
+.theme_dark :is(.secondary_button, .icon_button, .view_tab, .task_checkbox, .home_task_check) {
+    border-color: #48505c;
+    background: #292e37;
+    color: #dfe3e8;
+}
+
+.theme_dark :is(.task_tool_panel, .notifications_panel, .filter_menu, .sort_menu, .sidebar_project_menu) {
+    border-color: var(--bold_line);
+    background: #252a32;
+}
+
+.theme_dark :is(.inbox_activity_unread, .inbox_activity_selected, .task_row.task_row_selected) {
+    background: #30282b !important;
+}
+
+.theme_dark :is(.inbox_tabs, .inbox_toolbar, .inbox_group h2, .inbox_activity, .inbox_detail_meta, .timeline_header, .timeline_row, .timeline_days_track_header, .timeline_day_header_cell) {
+    border-color: var(--bold_line);
+}
+
+.theme_dark .timeline_row_track {
+    border-color: var(--bold_line);
+    background-image: repeating-linear-gradient(to right, transparent, transparent calc(100% / 30 - 1px), #343a43 calc(100% / 30 - 1px), #343a43 calc(100% / 30));
+}
+
+.theme_dark .reports_bars {
+    background: repeating-linear-gradient(to top, transparent 0, transparent 68px, #383e48 69px, transparent 70px);
+}
+
+.theme_dark .reports_donut > div {
+    background: var(--bold_surface);
+}
+
+.theme_dark progress::-webkit-progress-bar {
+    background: #383e48;
+}
+
+/* Keep list headers light while task rows remain comfortably dark. */
+.theme_dark .task_table_header {
+    border-color: #bec3ca;
+    background: #d9dadd;
+    color: #555d68;
+}
+
+.theme_dark .task_group_header {
+    border-bottom: 1px solid #b9bec5;
+    background: #cfd1d5;
+    color: #202630;
+}
+
+.theme_dark .task_group_header > span:last-child {
+    background: #eef0f2;
+    color: #505863;
+}
+
+.theme_dark .task_row {
+    border-color: #3b424d;
+    background: #252a32;
+}
+
+.theme_dark .task_row:hover {
+    background: #2d333d;
+}
+
+.theme_dark .task_row_selected,
+.theme_dark .task_row.task_row_selected {
+    background: #3a292e !important;
+}
+
+.theme_dark :is(.task_name_button, .task_name_button_inner, .task_project_cell) {
+    color: #f0f2f5;
+}
+
+.theme_dark :is(.task_date, .task_row_date) {
+    color: #b9c0ca;
+}
+
+.theme_dark .inbox_search_box {
+    border-color: #bdc2c9;
+    background: #d9dadd;
+    color: #4e5762;
+}
+
+.theme_dark .inbox_search_box input {
+    background: transparent;
+    color: #202630;
+}
+
+.theme_dark .inbox_search_box input::placeholder {
+    color: #69717c;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .theme_toggle_button,
+    .theme_toggle_icon {
+        transition: none;
+    }
+}
