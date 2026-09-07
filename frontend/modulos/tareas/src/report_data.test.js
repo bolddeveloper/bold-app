@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { buildReport } from "./report_data.js";
+const tasks = [{ project_id: "a", section: "completed", due: new Date(2026, 8, 6) }, { project_id: "a", section: "in_progress", due: new Date(2026, 8, 5) }, { project_id: "a", section: "todo", due: null }, { project_id: "a", section: "todo", due: new Date(2026, 8, 8) }];
+const report = buildReport(tasks, [{ id: "a" }], 7, task => task.due, new Date(2026, 8, 7));
+assert.deepEqual([report.total, report.completed, report.active, report.overdue, report.pending], [2, 1, 1, 1, 0]);
+assert.equal(report.weeks.reduce((sum, week) => sum + week.count, 0), 1);
+assert.equal(report.projects[0].completed, 1);
+assert.equal(buildReport(tasks, [], 0, task => task.due).total, 4);
+assert.equal(buildReport([], [], 30, task => task.due).total, 0);
+console.log("Report checks passed");

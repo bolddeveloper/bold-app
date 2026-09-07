@@ -9485,3 +9485,47 @@ button {
         width: 100% !important;
     }
 }
+
+/* Smooth feedback when changing the active sidebar module. */
+.navigation_item {
+    position: relative;
+    transition: background-color 220ms ease, box-shadow 220ms ease, color 220ms ease, transform 180ms ease;
+}
+
+.navigation_item:hover {
+    transform: translateX(3px);
+}
+
+.navigation_item_active {
+    animation: sidebar_item_select 260ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.navigation_icon {
+    transition: color 220ms ease, transform 220ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.navigation_item_active .navigation_icon {
+    transform: scale(1.12);
+}
+
+@keyframes sidebar_item_select {
+    from {
+        opacity: .65;
+        transform: translateX(-5px) scale(.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .navigation_item,
+    .navigation_icon {
+        transition: none;
+    }
+
+    .navigation_item_active {
+        animation: none;
+    }
+}

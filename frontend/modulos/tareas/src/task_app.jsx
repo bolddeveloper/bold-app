@@ -35,6 +35,8 @@ import {
     X as x_icon
 } from "lucide-react";
 import { navigation_items, notification_items, project_items, starter_tasks, team_members } from "./data/task_data.js";
+import ReportsModule from "./reports_module.jsx";
+import HomeModule from "./home_module.jsx";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
@@ -4877,7 +4879,24 @@ function TaskAppContent() {
                     search_query,
                     set_search_query
                 })}
-                {active_module === "tasks" ? render_tasks_module({
+                {active_module === "home" ? <HomeModule
+                    currentUser={current_user}
+                    notifications={notifications}
+                    onCreateProject={() => set_active_modal("project")}
+                    onCreateTask={() => set_active_modal("task")}
+                    onOpenProject={handle_project_select}
+                    onOpenReports={() => handle_module_change("reports")}
+                    onOpenTask={(task_id) => {
+                        set_active_module("tasks");
+                        set_active_section("tasks");
+                        handle_task_select(task_id);
+                    }}
+                    onOpenTasks={handle_my_tasks_select}
+                    onToggleTask={handle_toggle_task}
+                    parseDueDate={parse_due_date}
+                    projects={projects}
+                    tasks={tasks}
+                /> : active_module === "tasks" ? render_tasks_module({
                     active_filters,
                     active_quick_popover,
                     active_section,
@@ -4969,7 +4988,7 @@ function TaskAppContent() {
                     schedule_view,
                     set_active_modal,
                     set_schedule_view
-                }) : render_placeholder_module(active_module)}
+                }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module)}
             </main>
 
             {render_active_modal()}
