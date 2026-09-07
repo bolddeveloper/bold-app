@@ -517,9 +517,10 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 // Renders a project item in the sidebar workspace list.
 function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id) {
     const is_active = selected_project_id === project_item.id;
+    const is_menu_open = active_project_menu_id === project_item.id;
 
     return (
-        <div className="project_item_wrap dismissible_popover" key={project_item.id}>
+        <div className={`project_item_wrap dismissible_popover ${is_menu_open ? "project_item_wrap_menu_open" : ""}`} key={project_item.id}>
         <button
             className={`project_item ${is_active ? "project_item_active" : ""}`}
             type="button"
@@ -542,12 +543,10 @@ function render_project_item(project_item, selected_project_id, handle_project_s
             >
                 {render_icon(more_horizontal_icon, 18)}
             </button>
-            {active_project_menu_id === project_item.id ? (
-                <div className="sidebar_project_menu">
+                <div className={`sidebar_project_menu animated_overflow_menu ${is_menu_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_menu_open}>
                     <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "edit")}>Editar proyecto</button>
                     <button className="danger_menu_item" type="button" onClick={() => handle_project_menu_toggle(project_item.id, "delete")}>Eliminar proyecto</button>
                 </div>
-            ) : null}
         </div>
     );
 }
@@ -578,9 +577,9 @@ function get_split_content_width(split_element) {
 
 
 // Renders the task workspace content nested below Tareas.
-function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope) {
+function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open) {
     return (
-        <div className="tasks_submenu" id="tasks_workspace_menu">
+        <div className={`tasks_submenu ${is_open ? "tasks_submenu_open" : "tasks_submenu_closed"}`} id="tasks_workspace_menu" aria-hidden={!is_open}>
             <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
                 <span className="submenu_dot"></span>
                 <span>Mis tareas</span>
@@ -661,14 +660,14 @@ function render_sidebar(props) {
                             }
 
                             return (
-                                <div className="tasks_navigation_group" key={item.id}>
+                                <div className={`tasks_navigation_group ${is_tasks_menu_open ? "tasks_navigation_group_open" : "tasks_navigation_group_closed"}`} key={item.id}>
                                     {render_navigation_item(item, active_module, handle_module_change, {
                                         controls_id: "tasks_workspace_menu",
                                         is_expandable: true,
                                         is_expanded: is_tasks_menu_open,
                                         on_click: handle_tasks_menu_toggle
                                     })}
-                                    {is_tasks_menu_open ? render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope) : null}
+                                    {render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open)}
                                 </div>
                             );
                         })}
@@ -3817,9 +3816,9 @@ function render_project_modal(props) {
 
 
 // Renders the project overflow menu from the desktop reference.
-function render_project_menu(set_active_modal, handle_request_delete_project) {
+function render_project_menu(set_active_modal, handle_request_delete_project, is_open) {
     return (
-        <div className="project_menu_popover">
+        <div className={`project_menu_popover animated_overflow_menu ${is_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_open}>
             <button type="button">Editar detalles del proyecto <span>Ctrl+E</span></button>
             <button type="button">Duplicar proyecto <span>Ctrl+D</span></button>
             <button type="button">Guardar como plantilla</button>
@@ -4838,10 +4837,6 @@ function TaskAppContent() {
             });
         }
 
-        if (active_modal === "project_menu") {
-            return render_project_menu(set_active_modal, handle_request_delete_project);
-        }
-
         if (active_modal === "delete_confirm" && delete_target) {
             const is_task = delete_target.type === "task";
             const task_item = is_task ? tasks.find((item) => item.id === delete_target.id) : null;
@@ -4912,6 +4907,7 @@ function TaskAppContent() {
                     set_search_query,
                     set_is_dark_mode
                 })}
+                <div className="module_transition" key={active_module}>
                 {active_module === "home" ? <HomeModule
                     currentUser={current_user}
                     notifications={notifications}
@@ -5022,9 +5018,11 @@ function TaskAppContent() {
                     set_active_modal,
                     set_schedule_view
                 }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module)}
+                </div>
             </main>
 
             {render_active_modal()}
+            {render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}
         </div>
     );
 }

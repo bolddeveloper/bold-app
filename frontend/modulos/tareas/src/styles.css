@@ -9728,9 +9728,449 @@ button {
     opacity: 1;
 }
 
+.task_checkbox,
+.detail_checkbox {
+    position: relative;
+    transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.task_checkbox_checked {
+    animation: task_check_pop 320ms cubic-bezier(.2, .9, .3, 1);
+}
+
+.task_checkbox_checked::after {
+    position: absolute;
+    inset: -5px;
+    border: 2px solid rgba(231, 53, 53, .38);
+    border-radius: 10px;
+    content: "";
+    pointer-events: none;
+    animation: task_check_ripple 420ms ease-out both;
+}
+
+.task_checkbox_checked svg {
+    stroke-dasharray: 24;
+    animation: task_check_draw 260ms ease-out both;
+}
+
+@keyframes task_check_pop {
+    0% { transform: scale(.82); }
+    55% { transform: scale(1.12); box-shadow: 0 4px 12px rgba(231, 53, 53, .28); }
+    100% { transform: scale(1); }
+}
+
+@keyframes task_check_ripple {
+    from { opacity: .9; transform: scale(.72); }
+    to { opacity: 0; transform: scale(1.25); }
+}
+
+@keyframes task_check_draw {
+    from { opacity: 0; stroke-dashoffset: 24; }
+    to { opacity: 1; stroke-dashoffset: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .theme_toggle_button,
-    .theme_toggle_icon {
+    .theme_toggle_icon,
+    .task_checkbox,
+    .detail_checkbox {
         transition: none;
+    }
+
+    .task_checkbox_checked,
+    .task_checkbox_checked::after,
+    .task_checkbox_checked svg {
+        animation: none;
+    }
+}
+
+.module_transition {
+    min-width: 0;
+    animation: module_elegant_enter 380ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes module_elegant_enter {
+    from {
+        opacity: 0;
+        filter: blur(3px);
+        transform: translateY(9px) scale(.995);
+    }
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .module_transition {
+        animation: none;
+    }
+}
+
+.navigation_chevron {
+    transition: transform 380ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.tasks_navigation_group {
+    transition: gap 440ms ease;
+}
+
+.tasks_navigation_group_closed {
+    gap: 0;
+}
+
+.tasks_submenu {
+    max-height: 720px;
+    overflow: hidden;
+    opacity: 1;
+    transform-origin: top left;
+    transform: translateY(0) scaleY(1);
+    visibility: visible;
+    transition: max-height 440ms cubic-bezier(.2, .8, .2, 1), opacity 320ms ease, transform 440ms cubic-bezier(.2, .8, .2, 1), padding 440ms ease, margin 440ms ease, visibility 0s;
+}
+
+.tasks_submenu::before {
+    opacity: 1;
+    transform-origin: top;
+    transform: scaleY(1);
+    transition: opacity 300ms ease, transform 420ms 50ms ease;
+}
+
+.tasks_submenu > * {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 280ms ease, transform 360ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.tasks_submenu_open > :nth-child(1) { transition-delay: 55ms; }
+.tasks_submenu_open > :nth-child(2) { transition-delay: 100ms; }
+.tasks_submenu_open > :nth-child(3) { transition-delay: 145ms; }
+
+.tasks_submenu_closed {
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-7px) scaleY(.97);
+    visibility: hidden;
+    transition: max-height 440ms cubic-bezier(.4, 0, .6, 1), opacity 280ms ease, transform 400ms ease, padding 440ms ease, margin 440ms ease, visibility 0s linear 440ms;
+}
+
+.tasks_submenu_closed::before {
+    opacity: 0;
+    transform: scaleY(.25);
+    transition-delay: 0s;
+}
+
+.tasks_submenu_closed > * {
+    opacity: 0;
+    transform: translateX(-7px);
+    transition-delay: 0s;
+}
+
+.navigation_item_expandable[aria-expanded="true"] .navigation_icon {
+    animation: tasks_navigation_icon 300ms ease-out;
+}
+
+@keyframes tasks_navigation_icon {
+    50% { transform: scale(1.14) rotate(-5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .navigation_chevron {
+        transition: none;
+    }
+
+    .tasks_navigation_group,
+    .tasks_submenu,
+    .tasks_submenu::before,
+    .tasks_submenu > * {
+        transition: none;
+    }
+
+    .navigation_item_expandable[aria-expanded="true"] .navigation_icon {
+        animation: none;
+    }
+}
+
+.animated_overflow_menu {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    transform-origin: top right;
+    visibility: visible;
+    transition: opacity 300ms ease, transform 420ms cubic-bezier(.2, .8, .2, 1), visibility 0s;
+}
+
+.animated_overflow_menu > button {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 240ms ease, transform 320ms cubic-bezier(.2, .8, .2, 1), background-color 160ms ease;
+}
+
+.overflow_menu_open > button:nth-child(1) { transition-delay: 45ms; }
+.overflow_menu_open > button:nth-child(2) { transition-delay: 75ms; }
+.overflow_menu_open > button:nth-child(3) { transition-delay: 105ms; }
+.overflow_menu_open > button:nth-child(4) { transition-delay: 135ms; }
+.overflow_menu_open > button:nth-child(5) { transition-delay: 165ms; }
+.overflow_menu_open > button:nth-child(6) { transition-delay: 195ms; }
+
+.overflow_menu_closed {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-7px) scaleY(.96);
+    visibility: hidden;
+    transition: opacity 280ms ease, transform 400ms ease, visibility 0s linear 400ms;
+}
+
+.overflow_menu_closed > button {
+    opacity: 0;
+    transform: translateX(-7px);
+    transition-delay: 0s;
+}
+
+.project_item_wrap {
+    transition: transform 210ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.project_item_wrap:hover {
+    transform: translateX(4px);
+}
+
+.project_item_wrap_menu_open {
+    z-index: 100;
+}
+
+.project_item {
+    transition: background-color 190ms ease, color 190ms ease;
+}
+
+.project_item_wrap:hover .project_item {
+    background: rgba(255, 255, 255, .07);
+    color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animated_overflow_menu,
+    .animated_overflow_menu > button,
+    .project_item_wrap,
+    .project_item {
+        transition: none;
+    }
+}
+
+.project_menu_popover {
+    overflow: hidden;
+    border-radius: 14px;
+}
+
+.footer_progress > span,
+.progress_meter > span {
+    box-shadow: 4px 0 10px rgba(231, 53, 53, .45);
+    transition: width 680ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .footer_progress > span,
+    .progress_meter > span {
+        transition: none;
+    }
+}
+
+/* Cohesive task controls and readable text in dark mode. */
+.theme_dark .main_nav_tab_btn {
+    border-color: #424955;
+    background: #292e37;
+    color: #d9dee6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+}
+
+.theme_dark .main_nav_tab_btn:hover:not(.main_nav_tab_active) {
+    border-color: #596270;
+    background: #343a45;
+    color: #ffffff;
+}
+
+.theme_dark .main_nav_tab_btn.main_nav_tab_active {
+    border-color: var(--bold_red);
+    background: var(--bold_red);
+    color: #ffffff;
+}
+
+.theme_dark .view_switch_toggle {
+    border-color: #424955;
+    background: #292e37;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+}
+
+.theme_dark .view_switch_toggle .toggle_side {
+    color: #aeb6c2;
+}
+
+.theme_dark .view_switch_toggle .toggle_side:hover:not(.view_list_active):not(.view_board_active) {
+    background: #373e49;
+    color: #ffffff;
+}
+
+.theme_dark .add_row_button {
+    border-color: #424955;
+    background: #292e37;
+    color: #ff6262;
+}
+
+.theme_dark .add_row_button:hover {
+    border-color: #5a626f;
+    background: #343a45;
+}
+
+.theme_dark .task_table_header {
+    border-color: #414854;
+    background: #343a44;
+    color: #b9c1cc;
+}
+
+.theme_dark .task_group_header {
+    border-color: #414854;
+    background: #303640;
+    color: #f0f2f5;
+}
+
+.theme_dark .task_group_header > span:last-child {
+    background: #464e5a;
+    color: #ffffff;
+}
+
+.theme_dark .text_tool_button {
+    color: #aeb6c2;
+}
+
+.theme_dark .text_tool_button:hover,
+.theme_dark .text_tool_button_active {
+    color: #ffffff;
+}
+
+.theme_dark .inbox_search_box {
+    border-color: #424955;
+    background: #292e37;
+    color: #aeb6c2;
+}
+
+.theme_dark .inbox_search_box input {
+    background: transparent;
+    color: #eef1f5;
+}
+
+.theme_dark .inbox_search_box input::placeholder {
+    color: #929ba8;
+}
+
+.theme_dark :is(.project_menu_popover, .sidebar_project_menu) {
+    border-color: #424955;
+    background: #252a32;
+}
+
+.theme_dark :is(.project_menu_popover, .sidebar_project_menu) button {
+    border-color: #3b424d;
+    color: #e8ebef;
+}
+
+.theme_dark :is(.project_menu_popover, .sidebar_project_menu) button:hover {
+    background: #343a45;
+}
+
+.theme_dark :is(.project_subtitle, .table_footer strong, .task_card_title_button, .board_title_button, .timeline_task_link, .detail_task_title, .meta_value, .detail_collab_name, .detail_description_block, .section_title_row h2, .subtask_text, .filter_option, .customize_option, .sort_option, .form_field, .project_create_step > span, .project_create_grid_3 label) {
+    color: #e8ebef;
+}
+
+.theme_dark :is(.table_footer span, .task_date, .task_row_date, .detail_collab_email, .meta_label) {
+    color: #aeb6c2;
+}
+
+.theme_dark :is(.task_inline_edit_button, .board_section_actions button) {
+    border-color: #424955;
+    background: #292e37;
+    color: #aeb6c2;
+}
+
+.theme_dark :is(.bold_modal_window, .bold_modal_footer, .subtask_item_card, .subtask_dots_popover, .detail_comment_item, .detail_comment_input_box, .subtask_draft_row, .attachment_chip, .link_access_card, .privacy_card, .bold_pill_select_wrap) {
+    border-color: #424955;
+    background: #252a32;
+    color: #e8ebef;
+}
+
+.theme_dark :is(.bold_modal_header, .bold_modal_footer) {
+    border-color: #3b424d;
+}
+
+.theme_dark :is(.bold_modal_title, .bold_field_label, .bold_field_group label, .subtasks_section_header label, .subtask_title, .attachment_file_name, .access_row strong, .link_access_card strong, .privacy_card strong, .detail_comment_item strong, .detail_comment_item p, .picker_title, .picker_member_text strong, .chip_name) {
+    color: #eef1f5;
+}
+
+.theme_dark :is(.bold_modal_close_btn, .bold_btn_cancel, .bold_date_trigger_btn) {
+    border-color: #424955;
+    background: #303640;
+    color: #e8ebef;
+}
+
+.theme_dark :is(.subtask_dots_popover, .task_tool_panel) button:not(.primary_button):not(.danger_item) {
+    color: #e8ebef;
+}
+
+.theme_dark :is(.subtask_dots_popover, .task_tool_panel) button:hover {
+    background: #343a45;
+}
+
+.theme_dark :is(.task_card_title_text, .board_title_text, .calendar_day strong, .timeline_col_label) {
+    color: #eef1f5;
+}
+
+.bell_button {
+    transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.bell_button:hover {
+    transform: translateY(-2px);
+}
+
+.bell_button svg {
+    transform-origin: 50% 12%;
+    transition: transform 180ms ease;
+}
+
+.bell_button:hover svg {
+    transform: rotate(-7deg);
+}
+
+.bell_button_active svg {
+    animation: notification_bell_ring 520ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.bell_unread_dot {
+    animation: notification_dot_pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes notification_bell_ring {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(12deg); }
+    50% { transform: rotate(-10deg); }
+    72% { transform: rotate(6deg); }
+}
+
+@keyframes notification_dot_pulse {
+    0%, 72%, 100% { box-shadow: 0 0 0 0 rgba(231, 53, 53, 0); }
+    82% { box-shadow: 0 0 0 4px rgba(231, 53, 53, .16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bell_button,
+    .bell_button svg {
+        transition: none;
+    }
+
+    .bell_button_active svg,
+    .bell_unread_dot {
+        animation: none;
     }
 }
