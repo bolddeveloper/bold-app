@@ -10126,6 +10126,94 @@ button {
     color: #eef1f5;
 }
 
+.theme_dark .home_metric .home_metric_blue {
+    border: 1px solid #34577d;
+    background: #263b53;
+    color: #76b8ff;
+}
+
+.theme_dark .reports_metric_2 span {
+    border: 1px solid #34577d;
+    background: #263b53;
+    color: #76b8ff;
+}
+
+.theme_dark .bold_modal_header h2 {
+    color: #eef1f5 !important;
+}
+
+.theme_dark :is(.modal_close_btn, .add_collaborator_btn, .attachment_dropzone) {
+    border-color: #48515e;
+    background: #303640;
+}
+
+.theme_dark .modal_close_btn {
+    color: #cbd1da;
+}
+
+.theme_dark .modal_close_btn:hover {
+    background: #3b424d;
+    color: #ffffff;
+}
+
+.theme_dark .add_collaborator_btn {
+    color: #ff6262;
+    box-shadow: none;
+}
+
+.theme_dark .add_collaborator_btn:hover {
+    border-color: #a94c50;
+    background: #3b2d31;
+}
+
+.theme_dark .collaborators_chips_container {
+    border-color: #424b57;
+    background: #292f38;
+}
+
+.theme_dark .collaborators_empty_hint {
+    color: #aeb7c4;
+}
+
+.theme_dark :is(.collaborator_picker_dropdown, .collaborator_chip) {
+    border-color: #424b57;
+    background: #292f38;
+    color: #eef1f5;
+}
+
+.theme_dark .picker_title {
+    border-color: #424b57;
+    color: #aeb7c4;
+}
+
+.theme_dark .picker_member_row:hover {
+    background: #373e49;
+}
+
+.theme_dark .picker_member_row.is_selected {
+    background: #3b2d31;
+}
+
+.theme_dark .attachment_dropzone {
+    color: #aeb7c4;
+}
+
+.theme_dark .attachment_dropzone:hover {
+    border-color: var(--bold_red);
+    background: #343a45;
+    color: #ff6262;
+}
+
+.theme_dark :is(.bold_text_input, .bold_select_input, .bold_textarea_input) {
+    border-color: #48515e;
+    background: #292f38;
+    color: #eef1f5;
+}
+
+.theme_dark :is(.bold_text_input, .bold_textarea_input)::placeholder {
+    color: #858e9b;
+}
+
 .bell_button {
     transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
