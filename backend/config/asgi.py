@@ -18,8 +18,12 @@ django.setup()
 
 # Se importa despues de django.setup() porque routing.py importa modelos
 # (a traves de consumers.py) que necesitan las apps ya cargadas.
-from boldApp.tareas.routing import websocket_urlpatterns  # noqa: E402
+from boldApp.core.routing import websocket_urlpatterns as core_websocket_urlpatterns  # noqa: E402
+from boldApp.tareas.routing import websocket_urlpatterns as tareas_websocket_urlpatterns  # noqa: E402
 from django.conf import settings  # noqa: E402
+
+
+websocket_urlpatterns = core_websocket_urlpatterns + tareas_websocket_urlpatterns
 
 
 # Define el enrutador de protocolos: HTTP va a la app de Django de siempre,

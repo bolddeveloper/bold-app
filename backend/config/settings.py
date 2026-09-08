@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "channels",
     "rest_framework",
     "corsheaders",
+    "boldApp.core",
     "boldApp.tareas",
 ]
 
