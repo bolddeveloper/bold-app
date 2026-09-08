@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from boldApp.models import Project, Section, TaskStatus, User, Workspace
+from boldApp.tareas.models import Project, Section, TaskStatus, User, Workspace
 
 
 # Nombre del workspace de demo, calcado del valor por defecto de

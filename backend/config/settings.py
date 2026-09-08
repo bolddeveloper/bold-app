@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     "channels",
     "rest_framework",
     "corsheaders",
-    "boldApp",
+    "boldApp.tareas",
 ]
 
 
@@ -99,7 +99,7 @@ DATABASES = {
 
 
 # Define el modelo de usuario personalizado del proyecto.
-AUTH_USER_MODEL = "boldApp.User"
+AUTH_USER_MODEL = "boldApp_tareas.User"
 
 
 AUTH_PASSWORD_VALIDATORS = [
