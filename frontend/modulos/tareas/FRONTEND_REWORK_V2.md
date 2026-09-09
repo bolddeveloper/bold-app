@@ -1,5 +1,7 @@
 # Guía de integración y rework del frontend con el backend V2
 
+> Actualización de implementación: la integración local V2 ya está en el código. Consulta [REWORK_V2_RESULTADO.md](REWORK_V2_RESULTADO.md) para la auditoría inicial, los cambios, las pruebas ejecutadas y los límites de validación. El resto de esta guía conserva el plan y el contexto de partida.
+
 ## 1. Objetivo y estado de partida
 
 Esta guía describe cómo conectar el módulo React/Vite de tareas con el backend V2 de boldApp. El orden acordado es:

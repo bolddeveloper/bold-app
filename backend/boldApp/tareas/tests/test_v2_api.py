@@ -2,7 +2,7 @@ from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from channels.layers import get_channel_layer
 from django.core.management import call_command
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -163,3 +163,32 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(old_event["envelope"]["event_type"], "task.status_changed")
         self.assertEqual(new_event["envelope"]["event_type"], "task.status_changed")
         self.assertEqual(old_event["envelope"]["event_version"], 2)
+
+    def test_board_move_notifies_two_clients_without_changing_task_status(self):
+        created = self.client.post("/api/v2/tasks/", self.task_payload(), format="json")
+        task = Task.objects.get(id=created.data["id"])
+        link = TaskProject.objects.get(task=task)
+        layer = get_channel_layer()
+        clients = [async_to_sync(layer.new_channel)() for _ in range(2)]
+        for channel in clients:
+            async_to_sync(layer.group_add)(f"unit_{task.unit_id}", channel)
+        response = self.client.patch(
+            f"/api/v2/task-projects/{link.id}/",
+            {"section": None, "position": "2000.0000000000"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        task.refresh_from_db()
+        self.assertEqual(task.status_id, self.marketing_status.id)
+        events = [async_to_sync(layer.receive)(channel)["envelope"] for channel in clients]
+        self.assertEqual(events[0]["event_type"], "task.updated")
+        self.assertEqual(events[0]["event_id"], events[1]["event_id"])
+
+    @override_settings(CORS_ALLOWED_ORIGINS=["http://localhost:5173"])
+    def test_browser_cors_allows_assignment_header(self):
+        response = self.client.options(
+            "/api/v2/tasks/", HTTP_ORIGIN="http://localhost:5173",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization,content-type,x-assignment-id",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("x-assignment-id", response["Access-Control-Allow-Headers"])

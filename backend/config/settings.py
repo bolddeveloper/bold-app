@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 
 
 # Define las rutas base del proyecto.
@@ -132,9 +133,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Define los origenes permitidos para que el PWA (frontend) consuma la API.
-cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+cors_origins_env = os.environ.get(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+)
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CORS_ALLOW_HEADERS = (*default_headers, "x-assignment-id")
 
 
 # Define la configuracion base de Django REST Framework.

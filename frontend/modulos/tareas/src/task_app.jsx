@@ -1,4 +1,4 @@
-import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state } from "react";
+import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import {
     ArrowLeft as arrow_left_icon,
     ArrowUp as arrow_up_icon,
@@ -36,25 +36,26 @@ import {
     Sun as sun_icon,
     X as x_icon
 } from "lucide-react";
-import { navigation_items, notification_items, project_items, starter_tasks, team_members } from "./data/task_data.js";
+import { navigation_items, notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
+import TaskSession from "./task_session.jsx";
+import { api, is_using_real_backend } from "./services/api_client.js";
+import { loadTaskData, saveTaskDraft } from "./services/task_service.js";
+import { dateFromISO, toISODate, projectTask, taskPayload } from "./services/task_models.js";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
     delete_task as delete_task_request,
-    get_demo_workspace_id,
-    is_using_real_backend,
     list_tasks as list_tasks_request,
     move_task as move_task_request,
     toggle_subtask as toggle_subtask_request,
     update_task as update_task_request
-} from "./services/api_client.js";
+} from "./services/task_service.js";
 import {
     connect_realtime_stream,
     disconnect_realtime_stream,
-    publish_task_event,
-    subscribe_to_task_events
+    publish_task_event
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
 
@@ -130,16 +131,6 @@ const placeholder_content = {
 };
 
 
-// Defines the visible days for the static September calendar preview.
-const calendar_days = Array.from({
-    length: 30
-}, (_item, index) => index + 1);
-
-
-// Matches the "Hoy" (today) highlight used across the demo (due_day 2).
-const today_day_of_month = 2;
-
-
 // Defines the priority values used across filters and the task form.
 
 // Defines the board columns used in the workflow view matching Image 3.
@@ -168,10 +159,7 @@ const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
 const theme_storage_key = "bold_color_theme";
-const current_user = team_members.find((member_item) => (
-    member_item.email === (import.meta.env.VITE_DEMO_USER_EMAIL || "ana@bold.gt")
-)) || team_members[0];
-const current_user_id = current_user?.id;
+
 
 
 // Defines the optional desktop list columns and their labels/widths, in the
@@ -207,7 +195,7 @@ function get_member(member_id) {
 function get_task_collaborators(task) {
     if (!task) return [];
     const collaborator_ids = Array.isArray(task.collaborator_ids) ? task.collaborator_ids : [];
-    const ids = collaborator_ids.length
+    const ids = is_using_real_backend() ? collaborator_ids : collaborator_ids.length
         ? collaborator_ids
         : (task.assignee_id ? [task.assignee_id] : []);
     return ids.map((id) => get_member(id)).filter(Boolean);
@@ -215,6 +203,7 @@ function get_task_collaborators(task) {
 
 
 function get_saved_comments_by_task() {
+    if (is_using_real_backend()) return {};
     try {
         const saved_comments = JSON.parse(localStorage.getItem(comments_storage_key));
         return saved_comments && typeof saved_comments === "object" && !Array.isArray(saved_comments) ? saved_comments : {};
@@ -225,6 +214,7 @@ function get_saved_comments_by_task() {
 
 
 function save_task_comments(task_id, comments) {
+    if (is_using_real_backend()) return;
     try {
         localStorage.setItem(comments_storage_key, JSON.stringify({
             ...get_saved_comments_by_task(),
@@ -260,7 +250,7 @@ function merge_saved_comments(tasks) {
 
 // Finds a project by id for labels and color rendering.
 function get_project(project_id) {
-    return project_items.find((project_item) => project_item.id === project_id) || project_items[0];
+    return project_items.find((project_item) => project_item.id === project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
 }
 
 
@@ -316,6 +306,8 @@ function get_sorted_tasks(tasks, sort_field, sort_direction) {
     const direction_multiplier = sort_direction === "desc" ? -1 : 1;
 
     return [...tasks].sort((task_a, task_b) => {
+        if (sort_field === "position") return (Number(task_a.position) - Number(task_b.position)) * direction_multiplier;
+        if (sort_field === "due_day" && is_using_real_backend()) return (task_a.due_date || "9999").localeCompare(task_b.due_date || "9999") * direction_multiplier;
         if (sort_field === "due_day") {
             return (task_a.due_day - task_b.due_day) * direction_multiplier;
         }
@@ -379,6 +371,7 @@ function render_icon(icon_component, size = 18) {
 // a Date object at midnight for that deadline.  Falls back to the current
 // year when the label does not include one.
 function parse_due_date(task_item) {
+    if (is_using_real_backend() || task_item?.due_date !== undefined) return dateFromISO(task_item?.due_date);
     if (!task_item || !task_item.due_day) return null;
     const now_year = new Date().getFullYear();
     let due_month = 8; // default: September (index 8, same as starter data)
@@ -552,6 +545,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
 }
 
 function get_saved_timeline_comments() {
+    if (is_using_real_backend()) return {};
     try {
         const saved_comments = JSON.parse(localStorage.getItem(timeline_comments_storage_key));
         return saved_comments && typeof saved_comments === "object" && !Array.isArray(saved_comments) ? saved_comments : {};
@@ -589,7 +583,7 @@ function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, p
                 <p className="sidebar_label">WORKSPACE</p>
                 <button className="workspace_selector" type="button">
                     <span className="workspace_badge">B</span>
-                    <span>BOLD Workspace</span>
+                    <span>{is_using_real_backend() ? current_user?.unit_name : "BOLD Workspace"}</span>
                     {render_icon(chevron_down_icon, 16)}
                 </button>
             </div>
@@ -679,7 +673,7 @@ function render_sidebar(props) {
                 <span className="profile_avatar">{current_user.initials}</span>
                 <div className="profile_text">
                     <strong>{current_user.name}</strong>
-                    <span>Administrador</span>
+                    <span>{current_user?.job_role_title || "Administrador"}</span>
                 </div>
                 <button className="profile_menu_button" type="button" aria-label="Perfil">
                     {render_icon(more_horizontal_icon, 18)}
@@ -1241,8 +1235,8 @@ function render_filter_panel(props) {
         },
         {
             key: "sections",
-            label: "Estado",
-            items: task_sections.map((section_item) => ({ id: section_item.id, label: section_item.label }))
+            label: is_using_real_backend() ? "Sección" : "Estado",
+            items: (props.board_columns || task_sections).map((section_item) => ({ id: section_item.id, label: section_item.label }))
         },
         {
             key: "priorities",
@@ -1298,6 +1292,7 @@ function render_sort_panel(props) {
         sort_field
     } = props;
     const sort_field_items = [
+        ...(is_using_real_backend() ? [{ id: "position", label: "Orden del tablero" }] : []),
         { id: "title", label: "Nombre de tarea" },
         { id: "due_day", label: "Fecha limite" },
         { id: "priority", label: "Prioridad" }
@@ -1489,9 +1484,10 @@ function QuickStatusPopover({ current_status, on_close, on_select, status_option
 
 
 // Custom calendar date picker popover (Images 2 & 4 of design reference).
-function CustomDatePicker({ current_day, on_apply, on_clear }) {
-    const [view_month, set_view_month] = use_state(8); // 0-indexed, 8 = septiembre
-    const [view_year, set_view_year] = use_state(2026);
+function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
+    const initial_date = dateFromISO(current_date) || new Date();
+    const [view_month, set_view_month] = use_state(initial_date.getMonth());
+    const [view_year, set_view_year] = use_state(initial_date.getFullYear());
     const [picked_day, set_picked_day] = use_state(current_day || null);
     const year_options = Array.from({ length: 101 }, (_, index) => 2000 + index);
 
@@ -1546,6 +1542,7 @@ function CustomDatePicker({ current_day, on_apply, on_clear }) {
                 <button
                     type="button"
                     className="dp_apply_btn"
+                    disabled={!toISODate(view_year, view_month, picked_day)}
                     onClick={() => on_apply && on_apply(picked_day, view_month, view_year)}
                 >
                     Aplicar
@@ -1576,9 +1573,10 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
     };
     const status_color = status_colors[selected_task.status] || "#9ca3af";
 
-    function submit_comment() {
+    async function submit_comment() {
         if (!comment_text.trim() && !comment_images.length) return;
-        handle_add_comment(selected_task.id, comment_text, comment_images);
+        const saved = await handle_add_comment(selected_task.id, comment_text, comment_images);
+        if (saved === false) return;
         set_comment_text("");
         set_comment_images([]);
     }
@@ -1634,7 +1632,9 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
             </div>
 
             <div className="detail_meta_grid">
-                <span className="meta_label">Colaboradores</span>
+                {is_using_real_backend() && <><span className="meta_label">Responsable</span><span className="meta_value">{get_member(selected_task.assignee_id)?.name || "Sin responsable"}</span></>}
+
+                <span className="meta_label">{is_using_real_backend() ? "Seguidores" : "Colaboradores"}</span>
                 <span className="meta_value" style={{ flexWrap: "wrap" }}>
                     {collaborators.length > 0 ? (
                         <span style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -1735,6 +1735,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                 </div>
             ) : null}
 
+            {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
             {show_comments ? <>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
@@ -1846,7 +1847,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
                         onClick={() => set_is_picker_open((v) => !v)}
                     >
                         {render_icon(user_plus_icon, 14)}
-                        <span>Agregar colaborador</span>
+                        <span>{is_using_real_backend() ? "Agregar seguidor" : "Agregar colaborador"}</span>
                     </button>
 
                     {is_picker_open ? (
@@ -1908,7 +1909,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
                         onClick={() => set_is_picker_open(true)}
                     >
                         {render_icon(user_plus_icon, 16)}
-                        <span>Haz clic en "Agregar colaborador" para asignar personas del proyecto</span>
+                        <span>Selecciona personas para seguir esta tarea</span>
                     </div>
                 )}
             </div>
@@ -1918,12 +1919,24 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
 
 
 // "Editar Tarea" modal (Image 2 of design reference).
-function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options }) {
+function TaskIdentityFields({ data, unitId, assigneeId, onUnit, onAssignee }) {
+    return <div className="bold_field_row_2"><label className="bold_field_group">Equipo responsable<select className="bold_select_input" aria-label="Equipo responsable" value={unitId} onChange={event => onUnit(event.target.value)}>{data.units.map(item => <option key={item.id} value={item.id} disabled={!data.statuses.some(status => !status.unitId || status.unitId === item.id)}>{item.name}</option>)}</select></label><label className="bold_field_group">Responsable<select className="bold_select_input" aria-label="Responsable" value={assigneeId || ""} onChange={event => onAssignee(event.target.value)}><option value="">Sin responsable</option>{data.directory.filter(item => item.unitId === unitId).map(item => <option key={item.id} value={item.id}>{item.name} ? {item.job_role_title}</option>)}</select></label></div>;
+}
+
+function AttachmentLinks({ attachments, onChange }) {
+    const [url, setUrl] = use_state("");
+    const [name, setName] = use_state("");
+    return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos (enlaces)</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}<input className="bold_text_input" aria-label="Nombre del archivo" value={name} onChange={event => setName(event.target.value)} placeholder="Nombre del archivo"/><input className="bold_text_input" aria-label="Enlace del archivo" type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/><button type="button" className="secondary_button" disabled={!name.trim() || !/^https?:\/\//i.test(url)} onClick={() => { onChange([...attachments, { id: `new_${crypto.randomUUID()}`, name: name.trim(), url }]); setName(""); setUrl(""); }}>Agregar enlace</button></div>;
+}
+
+function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
+    const real = is_using_real_backend();
+    if (real) { board_columns = [...data.sections.filter(item => item.projectId === edit_draft.project_id), { id: "unsectioned", label: "Sin sección" }]; status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
     const subtasks = Array.isArray(edit_draft.subtasks) ? edit_draft.subtasks : [];
     const done_count = subtasks.filter((s) => s.completed).length;
 
-    const current_collaborators = edit_draft.collaborator_ids && edit_draft.collaborator_ids.length
+    const current_collaborators = real ? edit_draft.collaborator_ids || [] : edit_draft.collaborator_ids && edit_draft.collaborator_ids.length
         ? edit_draft.collaborator_ids
         : (edit_draft.assignee_id ? [edit_draft.assignee_id] : []);
 
@@ -1983,6 +1996,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                         </div>
                     </div>
 
+                    {real && <label className="bold_field_group">Fecha de inicio<input className="bold_text_input" type="date" value={edit_draft.start_date || ""} onChange={event => handle_edit_field_change("start_date", event.target.value || null)} /></label>}
                     {/* Fecha límite */}
                     <div className="bold_field_group" style={{ position: "relative" }}>
                         <label className="bold_field_label">Fecha límite</label>
@@ -1992,13 +2006,15 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                             onClick={() => set_show_datepicker((v) => !v)}
                         >
                             {render_icon(calendar_days_icon, 15)}
-                            {edit_draft.due_day ? edit_draft.due_label || `${edit_draft.due_day} sep 2026` : "Seleccionar fecha"}
+                            {edit_draft.due_day ? edit_draft.due_label || String(edit_draft.due_day) : "Seleccionar fecha"}
                         </button>
                         {show_datepicker ? (
                             <CustomDatePicker
                                 current_day={edit_draft.due_day}
-                                on_clear={() => { handle_edit_field_change("due_day", null); set_show_datepicker(false); }}
+                                current_date={edit_draft.due_date}
+                                on_clear={() => { handle_edit_field_change("due_date", null); handle_edit_field_change("due_day", null); set_show_datepicker(false); }}
                                 on_apply={(day, month, year) => {
+                                    handle_edit_field_change("due_date", toISODate(year, month, day));
                                     handle_edit_field_change("due_day", day);
                                     handle_edit_field_change("due_label", `${day} ${month_abbrev_es[month]} ${year}`);
                                     set_show_datepicker(false);
@@ -2007,12 +2023,13 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                         ) : null}
                     </div>
 
-                    {/* Colaboradores asignados al proyecto */}
+                    {real && <TaskIdentityFields data={data} unitId={edit_draft.unitId} assigneeId={edit_draft.assignee_id} onUnit={id => { handle_edit_field_change("unitId", id); handle_edit_field_change("statusId", undefined); handle_edit_field_change("status", data.statuses.find(item => (!item.unitId || item.unitId === id) && !item.isFinal)?.label || ""); handle_edit_field_change("assignee_id", ""); }} onAssignee={id => handle_edit_field_change("assignee_id", id)} />}
+                    {/* Seguidores y responsable son relaciones independientes. */}
                     <CollaboratorsSelector
                         selected_ids={current_collaborators}
                         on_change={(new_ids) => {
                             handle_edit_field_change("collaborator_ids", new_ids);
-                            handle_edit_field_change("assignee_id", new_ids[0] || null);
+                            if (!real) handle_edit_field_change("assignee_id", new_ids[0] || null);
                         }}
                     />
 
@@ -2079,6 +2096,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                         </button>
                     </div>
 
+                    {real ? <AttachmentLinks attachments={edit_attachments} onChange={items => handle_edit_field_change("attachments", items)} /> : <>
                     {/* Adjuntos */}
                     {edit_attachments.length > 0 ? (
                         <div className="bold_field_group">
@@ -2107,9 +2125,10 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                         </button>
                     )}
 
+                    </>}
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button">Guardar cambios</button>
+                        <button type="submit" className="primary_button" disabled={pending || (real && !edit_draft.status)}>Guardar cambios</button>
                     </footer>
                 </form>
             </div>
@@ -2119,14 +2138,17 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
 
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options }) {
+function CreateTaskModal({ board_columns, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
+    const real = is_using_real_backend();
+    const [unitId, set_unitId] = use_state(activeUnit || "");
+    const [assignee_id, set_assignee_id] = use_state("");
     const [title, set_title] = use_state("");
     const [project_id, set_project_id] = use_state(selected_project_id);
     const [section, set_section] = use_state("todo");
     const [collaborator_ids, set_collaborator_ids] = use_state([]);
     const [due_day, set_due_day] = use_state(null);
-    const [due_month, set_due_month] = use_state(8);
-    const [due_year, set_due_year] = use_state(2026);
+    const [due_month, set_due_month] = use_state(new Date().getMonth());
+    const [due_year, set_due_year] = use_state(new Date().getFullYear());
     const [priority, set_priority] = use_state("Media");
     const [status, set_status] = use_state("Pend.");
     const [description, set_description] = use_state("");
@@ -2134,6 +2156,12 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
     const [attachments, set_attachments] = use_state([]);
     const [show_datepicker, set_show_datepicker] = use_state(false);
 
+    if (real) {
+        board_columns = [...data.sections.filter(item => item.projectId === project_id), { id: "unsectioned", label: "Sin sección" }];
+        status_options = data.statuses.filter(item => !item.unitId || item.unitId === unitId).map(item => item.label);
+    }
+    use_effect(() => { if (real) set_section(data.sections.find(item => item.projectId === project_id)?.id || "unsectioned"); }, [project_id]);
+    use_effect(() => { if (real) { set_status(data.statuses.find(item => (!item.unitId || item.unitId === unitId) && !item.isFinal)?.label || ""); set_assignee_id(""); } }, [unitId]);
     function handle_submit(e) {
         e.preventDefault();
         if (!title.trim()) return;
@@ -2143,15 +2171,18 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
             title: title.trim(),
             project_id,
             section,
-            assignee_id: collaborator_ids[0] || null,
+            assignee_id: real ? assignee_id || null : collaborator_ids[0] || null,
+            unitId,
             collaborator_ids,
             due_day: due_day || null,
+            due_date: toISODate(due_year, due_month, due_day),
             due_label: due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : null,
             priority,
-            status: col?.status || status,
+            status: real ? status : col?.status || status,
             completed: section === "completed",
             description: description.trim(),
             subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ ...s, completed: false })),
+            attachments,
             attachment_name: attachments.length ? attachments[attachments.length - 1].name : null,
             tags: []
         };
@@ -2213,6 +2244,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                         {show_datepicker ? (
                             <CustomDatePicker
                                 current_day={due_day}
+                                current_date={toISODate(due_year, due_month, due_day)}
                                 on_clear={() => { set_due_day(null); set_show_datepicker(false); }}
                                 on_apply={(day, month, year) => {
                                     set_due_day(day);
@@ -2225,6 +2257,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     </div>
 
                     {/* Botón y selector de colaboradores del proyecto */}
+                    {real && <TaskIdentityFields data={data} unitId={unitId} assigneeId={assignee_id} onUnit={set_unitId} onAssignee={set_assignee_id} />}
                     <CollaboratorsSelector
                         selected_ids={collaborator_ids}
                         on_change={set_collaborator_ids}
@@ -2288,6 +2321,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                         {render_icon(plus_icon, 14)} Agregar subtarea
                     </button>
 
+                    {real ? <AttachmentLinks attachments={attachments} onChange={set_attachments} /> : <>
                     {/* Adjuntos */}
                     <button
                         type="button"
@@ -2298,9 +2332,10 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                         <span>{attachments.length > 0 ? `${attachments.length} archivo(s) adjunto(s)` : "Agregar archivos adjuntos"}</span>
                     </button>
 
+                    </>}
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button" disabled={!title.trim()}>Crear tarea</button>
+                        <button type="submit" className="primary_button" disabled={pending || !title.trim() || (real && !status)}>Crear tarea</button>
                     </footer>
                 </form>
             </div>
@@ -2382,20 +2417,20 @@ function render_tasks_module(props) {
                 <div className="project_title_group">
                     <p className="breadcrumb_text">
                         TAREAS / BOLD WORKSPACE
-                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / MARKETING</span>
+                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / {is_using_real_backend() ? current_user?.unit_name : "MARKETING"}</span>
                     </p>
                     <h1>{selected_project.label}</h1>
-                    <p className="project_subtitle">{selected_project.description || "Campaña y entregables del último trimestre"}</p>
+                    <p className="project_subtitle">{selected_project.description || (is_using_real_backend() ? "" : "Campaña y entregables del último trimestre")}</p>
                     <button className="mobile_workspace_selector" type="button">
                         <span className="workspace_badge">B</span>
-                        <span>BOLD Workspace</span>
+                        <span>{is_using_real_backend() ? current_user?.unit_name : "BOLD Workspace"}</span>
                         {render_icon(chevron_down_icon, 14)}
                     </button>
                 </div>
 
                 <div className="project_actions">
                     <div className="avatar_stack" aria-label="Miembros del proyecto">
-                        {team_members.slice(0, 3).map((member_item) => (
+                        {(is_using_real_backend() ? team_members.filter(item => selected_project.member_ids?.includes(item.id) || selected_project.owner_assignment === item.id).slice(0, 3) : team_members.slice(0, 3)).map((member_item) => (
                             <span
                                 className="avatar_medium"
                                 key={member_item.id}
@@ -2404,7 +2439,7 @@ function render_tasks_module(props) {
                                 {member_item.initials}
                             </span>
                         ))}
-                        <span className="avatar_more">+2</span>
+                        {!is_using_real_backend() && <span className="avatar_more">+2</span>}
                     </div>
                     <button className="secondary_button" type="button" onClick={() => set_active_modal("share")}>
                         Compartir
@@ -2479,6 +2514,7 @@ function render_tasks_module(props) {
                                 Filtrar
                             </button>
                             {active_task_tool === "filter" ? render_filter_panel({
+                                board_columns,
                                 active_filters,
                                 handle_clear_filters,
                                 handle_close_task_tool,
@@ -3021,7 +3057,7 @@ function render_task_row(props) {
                             current_status={task_item.status}
                             on_close={() => handle_toggle_quick_popover(null, null)}
                             on_select={(val) => handle_quick_change(task_item.id, "status", val)}
-                            status_options={status_options}
+                            status_options={is_using_real_backend() ? task_item.status_options || status_options : status_options}
                         />
                     ) : null}
                 </div>
@@ -3329,7 +3365,12 @@ function render_board_card(props) {
 
 // Renders the timeline/Gantt view for the Cronograma apartado.
 function render_timeline_view(filtered_tasks, handle_task_select) {
-    const days = Array.from({ length: 30 }, (_, i) => i + 1);
+    const dates = filtered_tasks.flatMap(task => [dateFromISO(task.start_date), parse_due_date(task)]).filter(Boolean);
+    const rangeStart = dates.length ? new Date(Math.min(...dates.map(date => date.getTime()))) : new Date();
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = dates.length ? new Date(Math.max(...dates.map(date => date.getTime()))) : rangeStart;
+    const dayCount = Math.max(14, Math.round((rangeEnd - rangeStart) / 86400000) + 1);
+    const days = Array.from({ length: dayCount }, (_, index) => { const date = new Date(rangeStart); date.setDate(date.getDate() + index); return date; });
 
     if (!filtered_tasks.length) {
         return render_empty_tasks_state();
@@ -3339,11 +3380,11 @@ function render_timeline_view(filtered_tasks, handle_task_select) {
         <div className="timeline_view_card">
             <div className="timeline_header">
                 <div className="timeline_col_label">TAREA</div>
-                <div className="timeline_days_track_header">
+                <div className="timeline_days_track_header" style={{ gridTemplateColumns: `repeat(${dayCount}, minmax(28px, 1fr))` }}>
                     {days.map((d) => (
-                        <div key={d} className={`timeline_day_header_cell ${d === today_day_of_month ? "timeline_day_today" : ""}`}>
-                            <span className="timeline_day_num">{d}</span>
-                            <span className="timeline_day_sub">sep</span>
+                        <div key={d.getTime()} className={`timeline_day_header_cell ${d.toDateString() === new Date().toDateString() ? "timeline_day_today" : ""}`}>
+                            <span className="timeline_day_num">{d.getDate()}</span>
+                            <span className="timeline_day_sub">{d.toLocaleDateString("es", { month: "short" })}</span>
                         </div>
                     ))}
                 </div>
@@ -3352,11 +3393,12 @@ function render_timeline_view(filtered_tasks, handle_task_select) {
             <div className="timeline_body">
                 {filtered_tasks.map((task_item) => {
                     const member_item = get_member(task_item.assignee_id);
-                    const due = task_item.due_day || 15;
-                    const duration = Math.min(due, 4);
-                    const start_day = Math.max(1, due - duration + 1);
-                    const left_pct = ((start_day - 1) / 30) * 100;
-                    const width_pct = Math.max(8, (duration / 30) * 100);
+                    const dueDate = parse_due_date(task_item);
+                    const startDate = dateFromISO(task_item.start_date) || dueDate;
+                    const startOffset = startDate ? Math.max(0, Math.round((startDate - rangeStart) / 86400000)) : 0;
+                    const duration = dueDate && startDate ? Math.max(1, Math.round((dueDate - startDate) / 86400000) + 1) : 1;
+                    const left_pct = startOffset / dayCount * 100;
+                    const width_pct = Math.max(2, duration / dayCount * 100);
 
                     return (
                         <div className="timeline_row" key={task_item.id}>
@@ -3371,11 +3413,12 @@ function render_timeline_view(filtered_tasks, handle_task_select) {
                                 </button>
                             </div>
                             <div className="timeline_row_track">
+                                {!dueDate && !startDate && <span>Sin fecha</span>}
                                 <div
                                     className={`timeline_bar ${get_priority_class(task_item.priority)}`}
-                                    style={{ left: `${left_pct}%`, width: `${width_pct}%` }}
+                                    style={{ left: `${left_pct}%`, width: `${width_pct}%`, display: dueDate || startDate ? undefined : "none" }}
                                     onClick={() => handle_task_select(task_item.id)}
-                                    title={`${task_item.title} (${task_item.due_label || `${due} sep`})`}
+                                    title={`${task_item.title} (${task_item.due_label || "Sin fecha"})`}
                                 >
                                     <span className="timeline_bar_text">{task_item.title}</span>
                                     {member_item ? render_avatar(member_item, "avatar_tiny") : null}
@@ -3391,7 +3434,12 @@ function render_timeline_view(filtered_tasks, handle_task_select) {
 
 
 // Renders the static calendar view with tasks placed on due dates.
-function render_calendar_view(props) {
+function render_calendar_view(props) { return <CalendarView {...props} />; }
+
+function CalendarView(props) {
+    const [month, setMonth] = use_state(new Date());
+    const calendar_days = Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, index) => index + 1);
+    const shift = amount => setMonth(new Date(month.getFullYear(), month.getMonth() + amount, 1));
     const {
         filtered_tasks,
         handle_task_select,
@@ -3406,32 +3454,29 @@ function render_calendar_view(props) {
         "Sab",
         "Dom"
     ];
-    // September 2026 is what the whole mock dataset (due_day/due_label) is
-    // anchored to; the leading blank cells align day 1 under its real
-    // weekday instead of always starting on Monday.
-    const leading_blank_count = (new Date(2026, 8, 1).getDay() + 6) % 7;
+    const leading_blank_count = (new Date(month.getFullYear(), month.getMonth(), 1).getDay() + 6) % 7;
 
     if (!filtered_tasks.length) {
-        return render_empty_tasks_state();
+        return render_empty_tasks_state(set_active_modal);
     }
 
     return (
         <div className="calendar_view">
             <div className="calendar_header">
                 <div className="calendar_title_group">
-                    <button className="icon_button" type="button" aria-label="Mes anterior">
+                    <button className="icon_button" type="button" aria-label="Mes anterior" onClick={() => shift(-1)}>
                         {render_icon(chevron_left_icon, 18)}
                     </button>
                     <div>
                         <p className="eyebrow_text">CALENDARIO</p>
-                        <h2>Septiembre 2026</h2>
+                        <h2>{month.toLocaleDateString("es", { month: "long", year: "numeric" })}</h2>
                     </div>
-                    <button className="icon_button" type="button" aria-label="Mes siguiente">
+                    <button className="icon_button" type="button" aria-label="Mes siguiente" onClick={() => shift(1)}>
                         {render_icon(chevron_right_icon, 18)}
                     </button>
                 </div>
                 <div className="calendar_header_actions">
-                    <button className="outline_button" type="button">Hoy</button>
+                    <button className="outline_button" type="button" onClick={() => setMonth(new Date())}>Hoy</button>
                     <button className="primary_button" type="button" onClick={() => set_active_modal("task")}>
                         {render_icon(plus_icon, 16)}
                         Agregar tarea
@@ -3446,8 +3491,8 @@ function render_calendar_view(props) {
                     <div className="calendar_day calendar_day_blank" key={`blank_${index}`}></div>
                 ))}
                 {calendar_days.map((day_item) => {
-                    const day_tasks = filtered_tasks.filter((task_item) => task_item.due_day === day_item);
-                    const is_today = day_item === today_day_of_month;
+                    const day_tasks = filtered_tasks.filter(task => { const date = parse_due_date(task); return date && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth() && date.getDate() === day_item; });
+                    const is_today = day_item === new Date().getDate() && month.getMonth() === new Date().getMonth() && month.getFullYear() === new Date().getFullYear();
 
                     return (
                         <div className={`calendar_day ${is_today ? "calendar_day_today" : ""}`} key={day_item}>
@@ -3475,7 +3520,7 @@ function render_calendar_view(props) {
 
 
 // Renders the empty task state shown when active filters remove all items.
-function render_empty_tasks_state(set_active_modal) {
+function render_empty_tasks_state(set_active_modal = () => {}) {
     return (
         <div className="empty_tasks_state">
             <div className="empty_search_icon">
@@ -3495,7 +3540,7 @@ function TimelineComments({ comments, on_add_comment }) {
     const [comment_text, set_comment_text] = use_state("");
     const [comment_images, set_comment_images] = use_state([]);
 
-    function submit_comment() {
+    async function submit_comment() {
         if (!comment_text.trim() && !comment_images.length) return;
         on_add_comment(comment_text, comment_images);
         set_comment_text("");
@@ -3606,12 +3651,16 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
 
 
 // Renders the sharing modal based on the desktop reference asset.
-function render_share_modal(set_active_modal) {
+function render_share_modal(set_active_modal, project, onMembers, onError) {
+    const real = is_using_real_backend();
+    const members = real ? team_members.filter(item => project?.member_ids?.includes(item.id) || project?.owner_assignment === item.id) : team_members.slice(0, 2);
+    const url = new URL(window.location.href); if (project?.id) url.searchParams.set("project", project.id);
+    const shareUrl = real ? url.href : "bold.gt/proyectos/lanzamiento-q4";
     return (
         <div className="modal_overlay">
             <section className="form_modal share_modal" role="dialog" aria-modal="true" aria-label="Compartir proyecto">
                 <header className="modal_header">
-                    <h2>Compartir "Lanzamiento Q4"</h2>
+                    <h2>Compartir "{project?.label || "Lanzamiento Q4"}"</h2>
                     <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
                         {render_icon(x_icon, 22)}
                     </button>
@@ -3620,32 +3669,32 @@ function render_share_modal(set_active_modal) {
                     <label className="form_field">
                         <span>Invitar personas</span>
                         <div className="invite_row">
-                            <input type="text" placeholder="Nombre o correo electronico" />
-                            <button className="primary_button" type="button">Enviar invitacion</button>
+                            <input type="text" placeholder={real ? "Administrar miembros del proyecto" : "Nombre o correo electronico"} readOnly={real} />
+                            <button className="primary_button" type="button" onClick={onMembers}>{real ? "Administrar miembros" : "Enviar invitacion"}</button>
                         </div>
                     </label>
                     <p className="sidebar_label">PERSONAS CON ACCESO</p>
-                    {team_members.slice(0, 2).map((member_item) => (
+                    {members.map((member_item) => (
                         <div className="access_row" key={member_item.id}>
                             {render_avatar(member_item, "avatar_medium")}
                             <div>
                                 <strong>{member_item.name}</strong>
                                 <span>{member_item.email}</span>
                             </div>
-                            <button className="outline_button" type="button">Puede editar</button>
+                            <button className="outline_button" type="button" onClick={onMembers}>{real ? "Miembro" : "Puede editar"}</button>
                         </div>
                     ))}
                     <div className="link_access_card">
                         <span>{render_icon(user_plus_icon, 18)}</span>
                         <div>
-                            <strong>Cualquiera en BOLD Workspace</strong>
-                            <p>Puede ver este proyecto con el enlace</p>
+                            <strong>{real ? "Acceso según tus permisos" : "Cualquiera en BOLD Workspace"}</strong>
+                            <p>{real ? "El enlace requiere iniciar sesión y tener acceso al proyecto" : "Puede ver este proyecto con el enlace"}</p>
                         </div>
                         {render_icon(chevron_down_icon, 16)}
                     </div>
                     <div className="copy_link_row">
-                        <input type="text" value="bold.gt/proyectos/lanzamiento-q4" readOnly />
-                        <button className="dark_button" type="button">
+                        <input type="text" value={shareUrl} readOnly />
+                        <button className="dark_button" type="button" onClick={() => navigator.clipboard?.writeText(shareUrl).catch(error => onError?.(error.message))}>
                             {render_icon(link_icon, 16)}
                             Copiar enlace
                         </button>
@@ -3657,7 +3706,7 @@ function render_share_modal(set_active_modal) {
 }
 
 
-function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_confirm }) {
+function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_confirm, pending }) {
     return (
         <div className="delete_confirm_overlay" onClick={on_cancel}>
             <section className="delete_confirm_modal" role="dialog" aria-modal="true" aria-label={`Eliminar ${item_type}`} onClick={(event) => event.stopPropagation()}>
@@ -3674,7 +3723,7 @@ function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_co
                 </div>
                 <footer className="delete_confirm_actions">
                     <button type="button" onClick={on_cancel}>Cancelar</button>
-                    <button type="button" onClick={on_confirm}>Eliminar</button>
+                    <button type="button" onClick={on_confirm} disabled={pending}>Eliminar</button>
                 </footer>
             </section>
         </div>
@@ -3748,11 +3797,11 @@ function render_project_modal(props) {
                         <div className="project_create_grid_3">
                             <label>
                                 Fecha de inicio
-                                <input name="project_start" type="date" defaultValue={editing_project?.start_date || ""} />
+                                <input name="project_start" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} type="date" defaultValue={editing_project?.start_date || ""} />
                             </label>
                             <label>
                                 Fecha de fin
-                                <input name="project_end" type="date" defaultValue={editing_project?.end_date || ""} />
+                                <input name="project_end" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} type="date" defaultValue={editing_project?.end_date || ""} />
                             </label>
                             <label>
                                 Estado inicial
@@ -3765,7 +3814,7 @@ function render_project_modal(props) {
                         </div>
                         <label className="project_create_full_select">
                             Prioridad
-                            <select name="project_priority" defaultValue={editing_project?.priority || "Media"}>
+                            <select name="project_priority" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} defaultValue={editing_project?.priority || "Media"}>
                                 {priority_items.map((priority_item) => <option key={priority_item}>{priority_item}</option>)}
                             </select>
                         </label>
@@ -3848,7 +3897,7 @@ function render_schedules_module(props) {
                 <div className="project_title_group">
                     <p className="breadcrumb_text">
                         CRONOGRAMAS / BOLD WORKSPACE
-                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / MARKETING</span>
+                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / {is_using_real_backend() ? current_user?.unit_name : "MARKETING"}</span>
                     </p>
                     <h1>Lanzamiento Q4 — Cronogramas</h1>
                     <p className="project_subtitle">Planificación temporal, hitos y fechas de entrega del proyecto</p>
@@ -3928,7 +3977,13 @@ class TaskAppErrorBoundary extends react_component {
 }
 
 
-function TaskAppContent() {
+function TaskAppContent({ session }) {
+    const real = is_using_real_backend();
+    const [data, set_data] = use_state(null);
+    const [api_error, set_api_error] = use_state("");
+    const [pending, set_pending] = use_state(false);
+    const mutation_pending = use_ref(false);
+    const refresh = use_ref(async () => {});
     const [active_module, set_active_module] = use_state("tasks");
     const [is_dark_mode, set_is_dark_mode] = use_state(() => {
         try {
@@ -3943,13 +3998,13 @@ function TaskAppContent() {
     const [is_sidebar_open, set_is_sidebar_open] = use_state(false);
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
-    const [tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
+    const [stored_tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);
     const [delete_target, set_delete_target] = use_state(null);
     const [edit_draft, set_edit_draft] = use_state(null);
     const [edit_attachments, set_edit_attachments] = use_state([]);
     const [active_task_tool, set_active_task_tool] = use_state(null);
-    const [sort_field, set_sort_field] = use_state("due_day");
+    const [sort_field, set_sort_field] = use_state(real ? "position" : "due_day");
     const [sort_direction, set_sort_direction] = use_state("asc");
     const [active_filters, set_active_filters] = use_state({
         assignee_ids: [],
@@ -3963,7 +4018,7 @@ function TaskAppContent() {
         status: true,
         project: false
     });
-    const status_options = default_status_items;
+    const status_options = real ? (data?.statuses || []).filter(item => !item.unitId || item.unitId === (edit_draft?.unitId || session?.assignments.find(item => item.id === session.active)?.unitId)).map(item => item.label) : default_status_items;
     const [collapsed_sections, set_collapsed_sections] = use_state([]);
     const [is_notifications_open, set_is_notifications_open] = use_state(false);
 
@@ -3976,6 +4031,7 @@ function TaskAppContent() {
         document.documentElement.style.colorScheme = is_dark_mode ? "dark" : "light";
     }, [is_dark_mode]);
     const [projects, set_projects] = use_state(() => {
+        if (real) return [];
         try {
             const saved_projects = JSON.parse(localStorage.getItem(projects_storage_key));
 
@@ -3987,7 +4043,7 @@ function TaskAppContent() {
     const [project_color, set_project_color] = use_state(project_color_options[0]);
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
     const [project_people_query, set_project_people_query] = use_state("");
-    const [board_columns, set_board_columns] = use_state(default_board_columns);
+    const [mock_board_columns, set_board_columns] = use_state(default_board_columns);
     const [dragged_task_id, set_dragged_task_id] = use_state(null);
     const [is_adding_column, set_is_adding_column] = use_state(false);
     const [new_column_name, set_new_column_name] = use_state("");
@@ -3996,8 +4052,13 @@ function TaskAppContent() {
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
-    const [selected_project_id, set_selected_project_id] = use_state("launch_q4");
+    const [selected_project_id, set_selected_project_id] = use_state(real ? new URLSearchParams(window.location.search).get("project") || "" : "launch_q4");
     const [task_scope, set_task_scope] = use_state("project");
+    const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
+    const board_columns = real ? (task_scope === "mine"
+        ? [{ id: "unsectioned", label: "Mis tareas" }]
+        : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), { id: "unsectioned", label: "Sin sección" }]) : mock_board_columns;
+
     const [task_detail_width, set_task_detail_width] = use_state(390);
     const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
     const [editing_project_id, set_editing_project_id] = use_state(null);
@@ -4018,12 +4079,12 @@ function TaskAppContent() {
     const [timeline_comments_by_scope, set_timeline_comments_by_scope] = use_state(get_saved_timeline_comments);
 
     use_effect(() => {
-        localStorage.setItem(projects_storage_key, JSON.stringify(projects));
+        if (!real) localStorage.setItem(projects_storage_key, JSON.stringify(projects));
     }, [projects]);
 
     use_effect(() => {
         try {
-            localStorage.setItem(timeline_comments_storage_key, JSON.stringify(timeline_comments_by_scope));
+            if (!real) localStorage.setItem(timeline_comments_storage_key, JSON.stringify(timeline_comments_by_scope));
         } catch (error) {
             console.warn("No se pudieron guardar los comentarios del cronograma.", error);
         }
@@ -4069,6 +4130,22 @@ function TaskAppContent() {
             member_ids: project_people_ids
         };
 
+        if (real) {
+            mutate(async () => {
+                const assignment = session.assignments.find(item => item.id === session.active);
+                const payload = { name: label, description: project_payload.description, color_hex: project_color, status: project_payload.status };
+                const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
+                const members = data.members.filter(item => item.project === project.id);
+                for (const member of members) if (!project_people_ids.includes(member.assignment)) await api.remove("project-members", member.id);
+                for (const id of project_people_ids) {
+                    const old = members.find(item => item.assignment === id);
+                    if (!old) await api.create("project-members", { project: project.id, assignment: id, member_role: "member", status: "active" });
+                    else if (old.status !== "active" || old.removed_at) await api.update("project-members", old.id, { status: "active", removed_at: null });
+                }
+                set_selected_project_id(project.id);
+            }, () => { set_active_modal(null); set_editing_project_id(null); });
+            return;
+        }
         set_projects((current_projects) => (
             editing_project_id
                 ? current_projects.map((project_item) => project_item.id === editing_project_id ? { ...project_item, ...project_payload } : project_item)
@@ -4083,6 +4160,7 @@ function TaskAppContent() {
     }
 
     function handle_project_select(project_id) {
+        if (real) { set_active_filters(filters => ({ ...filters, sections: [] })); const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url); }
         set_selected_project_id(project_id);
         set_task_scope("project");
         set_active_module("tasks");
@@ -4117,6 +4195,13 @@ function TaskAppContent() {
     }
 
     function handle_column_drop(column_id) {
+        if (real) {
+            const task = data.tasks.find(item => item.id === dragged_task_id);
+            const link = task?.taskProjects.find(item => item.projectId === selected_project_id);
+            set_dragged_task_id(null);
+            if (link) mutate(() => api.updateTaskProjectLink(link.id, { section: column_id === "unsectioned" ? null : column_id, position: String(Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === column_id).map(item => Number(item.position))) + 1000) }));
+            return;
+        }
         if (!dragged_task_id) return;
         const target_column = board_columns.find((c) => c.id === column_id);
         const next_section = column_id;
@@ -4146,6 +4231,7 @@ function TaskAppContent() {
     }
 
     function handle_add_column() {
+        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }); return; }
         const trimmed_name = new_column_name.trim();
         if (!trimmed_name) return;
 
@@ -4164,6 +4250,7 @@ function TaskAppContent() {
     }
 
     function handle_save_column_name() {
+        if (real) { if (editing_column_id !== "unsectioned" && editing_column_name.trim()) mutate(() => api.update("sections", editing_column_id, { name: editing_column_name.trim() }), () => set_editing_column_id(null)); return; }
         const label = editing_column_name.trim();
         if (!editing_column_id || !label) return;
         set_board_columns((current_cols) => current_cols.map((column_item) => (
@@ -4174,6 +4261,7 @@ function TaskAppContent() {
     }
 
     function handle_delete_column(column_id) {
+        if (real) { if (column_id !== "unsectioned") mutate(() => api.remove("sections", column_id)); return; }
         set_board_columns((current_cols) => current_cols.filter((column_item) => column_item.id !== column_id));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.section === column_id ? { ...task_item, section: "todo", status: "Pend.", completed: false } : task_item
@@ -4195,11 +4283,11 @@ function TaskAppContent() {
         const by_filters = get_tasks_matching_active_filters(by_search, active_filters);
         const scoped_tasks = task_scope === "mine"
             ? by_filters.filter((task_item) => (
-                task_item.assignee_id === current_user_id || task_item.collaborator_ids?.includes(current_user_id)
+                task_item.assignee_id === current_user_id || (!real && task_item.collaborator_ids?.includes(current_user_id))
             ))
             : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(scoped_tasks, sort_field, sort_direction);
+        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope === "mine" ? { ...task, section: "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
@@ -4213,11 +4301,11 @@ function TaskAppContent() {
     const selected_project = use_memo(() => (
         task_scope === "mine"
             ? { id: "my_tasks", label: "Mis tareas", description: "Tareas asignadas a ti" }
-            : projects.find((project_item) => project_item.id === selected_project_id) || projects[0] || project_items[0]
+            : projects.find((project_item) => project_item.id === selected_project_id) || projects[0] || project_items[0] || { id: "", label: "Sin proyectos" }
     ), [projects, selected_project_id, task_scope]);
 
     const timeline_scope_id = task_scope === "mine" ? "my_tasks" : selected_project_id;
-    const timeline_comments = timeline_comments_by_scope[timeline_scope_id] || [];
+    const timeline_comments = real ? tasks.filter(item => task_scope === "mine" ? item.assignee_id === current_user_id : item.taskProjects.some(link => link.projectId === selected_project_id)).flatMap(item => item.comments).sort((a, b) => a.created_at.localeCompare(b.created_at)) : timeline_comments_by_scope[timeline_scope_id] || [];
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
@@ -4249,67 +4337,62 @@ function TaskAppContent() {
     }, []);
 
 
-    // Loads real tasks from the boldApp backend on mount (falling back to
-    // the static starter_tasks already set as initial state if the backend
-    // is not reachable), then opens the live WebSocket connection so this
-    // client re-reads the task list whenever another client (a different
-    // browser/device) creates, updates, or deletes a task.
     use_effect(() => {
-        let is_mounted = true;
-
-        function refresh_tasks_from_backend(on_failure_message) {
-            list_tasks_request()
-                .then((backend_tasks) => {
-                    if (is_mounted && backend_tasks.length) {
-                        set_tasks(merge_saved_comments(backend_tasks));
-                    }
-                })
-                .catch((error) => {
-                    console.warn(on_failure_message, error);
-                });
-        }
-
-        function handle_incoming_event(envelope) {
-            const event_type = envelope?.event_type || "";
-            const is_task_or_comment_event = event_type.startsWith("task.") || event_type.startsWith("comment.");
-
-            if (is_task_or_comment_event) {
-                refresh_tasks_from_backend("No se pudo refrescar las tareas tras un evento en vivo.");
-            }
-        }
-
-        refresh_tasks_from_backend("No se pudo conectar con el backend, usando datos de ejemplo.");
-
-        // Suscribirse a eventos y abrir el WebSocket solo tiene sentido
-        // contra el backend real: en modo plantilla no hay otros clientes
-        // de los que escuchar cambios, y las propias acciones locales ya
-        // actualizan el estado directamente. Sin este guard, el eco local
-        // de publish_task_event dispara un refetch que puede resolver
-        // antes que la propia mutacion (por ejemplo, al crear una tarea),
-        // pisando el estado optimista.
-        let unsubscribe = () => { };
-
-        if (is_using_real_backend()) {
-            unsubscribe = subscribe_to_task_events(handle_incoming_event);
-
-            get_demo_workspace_id()
-                .then((workspace_id) => {
-                    if (is_mounted) {
-                        connect_realtime_stream(workspace_id);
-                    }
-                })
-                .catch((error) => {
-                    console.warn("No se pudo abrir la conexion en vivo con el backend.", error);
-                });
-        }
-
-        return () => {
-            is_mounted = false;
-            unsubscribe();
-            disconnect_realtime_stream();
+        if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
+        let mounted = true, running = null, dirty = false;
+        refresh.current = () => {
+            dirty = true;
+            if (running) return running;
+            running = (async () => {
+                while (dirty && mounted) {
+                    dirty = false;
+                    const next = await loadTaskData();
+                    if (!mounted) return;
+                    setPresentationData(next, session.active);
+                    set_data(next); set_projects(next.projects);
+                    set_tasks(next.tasks.filter(item => !item.parentTaskId || !next.tasks.some(parent => parent.id === item.parentTaskId)));
+                    set_notifications(next.notifications);
+                    set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
+                    set_selected_task_id(id => next.tasks.some(item => item.id === id) ? id : null);
+                }
+            })().finally(() => { running = null; });
+            return running;
         };
+        const report = error => { if (mounted && error.name !== "AbortError") set_api_error(error.message); };
+        refresh.current().then(async () => {
+            const units = await api.list("core/organizational-units");
+            for (const unit of units) {
+                const permission = await api.request("/api/v2/core/authorize/", { method: "POST", body: { assignment: session.active, permission_code: "tasks.task.read", target_unit: unit.id } });
+                if (mounted && permission.allowed) connect_realtime_stream({ unitId: unit.id, ...api.getSession(), onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+            }
+        }).catch(report);
+        // Secondary resources have no event stream; focus and polling reconcile them too.
+        const reconcile = () => refresh.current().catch(report);
+        window.addEventListener("focus", reconcile);
+        const timer = setInterval(reconcile, 30000);
+        return () => { mounted = false; clearInterval(timer); window.removeEventListener("focus", reconcile); disconnect_realtime_stream(); api.cancelRequests(); };
     }, []);
 
+    async function mutate(operation, on_success = () => {}) {
+        if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
+        mutation_pending.current = true; set_pending(true); set_api_error("");
+        try {
+            await operation(); await refresh.current(); on_success(); return true;
+        } catch (error) {
+            if (error.name !== "AbortError") {
+                set_api_error(error.message);
+                if (error.status === 404) { set_selected_task_id(null); set_active_modal(null); }
+                // Reconcile partial multi-resource saves as well as rejected writes.
+                await refresh.current().catch(() => {});
+                if (error.partialDraft) {
+                    set_selected_task_id(error.partialDraft.id); set_edit_draft(error.partialDraft);
+                    set_edit_attachments(error.partialDraft.attachments || []); set_active_modal("edit_task");
+                    set_api_error(`La tarea está guardada. Algunos cambios adicionales fallaron; puedes reintentarlos.\n${error.message}`);
+                }
+            }
+            return false;
+        } finally { mutation_pending.current = false; set_pending(false); }
+    }
 
     // Opens/closes one of the Ordenar/Filtrar/Personalizar dropdown panels,
     // closing the others if one is already open.
@@ -4332,6 +4415,7 @@ function TaskAppContent() {
     }
 
     function handle_mark_notifications_read() {
+        if (real) { mutate(async () => { for (const id of notifications.filter(item => !item.is_read).map(item => item.id)) await api.markNotificationRead(id); }); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => ({
             ...notification_item,
             is_read: true
@@ -4339,6 +4423,7 @@ function TaskAppContent() {
     }
 
     function handle_inbox_activity_select(notification_id) {
+        if (real) { set_selected_inbox_id(notification_id); mutate(async () => { for (const id of [notification_id]) await api.markNotificationRead(id); }); return; }
         set_selected_inbox_id(notification_id);
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: true } : notification_item
@@ -4363,12 +4448,16 @@ function TaskAppContent() {
     }
 
     function handle_toggle_inbox_read(notification_id) {
+        if (real && notifications.find(item => item.id === notification_id)?.is_read) { set_api_error("El servidor todavía no permite marcar notificaciones como no leídas."); return; }
+        if (real) { mutate(async () => { for (const id of [notification_id]) await api.markNotificationRead(id); }); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: !notification_item.is_read } : notification_item
         )));
     }
 
     function handle_inbox_bulk_read_state(is_read) {
+        if (real && !is_read) { set_api_error("El servidor todavía no permite marcar notificaciones como no leídas."); return; }
+        if (real) { mutate(async () => { for (const id of inbox_selected_ids) await api.markNotificationRead(id); }); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             inbox_selected_ids.includes(notification_item.id) ? { ...notification_item, is_read } : notification_item
         )));
@@ -4505,6 +4594,7 @@ function TaskAppContent() {
         const task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
         const draft_snapshot = {
+            ...(real ? task_item : {}),
             title: task_item.title,
             description: task_item.description || "",
             project_id: task_item.project_id,
@@ -4519,7 +4609,7 @@ function TaskAppContent() {
         };
         set_selected_task_id(task_id);
         set_edit_draft(draft_snapshot);
-        set_edit_attachments(task_item.attachment_name ? [{ id: "existing_attachment", name: task_item.attachment_name }] : []);
+        set_edit_attachments(real ? task_item.attachments : task_item.attachment_name ? [{ id: "existing_attachment", name: task_item.attachment_name }] : []);
         set_active_modal("edit_task");
     }
 
@@ -4540,6 +4630,7 @@ function TaskAppContent() {
 
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
+        if (real) { const task = data.tasks.find(item => item.id === task_id); mutate(() => api.updateTask(task_id, taskPayload({ unitId: task.unitId, [field]: value }, data.statuses)), () => set_active_quick_popover(null)); return; }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
             if (task_item.id !== task_id) return task_item;
             const state_patch = field === "status"
@@ -4557,6 +4648,10 @@ function TaskAppContent() {
 
 
     function handle_add_comment(task_id, comment_text, images = []) {
+        if (real) {
+            if (images.length) { set_api_error("Los comentarios admiten texto. A?ade los archivos como enlaces adjuntos a la tarea."); return Promise.resolve(false); }
+            return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim())) : Promise.resolve(false);
+        }
         const body = comment_text.trim();
         if (!body && !images.length) return;
 
@@ -4587,6 +4682,13 @@ function TaskAppContent() {
 
     // Toggles task completion and emits a local template event for future sync.
     function handle_toggle_task(task_id) {
+        if (real) {
+            const task = data.tasks.find(item => item.id === task_id);
+            const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
+            if (status) mutate(() => api.updateTask(task_id, { status: status.id }));
+            else set_api_error("No hay un estado compatible para cambiar la finalización.");
+            return;
+        }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
             if (task_item.id !== task_id) {
                 return task_item;
@@ -4620,6 +4722,10 @@ function TaskAppContent() {
     }
 
     function handle_add_timeline_comment(comment_text, images = []) {
+        if (real) {
+            if (!selected_task_id) { set_api_error("Selecciona una tarea para agregar su comentario."); return; }
+            return handle_add_comment(selected_task_id, comment_text, images);
+        }
         const body = comment_text.trim();
         if (!body && !images.length) return;
 
@@ -4640,6 +4746,7 @@ function TaskAppContent() {
 
     // Deletes a task through the backend and removes it from local state.
     function handle_confirm_delete_task(task_id) {
+        if (real) { mutate(() => api.deleteTask(task_id), () => { set_active_modal(null); set_selected_task_id(null); set_delete_target(null); }); return; }
         delete_task_request(task_id)
             .then(() => {
                 set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.id !== task_id));
@@ -4653,7 +4760,8 @@ function TaskAppContent() {
     }
 
     function handle_confirm_delete_project(project_id) {
-        const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0];
+        if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }); return; }
+        const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
         set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_id));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.project_id === project_id ? { ...task_item, project_id: fallback_project.id } : task_item
@@ -4666,6 +4774,7 @@ function TaskAppContent() {
 
     // Toggles one subtask's completed state, optimistically and through the backend.
     function handle_toggle_subtask(task_id, subtask_id) {
+        if (real) { handle_toggle_task(subtask_id); return; }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
             if (task_item.id !== task_id) {
                 return task_item;
@@ -4723,6 +4832,8 @@ function TaskAppContent() {
 
     // Updates one field of the "Editar tarea" draft as the user types/selects.
     function handle_edit_field_change(field_name, value) {
+        if (real && field_name === "attachments") { set_edit_attachments(value); return; }
+        if (real && field_name === "project_id") { set_edit_draft(draft => ({ ...draft, project_id: value, section: data.sections.find(item => item.projectId === value)?.id || "unsectioned" })); return; }
         set_edit_draft((current_draft) => ({ ...current_draft, [field_name]: value }));
     }
 
@@ -4730,6 +4841,7 @@ function TaskAppContent() {
     // Simulates picking a file from the "Agregar mas" dropzone in the
     // "Editar tarea" modal (same placeholder behavior as the create modal).
     function handle_add_edit_attachment() {
+        if (real) return;
         set_edit_attachments((current_attachments) => [
             ...current_attachments,
             { id: `edit_file_${Date.now()}`, name: `archivo_${current_attachments.length + 1}.pdf` }
@@ -4744,6 +4856,7 @@ function TaskAppContent() {
     // Saves the "Editar tarea" draft, optimistically and through the backend.
     function handle_save_task_edits(event, task_id) {
         event.preventDefault();
+        if (real) { mutate(() => saveTaskDraft({ ...edit_draft, attachments: edit_attachments }, data, data.tasks.find(item => item.id === task_id)), () => set_active_modal(null)); return; }
 
         const due_label = edit_draft.due_day ? edit_draft.due_label || `${edit_draft.due_day} sep` : "";
         const completed = edit_draft.section === "completed";
@@ -4770,9 +4883,11 @@ function TaskAppContent() {
         if (active_modal === "task") {
             return (
                 <CreateTaskModal
+                    data={data} pending={pending} activeUnit={session?.assignments.find(item => item.id === session.active)?.unitId}
                     board_columns={board_columns}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
+                        if (real) { mutate(() => saveTaskDraft(new_task, data), () => { set_active_modal(null); set_active_view("list"); }); return; }
                         const temporary_id = new_task.id;
                         set_tasks((current_tasks) => [...current_tasks, normalize_task(new_task)]);
                         set_active_modal(null);
@@ -4798,6 +4913,7 @@ function TaskAppContent() {
         if (active_modal === "edit_task" && selected_task && edit_draft) {
             return (
                 <EditTaskModal
+                    data={data} pending={pending}
                     board_columns={board_columns}
                     edit_attachments={edit_attachments}
                     edit_draft={edit_draft}
@@ -4817,7 +4933,7 @@ function TaskAppContent() {
         }
 
         if (active_modal === "share") {
-            return render_share_modal(set_active_modal);
+            return render_share_modal(set_active_modal, selected_project, () => handle_project_menu_toggle(selected_project_id, "edit"), set_api_error);
         }
 
         if (active_modal === "project") {
@@ -4840,10 +4956,11 @@ function TaskAppContent() {
         if (active_modal === "delete_confirm" && delete_target) {
             const is_task = delete_target.type === "task";
             const task_item = is_task ? tasks.find((item) => item.id === delete_target.id) : null;
-            const project_item = is_task ? get_project(task_item?.project_id) : projects.find((item) => item.id === delete_target.id) || project_items[0];
+            const project_item = is_task ? get_project(task_item?.project_id) : projects.find((item) => item.id === delete_target.id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
 
             return (
                 <DeleteConfirmModal
+                    pending={pending}
                     item_label={is_task ? task_item?.title : project_item?.label}
                     item_meta={is_task ? `Proyecto: ${project_item?.label || "Sin proyecto"}` : "Proyecto"}
                     item_type={is_task ? "tarea" : "proyecto"}
@@ -4859,6 +4976,8 @@ function TaskAppContent() {
         return null;
     }
 
+
+    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="status">{api_error || "Cargando tus tareas…"}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => refresh.current().catch(error => set_api_error(error.message))}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (
@@ -4890,6 +5009,8 @@ function TaskAppContent() {
             ) : null}
 
             <main className="main_workspace">
+                {real && <div className="session_toolbar"><label>Cargo <select aria-label="Asignación activa" value={session.active} onChange={event => session.choose(event.target.value)}>{session.assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button></div>}
+                {real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
                 {render_mobile_header({
                     active_module,
                     selected_task,
@@ -4924,7 +5045,7 @@ function TaskAppContent() {
                     onToggleTask={handle_toggle_task}
                     parseDueDate={parse_due_date}
                     projects={projects}
-                    tasks={tasks}
+                    tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "tasks" ? render_tasks_module({
                     active_filters,
                     active_quick_popover,
@@ -5031,7 +5152,7 @@ function TaskAppContent() {
 export default function task_app() {
     return (
         <TaskAppErrorBoundary>
-            <TaskAppContent />
+            <TaskSession>{session => <TaskAppContent key={session?.active || "template"} session={session} />}</TaskSession>
         </TaskAppErrorBoundary>
     );
 }

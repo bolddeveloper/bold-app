@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from .models import Comment, Task
+from .models import Comment, Task, TaskProject
 from .webhook_events import (
     COMMENT_CREATED,
     TASK_CREATED,
@@ -76,4 +76,16 @@ def dispatch_comment_created_event(sender, instance, created, **kwargs):
             instance.id,
             payload,
         )
+    )
+
+
+@receiver(post_save, sender=TaskProject)
+def dispatch_board_move(sender, instance, created, **kwargs):
+    # Initial links are already covered by task.created in the same transaction.
+    if created:
+        return
+    task = instance.task
+    transaction.on_commit(
+        partial(dispatch_task_event, task.unit_id, TASK_UPDATED, "task", task.id,
+                TaskSerializer(task).data)
     )

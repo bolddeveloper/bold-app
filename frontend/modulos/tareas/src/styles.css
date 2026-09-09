@@ -10262,3 +10262,8 @@ button {
         animation: none;
     }
 }
+/* Session controls reuse the existing form and button styles. */
+.session_toolbar { display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding: 8px 20px; flex-wrap: wrap; }
+.session_toolbar select { max-width: 65vw; padding: 7px; border: 1px solid #d1d5db; border-radius: 6px; background: inherit; color: inherit; }
+.api_feedback { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10000; max-width: 90vw; padding: 14px 20px; border-radius: 8px; background: #fff3cd; color: #664d03; white-space: pre-wrap; box-shadow: 0 4px 20px #0002; }
+.api_feedback button { margin-left: 16px; border: 0; background: transparent; cursor: pointer; }

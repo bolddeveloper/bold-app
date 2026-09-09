@@ -1,97 +1,59 @@
-import { create_task_event } from "./task_events.js";
-import { task_event_types } from "./task_events.js";
+import { api_base_url } from "./api_client.js";
 
-
-// Defines the WebSocket base URL, derived from the same API base used by
-// api_client.js (http -> ws, https -> wss).
-const api_base_url = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-const websocket_base_url = api_base_url.replace(/^http/, "ws");
-
-
-// Tracks the live WebSocket connection and its registered listeners.
-const realtime_state = {
-    is_connected: false,
-    transport: "none",
-    socket: null,
-    listeners: new Set()
-};
-
-
-// Subscribes to task events broadcast over the live connection.
-export function subscribe_to_task_events(listener) {
-    realtime_state.listeners.add(listener);
-
-    return () => {
-        realtime_state.listeners.delete(listener);
+export function createEventDeduplicator(limit = 1000) {
+    const seen = new Set();
+    return event => {
+        if (event?.event_version !== 2 || !event.event_id || seen.has(event.event_id)) return false;
+        seen.add(event.event_id);
+        if (seen.size > limit) seen.delete(seen.values().next().value);
+        return true;
     };
 }
-
-
-// Publishes an event to every registered listener.
-export function publish_task_event(event_payload) {
-    realtime_state.listeners.forEach((listener) => {
-        listener(event_payload);
-    });
-
-    return Promise.resolve({
-        ok: true,
-        mode: realtime_state.transport,
-        event_payload
-    });
+export function websocketURL({ unitId, token, assignmentId, baseUrl = api_base_url }) {
+    const url = new URL(`/ws/unit/${encodeURIComponent(unitId)}/`, baseUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.search = new URLSearchParams({ token, assignment: assignmentId });
+    return url.href;
 }
-
-
-// Opens a live WebSocket connection to boldApp for the given workspace, so
-// this client receives task/comment events from any other connected client
-// (including other browsers/devices) in real time.
-export function connect_realtime_stream(workspace_id) {
-    if (realtime_state.socket) {
-        return Promise.resolve({
-            ok: true,
-            mode: "already_connected"
-        });
+export function createRealtimeAdapter({ WebSocketImpl = globalThis.WebSocket, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+    const connections = new Map();
+    let accept = createEventDeduplicator();
+    function connect({ unitId, token, assignmentId, onEvent = () => {}, onReconnect = () => {}, onError = () => {}, baseUrl }) {
+        if (!unitId || !token || !assignmentId) throw new Error("Falta el contexto de la conexión en vivo.");
+        if (connections.has(unitId)) return;
+        const state = { stopped: false, attempt: 0, socket: null, timer: null };
+        connections.set(unitId, state);
+        function open() {
+            if (state.stopped) return;
+            const socket = new WebSocketImpl(websocketURL({ unitId, token, assignmentId, baseUrl }));
+            state.socket = socket;
+            socket.addEventListener("open", () => {
+                if (state.stopped) return;
+                state.attempt = 0;
+                // Includes the first connection: REST may have changed during the handshake.
+                onReconnect();
+            });
+            socket.addEventListener("message", message => {
+                if (state.stopped) return;
+                try { const event = JSON.parse(message.data); if (accept(event)) onEvent(event); } catch { /* Ignore malformed envelopes. */ }
+            });
+            socket.addEventListener("error", () => onError("No se pudo conectar en vivo. Reintentando…"));
+            socket.addEventListener("close", event => {
+                if (state.stopped) return;
+                if ([4401, 4403].includes(event.code)) { onError("Sin permiso para observar esta unidad."); return; }
+                state.timer = setTimer(open, Math.min(30000, 1000 * 2 ** Math.min(state.attempt++, 5)));
+            });
+        }
+        open();
     }
-
-    const socket = new WebSocket(`${websocket_base_url}/ws/workspace/${workspace_id}/`);
-    realtime_state.socket = socket;
-    realtime_state.transport = "websocket";
-
-    socket.addEventListener("open", () => {
-        realtime_state.is_connected = true;
-        publish_task_event(create_task_event(task_event_types.sync_connected, "workspace", {
-            transport: "websocket"
-        }));
-    });
-
-    socket.addEventListener("message", (message_event) => {
-        publish_task_event(JSON.parse(message_event.data));
-    });
-
-    socket.addEventListener("close", () => {
-        realtime_state.is_connected = false;
-        realtime_state.socket = null;
-    });
-
-    return Promise.resolve({
-        ok: true,
-        mode: "websocket"
-    });
-}
-
-
-// Closes the live WebSocket connection, if one is open.
-export function disconnect_realtime_stream() {
-    const event_payload = create_task_event(task_event_types.sync_disconnected, "workspace", {
-        transport: realtime_state.transport
-    });
-
-    if (realtime_state.socket) {
-        realtime_state.socket.close();
-        realtime_state.socket = null;
+    function disconnect() {
+        for (const state of connections.values()) { state.stopped = true; clearTimer(state.timer); state.socket?.close(); }
+        connections.clear(); accept = createEventDeduplicator();
     }
-
-    realtime_state.is_connected = false;
-    realtime_state.transport = "none";
-
-    return publish_task_event(event_payload);
+    return { connect, disconnect };
 }
+const realtime = createRealtimeAdapter();
+export const connect_realtime_stream = options => realtime.connect(options);
+export const disconnect_realtime_stream = () => realtime.disconnect();
+// Template events never enter the server's V2 event stream.
+export const publish_task_event = () => Promise.resolve();

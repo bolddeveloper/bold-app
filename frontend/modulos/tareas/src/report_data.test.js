@@ -7,4 +7,7 @@ assert.equal(report.weeks.reduce((sum, week) => sum + week.count, 0), 1);
 assert.equal(report.projects[0].completed, 1);
 assert.equal(buildReport(tasks, [], 0, task => task.due).total, 4);
 assert.equal(buildReport([], [], 30, task => task.due).total, 0);
+const v2 = buildReport([{ completed: true, taskProjects: [{ projectId: "a" }, { projectId: "b" }] }], [{ id: "a" }, { id: "b" }], 0, () => null);
+assert.equal(v2.total, 1);
+assert.deepEqual(v2.projects.map(project => project.completed), [1, 1]);
 console.log("Report checks passed");

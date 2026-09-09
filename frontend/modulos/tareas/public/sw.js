@@ -1,4 +1,4 @@
-const cache_name = "bold_tasks_shell_v1";
+const cache_name = "bold_tasks_shell_v2";
 
 
 // Lists the static assets that make the empty application shell available offline.
@@ -14,7 +14,7 @@ const shell_assets = [
 function should_cache_request(request) {
     const request_url = new URL(request.url);
 
-    return request_url.origin === self.location.origin;
+    return request_url.origin === self.location.origin && !request_url.pathname.startsWith("/api/");
 }
 
 
@@ -69,7 +69,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((cache_keys) => {
             return Promise.all(
                 cache_keys
-                    .filter((cache_key) => cache_key !== cache_name)
+                    .filter((cache_key) => cache_key.startsWith("bold_tasks_shell_") && cache_key !== cache_name)
                     .map((cache_key) => caches.delete(cache_key))
             );
         })
@@ -79,7 +79,7 @@ self.addEventListener("activate", (event) => {
 
 // Serves fresh files first and falls back to cached assets for offline use.
 self.addEventListener("fetch", (event) => {
-    if (event.request.method !== "GET") {
+    if (event.request.method !== "GET" || new URL(event.request.url).pathname.startsWith("/api/")) {
         return;
     }
 

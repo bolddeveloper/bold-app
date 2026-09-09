@@ -7,7 +7,7 @@ export function buildReport(tasks, projects, days, parseDueDate, now = new Date(
     const rows = tasks.map(task => ({ task, due: parseDueDate(task) }))
         .filter(({ due }) => !days || (due && due >= start && due <= end));
     const completed = rows.filter(({ task }) => task.completed || task.section === "completed").length;
-    const active = rows.filter(({ task }) => !task.completed && task.section === "in_progress").length;
+    const active = rows.filter(({ task }) => !task.completed && (task.statusCategory || task.section) === "in_progress").length;
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const overdue = rows.filter(({ task, due }) => !task.completed && task.section !== "completed" && due && due < today).length;
@@ -20,7 +20,7 @@ export function buildReport(tasks, projects, days, parseDueDate, now = new Date(
     });
     return { total: rows.length, completed, active, overdue, pending: rows.length - completed - active, weeks,
         projects: projects.map(project => {
-            const items = rows.filter(({ task }) => task.project_id === project.id);
+            const items = rows.filter(({ task }) => task.taskProjects ? task.taskProjects.some(link => link.projectId === project.id) : task.project_id === project.id);
             return { ...project, total: items.length, completed: items.filter(({ task }) => task.completed || task.section === "completed").length };
         }) };
 }
