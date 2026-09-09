@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .models import (
     AccessGrant,
@@ -12,6 +13,7 @@ from .models import (
     PermissionAuditLog,
     Position,
     PositionAssignment,
+    UserAccount,
 )
 
 
@@ -37,8 +39,35 @@ class PositionAdmin(admin.ModelAdmin):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "email", "is_active", "created_at")
-    search_fields = ("full_name", "email")
+    list_display = ("full_name", "is_active", "created_at")
+    search_fields = ("full_name",)
+
+
+@admin.register(UserAccount)
+class UserAccountAdmin(BaseUserAdmin):
+    list_display = ("email", "employee", "is_active", "is_staff", "created_at")
+    search_fields = ("email", "employee__full_name")
+    ordering = ("email",)
+    list_filter = ("is_active", "is_staff", "is_superuser")
+    readonly_fields = ("last_login", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("email", "password")}),
+        ("Persona", {"fields": ("employee", "avatar_url")}),
+        (
+            "Permisos",
+            {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},
+        ),
+        ("Fechas", {"fields": ("last_login", "created_at", "updated_at")}),
+    )
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": ("email", "employee", "password1", "password2", "is_active", "is_staff"),
+            },
+        ),
+    )
 
 
 @admin.register(PositionAssignment)
@@ -97,4 +126,4 @@ class GrantAuthorityPermissionAdmin(admin.ModelAdmin):
 class PermissionAuditLogAdmin(admin.ModelAdmin):
     list_display = ("employee", "permission", "target_unit", "decision", "created_at")
     list_filter = ("decision",)
-    search_fields = ("employee__full_name", "employee__email")
+    search_fields = ("employee__full_name",)

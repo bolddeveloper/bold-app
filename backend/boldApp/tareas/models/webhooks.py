@@ -4,7 +4,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from .mixins import UUIDPrimaryKeyModel
-from .workspaces import Workspace
+from boldApp.core.models import OrganizationalUnit
 
 
 # Genera un secreto aleatorio usado para firmar (HMAC) las entregas de un endpoint.
@@ -14,9 +14,9 @@ def generate_webhook_secret():
 
 # Define un suscriptor de webhooks: una URL externa que quiere recibir eventos de tareas.
 class WebhookEndpoint(UUIDPrimaryKeyModel):
-    workspace = models.ForeignKey(
-        Workspace,
-        on_delete=models.CASCADE,
+    unit = models.ForeignKey(
+        OrganizationalUnit,
+        on_delete=models.PROTECT,
         related_name="webhook_endpoints",
     )
     target_url = models.URLField()

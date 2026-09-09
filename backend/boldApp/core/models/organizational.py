@@ -88,7 +88,6 @@ class Position(UUIDPrimaryKeyModel):
 # tareas es justamente el que decidira como enlazar esto con AUTH_USER_MODEL.
 class Employee(UUIDPrimaryKeyModel):
     full_name = models.CharField(max_length=140)
-    email = models.EmailField(max_length=180, unique=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -117,6 +116,17 @@ class PositionAssignment(UUIDPrimaryKeyModel):
         ordering = ["-assigned_at"]
         indexes = [
             models.Index(fields=["employee", "is_active"], name="idx_posasg_employee_active"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["position"],
+                condition=models.Q(is_active=True, released_at__isnull=True),
+                name="unique_active_assignment_per_position",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(is_active=False) | models.Q(released_at__isnull=True),
+                name="active_assignment_has_no_release_date",
+            ),
         ]
 
     def __str__(self):

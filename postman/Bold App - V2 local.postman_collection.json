@@ -1,0 +1,278 @@
+{
+  "info": {
+    "_postman_id": "6bbcd5d4-9f04-4e32-a359-e123bb8b6d02",
+    "name": "Bold App - V2 local",
+    "description": "Flujo integral V2: token, asignaciones Core, tarea entre unidades, WebSocket y webhooks HMAC.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "const token = pm.collectionVariables.get('token');",
+          "const assignment = pm.collectionVariables.get('assignment_ana_id');",
+          "if (token) pm.request.headers.upsert({key: 'Authorization', value: `Token ${token}`});",
+          "if (assignment) pm.request.headers.upsert({key: 'X-Assignment-ID', value: assignment});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8000"},
+    {"key": "receiver_base_url", "value": "http://127.0.0.1:9000"},
+    {"key": "webhook_target_url", "value": "http://127.0.0.1:9000/webhook"},
+    {"key": "token", "value": ""},
+    {"key": "assignment_ana_id", "value": ""},
+    {"key": "assignment_david_id", "value": ""},
+    {"key": "unit_marketing_id", "value": ""},
+    {"key": "unit_operations_id", "value": ""},
+    {"key": "project_operations_id", "value": ""},
+    {"key": "section_operations_id", "value": ""},
+    {"key": "status_marketing_id", "value": ""},
+    {"key": "status_operations_id", "value": ""},
+    {"key": "webhook_marketing_id", "value": ""},
+    {"key": "webhook_marketing_secret", "value": ""},
+    {"key": "webhook_operations_id", "value": ""},
+    {"key": "webhook_operations_secret", "value": ""},
+    {"key": "task_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "01 - Preparación",
+      "item": [
+        {
+          "name": "1. Iniciar sesión",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"ana@bold.gt\",\n  \"password\": \"bolddemo123\"\n}"},
+            "url": "{{base_url}}/api/v2/core/auth/token/"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Token: HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('token', pm.response.json().token);"
+          ]}}]
+        },
+        {
+          "name": "2. Descubrir unidades y asignaciones",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/core/position-assignments/directory/"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Directorio: HTTP 200', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().results;",
+            "const ana = rows.find(x => x.employee_name === 'Ana Martinez');",
+            "const david = rows.find(x => x.employee_name === 'David Urbina');",
+            "pm.expect(ana, 'Ejecuta seed_demo_data: falta Ana').to.exist;",
+            "pm.expect(david, 'Ejecuta seed_demo_data: falta David').to.exist;",
+            "pm.collectionVariables.set('assignment_ana_id', ana.id);",
+            "pm.collectionVariables.set('assignment_david_id', david.id);",
+            "pm.collectionVariables.set('unit_marketing_id', ana.unit);",
+            "pm.collectionVariables.set('unit_operations_id', david.unit);"
+          ]}}]
+        },
+        {
+          "name": "3. Obtener proyecto de Operaciones",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/projects/?unit={{unit_operations_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Proyectos: HTTP 200', () => pm.response.to.have.status(200));",
+            "const project = pm.response.json().results.find(x => x.name === 'Rediseno web');",
+            "pm.expect(project, 'Falta el proyecto Rediseno web').to.exist;",
+            "pm.collectionVariables.set('project_operations_id', project.id);"
+          ]}}]
+        },
+        {
+          "name": "4. Obtener sección de Operaciones",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/sections/?project={{project_operations_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Secciones: HTTP 200', () => pm.response.to.have.status(200));",
+            "const section = pm.response.json().results.find(x => x.name === 'todo');",
+            "pm.expect(section).to.exist;",
+            "pm.collectionVariables.set('section_operations_id', section.id);"
+          ]}}]
+        },
+        {
+          "name": "5. Obtener estado Marketing",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/task-statuses/?unit={{unit_marketing_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Estados Marketing: HTTP 200', () => pm.response.to.have.status(200));",
+            "const status = pm.response.json().results.find(x => x.category === 'todo');",
+            "pm.expect(status).to.exist;",
+            "pm.collectionVariables.set('status_marketing_id', status.id);"
+          ]}}]
+        },
+        {
+          "name": "6. Obtener estado Operaciones",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/task-statuses/?unit={{unit_operations_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Estados Operaciones: HTTP 200', () => pm.response.to.have.status(200));",
+            "const status = pm.response.json().results.find(x => x.category === 'in_progress');",
+            "pm.expect(status).to.exist;",
+            "pm.collectionVariables.set('status_operations_id', status.id);"
+          ]}}]
+        },
+        {
+          "name": "7. Crear webhook Marketing",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"unit\": \"{{unit_marketing_id}}\",\n  \"target_url\": \"{{webhook_target_url}}\",\n  \"event_types\": [\"task.created\", \"task.updated\", \"task.status_changed\", \"task.deleted\", \"comment.created\"],\n  \"is_active\": true\n}"},
+            "url": "{{base_url}}/api/v2/webhook-endpoints/"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Webhook Marketing: HTTP 201', () => pm.response.to.have.status(201));",
+            "const data = pm.response.json();",
+            "pm.collectionVariables.set('webhook_marketing_id', data.id);",
+            "pm.collectionVariables.set('webhook_marketing_secret', data.secret);"
+          ]}}]
+        },
+        {
+          "name": "8. Configurar secreto Marketing en receptor",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"secret\": \"{{webhook_marketing_secret}}\",\n  \"reset\": true\n}"},
+            "url": "{{receiver_base_url}}/configure"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Receptor Marketing configurado', () => pm.response.to.have.status(200));"]}}]
+        },
+        {
+          "name": "9. Probar webhook Marketing",
+          "request": {"method": "POST", "url": "{{base_url}}/api/v2/webhook-endpoints/{{webhook_marketing_id}}/test/"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Prueba Marketing encolada: HTTP 202', () => pm.response.to.have.status(202));"]}}]
+        },
+        {
+          "name": "10. Crear webhook Operaciones",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"unit\": \"{{unit_operations_id}}\",\n  \"target_url\": \"{{webhook_target_url}}\",\n  \"event_types\": [\"task.created\", \"task.updated\", \"task.status_changed\", \"task.deleted\", \"comment.created\"],\n  \"is_active\": true\n}"},
+            "url": "{{base_url}}/api/v2/webhook-endpoints/"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Webhook Operaciones: HTTP 201', () => pm.response.to.have.status(201));",
+            "const data = pm.response.json();",
+            "pm.collectionVariables.set('webhook_operations_id', data.id);",
+            "pm.collectionVariables.set('webhook_operations_secret', data.secret);"
+          ]}}]
+        },
+        {
+          "name": "11. Agregar secreto Operaciones al receptor",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"secret\": \"{{webhook_operations_secret}}\",\n  \"reset\": false\n}"},
+            "url": "{{receiver_base_url}}/configure"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Receptor acepta ambos secretos', () => pm.response.to.have.status(200));",
+            "pm.expect(pm.response.json().configured_secrets).to.eql(2);"
+          ]}}]
+        },
+        {
+          "name": "12. Probar webhook Operaciones",
+          "request": {"method": "POST", "url": "{{base_url}}/api/v2/webhook-endpoints/{{webhook_operations_id}}/test/"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Prueba Operaciones encolada: HTTP 202', () => pm.response.to.have.status(202));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "02 - Flujo entre unidades",
+      "item": [
+        {
+          "name": "1. Crear tarea Marketing dentro de proyecto Operaciones",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"unit\": \"{{unit_marketing_id}}\",\n  \"assignee_assignment\": \"{{assignment_ana_id}}\",\n  \"status\": \"{{status_marketing_id}}\",\n  \"title\": \"Prueba Postman V2 entre unidades\",\n  \"description\": \"Responsabilidad Marketing, proyecto Operaciones\",\n  \"priority\": \"high\",\n  \"project\": \"{{project_operations_id}}\",\n  \"section\": \"{{section_operations_id}}\",\n  \"project_position\": \"1000.0000000000\"\n}"},
+            "url": "{{base_url}}/api/v2/tasks/"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Tarea creada atómicamente: HTTP 201', () => pm.response.to.have.status(201));",
+            "const data = pm.response.json();",
+            "pm.expect(data.unit).to.eql(pm.collectionVariables.get('unit_marketing_id'));",
+            "pm.collectionVariables.set('task_id', data.id);"
+          ]}}]
+        },
+        {
+          "name": "2. Traspasar tarea a Operaciones",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"unit\": \"{{unit_operations_id}}\",\n  \"assignee_assignment\": \"{{assignment_david_id}}\",\n  \"status\": \"{{status_operations_id}}\",\n  \"project\": \"{{project_operations_id}}\",\n  \"section\": \"{{section_operations_id}}\",\n  \"position\": \"2000.0000000000\"\n}"},
+            "url": "{{base_url}}/api/v2/tasks/{{task_id}}/move/"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Traspaso: HTTP 200', () => pm.response.to.have.status(200));",
+            "const data = pm.response.json();",
+            "pm.expect(data.unit).to.eql(pm.collectionVariables.get('unit_operations_id'));",
+            "pm.expect(data.assignee_assignment).to.eql(pm.collectionVariables.get('assignment_david_id'));"
+          ]}}]
+        },
+        {
+          "name": "3. Comentar tarea ya transferida",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"task\": \"{{task_id}}\",\n  \"body\": \"Operaciones recibió correctamente la tarea.\"\n}"},
+            "url": "{{base_url}}/api/v2/comments/"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Comentario: HTTP 201', () => pm.response.to.have.status(201));"]}}]
+        },
+        {
+          "name": "4. Eliminar tarea lógicamente",
+          "request": {"method": "DELETE", "url": "{{base_url}}/api/v2/tasks/{{task_id}}/"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Borrado lógico: HTTP 204', () => pm.response.to.have.status(204));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "03 - Verificación",
+      "item": [
+        {
+          "name": "1. Ver eventos recibidos y firmas",
+          "request": {"method": "GET", "url": "{{receiver_base_url}}/events"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Receptor: HTTP 200', () => pm.response.to.have.status(200));",
+            "const data = pm.response.json();",
+            "pm.test('Se recibieron 9 entregas', () => pm.expect(data.count).to.eql(9));",
+            "pm.test('Todas las firmas son válidas', () => pm.expect(data.events.every(x => x.signature_valid)).to.be.true);",
+            "pm.test('Todos los eventos usan versión 2', () => pm.expect(data.events.every(x => x.payload.event_version === 2)).to.be.true);"
+          ]}}]
+        },
+        {
+          "name": "2. Entregas Django Marketing",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/webhook-deliveries/?endpoint={{webhook_marketing_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Entregas Marketing: HTTP 200', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().results;",
+            "pm.test('Marketing tiene 4 entregas exitosas', () => { pm.expect(rows.length).to.eql(4); pm.expect(rows.every(x => x.succeeded && x.response_status_code === 200)).to.be.true; });"
+          ]}}]
+        },
+        {
+          "name": "3. Entregas Django Operaciones",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v2/webhook-deliveries/?endpoint={{webhook_operations_id}}"},
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Entregas Operaciones: HTTP 200', () => pm.response.to.have.status(200));",
+            "const rows = pm.response.json().results;",
+            "pm.test('Operaciones tiene 5 entregas exitosas', () => { pm.expect(rows.length).to.eql(5); pm.expect(rows.every(x => x.succeeded && x.response_status_code === 200)).to.be.true; });"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "99 - Limpieza opcional",
+      "item": [
+        {
+          "name": "1. Eliminar webhook Marketing",
+          "request": {"method": "DELETE", "url": "{{base_url}}/api/v2/webhook-endpoints/{{webhook_marketing_id}}/"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Eliminado: HTTP 204', () => pm.response.to.have.status(204));"]}}]
+        },
+        {
+          "name": "2. Eliminar webhook Operaciones",
+          "request": {"method": "DELETE", "url": "{{base_url}}/api/v2/webhook-endpoints/{{webhook_operations_id}}/"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Eliminado: HTTP 204', () => pm.response.to.have.status(204));"]}}]
+        }
+      ]
+    }
+  ]
+}

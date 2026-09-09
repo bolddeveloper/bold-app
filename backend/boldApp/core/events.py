@@ -38,6 +38,7 @@ def _sanitize_payload(payload):
 
 def build_event_envelope(event_type, entity_type, entity_id, payload):
     return {
+        "event_version": 2,
         "event_id": str(uuid.uuid4()),
         "event_type": event_type,
         "entity_type": entity_type,

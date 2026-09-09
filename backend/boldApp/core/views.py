@@ -1,8 +1,10 @@
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authorization import check_and_log
+from .permissions import IsAdminOrReadOnly
 from .models import (
     AccessGrant,
     Employee,
@@ -15,9 +17,11 @@ from .models import (
     PermissionAuditLog,
     Position,
     PositionAssignment,
+    UserAccount,
 )
 from .serializers import (
     AccessGrantSerializer,
+    AssignmentDirectorySerializer,
     AuthorizationCheckSerializer,
     EmployeeSerializer,
     GrantAuthorityPermissionSerializer,
@@ -29,6 +33,7 @@ from .serializers import (
     PermissionSerializer,
     PositionAssignmentSerializer,
     PositionSerializer,
+    UserAccountSerializer,
 )
 
 
@@ -36,6 +41,7 @@ from .serializers import (
 class OrganizationalUnitViewSet(viewsets.ModelViewSet):
     queryset = OrganizationalUnit.objects.all()
     serializer_class = OrganizationalUnitSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -48,11 +54,13 @@ class OrganizationalUnitViewSet(viewsets.ModelViewSet):
 class JobRoleViewSet(viewsets.ModelViewSet):
     queryset = JobRole.objects.all()
     serializer_class = JobRoleSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class PositionViewSet(viewsets.ModelViewSet):
     queryset = Position.objects.all()
     serializer_class = PositionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -65,29 +73,62 @@ class PositionViewSet(viewsets.ModelViewSet):
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return super().get_queryset()
+        return super().get_queryset().filter(id=self.request.user.employee_id)
+
+
+class UserAccountViewSet(viewsets.ModelViewSet):
+    queryset = UserAccount.objects.select_related("employee").all()
+    serializer_class = UserAccountSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return super().get_queryset()
+        return super().get_queryset().filter(id=self.request.user.id)
 
 
 class PositionAssignmentViewSet(viewsets.ModelViewSet):
     queryset = PositionAssignment.objects.all()
     serializer_class = PositionAssignmentSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(employee_id=self.request.user.employee_id)
         employee_id = self.request.query_params.get("employee")
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
         return queryset
+
+    @action(detail=False, methods=["get"])
+    def directory(self, request):
+        queryset = PositionAssignment.objects.filter(
+            is_active=True,
+            released_at__isnull=True,
+            employee__is_active=True,
+        ).select_related("employee", "position__unit", "position__job_role")
+        page = self.paginate_queryset(queryset)
+        serializer = AssignmentDirectorySerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
 
 # Define los viewsets de permisos base.
 class PermissionViewSet(viewsets.ModelViewSet):
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 
 class JobRolePermissionViewSet(viewsets.ModelViewSet):
     queryset = JobRolePermission.objects.all()
     serializer_class = JobRolePermissionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -101,9 +142,12 @@ class JobRolePermissionViewSet(viewsets.ModelViewSet):
 class AccessGrantViewSet(viewsets.ModelViewSet):
     queryset = AccessGrant.objects.all()
     serializer_class = AccessGrantSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(grantee_assignment__employee_id=self.request.user.employee_id)
         assignment_id = self.request.query_params.get("grantee_assignment")
         if assignment_id:
             queryset = queryset.filter(grantee_assignment_id=assignment_id)
@@ -113,9 +157,12 @@ class AccessGrantViewSet(viewsets.ModelViewSet):
 class GrantAuthorityViewSet(viewsets.ModelViewSet):
     queryset = GrantAuthority.objects.all()
     serializer_class = GrantAuthoritySerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(assignment__employee_id=self.request.user.employee_id)
         assignment_id = self.request.query_params.get("assignment")
         if assignment_id:
             queryset = queryset.filter(assignment_id=assignment_id)
@@ -125,6 +172,7 @@ class GrantAuthorityViewSet(viewsets.ModelViewSet):
 class GrantAuthorityPermissionViewSet(viewsets.ModelViewSet):
     queryset = GrantAuthorityPermission.objects.all()
     serializer_class = GrantAuthorityPermissionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 
 # Define el viewset de solo lectura del log de auditoria de permisos,
@@ -135,6 +183,8 @@ class PermissionAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(employee_id=self.request.user.employee_id)
         employee_id = self.request.query_params.get("employee")
         if employee_id:
             queryset = queryset.filter(employee_id=employee_id)
@@ -149,7 +199,7 @@ class PermissionAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 class AuthorizationCheckView(APIView):
 
     def post(self, request):
-        serializer = AuthorizationCheckSerializer(data=request.data)
+        serializer = AuthorizationCheckSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         try:

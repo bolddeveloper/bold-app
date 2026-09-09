@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from collections.abc import Iterable
 
 from rest_framework.utils.encoders import JSONEncoder as DRFJSONEncoder
 
@@ -37,6 +38,7 @@ def _sanitize_payload(payload):
 # entity_id, occurred_at, payload y source.
 def build_event_envelope(event_type, entity_type, entity_id, payload):
     return {
+        "event_version": 2,
         "event_id": str(uuid.uuid4()),
         "event_type": event_type,
         "entity_type": entity_type,
@@ -51,7 +53,7 @@ def build_event_envelope(event_type, entity_type, entity_id, payload):
 # que este suscrito a ese event_type (o a todos, si event_types esta vacio),
 # y lo transmite en vivo por WebSocket a los clientes conectados al mismo
 # workspace. Un solo punto de disparo alimenta ambos caminos.
-def dispatch_task_event(workspace_id, event_type, entity_type, entity_id, payload):
+def dispatch_task_event(unit_ids, event_type, entity_type, entity_id, payload):
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
 
@@ -60,7 +62,11 @@ def dispatch_task_event(workspace_id, event_type, entity_type, entity_id, payloa
 
     envelope = build_event_envelope(event_type, entity_type, entity_id, payload)
 
-    endpoints = WebhookEndpoint.objects.filter(workspace_id=workspace_id, is_active=True)
+    if isinstance(unit_ids, (str, uuid.UUID)) or not isinstance(unit_ids, Iterable):
+        unit_ids = [unit_ids]
+    unit_ids = list(dict.fromkeys(str(unit_id) for unit_id in unit_ids if unit_id))
+
+    endpoints = WebhookEndpoint.objects.filter(unit_id__in=unit_ids, is_active=True)
     for endpoint in endpoints:
         if endpoint.event_types and event_type not in endpoint.event_types:
             continue
@@ -68,9 +74,10 @@ def dispatch_task_event(workspace_id, event_type, entity_type, entity_id, payloa
 
     channel_layer = get_channel_layer()
     if channel_layer is not None:
-        async_to_sync(channel_layer.group_send)(
-            f"workspace_{workspace_id}",
-            {"type": "task.event", "envelope": envelope},
-        )
+        for unit_id in unit_ids:
+            async_to_sync(channel_layer.group_send)(
+                f"unit_{unit_id}",
+                {"type": "task.event", "envelope": envelope},
+            )
 
     return envelope

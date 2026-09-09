@@ -6,6 +6,7 @@
 from .access import AccessGrant, GrantAuthority, GrantAuthorityPermission, PermissionAuditLog
 from .organizational import Employee, JobRole, OrganizationalUnit, Position, PositionAssignment
 from .permissions import JobRolePermission, Permission
+from .users import UserAccount
 
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "PermissionAuditLog",
     "Position",
     "PositionAssignment",
+    "UserAccount",
 ]

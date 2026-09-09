@@ -15,19 +15,12 @@ from .views import (
     TaskStatusViewSet,
     TaskTagViewSet,
     TaskViewSet,
-    UserViewSet,
     WebhookDeliveryViewSet,
     WebhookEndpointViewSet,
-    WorkspaceMemberViewSet,
-    WorkspaceViewSet,
 )
 
 
-# Define el router de DRF con los 17 endpoints del modulo de tareas.
 router = DefaultRouter()
-router.register(r"users", UserViewSet, basename="user")
-router.register(r"workspaces", WorkspaceViewSet, basename="workspace")
-router.register(r"workspace-members", WorkspaceMemberViewSet, basename="workspace-member")
 router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"project-members", ProjectMemberViewSet, basename="project-member")
 router.register(r"sections", SectionViewSet, basename="section")
@@ -44,6 +37,5 @@ router.register(r"task-tags", TaskTagViewSet, basename="task-tag")
 router.register(r"notifications", NotificationViewSet, basename="notification")
 router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-endpoint")
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
-
 
 urlpatterns = router.urls

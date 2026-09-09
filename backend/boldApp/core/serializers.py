@@ -12,6 +12,7 @@ from .models import (
     PermissionAuditLog,
     Position,
     PositionAssignment,
+    UserAccount,
 )
 
 
@@ -40,10 +41,57 @@ class EmployeeSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class UserAccountSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+    last_login_at = serializers.DateTimeField(source="last_login", read_only=True)
+
+    class Meta:
+        model = UserAccount
+        fields = [
+            "id",
+            "employee",
+            "email",
+            "password",
+            "avatar_url",
+            "is_active",
+            "last_login_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+        account = UserAccount(**validated_data)
+        account.set_password(password)
+        account.save()
+        return account
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        instance = super().update(instance, validated_data)
+        if password is not None:
+            instance.set_password(password)
+            instance.save(update_fields=["password"])
+        return instance
+
+
 class PositionAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PositionAssignment
         fields = "__all__"
+
+
+class AssignmentDirectorySerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    unit = serializers.UUIDField(source="position.unit_id", read_only=True)
+    unit_name = serializers.CharField(source="position.unit.name", read_only=True)
+    job_role = serializers.UUIDField(source="position.job_role_id", read_only=True)
+    job_role_title = serializers.CharField(source="position.job_role.title", read_only=True)
+
+    class Meta:
+        model = PositionAssignment
+        fields = ["id", "employee", "employee_name", "unit", "unit_name", "job_role", "job_role_title"]
 
 
 # Define los serializers de permisos base.
@@ -110,8 +158,15 @@ class PermissionAuditLogSerializer(serializers.ModelSerializer):
 # preguntarle al nucleo si un empleado puede hacer algo, sin reimplementar
 # la logica de resolucion de permisos en cada modulo.
 class AuthorizationCheckSerializer(serializers.Serializer):
-    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all())
     assignment = serializers.PrimaryKeyRelatedField(queryset=PositionAssignment.objects.all())
     permission_code = serializers.CharField()
     target_unit = serializers.PrimaryKeyRelatedField(queryset=OrganizationalUnit.objects.all())
     resource_id = serializers.UUIDField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        assignment = attrs["assignment"]
+        if assignment.employee_id != request.user.employee_id:
+            raise serializers.ValidationError({"assignment": "La asignacion no pertenece a la cuenta autenticada."})
+        attrs["employee"] = request.user.employee
+        return attrs

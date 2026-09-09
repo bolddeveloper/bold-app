@@ -1,5 +1,6 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+from rest_framework.authtoken.views import obtain_auth_token
 
 from .views import (
     AccessGrantViewSet,
@@ -14,6 +15,7 @@ from .views import (
     PermissionViewSet,
     PositionAssignmentViewSet,
     PositionViewSet,
+    UserAccountViewSet,
 )
 
 
@@ -23,6 +25,7 @@ router.register(r"organizational-units", OrganizationalUnitViewSet, basename="or
 router.register(r"job-roles", JobRoleViewSet, basename="job-role")
 router.register(r"positions", PositionViewSet, basename="position")
 router.register(r"employees", EmployeeViewSet, basename="employee")
+router.register(r"user-accounts", UserAccountViewSet, basename="user-account")
 router.register(r"position-assignments", PositionAssignmentViewSet, basename="position-assignment")
 router.register(r"permissions", PermissionViewSet, basename="permission")
 router.register(r"job-role-permissions", JobRolePermissionViewSet, basename="job-role-permission")
@@ -39,5 +42,6 @@ router.register(r"permission-audit-logs", PermissionAuditLogViewSet, basename="p
 # El endpoint de autorizacion va antes que el router: es el punto de
 # integracion que consultan otros modulos, no un CRUD mas.
 urlpatterns = [
+    path("auth/token/", obtain_auth_token, name="core-auth-token"),
     path("authorize/", AuthorizationCheckView.as_view(), name="core-authorize"),
 ] + router.urls

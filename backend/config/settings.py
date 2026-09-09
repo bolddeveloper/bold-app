@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework.authtoken",
     "channels",
     "rest_framework",
     "corsheaders",
@@ -100,7 +101,7 @@ DATABASES = {
 
 
 # Define el modelo de usuario personalizado del proyecto.
-AUTH_USER_MODEL = "boldApp_tareas.User"
+AUTH_USER_MODEL = "boldApp_core.UserAccount"
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -138,15 +139,22 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 
 # Define la configuracion base de Django REST Framework.
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
 }
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.
-# REDIS_URL lo provee Render al agregar el addon de Redis; en desarrollo,
-# si no hay Redis disponible, las tareas corren en modo "eager" (sincrono,
-# dentro del mismo proceso) para que la demo funcione sin infraestructura.
+# REDIS_URL lo provee Render al agregar el addon de Redis; si la variable no
+# existe, las tareas corren en modo "eager" (sincrono, dentro del mismo
+# proceso) para que la demo local funcione sin infraestructura.
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = redis_url
 CELERY_RESULT_BACKEND = redis_url
@@ -156,20 +164,28 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = os.environ.get(
     "CELERY_TASK_ALWAYS_EAGER",
-    "true" if DEBUG and "REDIS_URL" not in os.environ else "false",
+    "true" if "REDIS_URL" not in os.environ else "false",
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = True
 
 
-# Define la capa de canales de Django Channels (push en vivo por WebSocket),
-# reutilizando el mismo Redis que ya usa Celery. A diferencia de Celery, el
-# channel layer no tiene modo "eager": hace falta un Redis real incluso en
-# desarrollo local.
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [redis_url],
+# Define la capa de canales de Django Channels (push en vivo por WebSocket).
+# En desarrollo sin REDIS_URL, la capa en memoria permite probar HTTP y
+# WebSockets con el proceso unico de runserver sin instalar Redis. Render y
+# cualquier entorno que defina REDIS_URL siguen usando la capa compartida de
+# Redis, necesaria cuando hay mas de un proceso o instancia.
+if "REDIS_URL" not in os.environ:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [redis_url],
+            },
+        },
+    }

@@ -1,16 +1,16 @@
-from django.conf import settings
 from django.db import models
+
+from boldApp.core.models import PositionAssignment
 
 from .mixins import UUIDPrimaryKeyModel
 from .tasks import Task
 
 
-# Define la tabla NOTIFICATIONS: avisos individuales para cada usuario.
 class Notification(UUIDPrimaryKeyModel):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+    recipient_assignment = models.ForeignKey(
+        PositionAssignment,
         on_delete=models.CASCADE,
-        related_name="notifications",
+        related_name="task_notifications",
     )
     task = models.ForeignKey(
         Task,
@@ -30,7 +30,7 @@ class Notification(UUIDPrimaryKeyModel):
         db_table = "notifications"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["user", "is_read"], name="idx_notifications_user_read"),
+            models.Index(fields=["recipient_assignment", "is_read"], name="idx_notifications_asg_read"),
         ]
 
     def __str__(self):
