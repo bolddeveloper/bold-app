@@ -1,6 +1,6 @@
 // Run against a seeded local backend: node tests/v2_live.mjs
 import assert from "node:assert/strict";
-import { createApiClient } from "../src/services/api_client.js";
+import { createApiClient } from "./test_client.js";
 import { createRealtimeAdapter } from "../src/services/realtime_adapter.js";
 const A = createApiClient(), B = createApiClient();
 // Unlike Node fetch, browsers require CORS even when credentials are valid.

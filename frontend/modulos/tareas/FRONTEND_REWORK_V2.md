@@ -1,5 +1,7 @@
 # Guía de integración y rework del frontend con el backend V2
 
+> Arquitectura actual: ver [separación Core / Tareas](CORE_TASKS_SEPARACION.md). Las referencias a `api_client.js` y `task_session.jsx` de este documento describen la etapa anterior.
+
 > Actualización de implementación: la integración local V2 ya está en el código. Consulta [REWORK_V2_RESULTADO.md](REWORK_V2_RESULTADO.md) para la auditoría inicial, los cambios, las pruebas ejecutadas y los límites de validación. El resto de esta guía conserva el plan y el contexto de partida.
 
 ## 1. Objetivo y estado de partida

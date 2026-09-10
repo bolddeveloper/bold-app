@@ -4,16 +4,13 @@ export function dateFromISO(value) {
     const date = new Date(year, month - 1, day);
     return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
 }
-export function selectAssignment(assignments, savedId) {
-    return assignments.find(item => item.id === savedId)?.id || (assignments.length === 1 ? assignments[0].id : "");
-}
 export function toISODate(year, month, day) {
     if (!day) return null;
     const value = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return dateFromISO(value) ? value : null;
 }
 export const normalizeProject = dto => ({ ...dto, label: dto.name, color: dto.color_hex || "#ef1f2d", unitId: dto.unit });
-export const normalizeAssignment = dto => ({ ...dto, personId: dto.employee, name: dto.employee_name, unitId: dto.unit, initials: (dto.employee_name || "").split(/\s+/).slice(0, 2).map(word => word[0]).join(""), color: "#4d9ae6", email: dto.job_role_title });
+
 export const normalizeStatus = dto => ({ ...dto, label: dto.name, isFinal: dto.is_final, unitId: dto.unit });
 export const normalizeSection = dto => ({ ...dto, label: ({ todo: "Por hacer", in_progress: "En curso", completed: "Completadas" })[dto.name] || dto.name, projectId: dto.project });
 export const normalizeTaskProject = dto => ({ ...dto, taskId: dto.task, projectId: dto.project, sectionId: dto.section, position: String(dto.position) });

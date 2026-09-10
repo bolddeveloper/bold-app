@@ -11,11 +11,12 @@ export class ApiError extends Error {
     }
 }
 
-export function createApiClient({ baseUrl = api_base_url, fetchImpl = (...args) => fetch(...args), onUnauthorized = () => {} } = {}) {
+export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args) => fetch(...args), onUnauthorized = () => {} } = {}) {
     let token = null, assignmentId = null, email = null;
     let controller = new AbortController();
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
     async function request(path, { method = "GET", body, anonymous = false, signal = controller.signal, ...options } = {}) {
+        signal = AbortSignal.any([controller.signal, signal]);
         const url = new URL(path, baseUrl);
         if (url.origin !== new URL(baseUrl).origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
         let response;
@@ -41,10 +42,10 @@ export function createApiClient({ baseUrl = api_base_url, fetchImpl = (...args) 
         }
         return data;
     }
-    async function list(resource, params = {}) {
+    async function list(resource, params = {}, options = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
         let path = `/api/v2/${resource}/?${query}`;
-        const rows = [], seen = new Set(), signal = controller.signal;
+        const rows = [], seen = new Set(), signal = AbortSignal.any([controller.signal, options.signal || controller.signal]);
         while (path) {
             if (seen.has(path)) throw new Error("Paginación circular del servidor.");
             seen.add(path);
@@ -54,44 +55,15 @@ export function createApiClient({ baseUrl = api_base_url, fetchImpl = (...args) 
         }
         return rows;
     }
-    const create = (resource, body) => request(`/api/v2/${resource}/`, { method: "POST", body });
-    const update = (resource, id, body) => request(`/api/v2/${resource}/${id}/`, { method: "PATCH", body });
-    const remove = (resource, id) => request(`/api/v2/${resource}/${id}/`, { method: "DELETE" });
+    const create = (resource, body, options = {}) => request(`/api/v2/${resource}/`, { ...options, method: "POST", body });
+    const update = (resource, id, body, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "PATCH", body });
+    const remove = (resource, id, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "DELETE" });
     return {
         request, list, create, update, remove, cancelRequests,
         setToken(value, accountEmail = null) { cancelRequests(); token = value; email = accountEmail; assignmentId = null; },
         setAssignment(value) { cancelRequests(); assignmentId = value; },
         getSession: () => ({ token, assignmentId, email }),
-        async login(username, password) {
-            const result = await request("/api/v2/core/auth/token/", { method: "POST", body: { username, password }, anonymous: true });
-            this.setToken(result.token, username.trim().toLowerCase());
-            return result;
-        },
-        async getCurrentAccount() {
-            const accounts = await list("core/user-accounts");
-            const account = accounts.find(item => item.email.toLowerCase() === email);
-            if (!account) throw new Error("No se pudo identificar la cuenta autenticada.");
-            return account;
-        },
-        async listOwnAssignments(account) {
-            const own = account || await this.getCurrentAccount();
-            return (await list("core/position-assignments", { employee: own.employee })).filter(item => item.employee === own.employee && item.is_active && !item.released_at);
-        },
-        listAssignmentDirectory: () => list("core/position-assignments/directory"),
-        listProjects: params => list("projects", params),
-        listSections: project => list("sections", { project }),
-        listStatuses: unit => list("task-statuses", { unit }),
-        listTasks: params => list("tasks", params),
-        createTask: body => create("tasks", body),
-        updateTask: (id, body) => update("tasks", id, body),
-        moveTask: (id, body) => request(`/api/v2/tasks/${id}/move/`, { method: "POST", body }),
-        deleteTask: id => remove("tasks", id),
-        listTaskProjectLinks: project => list("task-projects", { project }),
-        updateTaskProjectLink: (id, body) => update("task-projects", id, body),
-        listComments: () => list("comments"),
-        createComment: (task, body) => create("comments", { task, body }),
-        markNotificationRead: id => request(`/api/v2/notifications/${id}/mark-read/`, { method: "POST" })
     };
 }
 
-export const api = createApiClient({ onUnauthorized: () => globalThis.dispatchEvent?.(new Event("bold:unauthorized")) });
+export const http = createHttpClient({ onUnauthorized: () => globalThis.dispatchEvent?.(new Event("bold:unauthorized")) });

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createApiClient, ApiError } from "./api_client.js";
+import { createApiClient } from "../../tests/test_client.js";
+import { ApiError } from "../core/http_client.js";
 
 test("network failures show a Spanish connection error without expiring the session", async () => {
     let expired = false;

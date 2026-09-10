@@ -1,33 +1,3 @@
-// Defines the navigation shown by the empty Bold application shell.
-export const navigation_items = [
-    {
-        id: "home",
-        label: "Inicio",
-        icon: "home"
-    },
-    {
-        id: "tasks",
-        label: "Tareas",
-        icon: "check"
-    },
-    {
-        id: "schedules",
-        label: "Cronogramas",
-        icon: "gantt"
-    },
-    {
-        id: "inbox",
-        label: "Bandeja de entrada",
-        icon: "inbox"
-    },
-    {
-        id: "reports",
-        label: "Informes",
-        icon: "reports"
-    }
-];
-
-
 // Defines the projects displayed in the task workspace sidebar.
 export const project_items = [
     {

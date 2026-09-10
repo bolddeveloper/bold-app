@@ -20,7 +20,7 @@ const errors = [], oldError = console.error;
 console.error = (...args) => { errors.push(args.map(String).join(' ')); oldError(...args); };
 const React = await import('react');
 const { createRoot } = await import('react-dom/client');
-const App = (await server.ssrLoadModule('/src/task_app.jsx')).default;
+const App = (await server.ssrLoadModule('/src/app.jsx')).default;
 let root = createRoot(document.getElementById('root'));
 const pause = () => new Promise(resolve => setTimeout(resolve, 30));
 async function until(check, label) { const end = Date.now()+15000; while (!check()) { if (Date.now()>end) throw new Error(label+': '+document.body.textContent.slice(-1600)); await pause(); } }
@@ -33,7 +33,7 @@ try {
  input(document.querySelector('[name="email"]'),'ana@bold.gt'); input(document.querySelector('[name="password"]'),'bolddemo123');
  document.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
  await until(()=>document.querySelector('.session_toolbar'),'load real tasks');
- const api=(await server.ssrLoadModule('/src/services/api_client.js')).api; for (const task of await api.listTasks()) if(task.title===testTitle) await api.deleteTask(task.id); window.dispatchEvent(new window.Event('focus')); await pause();
+ const api=(await server.ssrLoadModule('/src/services/tasks_api.js')).api; for (const task of await api.listTasks()) if(task.title===testTitle) await api.deleteTask(task.id); window.dispatchEvent(new window.Event('focus')); await pause();
  } else await until(()=>document.querySelector('.task_row'),'mock list');
  console.log('DOM PASS: session/list mode='+real);
  button('Agregar tarea').click();
@@ -70,12 +70,12 @@ try {
  await until(()=>button('Eliminar') && !button('Eliminar').disabled,'delete confirmation'); button('Eliminar').click();
  await until(()=>!document.body.textContent.includes(testTitle),'delete task');
  console.log('DOM PASS: detail/edit render and confirmed deletion');
- if(real) { const api=(await server.ssrLoadModule('/src/services/api_client.js')).api; for(const task of await api.listTasks()) if(task.title===childTitle) await api.deleteTask(task.id); }
+ if(real) { const api=(await server.ssrLoadModule('/src/services/tasks_api.js')).api; for(const task of await api.listTasks()) if(task.title===childTitle) await api.deleteTask(task.id); }
  for(const label of ['Inicio','Informes']) { button(label).click(); await pause(); }
  console.log('DOM PASS: home/reports render');
  assert.deepEqual(errors,[]);
 } finally {
  root.unmount();
- if (real) { const api=(await server.ssrLoadModule('/src/services/api_client.js')).api; if(api.getSession().token) for(const task of await api.listTasks()) if([testTitle,childTitle].includes(task.title)) await api.deleteTask(task.id); }
+ if (real) { const api=(await server.ssrLoadModule('/src/services/tasks_api.js')).api; if((await server.ssrLoadModule("/src/core/http_client.js")).http.getSession().token) for(const task of await api.listTasks()) if([testTitle,childTitle].includes(task.title)) await api.deleteTask(task.id); }
  await server.close(); dom.window.close();
 }

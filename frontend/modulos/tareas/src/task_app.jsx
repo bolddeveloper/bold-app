@@ -1,9 +1,7 @@
 import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import {
-    ArrowLeft as arrow_left_icon,
     ArrowUp as arrow_up_icon,
     Archive as archive_icon,
-    BarChart3 as bar_chart_icon,
     Bell as bell_icon,
     Bookmark as bookmark_icon,
     CalendarDays as calendar_days_icon,
@@ -16,15 +14,12 @@ import {
     FileText as file_text_icon,
     Folder as folder_icon,
     GanttChart as gantt_chart_icon,
-    Home as home_icon,
     Inbox as inbox_icon,
     ImagePlus as image_plus_icon,
     ExternalLink as external_link_icon,
     LayoutList as layout_list_icon,
     Link as link_icon,
-    Menu as menu_icon,
     MessageCircle as message_circle_icon,
-    Moon as moon_icon,
     MoreHorizontal as more_horizontal_icon,
     Paperclip as paperclip_icon,
     Pencil as pencil_icon,
@@ -33,12 +28,13 @@ import {
     SlidersHorizontal as sliders_icon,
     Trash2 as trash_icon,
     UserPlus as user_plus_icon,
-    Sun as sun_icon,
     X as x_icon
 } from "lucide-react";
-import { navigation_items, notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
-import TaskSession from "./task_session.jsx";
-import { api, is_using_real_backend } from "./services/api_client.js";
+import { notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
+import { useCore } from "./core/core_provider.jsx";
+import { AppShell, useShell } from "./core/app_shell.jsx";
+import { api } from "./services/tasks_api.js";
+import { is_using_real_backend } from "./core/http_client.js";
 import { loadTaskData, saveTaskDraft } from "./services/task_service.js";
 import { dateFromISO, toISODate, projectTask, taskPayload } from "./services/task_models.js";
 import ReportsModule from "./reports_module.jsx";
@@ -102,15 +98,6 @@ const task_sections = [
 ];
 
 
-// Maps navigation ids to Lucide icons while keeping app names in snake case.
-const icon_map = {
-    home: home_icon,
-    check: check_icon,
-    inbox: inbox_icon,
-    reports: bar_chart_icon
-};
-
-
 // Defines empty shell content for modules that are not active in the MVP.
 const placeholder_content = {
     home: {
@@ -158,7 +145,6 @@ const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
-const theme_storage_key = "bold_color_theme";
 
 
 
@@ -440,16 +426,6 @@ function render_days_badge(task_item) {
 
 
 // Renders the small Bold logo mark used in the navigation shell.
-function render_logo() {
-    return (
-        <div className="brand_logo" aria-label="Bold">
-            <span>bold</span>
-            <span className="brand_dot"></span>
-        </div>
-    );
-}
-
-
 // Renders a reusable team avatar.
 function render_avatar(member_item, size_class = "avatar_medium") {
     if (!member_item) {
@@ -477,36 +453,6 @@ function render_project_dot(color) {
 
 
 // Renders one navigation item in the sidebar.
-function render_navigation_item(item, active_module, handle_module_change, options = {}) {
-    const is_active = active_module === item.id;
-    const item_icon = icon_map[item.icon] || home_icon;
-    const is_expandable = Boolean(options.is_expandable);
-    const is_expanded = Boolean(options.is_expanded);
-    const handle_click = options.on_click || (() => handle_module_change(item.id));
-
-    return (
-        <button
-            className={`navigation_item ${is_active ? "navigation_item_active" : ""} ${is_expandable ? "navigation_item_expandable" : ""}`}
-            key={item.id}
-            type="button"
-            aria-expanded={is_expandable ? is_expanded : undefined}
-            aria-controls={options.controls_id}
-            onClick={handle_click}
-        >
-            <span className="navigation_icon">
-                {item.id === "tasks" && is_active ? render_icon(check_icon, 16) : render_icon(item_icon, 17)}
-            </span>
-            <span>{item.label}</span>
-            {item.id === "tasks" ? (
-                <span className={`navigation_chevron ${is_expanded ? "navigation_chevron_open" : ""}`}>
-                    {render_icon(chevron_down_icon, 18)}
-                </span>
-            ) : null}
-        </button>
-    );
-}
-
-
 // Renders a project item in the sidebar workspace list.
 function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id) {
     const is_active = selected_project_id === project_item.id;
@@ -611,237 +557,6 @@ function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, p
 
 
 // Renders the desktop and mobile sidebar navigation.
-function render_sidebar(props) {
-    const {
-        active_project_menu_id,
-        active_module,
-        handle_module_change,
-        handle_my_tasks_select,
-        handle_project_menu_toggle,
-        handle_project_select,
-        handle_tasks_menu_toggle,
-        is_sidebar_open,
-        is_tasks_menu_open,
-        projects,
-        selected_project_id,
-        task_scope,
-        set_active_modal,
-        set_is_sidebar_open
-    } = props;
-    const primary_navigation_items = navigation_items.filter((item) => ["home", "tasks", "inbox", "reports"].includes(item.id));
-
-    return (
-        <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`}>
-            <div className="sidebar_header">
-                {render_logo()}
-                <button
-                    className="sidebar_close_button"
-                    type="button"
-                    aria-label="Cerrar navegacion"
-                    onClick={() => set_is_sidebar_open(false)}
-                >
-                    {render_icon(x_icon, 24)}
-                </button>
-            </div>
-
-            <div className="sidebar_scroll_area">
-                <div className="sidebar_section">
-                    <p className="sidebar_label">NAVEGACION</p>
-                    <nav className="navigation_list" aria-label="Principal">
-                        {primary_navigation_items.map((item) => {
-                            if (item.id !== "tasks") {
-                                return render_navigation_item(item, active_module, handle_module_change);
-                            }
-
-                            return (
-                                <div className={`tasks_navigation_group ${is_tasks_menu_open ? "tasks_navigation_group_open" : "tasks_navigation_group_closed"}`} key={item.id}>
-                                    {render_navigation_item(item, active_module, handle_module_change, {
-                                        controls_id: "tasks_workspace_menu",
-                                        is_expandable: true,
-                                        is_expanded: is_tasks_menu_open,
-                                        on_click: handle_tasks_menu_toggle
-                                    })}
-                                    {render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open)}
-                                </div>
-                            );
-                        })}
-                    </nav>
-                </div>
-            </div>
-
-            <div className="sidebar_footer">
-                <span className="profile_avatar">{current_user.initials}</span>
-                <div className="profile_text">
-                    <strong>{current_user.name}</strong>
-                    <span>{current_user?.job_role_title || "Administrador"}</span>
-                </div>
-                <button className="profile_menu_button" type="button" aria-label="Perfil">
-                    {render_icon(more_horizontal_icon, 18)}
-                </button>
-            </div>
-        </aside>
-    );
-}
-
-
-// Maps each notification type to the icon shown in its list item.
-const notification_type_icons = {
-    assignment: user_plus_icon,
-    comment: message_circle_icon,
-    status_changed: check_circle_icon
-};
-
-
-// Renders the "Notificaciones" dropdown panel opened from the bell button.
-function render_notifications_panel(props) {
-    const {
-        handle_close_notifications,
-        handle_mark_notifications_read,
-        notifications
-    } = props;
-
-    return (
-        <div className="task_tool_panel notifications_panel">
-            <header className="notifications_panel_header">
-                <h3>Notificaciones</h3>
-                <button className="link_button" type="button" onClick={handle_mark_notifications_read}>
-                    Marcar como leidas
-                </button>
-            </header>
-            <div className="notification_list">
-                {notifications.map((notification_item) => {
-                    const actor = team_members.find((member) => member.id === notification_item.actor_id);
-                    const notification_icon = notification_type_icons[notification_item.type] ?? bell_icon;
-
-                    return (
-                        <div
-                            className={`notification_item ${notification_item.is_read ? "" : "notification_item_unread"}`}
-                            key={notification_item.id}
-                        >
-                            <span className="notification_avatar" style={{ backgroundColor: actor ? actor.color : "#7c8b9a" }}>
-                                {actor ? actor.initials : render_icon(notification_icon, 14)}
-                            </span>
-                            <div className="notification_body">
-                                <p className="notification_title">{notification_item.title}</p>
-                                <p className="notification_text">{notification_item.body}</p>
-                                <span className="notification_time">{notification_item.time_label}</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-            <footer className="modal_footer">
-                <button className="link_button" type="button" onClick={handle_close_notifications}>
-                    Ver todas las notificaciones
-                </button>
-            </footer>
-        </div>
-    );
-}
-
-
-// Renders the desktop top bar with search and user state.
-function render_top_bar(props) {
-    const {
-        handle_close_notifications,
-        handle_mark_notifications_read,
-        handle_toggle_notifications,
-        is_dark_mode,
-        is_notifications_open,
-        notifications,
-        search_query,
-        set_search_query,
-        set_is_dark_mode
-    } = props;
-    const has_unread_notifications = notifications.some((notification_item) => !notification_item.is_read);
-
-    return (
-        <header className="top_bar">
-            <label className="search_box" htmlFor="task_search">
-                {render_icon(search_icon, 18)}
-                <input
-                    id="task_search"
-                    type="search"
-                    value={search_query}
-                    placeholder="Buscar tareas, proyectos o personas"
-                    onChange={(event) => set_search_query(event.target.value)}
-                />
-            </label>
-            <div className="top_bar_actions">
-                <button
-                    className="theme_toggle_button"
-                    type="button"
-                    aria-label={is_dark_mode ? "Activar modo claro" : "Activar modo oscuro"}
-                    title={is_dark_mode ? "Modo claro" : "Modo oscuro"}
-                    onClick={() => set_is_dark_mode((current_value) => !current_value)}
-                >
-                    <span className="theme_toggle_icon">{render_icon(is_dark_mode ? sun_icon : moon_icon, 17)}</span>
-                </button>
-                <div className="task_tool_anchor">
-                    <button
-                        className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}`}
-                        type="button"
-                        aria-label="Notificaciones"
-                        onClick={handle_toggle_notifications}
-                    >
-                        {render_icon(bell_icon, 18)}
-                        {has_unread_notifications ? <span className="bell_unread_dot"></span> : null}
-                    </button>
-                    {is_notifications_open ? render_notifications_panel({
-                        handle_close_notifications,
-                        handle_mark_notifications_read,
-                        notifications
-                    }) : null}
-                </div>
-                <span className="soft_avatar">{current_user.initials}</span>
-            </div>
-        </header>
-    );
-}
-
-
-// Renders the compact mobile header used above the active module.
-function render_mobile_header(props) {
-    const {
-        active_module,
-        selected_task,
-        set_active_modal,
-        set_is_sidebar_open
-    } = props;
-
-    const active_item = navigation_items.find((item) => item.id === active_module);
-    const title = selected_task ? "Detalle de tarea" : active_item?.label || "Tareas";
-
-    return (
-        <header className="mobile_header">
-            <div className="mobile_status_bar">
-                <span>9:41</span>
-                <span className="mobile_battery"></span>
-            </div>
-            <div className="mobile_header_row">
-                <button
-                    className="mobile_menu_button"
-                    type="button"
-                    aria-label={selected_task ? "Volver" : "Abrir navegacion"}
-                    onClick={() => selected_task ? set_active_modal(null) : set_is_sidebar_open(true)}
-                >
-                    {selected_task ? render_icon(arrow_left_icon, 24) : render_icon(menu_icon, 24)}
-                </button>
-                {selected_task ? <h1>{title}</h1> : active_module === "tasks" ? render_logo() : <h1>{title}</h1>}
-                <button
-                    className="mobile_more_button"
-                    type="button"
-                    aria-label="Mas opciones"
-                    onClick={() => set_active_modal(selected_task ? "project_menu" : null)}
-                >
-                    {selected_task ? render_icon(more_horizontal_icon, 21) : <span>{current_user.initials}</span>}
-                </button>
-            </div>
-        </header>
-    );
-}
-
-
 // Renders the empty placeholder used by modules outside the tasks MVP.
 function render_placeholder_module(active_module) {
     const placeholder_item = placeholder_content[active_module] || placeholder_content.home;
@@ -3977,25 +3692,17 @@ class TaskAppErrorBoundary extends react_component {
 }
 
 
-function TaskAppContent({ session }) {
+function TaskAppContent() {
+    const session = useCore();
+    const { active_module, set_active_module, set_is_sidebar_open } = useShell();
     const real = is_using_real_backend();
     const [data, set_data] = use_state(null);
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
     const refresh = use_ref(async () => {});
-    const [active_module, set_active_module] = use_state("tasks");
-    const [is_dark_mode, set_is_dark_mode] = use_state(() => {
-        try {
-            const saved_theme = localStorage.getItem(theme_storage_key);
-            return saved_theme ? saved_theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-        } catch (_error) {
-            return false;
-        }
-    });
     const [active_view, set_active_view] = use_state("list");
     const [active_modal, set_active_modal] = use_state(null);
-    const [is_sidebar_open, set_is_sidebar_open] = use_state(false);
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
@@ -4018,18 +3725,10 @@ function TaskAppContent({ session }) {
         status: true,
         project: false
     });
-    const status_options = real ? (data?.statuses || []).filter(item => !item.unitId || item.unitId === (edit_draft?.unitId || session?.assignments.find(item => item.id === session.active)?.unitId)).map(item => item.label) : default_status_items;
+    const status_options = real ? (data?.statuses || []).filter(item => !item.unitId || item.unitId === (edit_draft?.unitId || session.activeUnit?.id)).map(item => item.label) : default_status_items;
     const [collapsed_sections, set_collapsed_sections] = use_state([]);
     const [is_notifications_open, set_is_notifications_open] = use_state(false);
 
-    use_effect(() => {
-        try {
-            localStorage.setItem(theme_storage_key, is_dark_mode ? "dark" : "light");
-        } catch (_error) {
-            // The selected theme still works for this session when storage is unavailable.
-        }
-        document.documentElement.style.colorScheme = is_dark_mode ? "dark" : "light";
-    }, [is_dark_mode]);
     const [projects, set_projects] = use_state(() => {
         if (real) return [];
         try {
@@ -4132,7 +3831,7 @@ function TaskAppContent({ session }) {
 
         if (real) {
             mutate(async () => {
-                const assignment = session.assignments.find(item => item.id === session.active);
+                const assignment = session.activeAssignment;
                 const payload = { name: label, description: project_payload.description, color_hex: project_color, status: project_payload.status };
                 const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
                 const members = data.members.filter(item => item.project === project.id);
@@ -4346,9 +4045,9 @@ function TaskAppContent({ session }) {
             running = (async () => {
                 while (dirty && mounted) {
                     dirty = false;
-                    const next = await loadTaskData();
+                    const next = await loadTaskData(session);
                     if (!mounted) return;
-                    setPresentationData(next, session.active);
+                    setPresentationData(next);
                     set_data(next); set_projects(next.projects);
                     set_tasks(next.tasks.filter(item => !item.parentTaskId || !next.tasks.some(parent => parent.id === item.parentTaskId)));
                     set_notifications(next.notifications);
@@ -4360,17 +4059,18 @@ function TaskAppContent({ session }) {
         };
         const report = error => { if (mounted && error.name !== "AbortError") set_api_error(error.message); };
         refresh.current().then(async () => {
-            const units = await api.list("core/organizational-units");
+            const units = session.units;
             for (const unit of units) {
-                const permission = await api.request("/api/v2/core/authorize/", { method: "POST", body: { assignment: session.active, permission_code: "tasks.task.read", target_unit: unit.id } });
-                if (mounted && permission.allowed) connect_realtime_stream({ unitId: unit.id, ...api.getSession(), onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+                if (!mounted) return;
+                const allowed = await session.permissions.can("tasks.task.read", unit.id);
+                if (mounted && allowed) connect_realtime_stream({ unitId: unit.id, token: session.token, assignmentId: session.activeAssignment.id, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
             }
         }).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.
         const reconcile = () => refresh.current().catch(report);
         window.addEventListener("focus", reconcile);
         const timer = setInterval(reconcile, 30000);
-        return () => { mounted = false; clearInterval(timer); window.removeEventListener("focus", reconcile); disconnect_realtime_stream(); api.cancelRequests(); };
+        return () => { mounted = false; clearInterval(timer); window.removeEventListener("focus", reconcile); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
     async function mutate(operation, on_success = () => {}) {
@@ -4883,7 +4583,7 @@ function TaskAppContent({ session }) {
         if (active_modal === "task") {
             return (
                 <CreateTaskModal
-                    data={data} pending={pending} activeUnit={session?.assignments.find(item => item.id === session.active)?.unitId}
+                    data={data} pending={pending} activeUnit={session.activeUnit?.id}
                     board_columns={board_columns}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
@@ -4981,53 +4681,13 @@ function TaskAppContent({ session }) {
 
     // Returns the full shell with the focused tasks module.
     return (
-        <div className={`app_shell ${is_dark_mode ? "theme_dark" : ""} ${is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
-            {render_sidebar({
-                active_project_menu_id,
-                active_module,
-                handle_module_change,
-                handle_my_tasks_select,
-                handle_project_menu_toggle,
-                handle_project_select,
-                handle_tasks_menu_toggle,
-                is_sidebar_open,
-                is_tasks_menu_open,
-                projects,
-                selected_project_id,
-                task_scope,
-                set_active_modal,
-                set_is_sidebar_open
-            })}
-
-            {is_sidebar_open ? (
-                <button
-                    className="mobile_sidebar_overlay"
-                    type="button"
-                    aria-label="Cerrar navegacion"
-                    onClick={() => set_is_sidebar_open(false)}
-                ></button>
-            ) : null}
-
-            <main className="main_workspace">
-                {real && <div className="session_toolbar"><label>Cargo <select aria-label="Asignación activa" value={session.active} onChange={event => session.choose(event.target.value)}>{session.assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button></div>}
-                {real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
-                {render_mobile_header({
-                    active_module,
-                    selected_task,
-                    set_active_modal,
-                    set_is_sidebar_open
-                })}
-                {render_top_bar({
-                    handle_close_notifications,
-                    handle_mark_notifications_read,
-                    handle_toggle_notifications,
-                    is_dark_mode,
-                    is_notifications_open,
-                    notifications,
-                    search_query,
-                    set_search_query,
-                    set_is_dark_mode
-                })}
+        <AppShell
+            sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open) } } }}
+            mobileHeaderProps={{ detailOpen: !!selected_task, detailTitle: selected_task ? "Detalle de tarea" : null, onBack: () => set_active_modal(null), onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
+            topBarProps={{ searchPlaceholder: "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: ({ assignment: user_plus_icon, comment: message_circle_icon, status_changed: check_circle_icon })[item.type] })), search_query, set_search_query }}
+            feedback={real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
+            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}</>}
+        >
                 <div className="module_transition" key={active_module}>
                 {active_module === "home" ? <HomeModule
                     currentUser={current_user}
@@ -5140,19 +4800,12 @@ function TaskAppContent({ session }) {
                     set_schedule_view
                 }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module)}
                 </div>
-            </main>
-
-            {render_active_modal()}
-            {render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}
-        </div>
+        </AppShell>
     );
 }
 
 
-export default function task_app() {
-    return (
-        <TaskAppErrorBoundary>
-            <TaskSession>{session => <TaskAppContent key={session?.active || "template"} session={session} />}</TaskSession>
-        </TaskAppErrorBoundary>
-    );
+export default function TasksModule() {
+    const core = useCore();
+    return <TaskAppErrorBoundary><TaskAppContent key={core.activeAssignment?.id || "template"} /></TaskAppErrorBoundary>;
 }

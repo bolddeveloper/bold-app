@@ -1,6 +1,6 @@
 import { StrictMode as strict_mode, createElement as create_element } from "react";
 import { createRoot as create_root } from "react-dom/client";
-import task_app from "./task_app.jsx";
+import task_app from "./app.jsx";
 import { register_service_worker } from "./service_worker.js";
 import "./styles.css";
 

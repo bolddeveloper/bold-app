@@ -1,10 +1,9 @@
-import { api, is_using_real_backend } from "./api_client.js";
-import { normalizeProject, normalizeAssignment, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
+import { api } from "./tasks_api.js";
+import { is_using_real_backend } from "../core/http_client.js";
+import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
-export async function loadTaskData() {
-    const directory = (await api.listAssignmentDirectory()).map(normalizeAssignment);
+export async function loadTaskData({ directory, units }) {
     const projects = (await api.listProjects()).map(normalizeProject);
-    const units = await api.list("core/organizational-units");
     const sections = (await api.listSections()).map(normalizeSection);
     const statuses = [...new Map((await Promise.all(units.map(unit => api.listStatuses(unit.id)))).flat().map(dto => [dto.id, normalizeStatus(dto)])).values()];
     const tasks = (await api.listTasks()).map(dto => normalizeTask(dto, statuses));

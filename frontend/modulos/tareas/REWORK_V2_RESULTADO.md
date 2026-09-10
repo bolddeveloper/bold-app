@@ -1,5 +1,7 @@
 # Integración del frontend de Tareas con V2
 
+> Arquitectura actual: ver [separación Core / Tareas](CORE_TASKS_SEPARACION.md). Las referencias a `api_client.js` y `task_session.jsx` de este documento describen la etapa anterior.
+
 Implementada sobre los componentes existentes. Se conservan navegación, vistas de lista/tablero, calendario, cronograma, detalle, modales y modo plantilla. No se añadieron dependencias de producción ni se desplegó la aplicación.
 
 Corrección posterior del login: el entorno ejecutaba Django con `DEBUG=false` y sin `CORS_ALLOWED_ORIGINS`, por lo que aceptaba las credenciales pero el navegador bloqueaba la respuesta. Los valores predeterminados ahora permiten explícitamente `http://localhost:5173` y `http://127.0.0.1:5173`, sin depender de DEBUG; `backend/.env.example` refleja ambos. Se reinició el backend y se verificaron preflight, login y lecturas autenticadas con Origin. La prueba Node inicial no detectaba esta restricción del navegador: el recorrido de integración ahora comprueba CORS y envía Origin en sus sockets. Los fallos de red se presentan en español y las pruebas frontend suman 22.

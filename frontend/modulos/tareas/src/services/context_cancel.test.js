@@ -1,0 +1,33 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHttpClient } from "../core/http_client.js";
+import { createTasksApi } from "./tasks_api.js";
+import { getCoreState, updateCore, clearCore, directory, activeAssignment, activeAssignmentId } from "../core/core_store.js";
+test("module disposal cancels only its requests; assignment change cancels every old context", async () => {
+    const calls = [];
+    const http = createHttpClient({ fetchImpl: (url, options) => new Promise(resolve => calls.push({ url, options, resolve })) });
+    http.setToken("token"); http.setAssignment("a");
+    const tasks = createTasksApi(http);
+    const oldTasks = tasks.listTasks();
+    const coreRequest = http.list("core/organizational-units");
+    tasks.cancelRequests();
+    assert.equal(calls[0].options.signal.aborted, true);
+    assert.equal(calls[1].options.signal.aborted, false);
+    const rejected = assert.rejects(oldTasks, { name: "AbortError" });
+    calls[0].resolve(Response.json([{ id: "stale" }])); calls[1].resolve(Response.json([{ id: "unit" }]));
+    await rejected; assert.deepEqual(await coreRequest, [{ id: "unit" }]);
+    const another = tasks.listTasks();
+    http.setAssignment("b");
+    const contextRejected = assert.rejects(another, { name: "AbortError" });
+    calls[2].resolve(Response.json([])); await contextRejected;
+    const next = tasks.listTasks(); assert.equal(calls[3].options.headers["X-Assignment-ID"], "b");
+    calls[3].resolve(Response.json([])); await next;
+});
+test("Core identity exports are projections of one snapshot and clear on logout", () => {
+    const assignment = { id: "a", unitId: "u" }, unit = { id: "u" };
+    updateCore({ directory: [assignment], assignments: [assignment], units: [unit], activeAssignment: assignment });
+    assert.equal(activeAssignment, getCoreState().activeAssignment);
+    assert.equal(directory, getCoreState().directory);
+    assert.equal(activeAssignmentId, "a"); assert.equal(getCoreState().activeUnit, unit);
+    clearCore(); assert.equal(activeAssignment, null); assert.equal(activeAssignmentId, ""); assert.deepEqual(directory, []);
+});

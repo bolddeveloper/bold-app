@@ -1,6 +1,7 @@
+import { normalizeAssignment, selectAssignment } from "../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeProject, normalizeAssignment, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, selectAssignment } from "./task_models.js";
+import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload } from "./task_models.js";
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");
