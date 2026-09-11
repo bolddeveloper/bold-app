@@ -6,6 +6,7 @@ import "./styles.css";
 import "../../core/shared/responsive.css";
 import "../../core/app_shell.css";
 import "./tasks_mobile.css";
+import "./tasks_tablet.css";
 
 
 // Mounts the React application into the document root.
