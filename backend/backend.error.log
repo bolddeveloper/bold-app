@@ -1,0 +1,2 @@
+C:\Users\otero\Documents\GitHub\bold app\backend\venv\Lib\site-packages\django\core\handlers\base.py:61: UserWarning: No directory at: C:\Users\otero\Documents\GitHub\bold app\backend\staticfiles\
+  mw_instance = middleware(adapted_handler)

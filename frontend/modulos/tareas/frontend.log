@@ -1,0 +1,28 @@
+
+> bold-tasks-pwa@0.1.0 dev
+> vite --host 0.0.0.0 --port 5173
+
+
+  VITE v7.3.6  ready in 1243 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://26.243.115.230:5173/
+  ➜  Network: http://192.168.1.4:5173/
+  ➜  Network: http://172.26.112.1:5173/
+9:07:18 a.m. [vite] (client) hmr update /src/app.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/core/app_shell.jsx
+9:07:18 a.m. [vite] (client) page reload src/core/core_api.js
+9:07:18 a.m. [vite] (client) page reload src/core/core_models.js
+9:07:18 a.m. [vite] (client) hmr update /src/core/core_provider.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) page reload src/main.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/styles.css
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] vite.config.js changed, restarting server...
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) hmr update /src/task_app.jsx
+9:07:18 a.m. [vite] (client) Re-optimizing dependencies because vite config has changed
+9:07:19 a.m. [vite] server restarted.
