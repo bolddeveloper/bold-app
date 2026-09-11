@@ -1,7 +1,8 @@
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
-import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
+import { Component as react_component, createElement as create_element, useEffect as use_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
+import Swal from "sweetalert2";
 import {
     ArrowUp as arrow_up_icon,
     Archive as archive_icon,
@@ -39,7 +40,7 @@ import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft } from "./services/task_service.js";
-import { dateFromISO, toISODate, projectTask, taskPayload } from "./services/task_models.js";
+import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isMyTask } from "./services/task_models.js";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
 import {
@@ -77,11 +78,6 @@ const view_items = [
         id: "timeline",
         label: "Cronograma",
         icon: gantt_chart_icon
-    },
-    {
-        id: "calendar",
-        label: "Calendario",
-        icon: calendar_days_icon
     }
 ];
 
@@ -150,6 +146,12 @@ const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
+const today_iso = () => {
+    const today = new Date();
+    return toISODate(today.getFullYear(), today.getMonth(), today.getDate());
+};
+const open_date_picker = event => { try { event.currentTarget.showPicker?.(); } catch {} };
+const attachment_later = () => Swal.fire({ icon: "info", title: "Próximamente", text: "Esta función estará disponible más adelante", confirmButtonColor: "#ef1f2d" });
 
 
 
@@ -448,6 +450,88 @@ function render_avatar(member_item, size_class = "avatar_medium") {
     );
 }
 
+function select_color(variant, value) {
+    const normalized = String(value || "").toLowerCase();
+    if (variant === "priority") return normalized.includes("alta") ? "#ef1f2d" : normalized.includes("media") ? "#f59e0b" : "#22a06b";
+    if (variant === "status") {
+        if (/activ|curso|lista|complet|hech/.test(normalized) && !/inactiv/.test(normalized)) return "#22a06b";
+        if (/pend|esper/.test(normalized)) return "#f59e0b";
+        if (/inactiv|cancel|archiv/.test(normalized)) return "#8b95a5";
+        return "#4f6bed";
+    }
+    return null;
+}
+
+function TaskSelect({ aria_label, class_name = "", default_value, disabled = false, name, on_change = () => {}, options = [], stop_propagation = false, value, variant = "neutral" }) {
+    const normalized_options = options.map(option => typeof option === "object" ? option : { value: option, label: option });
+    const controlled = value !== undefined;
+    const [local_value, set_local_value] = use_state(default_value ?? normalized_options[0]?.value ?? "");
+    const selected_value = controlled ? value : local_value;
+    const selected_option = normalized_options.find(option => String(option.value) === String(selected_value)) || normalized_options[0] || { value: "", label: "Seleccionar" };
+    const [is_open, set_is_open] = use_state(false);
+    const [active_index, set_active_index] = use_state(0);
+    const root_ref = use_ref(null);
+    const listbox_id = use_id();
+
+    use_effect(() => {
+        if (!is_open) return undefined;
+        const close = event => { if (!root_ref.current?.contains(event.target)) set_is_open(false); };
+        document.addEventListener("pointerdown", close);
+        return () => document.removeEventListener("pointerdown", close);
+    }, [is_open]);
+
+    function open() {
+        set_active_index(Math.max(0, normalized_options.findIndex(option => String(option.value) === String(selected_value))));
+        set_is_open(true);
+    }
+
+    function choose(option) {
+        if (!option || option.disabled) return;
+        if (!controlled) set_local_value(option.value);
+        on_change(option.value);
+        set_is_open(false);
+    }
+
+    function handle_key_down(event) {
+        if (disabled) return;
+        if (event.key === "Escape") { set_is_open(false); return; }
+        if (event.key === "Tab") { set_is_open(false); return; }
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            if (!is_open) open();
+            const last = normalized_options.length - 1;
+            set_active_index(index => event.key === "Home" ? 0 : event.key === "End" ? last : Math.max(0, Math.min(last, index + (event.key === "ArrowDown" ? 1 : -1))));
+            return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            if (is_open) choose(normalized_options[active_index]); else open();
+        }
+    }
+
+    function render_option(option, trigger = false) {
+        const color = option.color || select_color(variant, option.label);
+        return <>
+            {option.member ? render_avatar(option.member, trigger ? "avatar_tiny" : "avatar_small") : color ? <span className="task_select_dot" style={{ "--select_color": color }} /> : option.badge ? <span className="task_select_badge">{option.badge}</span> : option.icon ? <span className="task_select_icon">{render_icon(option.icon, 15)}</span> : null}
+            <span className="task_select_text"><strong>{option.label}</strong>{!trigger && option.description ? <small>{option.description}</small> : null}</span>
+        </>;
+    }
+
+    return <div className={`task_select task_select_${variant} ${is_open ? "task_select_open" : ""} ${class_name}`} ref={root_ref} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) set_is_open(false); }} onClick={stop_propagation ? event => event.stopPropagation() : undefined} onKeyDown={handle_key_down}>
+        {name ? <input type="hidden" name={name} value={selected_value ?? ""} /> : null}
+        <button className="task_select_trigger" type="button" role="combobox" aria-label={aria_label} aria-activedescendant={is_open ? `${listbox_id}-${active_index}` : undefined} aria-controls={listbox_id} aria-expanded={is_open} aria-haspopup="listbox" disabled={disabled} onClick={() => is_open ? set_is_open(false) : open()}>
+            {render_option(selected_option, true)}
+            {render_icon(chevron_down_icon, 16)}
+        </button>
+        {is_open ? <div className="task_select_menu" id={listbox_id} role="listbox" aria-label={aria_label}>
+            {normalized_options.map((option, index) => <button className={`task_select_option ${index === active_index ? "task_select_option_focused" : ""}`} id={`${listbox_id}-${index}`} key={option.value} style={{ "--select_color": option.color || select_color(variant, option.label) || "#ef1f2d" }} type="button" role="option" aria-selected={String(option.value) === String(selected_value)} disabled={option.disabled} onMouseEnter={() => set_active_index(index)} onClick={() => choose(option)}>
+                {render_option(option)}
+                {String(option.value) === String(selected_value) ? <span className="task_select_check">{render_icon(check_icon, 15)}</span> : null}
+            </button>)}
+        </div> : null}
+    </div>;
+}
+
 
 // Renders a colored project dot.
 function render_project_dot(color) {
@@ -464,7 +548,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
     const is_menu_open = active_project_menu_id === project_item.id;
 
     return (
-        <div className={`project_item_wrap dismissible_popover ${is_menu_open ? "project_item_wrap_menu_open" : ""}`} key={project_item.id}>
+        <div className={`project_item_wrap dismissible_popover ${is_active ? "project_item_wrap_active" : ""} ${is_menu_open ? "project_item_wrap_menu_open" : ""}`} key={project_item.id}>
         <button
             className={`project_item ${is_active ? "project_item_active" : ""}`}
             type="button"
@@ -522,7 +606,7 @@ function get_split_content_width(split_element) {
 
 
 // Renders the task workspace content nested below Tareas.
-function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open) {
+function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open, projects_active) {
     return (
         <div className={`tasks_submenu ${is_open ? "tasks_submenu_open" : "tasks_submenu_closed"}`} id="tasks_workspace_menu" aria-hidden={!is_open}>
             <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
@@ -541,7 +625,11 @@ function render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, p
 
             <div className="sidebar_section projects_block">
                 <div className="projects_heading">
-                    <p className="sidebar_label">PROYECTOS</p>
+                    <button className={`projects_index_button ${projects_active ? "projects_index_button_active" : ""}`} type="button" onClick={handle_projects_open}>
+                        <span className="projects_index_icon">{render_icon(folder_icon, 17)}</span>
+                        <span><strong>Proyectos</strong><small>Ver todos</small></span>
+                        {render_icon(chevron_right_icon, 15)}
+                    </button>
                     <button
                         className="sidebar_add_button"
                         type="button"
@@ -783,18 +871,11 @@ function render_inbox_module(props) {
                                 {inbox_filter_menu === "filters" ? (
                                     <ResponsiveOverlay onClose={() => set_inbox_filter_menu(null)}><div className="task_tool_panel inbox_dropdown">
                                         <label className="filter_group_label">Estado</label>
-                                        <select aria-label="Estado" value={inbox_filters.state} onChange={(event) => set_inbox_filters((current) => ({ ...current, state: event.target.value }))}>
-                                            {inbox_state_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                                        </select>
+                                        <TaskSelect aria_label="Estado" variant="status" value={inbox_filters.state} options={inbox_state_options.map(option => ({ value: option.id, label: option.label }))} on_change={value => set_inbox_filters(current => ({ ...current, state: value }))} />
                                         <label className="filter_group_label">Tipo</label>
-                                        <select aria-label="Tipo" value={inbox_filters.type} onChange={(event) => set_inbox_filters((current) => ({ ...current, type: event.target.value }))}>
-                                            {inbox_type_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                                        </select>
+                                        <TaskSelect aria_label="Tipo" value={inbox_filters.type} options={inbox_type_options.map(option => ({ value: option.id, label: option.label }))} on_change={value => set_inbox_filters(current => ({ ...current, type: value }))} />
                                         <label className="filter_group_label">Proyecto</label>
-                                        <select aria-label="Proyecto" value={inbox_filters.project_id} onChange={(event) => set_inbox_filters((current) => ({ ...current, project_id: event.target.value }))}>
-                                            <option value="all">Todos los proyectos</option>
-                                            {project_items.map((project_item) => <option key={project_item.id} value={project_item.id}>{project_item.label}</option>)}
-                                        </select>
+                                        <TaskSelect aria_label="Proyecto" variant="project" value={inbox_filters.project_id} options={[{ value: "all", label: "Todos los proyectos", icon: folder_icon }, ...project_items.map(project => ({ value: project.id, label: project.label, color: project.color }))]} on_change={value => set_inbox_filters(current => ({ ...current, project_id: value }))} />
                                         <button className="link_button" type="button" onClick={() => set_inbox_filters((current) => ({ ...current, state: "all", type: "all", project_id: "all" }))}>
                                             Limpiar filtros
                                         </button>
@@ -1036,10 +1117,7 @@ function render_sort_panel(props) {
             </div>
             <div className="filter_group">
                 <span className="filter_group_label">Direccion</span>
-                <select value={sort_direction} onChange={(event) => set_sort_direction(event.target.value)}>
-                    <option value="asc">Ascendente</option>
-                    <option value="desc">Descendente</option>
-                </select>
+                <TaskSelect aria_label="Dirección" value={sort_direction} options={[{ value: "asc", label: "Ascendente" }, { value: "desc", label: "Descendente" }]} on_change={set_sort_direction} />
             </div>
             <footer className="modal_footer">
                 <button className="primary_button" type="button" onClick={handle_close_task_tool}>
@@ -1228,21 +1306,15 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
     }
 
     if (mobile) return <div className="native_date_picker">
-        <label>Fecha límite<input type="date" value={native_date} onChange={event => set_native_date(event.target.value)} /></label>
+        <label>Fecha límite<input type="date" value={native_date} onClick={open_date_picker} onChange={event => set_native_date(event.target.value)} /></label>
         <div><button type="button" onClick={on_clear}>Quitar fecha</button><button type="button" disabled={!dateFromISO(native_date)} onClick={() => { const date = dateFromISO(native_date); on_apply(date.getDate(), date.getMonth(), date.getFullYear()); }}>Aplicar fecha</button></div>
     </div>;
     return (
         <div className="custom_datepicker_popover" onClick={(e) => e.stopPropagation()}>
             <div className="custom_datepicker_nav">
                 <button type="button" aria-label="Mes anterior" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
-                <select aria-label="Mes" value={view_month} onChange={(event) => set_view_month(Number(event.target.value))}>
-                    {month_names_es.map((month_name, month_index) => (
-                        <option key={month_name} value={month_index}>{month_name}</option>
-                    ))}
-                </select>
-                <select aria-label="Año" value={view_year} onChange={(event) => set_view_year(Number(event.target.value))}>
-                    {year_options.map((year) => <option key={year} value={year}>{year}</option>)}
-                </select>
+                <TaskSelect aria_label="Mes" class_name="task_select_compact" value={view_month} options={month_names_es.map((label, value) => ({ value, label }))} on_change={set_view_month} />
+                <TaskSelect aria_label="Año" class_name="task_select_compact" value={view_year} options={year_options.map(year => ({ value: year, label: year }))} on_change={set_view_year} />
                 <button type="button" aria-label="Mes siguiente" onClick={go_next}>{render_icon(chevron_right_icon, 16)}</button>
             </div>
             <div className="custom_datepicker_grid">
@@ -1529,8 +1601,9 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
 
 
 // Selector de colaboradores para los modales de Crear y Editar tarea
-function CollaboratorsSelector({ on_change, selected_ids = [] }) {
+function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Personas del proyecto", empty_text = "Selecciona personas para seguir esta tarea" }) {
     const [is_picker_open, set_is_picker_open] = use_state(false);
+    const [query, set_query] = use_state("");
 
     use_effect(() => {
         if (!is_picker_open) return undefined;
@@ -1559,12 +1632,13 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
     }
 
     const assigned_members = selected_ids.map((id) => get_member(id)).filter(Boolean);
+    const visible_members = team_members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
 
     return (
         <div className="bold_field_group collaborators_field_group">
             <div className="collaborators_field_header">
                 <label className="bold_field_label">
-                    Colaboradores asignados ({assigned_members.length})
+                    {label} ({assigned_members.length})
                 </label>
                 <div className="collaborator_picker_anchor" style={{ position: "relative" }}>
                     <button
@@ -1573,14 +1647,15 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
                         onClick={() => set_is_picker_open((v) => !v)}
                     >
                         {render_icon(user_plus_icon, 14)}
-                        <span>{is_using_real_backend() ? "Agregar seguidor" : "Agregar colaborador"}</span>
+                        <span>{action_label || (is_using_real_backend() ? "Agregar seguidor" : "Agregar colaborador")}</span>
                     </button>
 
                     {is_picker_open ? (
                         <div className="collaborator_picker_dropdown">
-                            <div className="picker_title">Personas del proyecto</div>
+                            <div className="picker_title">{picker_title}</div>
+                            <input className="bold_text_input" type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar por nombre o correo" />
                             <div className="picker_list">
-                                {team_members.map((member) => {
+                                {visible_members.map((member) => {
                                     const is_assigned = selected_ids.includes(member.id);
                                     return (
                                         <button
@@ -1635,7 +1710,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
                         onClick={() => set_is_picker_open(true)}
                     >
                         {render_icon(user_plus_icon, 16)}
-                        <span>Selecciona personas para seguir esta tarea</span>
+                        <span>{empty_text}</span>
                     </div>
                 )}
             </div>
@@ -1646,13 +1721,14 @@ function CollaboratorsSelector({ on_change, selected_ids = [] }) {
 
 // "Editar Tarea" modal (Image 2 of design reference).
 function TaskIdentityFields({ data, unitId, assigneeId, onUnit, onAssignee }) {
-    return <div className="bold_field_row_2"><label className="bold_field_group">Equipo responsable<select className="bold_select_input" aria-label="Equipo responsable" value={unitId} onChange={event => onUnit(event.target.value)}>{data.units.map(item => <option key={item.id} value={item.id} disabled={!data.statuses.some(status => !status.unitId || status.unitId === item.id)}>{item.name}</option>)}</select></label><label className="bold_field_group">Responsable<select className="bold_select_input" aria-label="Responsable" value={assigneeId || ""} onChange={event => onAssignee(event.target.value)}><option value="">Sin responsable</option>{data.directory.filter(item => item.unitId === unitId).map(item => <option key={item.id} value={item.id}>{item.name} ? {item.job_role_title}</option>)}</select></label></div>;
+    return <div className="bold_field_row_2">
+        <label className="bold_field_group">Equipo responsable<TaskSelect aria_label="Equipo responsable" variant="team" value={unitId} options={data.units.map(item => ({ value: item.id, label: item.name, badge: item.name?.[0]?.toUpperCase(), disabled: !data.statuses.some(status => !status.unitId || status.unitId === item.id) }))} on_change={onUnit} /></label>
+        <label className="bold_field_group">Responsable<TaskSelect aria_label="Responsable" variant="person" value={assigneeId || ""} options={[{ value: "", label: "Sin responsable" }, ...data.directory.filter(item => item.unitId === unitId).map(member => ({ value: member.id, label: member.name, description: member.job_role_title, member }))]} on_change={onAssignee} /></label>
+    </div>;
 }
 
 function AttachmentLinks({ attachments, onChange }) {
-    const [url, setUrl] = use_state("");
-    const [name, setName] = use_state("");
-    return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos (enlaces)</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}<input className="bold_text_input" aria-label="Nombre del archivo" value={name} onChange={event => setName(event.target.value)} placeholder="Nombre del archivo"/><input className="bold_text_input" aria-label="Enlace del archivo" type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/><button type="button" className="secondary_button" disabled={!name.trim() || !/^https?:\/\//i.test(url)} onClick={() => { onChange([...attachments, { id: `new_${crypto.randomUUID()}`, name: name.trim(), url }]); setName(""); setUrl(""); }}>Agregar enlace</button></div>;
+    return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}<button type="button" className="attachment_dropzone" onClick={attachment_later}>{render_icon(paperclip_icon, 18)}<span>Agregar archivos adjuntos</span></button></div>;
 }
 
 function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
@@ -1692,6 +1768,8 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                             value={edit_draft.title || ""}
                             onChange={(e) => handle_edit_field_change("title", e.target.value)}
                             placeholder="Nombre de la tarea"
+                            required
+                            maxLength={220}
                         />
                     </div>
 
@@ -1699,31 +1777,15 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <select
-                                className="bold_select_input"
-                                value={edit_draft.project_id || ""}
-                                onChange={(e) => handle_edit_field_change("project_id", e.target.value)}
-                            >
-                                {projects.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                            </select>
+                            <TaskSelect aria_label="Proyecto" variant="project" value={edit_draft.project_id || ""} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color }))} on_change={value => handle_edit_field_change("project_id", value)} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
-                            <select
-                                className="bold_select_input"
-                                value={edit_draft.section || "todo"}
-                                onChange={(e) => handle_edit_field_change("section", e.target.value)}
-                            >
-                                {board_columns.map((col) => (
-                                    <option key={col.id} value={col.id}>{col.label}</option>
-                                ))}
-                            </select>
+                            <TaskSelect aria_label="Sección" variant="section" value={edit_draft.section || "todo"} options={board_columns.map(section_item => ({ value: section_item.id, label: section_item.label, icon: columns_icon }))} on_change={value => handle_edit_field_change("section", value)} />
                         </div>
                     </div>
 
-                    {real && <label className="bold_field_group">Fecha de inicio<input className="bold_text_input" type="date" value={edit_draft.start_date || ""} onChange={event => handle_edit_field_change("start_date", event.target.value || null)} /></label>}
+                    {real && <label className="bold_field_group">Fecha de inicio<input className="bold_text_input" type="date" value={edit_draft.start_date || ""} onClick={open_date_picker} onChange={event => handle_edit_field_change("start_date", event.target.value || null)} /></label>}
                     {/* Fecha límite */}
                     <div className="bold_field_group" style={{ position: "relative" }}>
                         <label className="bold_field_label">Fecha límite</label>
@@ -1764,15 +1826,11 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Prioridad</label>
-                            <select className="bold_select_input pill_dropdown_select priority_dropdown_select" value={edit_draft.priority || "Media"} onChange={(e) => handle_edit_field_change("priority", e.target.value)}>
-                                {priority_items.map((p) => <option key={p} value={p}>{p}</option>)}
-                            </select>
+                            <TaskSelect aria_label="Prioridad" variant="priority" value={edit_draft.priority || "Media"} options={priority_items} on_change={value => handle_edit_field_change("priority", value)} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Estado</label>
-                            <select className="bold_select_input pill_dropdown_select status_dropdown_select" value={edit_draft.status || "Pend."} onChange={(e) => handle_edit_field_change("status", e.target.value)}>
-                                {status_options.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                            <TaskSelect aria_label="Estado" variant="status" value={edit_draft.status || "Pend."} options={status_options} on_change={value => handle_edit_field_change("status", value)} />
                         </div>
                     </div>
 
@@ -1874,7 +1932,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
     const [project_id, set_project_id] = use_state(selected_project_id);
     const [section, set_section] = use_state("todo");
     const [collaborator_ids, set_collaborator_ids] = use_state([]);
-    const [due_day, set_due_day] = use_state(null);
+    const [due_day, set_due_day] = use_state(new Date().getDate());
     const [due_month, set_due_month] = use_state(new Date().getMonth());
     const [due_year, set_due_year] = use_state(new Date().getFullYear());
     const [priority, set_priority] = use_state("Media");
@@ -1942,25 +2000,18 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                             placeholder="¿Qué hay que hacer?"
                             autoFocus
                             required
+                            maxLength={220}
                         />
                     </div>
 
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <select className="bold_select_input" value={project_id} onChange={(e) => set_project_id(e.target.value)}>
-                                {projects.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                            </select>
+                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color }))} on_change={set_project_id} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
-                            <select className="bold_select_input" value={section} onChange={(e) => set_section(e.target.value)}>
-                                {board_columns.map((col) => (
-                                    <option key={col.id} value={col.id}>{col.label}</option>
-                                ))}
-                            </select>
+                            <TaskSelect aria_label="Sección" variant="section" value={section} options={board_columns.map(section_item => ({ value: section_item.id, label: section_item.label, icon: columns_icon }))} on_change={set_section} />
                         </div>
                     </div>
 
@@ -1995,15 +2046,11 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Prioridad</label>
-                            <select className="bold_select_input pill_dropdown_select priority_dropdown_select" value={priority} onChange={(e) => set_priority(e.target.value)}>
-                                {priority_items.map((p) => <option key={p} value={p}>{p}</option>)}
-                            </select>
+                            <TaskSelect aria_label="Prioridad" variant="priority" value={priority} options={priority_items} on_change={set_priority} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Estado</label>
-                            <select className="bold_select_input pill_dropdown_select status_dropdown_select" value={status} onChange={(e) => set_status(e.target.value)}>
-                                {status_options.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                            <TaskSelect aria_label="Estado" variant="status" value={status} options={status_options} on_change={set_status} />
                         </div>
                     </div>
 
@@ -2055,7 +2102,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     <button
                         type="button"
                         className="attachment_dropzone"
-                        onClick={() => set_attachments((aa) => [...aa, { id: `f_${Date.now()}`, name: `archivo_${aa.length + 1}.pdf` }])}
+                        onClick={attachment_later}
                     >
                         {render_icon(paperclip_icon, 18)}
                         <span>{attachments.length > 0 ? `${attachments.length} archivo(s) adjunto(s)` : "Agregar archivos adjuntos"}</span>
@@ -2100,6 +2147,7 @@ function render_tasks_module(props) {
         handle_delete_column,
         handle_detail_resize_key_down,
         handle_detail_resize_start,
+        handle_drag_end,
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
@@ -2205,15 +2253,6 @@ function render_tasks_module(props) {
                     >
                         Cronograma
                     </button>
-                    <button
-                        className={`main_nav_tab_btn ${active_section === "calendar" ? "main_nav_tab_active" : ""}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={active_section === "calendar"}
-                        onClick={() => set_active_section("calendar")}
-                    >
-                        Calendario
-                    </button>
                 </nav>
 
                 {/* 3 & 4 & 5. Dentro del apartado Tareas: Acciones de tareas — Personalizar — Botón de visualización */}
@@ -2287,12 +2326,16 @@ function render_tasks_module(props) {
                             collapsed_sections,
                             completed_count,
                             completion_percent,
+                            dragged_task_id,
                             editing_column_id,
                             editing_column_name,
                             filtered_tasks,
                             handle_add_column,
+                            handle_column_drop,
                             handle_delete_column,
                             handle_delete_task,
+                            handle_drag_end,
+                            handle_drag_start,
                             handle_open_edit_task,
                             handle_quick_change,
                             handle_save_column_name,
@@ -2324,6 +2367,7 @@ function render_tasks_module(props) {
                             filtered_tasks,
                             handle_add_column,
                             handle_column_drop,
+                            handle_drag_end,
                             handle_delete_column,
                             handle_drag_start,
                             handle_save_column_name,
@@ -2381,17 +2425,6 @@ function render_tasks_module(props) {
                 </div>
             ) : null}
 
-            {active_section === "calendar" ? (
-                <div className="calendar_view_wrapper">
-                    {render_calendar_view({
-                        filtered_tasks: project_tasks,
-                        handle_task_select,
-                        set_active_modal
-                    })}
-                    <TaskDetailSidebar handle_add_comment={handle_add_comment} handle_delete_task={handle_delete_task} handle_open_edit_task={handle_open_edit_task} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
-                </div>
-
-            ) : null}
         </section>
     );
 }
@@ -2424,12 +2457,16 @@ function render_list_view(props) {
         collapsed_sections = [],
         completed_count,
         completion_percent,
+        dragged_task_id,
         editing_column_id,
         editing_column_name,
         filtered_tasks,
         handle_add_column,
+        handle_column_drop,
         handle_delete_column,
         handle_delete_task,
+        handle_drag_end,
+        handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
         handle_save_column_name,
@@ -2472,14 +2509,19 @@ function render_list_view(props) {
                 </div>
 
                 {board_columns.map((section_item) => render_task_group({
+                    mobile_actions: props.mobile_actions,
                     active_quick_popover,
                     collapsed_sections,
                     column_items: field_items,
                     editing_column_id,
                     editing_column_name,
                     filtered_tasks,
+                    dragged_task_id,
+                    handle_column_drop,
                     handle_delete_column,
                     handle_delete_task,
+                    handle_drag_end,
+                    handle_drag_start,
                     handle_open_edit_task,
                     handle_quick_change,
                     handle_save_column_name,
@@ -2567,8 +2609,12 @@ function render_task_group(props) {
         editing_column_id,
         editing_column_name,
         filtered_tasks,
+        dragged_task_id,
+        handle_column_drop,
         handle_delete_column,
         handle_delete_task,
+        handle_drag_end,
+        handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
         handle_save_column_name,
@@ -2577,6 +2623,7 @@ function render_task_group(props) {
         handle_toggle_quick_popover,
         handle_toggle_section,
         handle_toggle_task,
+        mobile_actions,
         section_item,
         selected_task_id,
         set_editing_column_id,
@@ -2588,7 +2635,12 @@ function render_task_group(props) {
     const is_collapsed = collapsed_sections.includes(section_item.id);
 
     return (
-        <div className="task_group" key={section_item.id}>
+        <div
+            className={`task_group ${dragged_task_id ? "task_group_drop_ready" : ""}`}
+            key={section_item.id}
+            onDragOver={handle_column_drop ? event => event.preventDefault() : undefined}
+            onDrop={handle_column_drop ? event => { event.preventDefault(); handle_column_drop(section_item.id); } : undefined}
+        >
             <div className="task_group_header" role="button" tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") handle_toggle_section(section_item.id);
             }}>
@@ -2615,7 +2667,7 @@ function render_task_group(props) {
                     <strong>{section_item.label.toUpperCase()}</strong>
                 )}
                 <span>{section_tasks.length}</span>
-                {section_item.id.startsWith("col_") ? (
+                {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
                     <div className="board_section_actions list_section_actions" onClick={(event) => event.stopPropagation()}>
                         <button type="button" title="Renombrar sección" onClick={() => handle_start_edit_column(section_item)}>
                             {render_icon(pencil_icon, 13)}
@@ -2630,11 +2682,15 @@ function render_task_group(props) {
                 active_quick_popover,
                 column_items,
                 handle_delete_task,
+                handle_drag_end,
+                handle_drag_start,
                 handle_open_edit_task,
                 handle_quick_change,
                 handle_task_select,
                 handle_toggle_quick_popover,
                 handle_toggle_task,
+                mobile_actions,
+                is_dragging: dragged_task_id === task_item.id,
                 is_selected: selected_task_id === task_item.id,
                 status_options,
                 task_item,
@@ -2651,12 +2707,16 @@ function render_task_row(props) {
         active_quick_popover,
         column_items = optional_column_items,
         handle_delete_task,
+        handle_drag_end,
+        handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
         handle_task_select,
         handle_toggle_quick_popover,
         handle_toggle_task,
+        is_dragging,
         is_selected,
+        mobile_actions,
         status_options = default_status_items,
         task_item,
         visible_fields
@@ -2670,12 +2730,17 @@ function render_task_row(props) {
     return (
         <div
             className={`task_row ${task_item.completed ? "task_row_completed" : ""} ${is_selected ? "task_row_selected" : ""}`}
+            data-dragging={is_dragging ? "true" : "false"}
+            draggable={Boolean(handle_drag_start)}
             key={task_item.id}
+            title="Arrastra la tarea a otra sección"
             style={{
                 ...get_task_table_columns_style(visible_fields, true, column_items),
-                cursor: "pointer",
+                cursor: handle_drag_start ? "grab" : "pointer",
                 zIndex: is_priority_open || is_status_open ? 50 : 1
             }}
+            onDragEnd={handle_drag_end}
+            onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
             onClick={() => handle_task_select(task_item.id)}
         >
             <button
@@ -2847,9 +2912,7 @@ function TaskMobileActions({ task, actions }) {
         <summary aria-label={`Acciones de ${task.title}`}>••• <span>Acciones</span></summary>
         <div className="mobile_task_action_list">
             <button type="button" onClick={() => actions.onEdit(task.id)}>Editar tarea</button>
-            <label>Mover a sección<select aria-label={`Mover ${task.title} a sección`} value={task.section || "unsectioned"} onChange={event => actions.onMove(task.id, event.target.value)}>
-                {actions.sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
-            </select></label>
+            <label>Mover a sección<TaskSelect aria_label={`Mover ${task.title} a sección`} variant="section" value={task.section || "unsectioned"} options={actions.sections.map(section => ({ value: section.id, label: section.label, icon: columns_icon }))} stop_propagation on_change={value => actions.onMove(task.id, value)} /></label>
             <button type="button" className="danger_menu_item" onClick={() => actions.onDelete(task.id)}>Eliminar tarea</button>
         </div>
     </details>;
@@ -2921,6 +2984,7 @@ function render_board_view(props) {
         filtered_tasks,
         handle_add_column,
         handle_column_drop,
+        handle_drag_end,
         handle_delete_column,
         handle_drag_start,
         handle_save_column_name,
@@ -2974,7 +3038,7 @@ function render_board_view(props) {
                                 <h2>{section_item.label}</h2>
                             )}
                             <span>{section_tasks.length}</span>
-                            {section_item.id.startsWith("col_") ? (
+                            {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
                                 <div className="board_section_actions" onClick={(event) => event.stopPropagation()}>
                                     <button type="button" title="Renombrar sección" onClick={() => handle_start_edit_column(section_item)}>
                                         {render_icon(pencil_icon, 13)}
@@ -2988,6 +3052,7 @@ function render_board_view(props) {
                         <div className="board_card_stack">
                             {section_tasks.map((task_item) => render_board_card({
                     mobile_actions: props.mobile_actions,
+                                handle_drag_end,
                                 handle_drag_start,
                                 handle_task_select,
                                 handle_toggle_task,
@@ -3044,6 +3109,7 @@ function render_board_view(props) {
 // Renders a task card inside the board view.
 function render_board_card(props) {
     const {
+        handle_drag_end,
         handle_drag_start,
         handle_task_select,
         handle_toggle_task,
@@ -3059,7 +3125,8 @@ function render_board_card(props) {
             data-dragging={is_dragging ? "true" : "false"}
             key={task_item.id}
             draggable={Boolean(handle_drag_start)}
-            onDragStart={handle_drag_start ? () => handle_drag_start(task_item.id) : undefined}
+            onDragEnd={handle_drag_end}
+            onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
             onClick={() => handle_task_select(task_item.id)}
             style={{ cursor: "pointer" }}
         >
@@ -3446,6 +3513,50 @@ function render_share_modal(set_active_modal, project, onMembers, onError) {
     );
 }
 
+function ShareProjectModal({ project, onClose, onSave, onError, pending }) {
+    const [query, setQuery] = use_state("");
+    const [selected, setSelected] = use_state(() => project?.member_ids || []);
+    const visible = team_members.filter(member => selected.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const url = new URL(window.location.href);
+    if (project?.id) url.searchParams.set("project", project.id);
+    const toggle = id => setSelected(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
+    return <div className="modal_overlay"><section className="form_modal share_modal" role="dialog" aria-modal="true" aria-label="Compartir proyecto">
+        <header className="modal_header"><h2>Compartir "{project?.label}"</h2><button type="button" aria-label="Cerrar" onClick={onClose}>{render_icon(x_icon, 22)}</button></header>
+        <div className="share_content">
+            <label className="form_field"><span>Buscar personas</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre o correo electrónico" /></label>
+            <div className="project_people_selected">{visible.map(member => <button className={`project_person_chip ${selected.includes(member.id) ? "project_person_chip_active" : ""}`} key={member.id} type="button" onClick={() => toggle(member.id)}>{render_avatar(member, "avatar_small")}<span>{member.name}<small>{member.email}</small></span>{render_icon(selected.includes(member.id) ? x_icon : plus_icon, 16)}</button>)}</div>
+            <div className="copy_link_row"><input type="text" value={url.href} readOnly /><button className="dark_button" type="button" onClick={() => navigator.clipboard?.writeText(url.href).catch(error => onError(error.message))}>{render_icon(link_icon, 16)} Copiar enlace</button></div>
+            <footer className="bold_modal_footer"><button className="secondary_button" type="button" onClick={onClose}>Cancelar</button><button className="primary_button" type="button" disabled={pending} onClick={() => onSave(selected)}>Guardar acceso</button></footer>
+        </div>
+    </section></div>;
+}
+
+function render_projects_module({ projects, selected_project_id, tasks, search_query, onCreate, onOpen, onEdit, onShare, onDelete }) {
+    const query = search_query.trim().toLowerCase();
+    const visible = projects.filter(project => project.label.toLowerCase().includes(query));
+    return <section className="projects_module">
+        <header className="projects_module_header"><div><p className="breadcrumb_text">PROYECTOS</p><h1>Proyectos</h1><p>Gestiona el trabajo del departamento en un solo lugar.</p></div><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
+        <div className="projects_grid">{visible.map(project => {
+            const projectTasks = tasks.filter(task => task.project_id === project.id || task.taskProjects?.some(link => link.projectId === project.id));
+            const done = projectTasks.filter(task => task.completed).length;
+            const progress = projectTasks.length ? Math.round(done / projectTasks.length * 100) : 0;
+            return <article className={`project_summary_card ${selected_project_id === project.id ? "project_summary_card_active" : ""}`} key={project.id}>
+                <div className="project_summary_title">{render_project_dot(project.color)}<button type="button" onClick={() => onOpen(project.id)}>{project.label}</button><span>{project.status || "Activo"}</span></div>
+                <p>{project.start_date || "Sin inicio"} — {project.end_date || "Sin fecha final"}</p>
+                <div className="project_summary_progress"><span><i style={{ width: `${progress}%` }} /></span><strong>{progress}%</strong></div>
+                <small>{done} de {projectTasks.length} tareas completadas</small>
+                <footer className="project_summary_actions">
+                    <button className="project_action_primary" type="button" onClick={() => onOpen(project.id)}>{render_icon(external_link_icon, 15)} Abrir tareas</button>
+                    <button className="project_action_secondary" type="button" onClick={() => onEdit(project.id)}>{render_icon(pencil_icon, 15)} Editar</button>
+                    <button className="project_action_secondary" type="button" onClick={() => onShare(project.id)}>{render_icon(link_icon, 15)} Compartir</button>
+                    <button className="project_action_danger" type="button" onClick={() => onDelete(project.id)}>{render_icon(trash_icon, 15)} Eliminar</button>
+                </footer>
+            </article>;
+        })}</div>
+        {!visible.length && <div className="placeholder_card"><h2>No hay proyectos</h2><p>Prueba otro nombre o crea un proyecto.</p></div>}
+    </section>;
+}
+
 
 function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_confirm, pending }) {
     return (
@@ -3479,16 +3590,10 @@ function render_project_modal(props) {
         handle_create_project,
         project_color,
         project_people_ids,
-        project_people_query,
         set_active_modal,
         set_project_color,
-        set_project_people_query,
-        toggle_project_person
+        set_project_people_ids
     } = props;
-    const visible_people = team_members.filter((member_item) => (
-        !project_people_query.trim()
-        || `${member_item.name} ${member_item.email}`.toLowerCase().includes(project_people_query.trim().toLowerCase())
-    ));
 
     return (
         <div className="project_create_overlay">
@@ -3507,7 +3612,7 @@ function render_project_modal(props) {
                     <div className="modal_scroll_fields">
                     <label className="project_create_step">
                         <span><strong>1</strong> Nombre del proyecto</span>
-                        <input name="project_name" type="text" placeholder="Ej. Campana de lanzamiento Q4" defaultValue={editing_project?.label || ""} required />
+                        <input name="project_name" type="text" placeholder="Ej. Campana de lanzamiento Q4" defaultValue={editing_project?.label || ""} required maxLength={180} />
                     </label>
 
                     <label className="project_create_step">
@@ -3539,60 +3644,33 @@ function render_project_modal(props) {
                         <div className="project_create_grid_3">
                             <label>
                                 Fecha de inicio
-                                <input name="project_start" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} type="date" defaultValue={editing_project?.start_date || ""} />
+                                <input name="project_start" type="date" defaultValue={editing_project?.start_date || today_iso()} onClick={open_date_picker} />
                             </label>
                             <label>
                                 Fecha de fin
-                                <input name="project_end" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} type="date" defaultValue={editing_project?.end_date || ""} />
+                                <input name="project_end" type="date" defaultValue={editing_project?.end_date || ""} onClick={open_date_picker} />
                             </label>
                             <label>
                                 Estado inicial
-                                <select name="project_status" defaultValue={editing_project?.status || "Activo"}>
-                                    <option>Activo</option>
-                                    <option>Pendiente</option>
-                                    <option>Inactivo</option>
-                                </select>
+                                <TaskSelect aria_label="Estado inicial" name="project_status" variant="status" default_value={editing_project?.status || "Activo"} options={["Activo", "Pendiente", "Inactivo"]} />
                             </label>
                         </div>
                         <label className="project_create_full_select">
                             Prioridad
-                            <select name="project_priority" disabled={is_using_real_backend()} title={is_using_real_backend() ? "Este campo todavía no está disponible para proyectos" : undefined} defaultValue={editing_project?.priority || "Media"}>
-                                {priority_items.map((priority_item) => <option key={priority_item}>{priority_item}</option>)}
-                            </select>
+                            <TaskSelect aria_label="Prioridad" name="project_priority" variant="priority" disabled={is_using_real_backend()} default_value={editing_project?.priority || "Media"} options={priority_items} />
                         </label>
                     </section>
 
                     <section className="project_create_step">
                         <span><strong>5</strong> Personas relacionadas al proyecto</span>
-                        <p>Agrega las personas que estaran relacionadas o participaran en este proyecto.</p>
-                        <div className="project_people_box">
-                            <label className="project_people_search">
-                                {render_icon(search_icon, 23)}
-                                <input
-                                    value={project_people_query}
-                                    placeholder="Buscar personas por nombre o correo..."
-                                    onChange={(event) => set_project_people_query(event.target.value)}
-                                />
-                            </label>
-                            <div className="project_people_selected">
-                                {visible_people.map((member_item) => {
-                                    const is_selected = project_people_ids.includes(member_item.id);
-
-                                    return (
-                                        <button
-                                            className={`project_person_chip ${is_selected ? "project_person_chip_active" : ""}`}
-                                            key={member_item.id}
-                                            type="button"
-                                            onClick={() => toggle_project_person(member_item.id)}
-                                        >
-                                            {render_avatar(member_item, "avatar_small")}
-                                            {member_item.name}
-                                            {render_icon(is_selected ? x_icon : plus_icon, 16)}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <CollaboratorsSelector
+                            selected_ids={project_people_ids}
+                            on_change={set_project_people_ids}
+                            label="Personas relacionadas"
+                            action_label="Agregar persona"
+                            picker_title="Personas del proyecto"
+                            empty_text="Selecciona personas relacionadas con este proyecto"
+                        />
                     </section>
 
                     </div>
@@ -3771,24 +3849,30 @@ function TaskAppContent() {
             return project_items;
         }
     });
+    const recent_projects_key = `bold_recent_projects:${session.activeAssignment?.personId || "demo"}:${session.activeAssignment?.id || current_user_id}`;
+    const [recent_project_ids, set_recent_project_ids] = use_state([]);
     const [project_color, set_project_color] = use_state(project_color_options[0]);
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
-    const [project_people_query, set_project_people_query] = use_state("");
-    const [mock_board_columns, set_board_columns] = use_state(default_board_columns);
+    const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
     const [dragged_task_id, set_dragged_task_id] = use_state(null);
     const [is_adding_column, set_is_adding_column] = use_state(false);
     const [new_column_name, set_new_column_name] = use_state("");
     const [editing_column_id, set_editing_column_id] = use_state(null);
     const [editing_column_name, set_editing_column_name] = use_state("");
+    const [unsectioned_by_project, set_unsectioned_by_project] = use_state({});
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
-    const [selected_project_id, set_selected_project_id] = use_state(real ? new URLSearchParams(window.location.search).get("project") || "" : "launch_q4");
+    const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? "" : "launch_q4"));
     const [task_scope, set_task_scope] = use_state("project");
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
+    const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
+    const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
+    const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
     const board_columns = real ? (task_scope === "mine"
         ? [{ id: "unsectioned", label: "Mis tareas" }]
-        : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), { id: "unsectioned", label: "Sin sección" }]) : mock_board_columns;
+        : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])])
+        : [...(mock_sections_by_project[selected_project_id] || []), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])];
 
     const [task_detail_width, set_task_detail_width] = use_state(390);
     const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
@@ -3814,6 +3898,23 @@ function TaskAppContent() {
     }, [projects]);
 
     use_effect(() => {
+        if (real && !data) return;
+        let saved = [];
+        try { saved = JSON.parse(localStorage.getItem(recent_projects_key)) || []; } catch {}
+        const next = recentProjectIds(Array.isArray(saved) ? saved : [], projects.map(project => project.id));
+        set_recent_project_ids(next);
+        try { localStorage.setItem(recent_projects_key, JSON.stringify(next)); } catch {}
+    }, [recent_projects_key, projects, real, data]);
+
+    function remember_project(project_id, available_ids = projects.map(project => project.id)) {
+        set_recent_project_ids(current => {
+            const next = recentProjectIds(current, available_ids, project_id);
+            try { localStorage.setItem(recent_projects_key, JSON.stringify(next)); } catch {}
+            return next;
+        });
+    }
+
+    use_effect(() => {
         try {
             if (!real) localStorage.setItem(timeline_comments_storage_key, JSON.stringify(timeline_comments_by_scope));
         } catch (error) {
@@ -3832,40 +3933,36 @@ function TaskAppContent() {
         return () => window.removeEventListener("resize", clamp_detail_width);
     }, []);
 
-    function toggle_project_person(member_id) {
-        set_project_people_ids((current_ids) => (
-            current_ids.includes(member_id)
-                ? current_ids.filter((current_id) => current_id !== member_id)
-                : [...current_ids, member_id]
-        ));
-    }
-
     function handle_create_project(event) {
         event.preventDefault();
         const form_data = new FormData(event.currentTarget);
-        const label = (form_data.get("project_name") || "").toString().trim();
+        const base_label = (form_data.get("project_name") || "").toString().trim();
+        const start_date = form_data.get("project_start") || "";
+        const end_date = form_data.get("project_end") || "";
 
-        if (!label) {
-            return;
-        }
+        const validation_error = validateProjectDraft(base_label, start_date, end_date);
+        if (validation_error) return set_api_error(validation_error);
+        const label = editing_project_id ? base_label : uniqueProjectName(base_label, projects.map(project => project.label));
 
         const project_payload = {
             id: editing_project_id || `project_${Date.now()}`,
             label,
             description: (form_data.get("project_description") || "").toString(),
             color: project_color,
-            start_date: form_data.get("project_start") || "",
-            end_date: form_data.get("project_end") || "",
+            start_date,
+            end_date,
             status: form_data.get("project_status") || "Activo",
             priority: form_data.get("project_priority") || "Media",
             member_ids: project_people_ids
         };
 
         if (real) {
+            let created_project_id = editing_project_id;
             mutate(async () => {
                 const assignment = session.activeAssignment;
-                const payload = { name: label, description: project_payload.description, color_hex: project_color, status: project_payload.status };
+                const payload = { name: label, description: project_payload.description, color_hex: project_color, status: project_payload.status, start_date: start_date || null, end_date: end_date || null };
                 const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
+                created_project_id = project.id;
                 const members = data.members.filter(item => item.project === project.id);
                 for (const member of members) if (!project_people_ids.includes(member.assignment)) await api.remove("project-members", member.id);
                 for (const id of project_people_ids) {
@@ -3874,7 +3971,10 @@ function TaskAppContent() {
                     else if (old.status !== "active" || old.removed_at) await api.update("project-members", old.id, { status: "active", removed_at: null });
                 }
                 set_selected_project_id(project.id);
-            }, () => { set_active_modal(null); set_editing_project_id(null); });
+            }, () => {
+                if (!editing_project_id) remember_project(created_project_id, [created_project_id, ...projects.map(project => project.id)]);
+                set_active_modal(null); set_editing_project_id(null);
+            });
             return;
         }
         set_projects((current_projects) => (
@@ -3882,25 +3982,33 @@ function TaskAppContent() {
                 ? current_projects.map((project_item) => project_item.id === editing_project_id ? { ...project_item, ...project_payload } : project_item)
                 : [...current_projects, project_payload]
         ));
+        if (!editing_project_id) set_mock_sections_by_project(current => ({ ...current, [project_payload.id]: [] }));
+        if (!editing_project_id) remember_project(project_payload.id, [project_payload.id, ...projects.map(project => project.id)]);
         set_selected_project_id(project_payload.id);
         set_project_color(project_color_options[0]);
         set_project_people_ids(team_members.map((member_item) => member_item.id));
-        set_project_people_query("");
         set_editing_project_id(null);
         set_active_modal(null);
     }
 
     function handle_project_select(project_id) {
-        if (real) { set_active_filters(filters => ({ ...filters, sections: [] })); const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url); }
+        remember_project(project_id);
+        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+        if (real) set_active_filters(filters => ({ ...filters, sections: [] }));
         set_selected_project_id(project_id);
         set_task_scope("project");
         set_active_module("tasks");
         set_active_section("tasks");
         set_selected_task_id(null);
         set_active_project_menu_id(null);
+        set_is_sidebar_open(false);
     }
 
     function handle_project_menu_toggle(project_id, action = "toggle") {
+        if (action !== "toggle") {
+            const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+            set_selected_project_id(project_id);
+        }
         if (action === "edit") {
             const project_item = projects.find((item) => item.id === project_id);
             set_editing_project_id(project_id);
@@ -3921,8 +4029,34 @@ function TaskAppContent() {
         set_active_project_menu_id((current_id) => current_id === project_id ? null : project_id);
     }
 
-    function handle_drag_start(task_id) {
+    function handle_share_project(project_id) {
+        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+        set_selected_project_id(project_id);
+        set_active_project_menu_id(null);
+        set_active_modal("share");
+    }
+
+    function handle_save_project_members(member_ids) {
+        if (!real) {
+            set_projects(items => items.map(project => project.id === selected_project_id ? { ...project, member_ids } : project));
+            set_active_modal(null);
+            return;
+        }
+        mutate(async () => {
+            const members = data.members.filter(item => item.project === selected_project_id);
+            for (const member of members) if (!member_ids.includes(member.assignment)) await api.remove("project-members", member.id);
+            for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: selected_project_id, assignment: id, member_role: "member", status: "active" });
+        }, () => set_active_modal(null));
+    }
+
+    function handle_drag_start(task_id, event) {
         set_dragged_task_id(task_id);
+        event?.dataTransfer?.setData("text/plain", String(task_id));
+        if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    }
+
+    function handle_drag_end() {
+        set_dragged_task_id(null);
     }
 
     function handle_column_drop(column_id, task_id = dragged_task_id) {
@@ -3967,10 +4101,7 @@ function TaskAppContent() {
         if (!trimmed_name) return;
 
         const new_column_id = `col_${Date.now()}`;
-        set_board_columns((current_cols) => [
-            ...current_cols,
-            { id: new_column_id, label: trimmed_name, status: trimmed_name }
-        ]);
+        set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: [...(current[selected_project_id] || []), { id: new_column_id, label: trimmed_name, status: trimmed_name }] }));
         set_new_column_name("");
         set_is_adding_column(false);
     }
@@ -3981,21 +4112,44 @@ function TaskAppContent() {
     }
 
     function handle_save_column_name() {
-        if (real) { if (editing_column_id !== "unsectioned" && editing_column_name.trim()) mutate(() => api.update("sections", editing_column_id, { name: editing_column_name.trim() }), () => set_editing_column_id(null)); return; }
         const label = editing_column_name.trim();
         if (!editing_column_id || !label) return;
-        set_board_columns((current_cols) => current_cols.map((column_item) => (
-            column_item.id === editing_column_id ? { ...column_item, label, status: label } : column_item
-        )));
+        if (editing_column_id === "unsectioned") {
+            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label, hidden: false } }));
+            set_editing_column_id(null);
+            set_editing_column_name("");
+            return;
+        }
+        if (real) { mutate(() => api.update("sections", editing_column_id, { name: label }), () => set_editing_column_id(null)); return; }
+        set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).map(column_item => column_item.id === editing_column_id ? { ...column_item, label, status: label } : column_item) }));
         set_editing_column_id(null);
         set_editing_column_name("");
     }
 
     function handle_delete_column(column_id) {
-        if (real) { if (column_id !== "unsectioned") mutate(() => api.remove("sections", column_id)); return; }
-        set_board_columns((current_cols) => current_cols.filter((column_item) => column_item.id !== column_id));
+        if (column_id === "unsectioned") {
+            const hide = () => set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { ...(current[selected_project_id] || { label: "Sin sección" }), hidden: true } }));
+            if (real) {
+                const links = data.links.filter(link => link.projectId === selected_project_id && !link.sectionId);
+                if (!links.length) { hide(); return; }
+                mutate(async () => {
+                    const existing = data.sections.find(section => section.projectId === selected_project_id);
+                    const target = existing || await api.create("sections", { project: selected_project_id, name: "General", position: "1000" });
+                    for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: target.id, position: String((index + 1) * 1000) });
+                }, hide);
+                return;
+            }
+            const sections = mock_sections_by_project[selected_project_id] || [];
+            const target = sections[0] || { id: `col_${Date.now()}`, label: "General", status: "Pend." };
+            if (!sections.length) set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: [target] }));
+            set_tasks(current => current.map(task => task.project_id === selected_project_id && task.section === "unsectioned" ? { ...task, section: target.id, status: target.status || "Pend.", completed: target.id === "completed" } : task));
+            hide();
+            return;
+        }
+        if (real) { mutate(() => api.remove("sections", column_id)); return; }
+        set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).filter(column_item => column_item.id !== column_id) }));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
-            task_item.section === column_id ? { ...task_item, section: "todo", status: "Pend.", completed: false } : task_item
+            task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: "unsectioned", status: "Pend.", completed: false } : task_item
         )));
     }
 
@@ -4013,9 +4167,7 @@ function TaskAppContent() {
         const by_search = get_filtered_tasks(tasks, search_query);
         const by_filters = get_tasks_matching_active_filters(by_search, active_filters);
         const scoped_tasks = task_scope === "mine"
-            ? by_filters.filter((task_item) => (
-                task_item.assignee_id === current_user_id || (!real && task_item.collaborator_ids?.includes(current_user_id))
-            ))
+            ? by_filters.filter((task_item) => isMyTask(task_item, current_user_id))
             : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
         return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope === "mine" ? { ...task, section: "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
@@ -4585,11 +4737,7 @@ function TaskAppContent() {
     // Simulates picking a file from the "Agregar mas" dropzone in the
     // "Editar tarea" modal (same placeholder behavior as the create modal).
     function handle_add_edit_attachment() {
-        if (real) return;
-        set_edit_attachments((current_attachments) => [
-            ...current_attachments,
-            { id: `edit_file_${Date.now()}`, name: `archivo_${current_attachments.length + 1}.pdf` }
-        ]);
+        attachment_later();
     }
 
     function handle_remove_edit_attachment(attachment_id) {
@@ -4600,11 +4748,15 @@ function TaskAppContent() {
     // Saves the "Editar tarea" draft, optimistically and through the backend.
     function handle_save_task_edits(event, task_id) {
         event.preventDefault();
-        if (real) { mutate(() => saveTaskDraft({ ...edit_draft, attachments: edit_attachments }, data, data.tasks.find(item => item.id === task_id)), () => set_active_modal(null)); return; }
+        const title = (edit_draft.title || "").trim();
+        if (!title) return set_api_error("El título de la tarea es obligatorio.");
+        if (title.length > 220) return set_api_error("El título de la tarea no puede superar 220 caracteres.");
+        const validated_draft = { ...edit_draft, title };
+        if (real) { mutate(() => saveTaskDraft({ ...validated_draft, attachments: edit_attachments }, data, data.tasks.find(item => item.id === task_id)), () => set_active_modal(null)); return; }
 
-        const due_label = edit_draft.due_day ? edit_draft.due_label || `${edit_draft.due_day} sep` : "";
-        const completed = edit_draft.section === "completed";
-        const updated_fields = { ...edit_draft, due_label, completed };
+        const due_label = validated_draft.due_day ? validated_draft.due_label || `${validated_draft.due_day} sep` : "";
+        const completed = validated_draft.section === "completed";
+        const updated_fields = { ...validated_draft, due_label, completed };
 
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.id === task_id ? { ...task_item, ...updated_fields } : task_item
@@ -4677,7 +4829,7 @@ function TaskAppContent() {
         }
 
         if (active_modal === "share") {
-            return render_share_modal(set_active_modal, selected_project, () => handle_project_menu_toggle(selected_project_id, "edit"), set_api_error);
+            return <ShareProjectModal project={selected_project} pending={pending} onClose={() => set_active_modal(null)} onSave={handle_save_project_members} onError={set_api_error} />;
         }
 
         if (active_modal === "project") {
@@ -4686,14 +4838,12 @@ function TaskAppContent() {
                 handle_create_project,
                 project_color,
                 project_people_ids,
-                project_people_query,
                 set_active_modal: (modal_id) => {
                     if (modal_id === null) set_editing_project_id(null);
                     set_active_modal(modal_id);
                 },
                 set_project_color,
-                set_project_people_query,
-                toggle_project_person
+                set_project_people_ids
             });
         }
 
@@ -4726,9 +4876,9 @@ function TaskAppContent() {
     // Returns the full shell with the focused tasks module.
     return (
         <AppShell
-            sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open) } } }}
+            sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => handle_module_change("projects"), set_active_modal, recent_project_ids.map(id => projects.find(project => project.id === id)).filter(Boolean), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, active_module === "projects") } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
-            topBarProps={{ searchPlaceholder: "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
+            topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
             overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}</>}
         >
@@ -4750,7 +4900,17 @@ function TaskAppContent() {
                     parseDueDate={parse_due_date}
                     projects={projects}
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
-                /> : active_module === "tasks" ? render_tasks_module({
+                /> : active_module === "projects" ? render_projects_module({
+                    projects,
+                    selected_project_id,
+                    tasks: stored_tasks,
+                    search_query,
+                    onCreate: () => { set_editing_project_id(null); set_project_color(project_color_options[0]); set_project_people_ids([]); set_active_modal("project"); },
+                    onOpen: handle_project_select,
+                    onEdit: id => handle_project_menu_toggle(id, "edit"),
+                    onShare: handle_share_project,
+                    onDelete: id => handle_project_menu_toggle(id, "delete")
+                }) : active_module === "tasks" ? render_tasks_module({
                     mobile_actions: { onEdit: handle_open_edit_task, onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
                     active_quick_popover,
@@ -4773,6 +4933,7 @@ function TaskAppContent() {
                     handle_delete_task: handle_request_delete_task,
                     handle_detail_resize_key_down,
                     handle_detail_resize_start,
+                    handle_drag_end,
                     handle_drag_start,
                     handle_open_edit_task,
                     handle_quick_change,

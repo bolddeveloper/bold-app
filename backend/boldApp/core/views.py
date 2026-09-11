@@ -112,7 +112,7 @@ class PositionAssignmentViewSet(viewsets.ModelViewSet):
             is_active=True,
             released_at__isnull=True,
             employee__is_active=True,
-        ).select_related("employee", "position__unit", "position__job_role")
+        ).select_related("employee__user_account", "position__unit", "position__job_role")
         page = self.paginate_queryset(queryset)
         serializer = AssignmentDirectorySerializer(page, many=True)
         return self.get_paginated_response(serializer.data)

@@ -104,7 +104,7 @@ function render_sidebar(props) {
 
             <div className="sidebar_scroll_area">
                 <div className="sidebar_section">
-                    <p className="sidebar_label">NAVEGACION</p>
+                    <p className="sidebar_label" title="Departamento actual">{current_user?.unit_name || "NAVEGACION"}</p>
                     <nav className="navigation_list" aria-label="Principal">
                         {primary_navigation_items.map((item) => {
                             const slot = navigationSlots[item.id];

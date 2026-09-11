@@ -60,8 +60,46 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(response.data["count"], 3)
         self.assertEqual(
             set(response.data["results"][0]),
-            {"id", "employee", "employee_name", "unit", "unit_name", "job_role", "job_role_title"},
+            {"id", "employee", "employee_name", "employee_email", "unit", "unit_name", "job_role", "job_role_title"},
         )
+
+    def test_project_dates_validation_duplicate_names_and_empty_sections(self):
+        payload = {
+            "unit": str(self.marketing.id),
+            "owner_assignment": str(self.ana_assignment.id),
+            "name": "  Proyecto nuevo  ",
+            "status": "Activo",
+            "start_date": "2026-09-11",
+            "end_date": "2026-09-30",
+        }
+        first = self.client.post("/api/v2/projects/", payload, format="json")
+        second = self.client.post("/api/v2/projects/", payload, format="json")
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(first.data["name"], "Proyecto nuevo")
+        self.assertEqual(second.status_code, 201, second.data)
+        self.assertEqual(second.data["name"], "Proyecto nuevo (2)")
+        self.assertFalse(Section.objects.filter(project_id=first.data["id"]).exists())
+
+        payload["name"] = "Rango incorrecto"
+        payload["start_date"], payload["end_date"] = "2026-10-01", "2026-09-30"
+        invalid = self.client.post("/api/v2/projects/", payload, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("end_date", invalid.data)
+
+    def test_section_delete_unsections_tasks_and_task_titles_are_trimmed(self):
+        response = self.client.post("/api/v2/tasks/", {**self.task_payload(), "title": "  Tarea limpia  "}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        task = Task.objects.get(id=response.data["id"])
+        link = TaskProject.objects.get(task=task)
+        self.assertEqual(task.title, "Tarea limpia")
+        deleted = self.client.delete(f"/api/v2/sections/{self.ops_section.id}/")
+        self.assertEqual(deleted.status_code, 204)
+        link.refresh_from_db()
+        self.assertIsNone(link.section_id)
+
+        invalid = self.client.post("/api/v2/tasks/", {**self.task_payload(), "section": None, "title": "   "}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("title", invalid.data)
 
     def test_webhook_secret_is_only_returned_when_endpoint_is_created(self):
         created = self.client.post(

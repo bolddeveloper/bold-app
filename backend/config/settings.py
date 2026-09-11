@@ -171,9 +171,6 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
     "CELERY_TASK_ALWAYS_EAGER",
     "true" if "REDIS_URL" not in os.environ else "false",
 ).lower() == "true"
-# En desarrollo los webhooks se ejecutan dentro del proceso de Django. Una
-# integracion externa caida debe quedar registrada como entrega fallida, pero
-# nunca convertir en 500 la operacion principal que genero el evento.
 CELERY_TASK_EAGER_PROPAGATES = False
 
 

@@ -21,6 +21,8 @@ class Project(UUIDPrimaryKeyModel, SoftDeleteModel):
     description = models.TextField(null=True, blank=True)
     color_hex = models.CharField(max_length=7, null=True, blank=True)
     status = models.CharField(max_length=30)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     sensitivity_level = models.CharField(max_length=20, null=True, blank=True)
     is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

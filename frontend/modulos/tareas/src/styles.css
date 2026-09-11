@@ -103,6 +103,20 @@ button {
     margin-top: 10px;
 }
 
+.projects_index_button {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+}
+
+.projects_index_button:hover,
+.projects_index_button:focus-visible {
+    color: #ffffff;
+}
+
 .sidebar_add_button {
     display: inline-flex;
     width: 30px;
@@ -580,6 +594,17 @@ button {
 
 .board_card[data-dragging="true"] {
     opacity: 0.55;
+}
+
+.task_row[data-dragging="true"] {
+    opacity: 0.5;
+    cursor: grabbing !important;
+}
+
+.task_group_drop_ready .task_group_header {
+    outline: 2px dashed rgba(239, 31, 45, .45);
+    outline-offset: -3px;
+    background: rgba(239, 31, 45, .06);
 }
 
 .text_tool_button_active {
@@ -8807,3 +8832,236 @@ button {
 .project_title_group { flex: 1 1 220px; min-width: 0; }
 .project_actions { flex-wrap: wrap; }
 .modal_scroll_fields { display: contents; }
+
+/* Dedicated projects module and compact task controls. */
+.tasks_module > .task_project_header .breadcrumb_text { display: none; }
+.projects_module { padding: 32px; }
+.projects_module_header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.projects_module_header h1 { margin: 4px 0; font-size: 30px; }
+.projects_module_header p { margin: 0; color: var(--bold_muted); }
+.projects_grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.project_summary_card { display: grid; gap: 14px; padding: 20px; border: 1px solid var(--bold_line); border-radius: 16px; background: var(--bold_surface); }
+.project_summary_title { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.project_summary_title button { overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 800; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.project_summary_title > span:last-child { padding: 4px 8px; border-radius: 999px; background: #edf7ef; color: #28783d; font-size: 11px; font-weight: 800; }
+.project_summary_card p, .project_summary_card small { margin: 0; color: var(--bold_muted); }
+.project_summary_progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+.project_summary_progress > span { height: 7px; overflow: hidden; border-radius: 999px; background: #ece9e5; }
+.project_summary_progress i { display: block; height: 100%; border-radius: inherit; background: var(--bold_red); }
+.project_summary_card footer { display: flex; flex-wrap: wrap; gap: 7px; }
+.project_summary_card footer button { min-height: 32px; padding: 5px 9px; border: 1px solid var(--bold_line); border-radius: 7px; background: transparent; color: inherit; }
+.view_switch_toggle .toggle_side, .board_section_actions button { min-width: 30px; min-height: 30px; }
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select) { appearance: auto; border-color: var(--bold_line); transition: border-color 160ms ease, box-shadow 160ms ease; }
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select):hover { border-color: #a9a39c; }
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select):focus { border-color: var(--bold_red); box-shadow: 0 0 0 3px rgba(239, 31, 45, .12); }
+.project_person_chip small { display: block; font-size: 10px; opacity: .72; }
+@media (max-width: 760px) { .projects_module { padding: 18px 12px; } .projects_module_header { align-items: stretch; flex-direction: column; } .projects_module_header .primary_button { width: 100%; } }
+
+/* Stronger project selection and cards. */
+.project_item_wrap { border-radius: 11px; }
+.project_item { border: 1px solid transparent; }
+.project_item_wrap:hover .project_item { border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .08); }
+.project_item_active,
+.project_item_wrap:hover .project_item_active {
+    border-color: rgba(239, 31, 45, .55);
+    background: linear-gradient(90deg, rgba(239, 31, 45, .25), rgba(255, 255, 255, .1));
+    box-shadow: inset 3px 0 0 var(--bold_red), 0 5px 14px rgba(0, 0, 0, .18);
+    color: #ffffff;
+}
+.project_item_active .project_dot { box-shadow: 0 0 0 3px rgba(255, 255, 255, .18); }
+.project_item_wrap_active .project_more_button { background: rgba(255, 255, 255, .1); color: #ffffff; }
+
+.project_summary_card {
+    position: relative;
+    overflow: hidden;
+    border-color: #ded9d3;
+    box-shadow: 0 8px 22px rgba(32, 36, 43, .07);
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.project_summary_card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: #d8d3cd; }
+.project_summary_card:hover { transform: translateY(-3px); border-color: #c9c1b9; box-shadow: 0 14px 32px rgba(32, 36, 43, .12); }
+.project_summary_card_active { border-color: rgba(239, 31, 45, .48); box-shadow: 0 12px 30px rgba(239, 31, 45, .12); }
+.project_summary_card_active::before { background: var(--bold_red); }
+.project_summary_title button { min-height: 34px; padding: 5px 8px; border-radius: 8px; cursor: pointer; }
+.project_summary_title button:hover,
+.project_summary_title button:focus-visible { background: rgba(239, 31, 45, .08); color: var(--bold_red); }
+
+/* Date fields open from the whole control. */
+:is(.bold_modal_window, .project_create_modal, .native_date_picker) input[type="date"] { cursor: pointer; }
+:is(.bold_modal_window, .project_create_modal, .native_date_picker) input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+
+/* Consistent dropdown surfaces across the tasks module. */
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select, .inbox_dropdown select, .sort_menu select, .custom_datepicker_nav select) {
+    min-height: 40px;
+    padding: 7px 34px 7px 12px;
+    border: 1px solid #d9d5d0;
+    border-radius: 10px;
+    background-color: var(--bold_surface, #ffffff);
+    color: inherit;
+    font-family: inherit;
+    font-weight: 650;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(25, 29, 35, .04);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select, .inbox_dropdown select, .sort_menu select, .custom_datepicker_nav select):hover { border-color: #aaa39b; background-color: #fbfaf9; }
+:is(.bold_select_input, .project_create_body select, .mobile_task_action_list select, .inbox_dropdown select, .sort_menu select, .custom_datepicker_nav select):focus-visible { outline: 0; border-color: var(--bold_red); box-shadow: 0 0 0 3px rgba(239, 31, 45, .13); }
+
+:is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown) {
+    overflow: hidden;
+    border: 1px solid #ded9d3;
+    border-radius: 13px;
+    background: var(--bold_surface, #ffffff);
+    box-shadow: 0 16px 38px rgba(25, 29, 35, .16);
+}
+:is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown) button { transition: background-color 140ms ease, color 140ms ease, transform 140ms ease; }
+:is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown) button:hover { background: #f7f4f1; }
+
+/* Custom selects: the open list keeps Bold styling instead of the OS menu. */
+.task_select {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    color: #252a34;
+}
+
+.task_select_trigger {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 11px;
+    border: 1px solid #d9d5d0;
+    border-radius: 10px;
+    background: #ffffff;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(25, 29, 35, .04);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.task_select_trigger:hover { border-color: #aaa39b; background: #fbfaf9; }
+.task_select_trigger:focus-visible,
+.task_select_open .task_select_trigger { outline: 0; border-color: var(--bold_red); box-shadow: 0 0 0 3px rgba(239, 31, 45, .13); }
+.task_select_trigger:disabled { cursor: not-allowed; opacity: .55; background: #f1efec; }
+.task_select_trigger > svg { color: #69717e; transition: transform 150ms ease; }
+.task_select_open .task_select_trigger > svg { transform: rotate(180deg); }
+
+.task_select_text { min-width: 0; display: grid; gap: 2px; }
+.task_select_text strong { overflow: hidden; color: inherit; font-size: 13px; font-weight: 750; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.task_select_text small { overflow: hidden; color: #7b8492; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.task_select_dot { width: 10px; height: 10px; border-radius: 50%; background: var(--select_color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--select_color) 16%, transparent); }
+.task_select_icon { display: inline-flex; color: #69717e; }
+.task_select_badge { display: inline-grid; width: 25px; height: 25px; place-items: center; border-radius: 7px; background: #ef3340; color: #fff; font-size: 12px; font-weight: 900; }
+
+.task_select_menu {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 0;
+    z-index: 2100;
+    display: grid;
+    gap: 3px;
+    width: max(100%, 210px);
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid #ded9d3;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(25, 29, 35, .2);
+    animation: task_select_enter 140ms ease-out;
+}
+
+.task_select_option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 38px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #303641;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.task_select_option:hover,
+.task_select_option_focused { background: #f6f3f0; }
+.task_select_option[aria-selected="true"] { background: #fff0f1; color: #b91c2a; }
+.task_select_option:disabled { cursor: not-allowed; opacity: .45; }
+.task_select_check { display: inline-flex; color: var(--bold_red); }
+.task_select_priority .task_select_option[aria-selected="true"],
+.task_select_status .task_select_option[aria-selected="true"] { box-shadow: inset 3px 0 0 var(--select_color, var(--bold_red)); }
+.task_select_compact { width: 128px; }
+.task_select_compact .task_select_menu { width: 100%; min-width: 128px; }
+.custom_datepicker_nav .task_select { width: auto; min-width: 0; flex: 1 1 0; }
+.custom_datepicker_nav .task_select_trigger { min-height: 32px; padding: 4px 7px; }
+.custom_datepicker_nav .task_select_menu { min-width: 110px; }
+@keyframes task_select_enter {
+    from { opacity: 0; transform: translateY(-5px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Projects entry behaves like a real module button. */
+.projects_heading { gap: 8px; }
+.projects_index_button {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    min-height: 46px;
+    flex: 1 1 auto;
+    padding: 7px 10px;
+    border: 1px solid rgba(255, 255, 255, .11);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, .055);
+    color: rgba(255, 255, 255, .88);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.projects_index_button > span:nth-child(2) { min-width: 0; display: grid; }
+.projects_index_button strong { overflow: hidden; font-size: 12px; letter-spacing: .8px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.projects_index_button small { color: rgba(255, 255, 255, .48); font-size: 10px; }
+.projects_index_icon { display: inline-grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; background: rgba(239, 31, 45, .2); color: #ff6570; }
+.projects_index_button:hover,
+.projects_index_button:focus-visible { outline: 0; border-color: rgba(239, 31, 45, .6); background: rgba(255, 255, 255, .1); transform: translateY(-1px); }
+.projects_index_button_active { border-color: rgba(239, 31, 45, .72); background: linear-gradient(100deg, rgba(239, 31, 45, .28), rgba(255, 255, 255, .08)); box-shadow: inset 3px 0 0 var(--bold_red); }
+
+/* Clear hierarchy for project actions. */
+.project_summary_card .project_summary_actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.project_summary_card .project_summary_actions button { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: 5px; padding: 4px 8px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease; }
+.project_summary_card .project_action_primary { border-color: var(--bold_red); background: var(--bold_red); color: #ffffff; box-shadow: 0 5px 12px rgba(239, 31, 45, .2); }
+.project_summary_card .project_action_primary:hover { background: #d91d29; transform: translateY(-1px); }
+.project_summary_card .project_action_secondary { border-color: #d8d3cd; background: #ffffff; color: #3c424d; }
+.project_summary_card .project_action_secondary:hover { border-color: #aaa39b; background: #f7f5f2; }
+.project_summary_card .project_action_danger { border-color: #f1c5c9; background: #fff5f5; color: #c81e2a; }
+.project_summary_card .project_action_danger:hover { border-color: #e78991; background: #ffe7e9; }
+
+.theme_dark .task_select_trigger,
+.theme_dark .task_select_menu,
+.theme_dark .task_select_option,
+.theme_dark .project_summary_card .project_action_secondary { border-color: #444b57; background: #252a32; color: #f4f5f7; }
+.theme_dark .task_select_option:hover,
+.theme_dark .task_select_option_focused { background: #343a44; }
+.theme_dark .task_select_option[aria-selected="true"] { background: rgba(239, 31, 45, .18); color: #ff8790; }
+.theme_dark .task_select_text small { color: #aeb5c0; }
+
+@media (max-width: 760px) {
+    .task_select_menu { position: fixed; inset: auto 12px 12px; width: auto; max-height: min(52vh, 360px); padding: 9px; border-radius: 16px; }
+    .task_select_option { min-height: 46px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .task_select_menu,
+    .projects_index_button,
+    .project_summary_card .project_summary_actions button { animation: none; transition: none; }
+}
