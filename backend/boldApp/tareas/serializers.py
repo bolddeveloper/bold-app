@@ -34,6 +34,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = "__all__"
         read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at"]
+        validators = []
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("El nombre del proyecto es obligatorio.")
+        return value
 
     def validate(self, attrs):
         unit = attrs.get("unit") or getattr(self.instance, "unit", None)
@@ -43,7 +50,28 @@ class ProjectSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"owner_assignment": "La asignacion propietaria debe pertenecer a la unidad del proyecto."}
             )
+        start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "La fecha final no puede ser anterior a la fecha inicial."})
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        if self.instance and unit and name and Project.objects.filter(unit=unit, name=name).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError({"name": "Ya existe un proyecto con este nombre en el departamento."})
         return attrs
+
+    def create(self, validated_data):
+        base_name = validated_data["name"]
+        unit = validated_data["unit"]
+        names = set(Project.objects.filter(unit=unit).values_list("name", flat=True))
+        if base_name in names:
+            suffix = 2
+            candidate = ""
+            while not candidate or candidate in names:
+                marker = f" ({suffix})"
+                candidate = f"{base_name[:180 - len(marker)]}{marker}"
+                suffix += 1
+            validated_data["name"] = candidate
+        return super().create(validated_data)
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):
@@ -95,6 +123,12 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = "__all__"
         read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at"]
+
+    def validate_title(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("El titulo de la tarea es obligatorio.")
+        return value
 
     def validate(self, attrs):
         unit = attrs.get("unit") or getattr(self.instance, "unit", None)

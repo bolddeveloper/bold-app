@@ -1,5 +1,5 @@
 export const is_using_real_backend = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true";
-export const api_base_url = import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+export const api_base_url = (import.meta.env?.DEV && globalThis.location?.origin) || import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export class ApiError extends Error {
     constructor(status, details) {

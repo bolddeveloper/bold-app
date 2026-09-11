@@ -171,7 +171,7 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
     "CELERY_TASK_ALWAYS_EAGER",
     "true" if "REDIS_URL" not in os.environ else "false",
 ).lower() == "true"
-CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_EAGER_PROPAGATES = False
 
 
 # Define la capa de canales de Django Channels (push en vivo por WebSocket).

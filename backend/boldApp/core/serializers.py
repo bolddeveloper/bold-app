@@ -84,6 +84,7 @@ class PositionAssignmentSerializer(serializers.ModelSerializer):
 
 class AssignmentDirectorySerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_email = serializers.SerializerMethodField()
     unit = serializers.UUIDField(source="position.unit_id", read_only=True)
     unit_name = serializers.CharField(source="position.unit.name", read_only=True)
     job_role = serializers.UUIDField(source="position.job_role_id", read_only=True)
@@ -91,7 +92,11 @@ class AssignmentDirectorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PositionAssignment
-        fields = ["id", "employee", "employee_name", "unit", "unit_name", "job_role", "job_role_title"]
+        fields = ["id", "employee", "employee_name", "employee_email", "unit", "unit_name", "job_role", "job_role_title"]
+
+    def get_employee_email(self, assignment):
+        account = getattr(assignment.employee, "user_account", None)
+        return account.email if account and account.is_active else ""
 
 
 # Define los serializers de permisos base.

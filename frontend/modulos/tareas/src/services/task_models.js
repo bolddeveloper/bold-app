@@ -9,6 +9,27 @@ export function toISODate(year, month, day) {
     const value = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return dateFromISO(value) ? value : null;
 }
+export function validateProjectDraft(name, startDate, endDate) {
+    if (!name.trim()) return "El nombre del proyecto es obligatorio.";
+    if (name.trim().length > 180) return "El nombre del proyecto no puede superar 180 caracteres.";
+    if ((startDate && !dateFromISO(startDate)) || (endDate && !dateFromISO(endDate))) return "Ingresa fechas válidas.";
+    if (startDate && endDate && startDate > endDate) return "La fecha final no puede ser anterior a la fecha inicial.";
+    return "";
+}
+export function uniqueProjectName(name, existingNames) {
+    let candidate = name.trim();
+    const names = new Set(existingNames);
+    for (let suffix = 2; names.has(candidate); suffix += 1) {
+        const marker = ` (${suffix})`;
+        candidate = `${name.trim().slice(0, 180 - marker.length)}${marker}`;
+    }
+    return candidate;
+}
+export function recentProjectIds(historyIds, projectIds, openedId = null, limit = 4) {
+    const available = new Set(projectIds);
+    return [...new Set([openedId, ...historyIds, ...projectIds].filter(id => id && available.has(id)))].slice(0, limit);
+}
+export const isMyTask = (task, assignmentId) => task.assignee_id === assignmentId || task.collaborator_ids?.includes(assignmentId);
 export const normalizeProject = dto => ({ ...dto, label: dto.name, color: dto.color_hex || "#ef1f2d", unitId: dto.unit });
 
 export const normalizeStatus = dto => ({ ...dto, label: dto.name, isFinal: dto.is_final, unitId: dto.unit });
