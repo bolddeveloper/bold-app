@@ -626,6 +626,23 @@
     border-color: #1e2229;
 }
 
+.theme_dark .notification_item {
+    color: #edf0f4;
+}
+
+.theme_dark .notification_item_unread {
+    background: #30282b;
+}
+
+.theme_dark .notification_title {
+    color: #f4f6f8;
+}
+
+.theme_dark .notification_text,
+.theme_dark .notification_time {
+    color: #a9b0bb;
+}
+
 .theme_dark progress::-webkit-progress-bar {
     background: #383e48;
 }
@@ -775,6 +792,12 @@
         width: min(440px, calc(100vw - 32px));
         border-radius: 18px;
         box-shadow: -16px 0 44px rgba(25, 28, 34, .2);
+    }
+
+    .theme_dark .sidebar_shell .session_toolbar select {
+        border-color: #424955;
+        background: #292e37;
+        color: #edf0f4;
     }
 }
 
