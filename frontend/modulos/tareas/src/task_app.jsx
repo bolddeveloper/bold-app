@@ -3,6 +3,7 @@ import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
 import { Component as react_component, createElement as create_element, useEffect as use_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import Swal from "sweetalert2";
+import { createPortal } from "react-dom";
 import {
     ArrowUp as arrow_up_icon,
     Archive as archive_icon,
@@ -241,9 +242,11 @@ function merge_saved_comments(tasks) {
 }
 
 
-// Finds a project by id for labels and color rendering.
+let visible_project_items = project_items;
+
+// Finds a project by id for labels and identity rendering.
 function get_project(project_id) {
-    return project_items.find((project_item) => project_item.id === project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
+    return visible_project_items.find((project_item) => project_item.id === project_id) || visible_project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
 }
 
 
@@ -512,7 +515,7 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
     function render_option(option, trigger = false) {
         const color = option.color || select_color(variant, option.label);
         return <>
-            {option.member ? render_avatar(option.member, trigger ? "avatar_tiny" : "avatar_small") : color ? <span className="task_select_dot" style={{ "--select_color": color }} /> : option.badge ? <span className="task_select_badge">{option.badge}</span> : option.icon ? <span className="task_select_icon">{render_icon(option.icon, 15)}</span> : null}
+            {option.member ? render_avatar(option.member, trigger ? "avatar_tiny" : "avatar_small") : option.image ? <img className="task_select_project_image" src={option.image} alt="" /> : color ? <span className="task_select_dot" style={{ "--select_color": color }} /> : option.badge ? <span className="task_select_badge">{option.badge}</span> : option.icon ? <span className="task_select_icon">{render_icon(option.icon, 15)}</span> : null}
             <span className="task_select_text"><strong>{option.label}</strong>{!trigger && option.description ? <small>{option.description}</small> : null}</span>
         </>;
     }
@@ -532,12 +535,57 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
     </div>;
 }
 
+function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_down, on_resize_start, width }) {
+    const [closing, set_closing] = use_state(false);
+    const close_timer = use_ref(null);
+    const request_close = () => {
+        if (closing) return;
+        set_closing(true);
+        close_timer.current = window.setTimeout(on_close, 200);
+    };
+    useDialog(true, ".task_drawer_panel", request_close);
+    use_effect(() => () => window.clearTimeout(close_timer.current), []);
+
+    return createPortal(<div className={`task_drawer_overlay ${closing ? "task_drawer_closing" : ""}`} onPointerDown={event => { if (event.target === event.currentTarget) request_close(); }}>
+        <section className={`task_drawer_panel ${class_name}`} data-task-drawer="true" role="dialog" aria-modal="true" aria-label={label} style={{ "--task_drawer_width": `${width}px` }} onClickCapture={event => { if (event.target.closest("[data-drawer-close]")) { event.preventDefault(); event.stopPropagation(); request_close(); } }}>
+            {children}
+            <div className="task_drawer_resizer" role="separator" aria-label="Cambiar ancho del panel" aria-orientation="vertical" aria-valuemin={360} aria-valuemax={Math.round(window.innerWidth * .7)} aria-valuenow={width} tabIndex={0} onKeyDown={on_resize_key_down} onPointerDown={on_resize_start} />
+        </section>
+    </div>, document.body);
+}
+
+function crop_project_avatar(file) {
+    return new Promise((resolve, reject) => {
+        if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return reject(new Error("Selecciona una imagen PNG, JPEG o WebP."));
+        if (file.size > 10 * 1024 * 1024) return reject(new Error("La imagen no puede superar 10 MB."));
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+        reader.onload = () => {
+            const image = new Image();
+            image.onerror = () => reject(new Error("La imagen está dañada o no es compatible."));
+            image.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = 256; canvas.height = 256;
+                const side = Math.min(image.naturalWidth, image.naturalHeight);
+                canvas.getContext("2d").drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+                const data_url = canvas.toDataURL("image/webp", .82);
+                if (Math.ceil((data_url.length - data_url.indexOf(",") - 1) * .75) > 300 * 1024) return reject(new Error("La imagen comprimida supera 300 KB."));
+                resolve(data_url);
+            };
+            image.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 
 // Renders a colored project dot.
-function render_project_dot(color) {
-    return (
-        <span className="project_dot" style={{ "--project_color": color }}></span>
-    );
+function render_project_dot(project_or_color, size_class = "") {
+    const project = typeof project_or_color === "object" ? project_or_color : null;
+    const color = project?.color || project_or_color;
+    return project?.avatar_data_url
+        ? <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} role="img" aria-label={`Imagen de ${project.label || "proyecto"}`}><img src={project.avatar_data_url} alt="" onError={event => event.currentTarget.remove()} /></span>
+        : <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} aria-hidden="true" />;
 }
 
 
@@ -554,7 +602,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
             type="button"
             onClick={() => handle_project_select(project_item.id)}
         >
-            {render_project_dot(project_item.color)}
+            {render_project_dot(project_item)}
             <span>{project_item.label}</span>
             {is_active ? (
                 <span className="project_more">•••</span>
@@ -875,7 +923,7 @@ function render_inbox_module(props) {
                                         <label className="filter_group_label">Tipo</label>
                                         <TaskSelect aria_label="Tipo" value={inbox_filters.type} options={inbox_type_options.map(option => ({ value: option.id, label: option.label }))} on_change={value => set_inbox_filters(current => ({ ...current, type: value }))} />
                                         <label className="filter_group_label">Proyecto</label>
-                                        <TaskSelect aria_label="Proyecto" variant="project" value={inbox_filters.project_id} options={[{ value: "all", label: "Todos los proyectos", icon: folder_icon }, ...project_items.map(project => ({ value: project.id, label: project.label, color: project.color }))]} on_change={value => set_inbox_filters(current => ({ ...current, project_id: value }))} />
+                                        <TaskSelect aria_label="Proyecto" variant="project" value={inbox_filters.project_id} options={[{ value: "all", label: "Todos los proyectos", icon: folder_icon }, ...project_items.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))]} on_change={value => set_inbox_filters(current => ({ ...current, project_id: value }))} />
                                         <button className="link_button" type="button" onClick={() => set_inbox_filters((current) => ({ ...current, state: "all", type: "all", project_id: "all" }))}>
                                             Limpiar filtros
                                         </button>
@@ -999,7 +1047,7 @@ function render_inbox_module(props) {
                                         <small>Fecha limite</small>
                                         <strong>{selected_activity.task?.due_label || "Sin fecha"}</strong>
                                     </div>
-                                    <span>{render_project_dot(selected_activity.project.color)}</span>
+                                    <span>{render_project_dot(selected_activity.project)}</span>
                                     <div>
                                         <small>Proyecto</small>
                                         <strong>{selected_activity.project.label}</strong>
@@ -1405,7 +1453,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                     >
                         {render_icon(trash_icon, 15)}
                     </button>
-                    <button type="button" className="detail_action_btn" title="Cerrar panel" onClick={on_close}>
+                    <button type="button" className="detail_action_btn" title="Cerrar panel" data-drawer-close onClick={on_close}>
                         {render_icon(x_icon, 16)}
                     </button>
                 </div>
@@ -1453,7 +1501,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
 
                 <span className="meta_label">Proyecto</span>
                 <span className="meta_value">
-                    {render_project_dot(project_item?.color)}
+                    {render_project_dot(project_item)}
                     {project_item?.label || "Sin proyecto"}
                 </span>
 
@@ -1731,7 +1779,7 @@ function AttachmentLinks({ attachments, onChange }) {
     return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}<button type="button" className="attachment_dropzone" onClick={attachment_later}>{render_icon(paperclip_icon, 18)}<span>Agregar archivos adjuntos</span></button></div>;
 }
 
-function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
+function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
     const real = is_using_real_backend();
     if (real) { board_columns = [...data.sections.filter(item => item.projectId === edit_draft.project_id), { id: "unsectioned", label: "Sin sección" }]; status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
@@ -1743,8 +1791,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
         : (edit_draft.assignee_id ? [edit_draft.assignee_id] : []);
 
     return (
-        <div className="bold_modal_backdrop" onClick={on_cancel}>
-            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Editar tarea">
+        <TaskDrawer class_name="bold_modal_window" label="Editar tarea" on_close={on_cancel} {...drawer}>
                 <div className="bold_modal_header">
                     <div>
                         <p className="modal_eyebrow">EDITAR TAREA</p>
@@ -1752,7 +1799,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                             {edit_draft.title || "Tarea sin nombre"}
                         </h2>
                     </div>
-                    <button type="button" className="modal_close_btn" onClick={on_cancel} aria-label="Cerrar modal">
+                    <button type="button" className="modal_close_btn" data-drawer-close onClick={on_cancel} aria-label="Cerrar modal">
                         {render_icon(x_icon, 20)}
                     </button>
                 </div>
@@ -1777,7 +1824,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <TaskSelect aria_label="Proyecto" variant="project" value={edit_draft.project_id || ""} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color }))} on_change={value => handle_edit_field_change("project_id", value)} />
+                            <TaskSelect aria_label="Proyecto" variant="project" value={edit_draft.project_id || ""} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))} on_change={value => handle_edit_field_change("project_id", value)} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
@@ -1913,18 +1960,17 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                     </>}
                     </div>
                     <footer className="bold_modal_footer">
-                        <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
+                        <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
                         <button type="submit" className="primary_button" disabled={pending || (real && !edit_draft.status)}>Guardar cambios</button>
                     </footer>
                 </form>
-            </div>
-        </div>
+        </TaskDrawer>
     );
 }
 
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
+function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
     const real = is_using_real_backend();
     const [unitId, set_unitId] = use_state(activeUnit || "");
     const [assignee_id, set_assignee_id] = use_state("");
@@ -1976,14 +2022,13 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
     }
 
     return (
-        <div className="bold_modal_backdrop" onClick={on_cancel}>
-            <div className="bold_modal_window" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Nueva tarea">
+        <TaskDrawer class_name="bold_modal_window" label="Nueva tarea" on_close={on_cancel} {...drawer}>
                 <div className="bold_modal_header">
                     <div>
                         <p className="modal_eyebrow">NUEVA TAREA</p>
                         <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0, color: "#111827" }}>Crear nueva tarea</h2>
                     </div>
-                    <button type="button" className="modal_close_btn" onClick={on_cancel} aria-label="Cerrar modal">
+                    <button type="button" className="modal_close_btn" data-drawer-close onClick={on_cancel} aria-label="Cerrar modal">
                         {render_icon(x_icon, 20)}
                     </button>
                 </div>
@@ -2007,7 +2052,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color }))} on_change={set_project_id} />
+                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))} on_change={set_project_id} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
@@ -2111,12 +2156,11 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     </>}
                     </div>
                     <footer className="bold_modal_footer">
-                        <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
+                        <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
                         <button type="submit" className="primary_button" disabled={pending || !title.trim() || (real && !status)}>Crear tarea</button>
                     </footer>
                 </form>
-            </div>
-        </div>
+        </TaskDrawer>
     );
 }
 
@@ -2127,6 +2171,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
 function render_tasks_module(props) {
     const {
         active_filters,
+        active_modal,
         active_quick_popover,
         active_section = "tasks",
         active_task_tool,
@@ -2397,7 +2442,7 @@ function render_tasks_module(props) {
                         handle_task_select={handle_task_select}
                         handle_toggle_subtask={handle_toggle_subtask}
                         handle_toggle_task={handle_toggle_task}
-                        selected_task={selected_task}
+                        selected_task={["task", "edit_task", "project"].includes(active_modal) ? null : selected_task}
                         task_detail_width={task_detail_width}
                     />
                 </div>
@@ -2418,7 +2463,7 @@ function render_tasks_module(props) {
                         handle_task_select={handle_task_select}
                         handle_toggle_subtask={handle_toggle_subtask}
                         handle_toggle_task={handle_toggle_task}
-                        selected_task={selected_task}
+                        selected_task={["task", "edit_task", "project"].includes(active_modal) ? null : selected_task}
                         show_comments={false}
                         task_detail_width={task_detail_width}
                     />
@@ -2859,7 +2904,7 @@ function render_task_row(props) {
 
             {visible_fields.project ? (
                 <span className="task_project_cell">
-                    {render_project_dot(project_item.color)}
+                    {render_project_dot(project_item)}
                     {project_item.label}
                 </span>
             ) : null}
@@ -3131,7 +3176,7 @@ function render_board_card(props) {
             style={{ cursor: "pointer" }}
         >
             <div className="board_card_topline">
-                {render_project_dot(project_item.color)}
+                {render_project_dot(project_item)}
                 <span>{project_item.label}</span>
                 <button
                     className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
@@ -3429,19 +3474,7 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
     if (!selected_task) return null;
 
     return (
-        <>
-            <div
-                className="task_detail_resizer"
-                role="separator"
-                aria-label="Cambiar ancho del detalle de tarea"
-                aria-orientation="vertical"
-                aria-valuemin={320}
-                aria-valuenow={task_detail_width}
-                tabIndex={0}
-                onKeyDown={handle_detail_resize_key_down}
-                onPointerDown={handle_detail_resize_start}
-            />
-            <ResponsiveOverlay query="(max-width: 1023px)" onClose={() => handle_task_select(null)}><div className="task_detail_sidebar" role="dialog" aria-label="Detalle de tarea" style={{ width: `min(${task_detail_width}px, 50%)` }}>
+        <TaskDrawer class_name="task_detail_sidebar" label="Detalle de tarea" on_close={() => handle_task_select(null)} width={task_detail_width} on_resize_key_down={handle_detail_resize_key_down} on_resize_start={handle_detail_resize_start}>
                 <TaskDetailPanel
                     handle_add_comment={handle_add_comment}
                     handle_delete_task={handle_delete_task}
@@ -3452,8 +3485,7 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
                     selected_task={selected_task}
                     show_comments={show_comments}
                 />
-            </div></ResponsiveOverlay>
-        </>
+        </TaskDrawer>
     );
 }
 
@@ -3469,7 +3501,7 @@ function render_share_modal(set_active_modal, project, onMembers, onError) {
             <section className="form_modal share_modal" role="dialog" aria-modal="true" aria-label="Compartir proyecto">
                 <header className="modal_header">
                     <h2>Compartir "{project?.label || "Lanzamiento Q4"}"</h2>
-                    <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
+                    <button type="button" data-drawer-close aria-label="Cerrar" onClick={() => set_active_modal(null)}>
                         {render_icon(x_icon, 22)}
                     </button>
                 </header>
@@ -3541,7 +3573,7 @@ function render_projects_module({ projects, selected_project_id, tasks, search_q
             const done = projectTasks.filter(task => task.completed).length;
             const progress = projectTasks.length ? Math.round(done / projectTasks.length * 100) : 0;
             return <article className={`project_summary_card ${selected_project_id === project.id ? "project_summary_card_active" : ""}`} key={project.id}>
-                <div className="project_summary_title">{render_project_dot(project.color)}<button type="button" onClick={() => onOpen(project.id)}>{project.label}</button><span>{project.status || "Activo"}</span></div>
+                <div className="project_summary_title">{render_project_dot(project, "project_identity_card")}<button type="button" onClick={() => onOpen(project.id)}>{project.label}</button><span>{project.status || "Activo"}</span></div>
                 <p>{project.start_date || "Sin inicio"} — {project.end_date || "Sin fecha final"}</p>
                 <div className="project_summary_progress"><span><i style={{ width: `${progress}%` }} /></span><strong>{progress}%</strong></div>
                 <small>{done} de {projectTasks.length} tareas completadas</small>
@@ -3586,24 +3618,23 @@ function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_co
 // Renders the create project modal shown from the sidebar add button.
 function render_project_modal(props) {
     const {
+        drawer,
         editing_project,
         handle_create_project,
+        project_avatar_data_url,
         project_color,
         project_people_ids,
+        set_api_error,
         set_active_modal,
+        set_project_avatar_data_url,
         set_project_color,
         set_project_people_ids
     } = props;
 
     return (
-        <div className="project_create_overlay">
-            <section className="project_create_modal" role="dialog" aria-modal="true" aria-label="Crear proyecto">
+        <TaskDrawer class_name="project_create_modal" label={editing_project ? "Editar proyecto" : "Crear proyecto"} on_close={() => set_active_modal(null)} {...drawer}>
                 <header className="project_create_header">
-                    <h2>
-                        {render_icon(folder_icon, 34)}
-                        {editing_project ? "Editar proyecto" : "Crear nuevo proyecto"}
-                    </h2>
-                    <button type="button" aria-label="Cerrar" onClick={() => set_active_modal(null)}>
+                    <button type="button" data-drawer-close aria-label="Cerrar" onClick={() => set_active_modal(null)}>
                         {render_icon(x_icon, 30)}
                     </button>
                 </header>
@@ -3636,6 +3667,18 @@ function render_project_modal(props) {
                                     {project_color === color_item ? render_icon(check_icon, 25) : null}
                                 </button>
                             ))}
+                        </div>
+                    </section>
+
+                    <section className="project_create_step project_avatar_step">
+                        <span>Imagen del proyecto</span>
+                        <div className="project_avatar_editor">
+                            <div className="project_avatar_preview">{render_project_dot({ label: editing_project?.label || "nuevo proyecto", color: project_color, avatar_data_url: project_avatar_data_url }, "project_identity_preview")}</div>
+                            <div className="project_avatar_actions">
+                                <label className="project_avatar_upload">{project_avatar_data_url ? "Reemplazar foto" : "Subir foto"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => crop_project_avatar(event.target.files?.[0]).then(value => { set_project_avatar_data_url(value); set_api_error(""); }).catch(error => set_api_error(error.message))} /></label>
+                                {project_avatar_data_url ? <button type="button" onClick={() => set_project_avatar_data_url("")}>Usar color</button> : null}
+                                <small>PNG, JPEG o WebP. Recorte cuadrado automático.</small>
+                            </div>
                         </div>
                     </section>
 
@@ -3675,12 +3718,11 @@ function render_project_modal(props) {
 
                     </div>
                     <footer className="project_create_footer">
-                        <button type="button" onClick={() => set_active_modal(null)}>Cancelar</button>
+                        <button type="button" data-drawer-close onClick={() => set_active_modal(null)}>Cancelar</button>
                         <button type="submit">{editing_project ? "Guardar cambios" : "Crear proyecto"}</button>
                     </footer>
                 </form>
-            </section>
-        </div>
+        </TaskDrawer>
     );
 }
 
@@ -3812,7 +3854,7 @@ function TaskAppContent() {
     const [inbox_detail_open, set_inbox_detail_open] = use_state(false);
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
-    useDialog(!!active_modal && !["project_menu"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
+    useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
@@ -3849,8 +3891,10 @@ function TaskAppContent() {
             return project_items;
         }
     });
+    visible_project_items = projects.length ? projects : project_items;
     const recent_projects_key = `bold_recent_projects:${session.activeAssignment?.personId || "demo"}:${session.activeAssignment?.id || current_user_id}`;
     const [recent_project_ids, set_recent_project_ids] = use_state([]);
+    const [project_avatar_data_url, set_project_avatar_data_url] = use_state("");
     const [project_color, set_project_color] = use_state(project_color_options[0]);
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
@@ -3874,7 +3918,10 @@ function TaskAppContent() {
         : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])])
         : [...(mock_sections_by_project[selected_project_id] || []), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])];
 
-    const [task_detail_width, set_task_detail_width] = use_state(390);
+    const [task_detail_width, set_task_detail_width] = use_state(() => {
+        const saved = Number(localStorage.getItem("bold_task_drawer_width"));
+        return saved || Math.min(720, Math.round(window.innerWidth * .44));
+    });
     const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
     const [editing_project_id, set_editing_project_id] = use_state(null);
     const [inbox_tab, set_inbox_tab] = use_state("activity");
@@ -3924,14 +3971,21 @@ function TaskAppContent() {
 
     use_effect(() => {
         function clamp_detail_width() {
-            const split_element = document.querySelector(".tasks_workspace_split");
-            if (!split_element || window.innerWidth <= 760) return;
-            set_task_detail_width((current_width) => Math.min(current_width, get_split_content_width(split_element) / 2));
+            if (window.innerWidth <= 760) return;
+            set_task_detail_width(current_width => Math.min(window.innerWidth * .7, Math.max(360, current_width)));
         }
 
         window.addEventListener("resize", clamp_detail_width);
         return () => window.removeEventListener("resize", clamp_detail_width);
     }, []);
+
+    use_effect(() => {
+        localStorage.setItem("bold_task_drawer_width", String(Math.round(task_detail_width)));
+    }, [task_detail_width]);
+
+    use_effect(() => {
+        if (active_modal === "project") set_project_avatar_data_url(projects.find(project => project.id === editing_project_id)?.avatar_data_url || "");
+    }, [active_modal, editing_project_id]);
 
     function handle_create_project(event) {
         event.preventDefault();
@@ -3948,6 +4002,7 @@ function TaskAppContent() {
             id: editing_project_id || `project_${Date.now()}`,
             label,
             description: (form_data.get("project_description") || "").toString(),
+            avatar_data_url: project_avatar_data_url || null,
             color: project_color,
             start_date,
             end_date,
@@ -3960,7 +4015,7 @@ function TaskAppContent() {
             let created_project_id = editing_project_id;
             mutate(async () => {
                 const assignment = session.activeAssignment;
-                const payload = { name: label, description: project_payload.description, color_hex: project_color, status: project_payload.status, start_date: start_date || null, end_date: end_date || null };
+                const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, start_date: start_date || null, end_date: end_date || null };
                 const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
                 created_project_id = project.id;
                 const members = data.members.filter(item => item.project === project.id);
@@ -4281,7 +4336,6 @@ function TaskAppContent() {
     useDialog(mobile && !!inbox_filter_menu, ".inbox_dropdown", () => set_inbox_filter_menu(null));
     useDialog(compact && inbox_detail_open && active_module === "inbox", ".inbox_detail_panel_open", () => set_inbox_detail_open(false));
     useDialog(mobile && !!active_task_tool, ".task_options_panel", () => set_active_task_tool(null));
-    useDialog(compact && !!selected_task && !active_modal, ".task_detail_sidebar", () => set_selected_task_id(null));
     use_effect(() => {
         const escape = event => { if (event.key === "Escape") { set_active_task_tool(null); set_active_quick_popover(null); set_active_project_menu_id(null); set_inbox_filter_menu(null); set_active_modal(current => current === "project_menu" ? null : current); } };
         document.addEventListener("keydown", escape);
@@ -4459,12 +4513,11 @@ function TaskAppContent() {
         event.preventDefault();
         event.currentTarget.focus();
         event.currentTarget.setPointerCapture(event.pointerId);
-        const split_width = get_split_content_width(event.currentTarget.parentElement);
-        const detail_width = event.currentTarget.nextElementSibling.getBoundingClientRect().width;
+        const detail_width = task_detail_width;
         const start_x = event.clientX;
 
         function handle_pointer_move(move_event) {
-            set_task_detail_width(Math.min(split_width / 2, Math.max(320, detail_width + start_x - move_event.clientX)));
+            set_task_detail_width(Math.min(window.innerWidth * .7, Math.max(360, detail_width + start_x - move_event.clientX)));
         }
 
         function handle_pointer_up() {
@@ -4479,9 +4532,8 @@ function TaskAppContent() {
     function handle_detail_resize_key_down(event) {
         if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
-        const max_width = get_split_content_width(event.currentTarget.parentElement) / 2;
         const direction = event.key === "ArrowLeft" ? 16 : -16;
-        set_task_detail_width((current_width) => Math.min(max_width, Math.max(320, current_width + direction)));
+        set_task_detail_width(current_width => Math.min(window.innerWidth * .7, Math.max(360, current_width + direction)));
     }
 
 
@@ -4775,11 +4827,13 @@ function TaskAppContent() {
 
     // Renders the active modal requested by the application state.
     function render_active_modal() {
+        const drawer = { width: task_detail_width, on_resize_key_down: handle_detail_resize_key_down, on_resize_start: handle_detail_resize_start };
         // New Master-Plan Crear modal
         if (active_modal === "task") {
             return (
                 <CreateTaskModal
                     data={data} pending={pending} activeUnit={session.activeUnit?.id}
+                    drawer={drawer}
                     board_columns={board_columns}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
@@ -4810,6 +4864,7 @@ function TaskAppContent() {
             return (
                 <EditTaskModal
                     data={data} pending={pending}
+                    drawer={drawer}
                     board_columns={board_columns}
                     edit_attachments={edit_attachments}
                     edit_draft={edit_draft}
@@ -4834,14 +4889,18 @@ function TaskAppContent() {
 
         if (active_modal === "project") {
             return render_project_modal({
+                drawer,
                 editing_project: projects.find((project_item) => project_item.id === editing_project_id) || null,
                 handle_create_project,
+                project_avatar_data_url,
                 project_color,
                 project_people_ids,
+                set_api_error,
                 set_active_modal: (modal_id) => {
                     if (modal_id === null) set_editing_project_id(null);
                     set_active_modal(modal_id);
                 },
+                set_project_avatar_data_url,
                 set_project_color,
                 set_project_people_ids
             });
@@ -4913,6 +4972,7 @@ function TaskAppContent() {
                 }) : active_module === "tasks" ? render_tasks_module({
                     mobile_actions: { onEdit: handle_open_edit_task, onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
+                    active_modal,
                     active_quick_popover,
                     active_section,
                     active_task_tool,

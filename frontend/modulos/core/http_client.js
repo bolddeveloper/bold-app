@@ -35,7 +35,11 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         const raw = await response.text();
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         let data;
-        try { data = raw ? JSON.parse(raw) : null; } catch { data = { detail: raw }; }
+        try { data = raw ? JSON.parse(raw) : null; } catch {
+            data = { detail: response.status >= 500
+                ? "El servidor tuvo un error interno. Inténtalo de nuevo en unos momentos."
+                : "El servidor devolvió una respuesta inesperada." };
+        }
         if (!response.ok) {
             if (response.status === 401 && !anonymous) onUnauthorized();
             throw new ApiError(response.status, data);
