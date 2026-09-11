@@ -1,0 +1,456 @@
+/* Tablet layout: portrait and landscape between the mobile and desktop shells. */
+@media (min-width: 761px) and (max-width: 1023px) {
+    .tasks_module,
+    .inbox_module,
+    .home_module,
+    .reports_module {
+        padding: 24px clamp(20px, 4vw, 40px) 48px;
+    }
+
+    .task_project_header {
+        align-items: flex-end;
+        gap: 24px;
+        margin-bottom: 22px;
+    }
+
+    .project_title_group h1 {
+        font-size: clamp(34px, 5vw, 44px);
+        overflow-wrap: anywhere;
+    }
+
+    .project_actions {
+        justify-content: flex-start;
+    }
+
+    .project_actions button,
+    .task_tabs_row button,
+    .task_tools button,
+    .inbox_toolbar button,
+    .inbox_header_actions button {
+        min-height: 44px;
+    }
+
+    .task_tabs_row {
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .task_tools {
+        gap: 10px;
+        margin-bottom: 24px;
+    }
+
+    .desktop_only {
+        display: none !important;
+    }
+
+    .mobile_only {
+        display: block;
+    }
+
+    .mobile_task_stack {
+        display: grid;
+        gap: 24px;
+    }
+
+    .mobile_task_section {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .mobile_section_header {
+        grid-column: 1 / -1;
+        min-height: 44px;
+        margin: 0;
+        padding: 0 4px;
+        text-align: left;
+    }
+
+    .mobile_section_header > span:last-child {
+        display: inline-flex;
+        min-width: 28px;
+        min-height: 26px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: var(--bold_surface_soft);
+        color: var(--bold_muted);
+        font-size: 12px;
+    }
+
+    .task_card {
+        position: relative;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 38px;
+        align-content: start;
+        align-items: start;
+        gap: 10px;
+        min-width: 0;
+        min-height: 150px;
+        padding: 16px;
+        border: 1px solid var(--bold_line);
+        border-radius: 14px;
+        background: var(--bold_surface);
+        box-shadow: 0 8px 20px rgba(49, 47, 45, .06);
+    }
+
+    .task_card_alert::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        border-radius: 14px 0 0 14px;
+        background: var(--bold_red);
+        content: "";
+    }
+
+    .task_card_content {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+        padding: 0;
+    }
+
+    .task_card_title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px;
+        color: inherit;
+    }
+
+    .task_card_title_text {
+        min-width: 0;
+        white-space: normal;
+        overflow: visible;
+        overflow-wrap: anywhere;
+        font-size: 16px;
+        font-weight: 900;
+        line-height: 1.4;
+    }
+
+    .mobile_badge_row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+    }
+
+    .muted_meta,
+    .alert_meta {
+        display: inline-flex;
+        color: var(--bold_muted);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .task_checkbox,
+    .mobile_task_actions summary {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .mobile_task_actions {
+        display: block;
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--bold_line);
+    }
+
+    .mobile_task_actions summary {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .mobile_task_action_list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding-top: 10px;
+    }
+
+    .mobile_task_action_list label {
+        grid-column: 1 / -1;
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+    }
+
+    .mobile_task_action_list button,
+    .mobile_task_action_list select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--bold_line);
+        border-radius: 9px;
+        padding: 8px 10px;
+        background: var(--bold_surface);
+        color: inherit;
+    }
+
+    .progress_card {
+        margin-bottom: 22px;
+        border-radius: 12px;
+    }
+
+    .board_view {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: calc((100% - 16px) / 2);
+        align-items: start;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 14px;
+        scroll-snap-type: x proximity;
+    }
+
+    .board_column,
+    .board_column_new {
+        width: auto;
+        min-width: 0;
+        scroll-snap-align: start;
+    }
+
+    .board_card {
+        min-width: 0;
+    }
+
+    .board_card .mobile_task_actions {
+        margin-top: 10px;
+    }
+
+    .task_detail_resizer {
+        display: none;
+    }
+
+    .task_detail_sidebar {
+        position: fixed;
+        inset: 0 0 0 auto;
+        z-index: 1450;
+        width: min(620px, 82vw) !important;
+        height: 100dvh;
+        max-height: 100dvh;
+        padding: 0;
+        background: var(--bold_surface);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        box-shadow: -18px 0 48px rgba(25, 28, 34, .2);
+    }
+
+    .task_detail_panel_card {
+        min-height: 100%;
+        padding: 28px 30px;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .detail_meta_grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .detail_action_btn,
+    .detail_close_circle_btn,
+    .detail_comment_send_btn,
+    .modal_close_btn,
+    .bold_modal_close_btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .bold_modal_backdrop,
+    .modal_overlay,
+    .edit_modal_overlay,
+    .project_create_overlay {
+        padding: 24px !important;
+        align-items: center;
+    }
+
+    .bold_modal_window,
+    .form_modal,
+    .edit_task_modal,
+    .project_create_modal {
+        width: min(720px, calc(100vw - 48px)) !important;
+        max-width: 100%;
+        max-height: calc(100dvh - 48px) !important;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .bold_modal_window form,
+    .form_modal form,
+    .project_create_modal form,
+    form.bold_modal_body,
+    form.project_create_body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .bold_modal_body,
+    .form_grid,
+    .edit_task_body,
+    .project_create_body {
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    form.bold_modal_body,
+    form.project_create_body {
+        gap: 0;
+        padding: 0;
+    }
+
+    .modal_scroll_fields {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 16px;
+        min-height: 0;
+        padding: 20px 28px;
+        overflow-y: auto;
+    }
+
+    .modal_scroll_fields > * {
+        flex-shrink: 0;
+    }
+
+    .bold_modal_footer,
+    .modal_footer,
+    .edit_modal_footer,
+    .project_create_footer {
+        position: static;
+        flex: 0 0 auto;
+        background: var(--bold_surface);
+    }
+
+    .task_options_panel,
+    .inbox_dropdown {
+        max-width: min(420px, calc(100vw - 48px));
+        max-height: min(560px, calc(100dvh - 48px));
+        overflow-y: auto;
+    }
+
+    .home_metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .home_metric {
+        min-width: 0;
+        min-height: 132px;
+        padding: 18px;
+    }
+
+    .home_grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .home_grid > :first-child,
+    .home_grid > :last-child {
+        grid-column: 1 / -1;
+    }
+
+    .reports_metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .reports_metric {
+        min-width: 0;
+        padding: 18px;
+    }
+
+    .reports_metric strong {
+        font-size: 34px;
+    }
+
+    .inbox_header {
+        display: flex;
+        align-items: flex-start;
+        gap: 24px;
+    }
+
+    .inbox_header_actions,
+    .inbox_toolbar {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .inbox_search_box {
+        flex: 1 1 240px;
+        min-width: 0;
+    }
+
+    .inbox_activity_main {
+        min-width: 0;
+    }
+
+    .inbox_activity_title,
+    .inbox_activity_text,
+    .inbox_detail_panel h2 {
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (min-width: 761px) and (max-width: 899px) {
+    .inbox_body {
+        display: block;
+    }
+
+    .inbox_detail_panel {
+        display: none;
+    }
+
+    .inbox_detail_panel_open {
+        position: fixed;
+        inset: 0 0 0 auto;
+        z-index: 1450;
+        display: grid;
+        width: min(620px, 88vw);
+        height: 100dvh;
+        padding: 28px;
+        overflow-y: auto;
+        background: var(--bold_surface);
+        box-shadow: -18px 0 48px rgba(25, 28, 34, .2);
+    }
+
+    .inbox_detail_panel_open > .mobile_only {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 44px;
+    }
+}
+
+@media (min-width: 761px) and (max-width: 820px) {
+    .task_project_header .project_title_group {
+        flex: 1 1 100%;
+    }
+
+    .task_project_header .project_title_group h1 {
+        overflow-wrap: normal;
+    }
+
+    .task_project_header .project_actions {
+        width: 100%;
+    }
+}
+
+@media (min-width: 900px) and (max-width: 1023px) {
+    .inbox_body {
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+    }
+
+    .inbox_detail_panel {
+        padding: 24px 20px;
+    }
+
+    .inbox_detail_panel > .mobile_only {
+        display: none;
+    }
+}

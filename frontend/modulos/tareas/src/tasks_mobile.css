@@ -512,7 +512,7 @@ body {
     .board_card { padding: 12px; min-width: 0; }
     .board_card_title, .board_title_row, .board_card p { overflow-wrap: anywhere; white-space: normal; }
     .board_card footer { flex-wrap: wrap; gap: 8px; }
-    .task_detail_sidebar { position: fixed; inset: 0; z-index: 1250; width: 100% !important; height: 100dvh; max-height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: var(--bold_surface); overflow-y: auto; overscroll-behavior: contain; }
+    .task_detail_sidebar { position: fixed; inset: 0; z-index: 1450; width: 100% !important; height: 100dvh; max-height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: var(--bold_surface); overflow-y: auto; overscroll-behavior: contain; }
     .task_detail_panel_card { min-width: 0; border-radius: 0; padding: 16px 12px; }
     .detail_header, .detail_title_row, .detail_action_row { flex-wrap: wrap; gap: 8px; }
     .detail_task_title { font-size: 22px; white-space: normal; }
@@ -541,7 +541,7 @@ body {
     .inbox_header_actions button { min-height: 44px; white-space: normal; }
     .inbox_body { display: block; }
     .inbox_detail_panel { display: none; }
-    .inbox_detail_panel_open { display: block; position: fixed; inset: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--bold_surface); z-index: 1200; overflow-y: auto; }
+    .inbox_detail_panel_open { display: block; position: fixed; inset: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--bold_surface); z-index: 1450; overflow-y: auto; }
     .inbox_activity { grid-template-columns: 44px minmax(0, 1fr); }
     .inbox_activity_main { grid-template-columns: 8px 36px minmax(0, 1fr); padding-inline: 8px; }
     .inbox_activity_actions { flex-wrap: wrap; padding-inline: 8px; }

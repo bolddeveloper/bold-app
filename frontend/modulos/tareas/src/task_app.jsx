@@ -902,7 +902,7 @@ function render_inbox_module(props) {
                         </div>
                     </div>
 
-                    <ResponsiveOverlay><aside className={`inbox_detail_panel ${props.inbox_detail_open ? "inbox_detail_panel_open" : ""}`}><button className="mobile_only secondary_button" type="button" onClick={props.close_inbox_detail}>Volver a la bandeja</button>
+                    <ResponsiveOverlay query="(max-width: 899px)" onClose={props.inbox_detail_open ? props.close_inbox_detail : undefined}><aside className={`inbox_detail_panel ${props.inbox_detail_open ? "inbox_detail_panel_open" : ""}`}><button className="mobile_only secondary_button" type="button" onClick={props.close_inbox_detail}>Volver a la bandeja</button>
                         {selected_activity ? (
                             <>
                                 <span className="inbox_status_badge">{selected_activity.task?.status || "Activa"}</span>
@@ -3374,7 +3374,7 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
                 onKeyDown={handle_detail_resize_key_down}
                 onPointerDown={handle_detail_resize_start}
             />
-            <ResponsiveOverlay><div className="task_detail_sidebar" role="dialog" aria-label="Detalle de tarea" style={{ width: `min(${task_detail_width}px, 50%)` }}>
+            <ResponsiveOverlay query="(max-width: 1023px)" onClose={() => handle_task_select(null)}><div className="task_detail_sidebar" role="dialog" aria-label="Detalle de tarea" style={{ width: `min(${task_detail_width}px, 50%)` }}>
                 <TaskDetailPanel
                     handle_add_comment={handle_add_comment}
                     handle_delete_task={handle_delete_task}
@@ -3733,6 +3733,7 @@ function TaskAppContent() {
     const [active_modal, set_active_modal] = use_state(null);
     const [inbox_detail_open, set_inbox_detail_open] = use_state(false);
     const mobile = useMediaQuery("(max-width: 760px)");
+    const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(!!active_modal && !["project_menu"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
@@ -4126,9 +4127,9 @@ function TaskAppContent() {
     }
 
     useDialog(mobile && !!inbox_filter_menu, ".inbox_dropdown", () => set_inbox_filter_menu(null));
-    useDialog(mobile && inbox_detail_open && active_module === "inbox", ".inbox_detail_panel_open", () => set_inbox_detail_open(false));
+    useDialog(compact && inbox_detail_open && active_module === "inbox", ".inbox_detail_panel_open", () => set_inbox_detail_open(false));
     useDialog(mobile && !!active_task_tool, ".task_options_panel", () => set_active_task_tool(null));
-    useDialog(mobile && !!selected_task && !active_modal, ".task_detail_sidebar", () => set_selected_task_id(null));
+    useDialog(compact && !!selected_task && !active_modal, ".task_detail_sidebar", () => set_selected_task_id(null));
     use_effect(() => {
         const escape = event => { if (event.key === "Escape") { set_active_task_tool(null); set_active_quick_popover(null); set_active_project_menu_id(null); set_inbox_filter_menu(null); set_active_modal(current => current === "project_menu" ? null : current); } };
         document.addEventListener("keydown", escape);

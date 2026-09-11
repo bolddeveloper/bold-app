@@ -746,4 +746,36 @@
     .core_login_panel :is(input, select, button) { min-height: 44px; width: 100%; font-size: 16px; }
 }
 
+@media (min-width: 761px) and (max-width: 1023px) {
+    .sidebar_shell {
+        width: 320px;
+        padding-inline: 22px;
+    }
+
+    .mobile_header_row,
+    .top_bar {
+        padding-right: 24px;
+        padding-left: 24px;
+    }
+
+    .mobile_header_row h1 {
+        font-size: 20px;
+    }
+
+    .top_bar {
+        justify-content: center;
+    }
+
+    .search_box {
+        max-width: 760px;
+    }
+
+    .notification_surface .notifications_panel {
+        inset: 16px 16px 16px auto;
+        width: min(440px, calc(100vw - 32px));
+        border-radius: 18px;
+        box-shadow: -16px 0 44px rgba(25, 28, 34, .2);
+    }
+}
+
 @media (min-width: 1024px) { .mobile_sidebar_overlay { display: none; } }
