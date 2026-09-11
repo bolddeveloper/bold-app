@@ -1,15 +1,15 @@
 # Separación Core / Tareas
 
-Implementación incremental sobre el paquete Vite existente, sin nuevas dependencias de producción ni cambios de CSS o contratos del backend. La carpeta del paquete sigue llamándose `frontend/modulos/tareas`; `src/core` es independiente por sus imports y puede servir a otros módulos del mismo frontend.
+Implementación incremental sobre el paquete Vite existente, sin nuevas dependencias de producción ni cambios de CSS o contratos del backend. Tareas permanece en `frontend/modulos/tareas` y Core vive como módulo hermano en `frontend/modulos/core`, disponible para otros módulos del frontend.
 
 ## Responsabilidades
 
 - `src/app.jsx`: composición, registro de navegación e identidad de plantilla. `main.jsx` monta esta aplicación.
-- `src/core/http_client.js`: transporte V2, token/contexto HTTP, JSON, paginación, 204, errores y cancelación global al cambiar sesión o cargo.
-- `src/core/core_api.js`: autenticación, cuenta, Employee, assignments, directorio, unidades y autorización.
-- `src/core/core_store.js`: única instantánea de identidad organizacional. Sus exports de directorio/asignación son referencias a esa instantánea, no un segundo estado de Tareas.
-- `src/core/core_provider.jsx`: restauración, login/logout, selección de cargo, Context y `useCore()`. Obtiene Employee desde su endpoint; activeUnit se deriva de activeAssignment. El token vive en el transporte Core; el contexto lo expone como proyección. sessionStorage es únicamente persistencia para restaurar.
-- `src/core/app_shell.jsx`: navegación global, tema, sidebar, cabeceras, selector de cargo y presentación de notificaciones. Recibe submenús, notificaciones y acciones mediante props; no importa Tasks.
+- `../core/http_client.js`: transporte V2, token/contexto HTTP, JSON, paginación, 204, errores y cancelación global al cambiar sesión o cargo.
+- `../core/core_api.js`: autenticación, cuenta, Employee, assignments, directorio, unidades y autorización.
+- `../core/core_store.js`: única instantánea de identidad organizacional. Sus exports de directorio/asignación son referencias a esa instantánea, no un segundo estado de Tareas.
+- `../core/core_provider.jsx`: restauración, login/logout, selección de cargo, Context y `useCore()`. Obtiene Employee desde su endpoint; activeUnit se deriva de activeAssignment. El token vive en el transporte Core; el contexto lo expone como proyección. sessionStorage es únicamente persistencia para restaurar.
+- `../core/app_shell.jsx`: navegación global, tema, sidebar, cabeceras, selector de cargo y presentación de notificaciones. Recibe submenús, notificaciones y acciones mediante props; no importa Tasks.
 - `src/services/tasks_api.js`: endpoints de Tasks y cancelación de solicitudes del módulo, sin métodos de login ni almacenamiento de token.
 - `task_app.jsx`, `task_service.js`, normalizadores de tareas y realtime: dominio y vistas de Tareas, Inicio/Informes basados en tareas, filtros, formularios y reconciliación REST.
 

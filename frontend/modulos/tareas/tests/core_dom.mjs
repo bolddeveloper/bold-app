@@ -44,8 +44,8 @@ const server = await createServer({ server: { middlewareMode: true }, appType: "
 const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const App = (await server.ssrLoadModule("/src/app.jsx")).default;
-const store = await server.ssrLoadModule("/src/core/core_store.js");
-const http = (await server.ssrLoadModule("/src/core/http_client.js")).http;
+const store = await server.ssrLoadModule("/@fs/" + path.resolve("../core/core_store.js").replaceAll("\\", "/"));
+const http = (await server.ssrLoadModule("/@fs/" + path.resolve("../core/http_client.js").replaceAll("\\", "/"))).http;
 let root = createRoot(document.getElementById("root"));
 const errors = [], originalError = console.error;
 console.error = (...args) => { errors.push(args.map(String).join(" ")); originalError(...args); };

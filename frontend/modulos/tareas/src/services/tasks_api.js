@@ -1,4 +1,4 @@
-import { http } from "../core/http_client.js";
+import { http } from "../../../core/http_client.js";
 export function createTasksApi(client = http) {
     let controller = new AbortController();
     const request = (path, options = {}) => client.request(path, { ...options, signal: controller.signal });

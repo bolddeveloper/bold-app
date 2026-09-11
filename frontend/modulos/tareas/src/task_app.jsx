@@ -1,6 +1,6 @@
-import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
-import { useMediaQuery } from "./shared/use_media_query.js";
-import { useDialog } from "./shared/use_dialog.js";
+import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
+import { useMediaQuery } from "../../core/shared/use_media_query.js";
+import { useDialog } from "../../core/shared/use_dialog.js";
 import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import {
     ArrowUp as arrow_up_icon,
@@ -34,10 +34,10 @@ import {
     X as x_icon
 } from "lucide-react";
 import { notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
-import { useCore } from "./core/core_provider.jsx";
-import { AppShell, useShell } from "./core/app_shell.jsx";
+import { useCore } from "../../core/core_provider.jsx";
+import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { api } from "./services/tasks_api.js";
-import { is_using_real_backend } from "./core/http_client.js";
+import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft } from "./services/task_service.js";
 import { dateFromISO, toISODate, projectTask, taskPayload } from "./services/task_models.js";
 import ReportsModule from "./reports_module.jsx";

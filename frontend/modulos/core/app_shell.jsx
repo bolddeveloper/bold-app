@@ -1,6 +1,6 @@
-import { ResponsiveOverlay } from "../shared/responsive_overlay.jsx";
-import { useMediaQuery } from "../shared/use_media_query.js";
-import { useDialog } from "../shared/use_dialog.js";
+import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
+import { useMediaQuery } from "./shared/use_media_query.js";
+import { useDialog } from "./shared/use_dialog.js";
 import { createContext, useContext, useEffect, useState, createElement } from "react";
 import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, Home as home_icon, Inbox as inbox_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";

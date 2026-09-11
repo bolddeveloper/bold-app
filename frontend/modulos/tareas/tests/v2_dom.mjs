@@ -76,6 +76,6 @@ try {
  assert.deepEqual(errors,[]);
 } finally {
  root.unmount();
- if (real) { const api=(await server.ssrLoadModule('/src/services/tasks_api.js')).api; if((await server.ssrLoadModule("/src/core/http_client.js")).http.getSession().token) for(const task of await api.listTasks()) if([testTitle,childTitle].includes(task.title)) await api.deleteTask(task.id); }
+ if (real) { const api=(await server.ssrLoadModule('/src/services/tasks_api.js')).api; if((await server.ssrLoadModule("/@fs/" + path.resolve("../core/http_client.js").replaceAll("\\", "/"))).http.getSession().token) for(const task of await api.listTasks()) if([testTitle,childTitle].includes(task.title)) await api.deleteTask(task.id); }
  await server.close(); dom.window.close();
 }

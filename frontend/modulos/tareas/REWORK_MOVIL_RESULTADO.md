@@ -8,8 +8,8 @@ Se reorganizó la interfaz móvil sobre los componentes existentes. Se conserva 
 
 | Archivo | Motivo |
 | --- | --- |
-| `src/core/app_shell.jsx` | Drawer accesible, controles de sesión dentro del drawer compacto, header móvil con campana, búsqueda disponible, notificaciones fuera del contenedor animado y destino para portales. Se retiró la barra de estado ficticia. |
-| `src/core/core_provider.jsx` | Clase específica para adaptar el formulario de login; sin cambios en autenticación. |
+| `../core/app_shell.jsx` | Drawer accesible, controles de sesión dentro del drawer compacto, header móvil con campana, búsqueda disponible, notificaciones fuera del contenedor animado y destino para portales. Se retiró la barra de estado ficticia. |
+| `../core/core_provider.jsx` | Clase específica para adaptar el formulario de login; sin cambios en autenticación. |
 | `src/main.jsx` | Importación explícita y ordenada de estilos globales, compartidos, Core y Tareas. |
 | `src/styles.css` | Extracción de reglas del shell y consolidación de media queries móviles; wrap de herramientas/cabecera para evitar overflow en escritorio estrecho. |
 | `src/task_app.jsx` | Cards, acciones táctiles, movimiento explícito de sección, filtros reales, detalle, Bandeja, fecha móvil nativa y estructura desplazable de formularios. Corrección del mapa de iconos faltante en Bandeja. |
@@ -19,12 +19,12 @@ Se reorganizó la interfaz móvil sobre los componentes existentes. Se conserva 
 
 | Archivo | Responsabilidad |
 | --- | --- |
-| `src/core/app_shell.css` | Estilos del shell extraídos, navegación compacta, notificaciones y login. |
+| `../core/app_shell.css` | Estilos del shell extraídos, navegación compacta, notificaciones y login. |
 | `src/tasks_mobile.css` | Reglas móviles de Tareas, formularios, Kanban, Bandeja y ajustes de Inicio/Informes. Media queries móviles agrupadas. |
-| `src/shared/use_media_query.js` | Suscripción al breakpoint para interacciones y portales; el layout principal se resuelve con CSS. |
-| `src/shared/use_dialog.js` | Escape, ciclo de foco, devolución del foco y bloqueo de scroll para paneles superpuestos, incluidos diálogos anidados. |
-| `src/shared/responsive_overlay.jsx` | `ResponsiveOverlay`: portal móvil para escapar de transformaciones y contenedores con overflow; conserva el renderizado normal en escritorio. |
-| `src/shared/responsive.css` | Backdrop compartido de los paneles. |
+| `../core/shared/use_media_query.js` | Suscripción al breakpoint para interacciones y portales; el layout principal se resuelve con CSS. |
+| `../core/shared/use_dialog.js` | Escape, ciclo de foco, devolución del foco y bloqueo de scroll para paneles superpuestos, incluidos diálogos anidados. |
+| `../core/shared/responsive_overlay.jsx` | `ResponsiveOverlay`: portal móvil para escapar de transformaciones y contenedores con overflow; conserva el renderizado normal en escritorio. |
+| `../core/shared/responsive.css` | Backdrop compartido de los paneles. |
 | `tests/responsive.mjs` | Prueba automatizada en Edge real sin interfaz, capturas, consola, anchos y recorridos responsive. |
 | `REWORK_MOVIL_RESULTADO.md` | Este reporte. |
 

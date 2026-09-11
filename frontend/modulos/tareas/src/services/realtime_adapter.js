@@ -1,4 +1,4 @@
-import { api_base_url } from "../core/http_client.js";
+import { api_base_url } from "../../../core/http_client.js";
 
 export function createEventDeduplicator(limit = 1000) {
     const seen = new Set();

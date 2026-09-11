@@ -1,5 +1,5 @@
 import { api } from "./tasks_api.js";
-import { is_using_real_backend } from "../core/http_client.js";
+import { is_using_real_backend } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
 export async function loadTaskData({ directory, units }) {

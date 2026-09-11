@@ -1,5 +1,5 @@
-import { CoreProvider } from "./core/core_provider.jsx";
-import { ShellProvider } from "./core/app_shell.jsx";
+import { CoreProvider } from "../../core/core_provider.jsx";
+import { ShellProvider } from "../../core/app_shell.jsx";
 import TasksModule from "./task_app.jsx";
 import { team_members } from "./data/task_data.js";
 const navigation = [

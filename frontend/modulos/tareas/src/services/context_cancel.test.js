@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHttpClient } from "../core/http_client.js";
+import { createHttpClient } from "../../../core/http_client.js";
 import { createTasksApi } from "./tasks_api.js";
-import { getCoreState, updateCore, clearCore, directory, activeAssignment, activeAssignmentId } from "../core/core_store.js";
+import { getCoreState, updateCore, clearCore, directory, activeAssignment, activeAssignmentId } from "../../../core/core_store.js";
 test("module disposal cancels only its requests; assignment change cancels every old context", async () => {
     const calls = [];
     const http = createHttpClient({ fetchImpl: (url, options) => new Promise(resolve => calls.push({ url, options, resolve })) });
