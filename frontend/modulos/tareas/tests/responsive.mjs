@@ -24,6 +24,12 @@ async function fits(page, locator, label) {
     const box = await locator.boundingBox(), viewport = page.viewportSize();
     assert.ok(box && box.x >= -1 && box.x + box.width <= viewport.width + 1, `${label}: ${JSON.stringify(box)}`);
 }
+async function isDarkSurface(locator, label) {
+    const color = await locator.evaluate(element => getComputedStyle(element).backgroundColor);
+    const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) || [];
+    assert.equal(channels.length, 3, `${label}: invalid background ${color}`);
+    assert.ok(channels.reduce((sum, channel) => sum + channel, 0) / 3 < 100, `${label}: light background ${color}`);
+}
 try {
     for (const width of (process.env.BOLD_WIDTHS || "320,360,375,390,414,480,768,820,1023,1024,1280,1440,1920").split(",").map(Number)) {
         const page = await browser.newPage({ viewport: { width, height: 850 }, hasTouch: width < 1024 });
@@ -116,6 +122,31 @@ try {
         if (width < 1024) await page.keyboard.press("Escape");
         await page.getByRole("button", { name: "Activar modo oscuro", exact: true }).click();
         await page.screenshot({ path: path.join(artifacts, `dark-${width}.png`), animations: "disabled" });
+        if (process.env.BOLD_DARK_AUDIT === "true") {
+            await isDarkSurface(page.locator(".main_workspace"), `dark workspace ${width}`);
+            if (width < 1024) await page.getByRole("button", { name: "Abrir navegacion", exact: true }).click();
+            await page.locator(".navigation_list").getByRole("button", { name: "Mis tareas", exact: true }).click();
+            const taskSurface = page.locator(width < 1024 ? ".task_card" : ".task_table_card").first();
+            await taskSurface.waitFor();
+            await isDarkSurface(taskSurface, `dark tasks ${width}`);
+            await page.screenshot({ path: path.join(artifacts, `dark-tasks-${width}.png`), fullPage: true, animations: "disabled" });
+            await page.locator('button[aria-label="Notificaciones"]:visible').click();
+            await isDarkSurface(page.locator(".notifications_panel"), `dark notifications ${width}`);
+            await page.screenshot({ path: path.join(artifacts, `dark-notifications-${width}.png`), animations: "disabled" });
+            await page.getByRole("button", { name: "Cerrar notificaciones", exact: true }).first().click();
+            await page.locator(width < 1024 ? ".task_card_content" : ".task_name_button").first().click();
+            await isDarkSurface(page.locator(".task_detail_panel_card"), `dark detail ${width}`);
+            await page.screenshot({ path: path.join(artifacts, `dark-detail-${width}.png`), animations: "disabled" });
+            await page.getByTitle("Cerrar panel", { exact: true }).click();
+            await page.getByRole("button", { name: "Agregar tarea", exact: true }).click();
+            await isDarkSurface(page.locator(".bold_modal_window"), `dark task modal ${width}`);
+            await page.screenshot({ path: path.join(artifacts, `dark-create-${width}.png`), animations: "disabled" });
+            await page.keyboard.press("Escape");
+            if (width < 1024) await page.getByRole("button", { name: "Abrir navegacion", exact: true }).click();
+            await page.locator(".navigation_list").getByRole("button", { name: "Bandeja de entrada", exact: true }).click();
+            await isDarkSurface(page.locator(".inbox_card"), `dark inbox ${width}`);
+            await page.screenshot({ path: path.join(artifacts, `dark-inbox-${width}.png`), fullPage: true, animations: "disabled" });
+        }
         await noOverflow(page, `after interactions ${width}`);
         console.log(`RESPONSIVE PASS ${width}px`);
         await page.close();

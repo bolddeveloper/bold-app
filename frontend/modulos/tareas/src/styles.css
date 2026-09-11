@@ -6021,6 +6021,13 @@ button {
     padding: 4px 0;
 }
 
+.detail_description_text {
+    margin: 0;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
 /* Subtasks in detail panel */
 .subtasks_badge {
     background: #f3f4f6;
@@ -8805,6 +8812,110 @@ button {
     border-color: #48515e;
     background: #292f38;
     color: #eef1f5;
+}
+
+/* Responsive surfaces use the same dark palette as the desktop workspace. */
+.theme_dark :is(.task_card, .edit_task_modal, .task_detail_sidebar, .task_detail_panel_card, .native_date_picker, .custom_datepicker_popover) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: #edf0f4;
+}
+
+.theme_dark .task_card {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .22);
+}
+
+.theme_dark .task_card[data-selected="true"] {
+    border-color: #8f4449;
+    background: #3a292e;
+}
+
+.theme_dark :is(.mobile_section_header, .mobile_task_actions summary, .mobile_task_action_list label) {
+    color: #e8ebef;
+}
+
+.theme_dark .mobile_workspace_selector {
+    border-color: #48515e;
+    background: #292e37;
+    color: #edf0f4;
+}
+
+.theme_dark .mobile_section_header > span:last-child {
+    background: #343a45;
+    color: #c4cad3;
+}
+
+.theme_dark .mobile_task_actions {
+    border-color: var(--bold_line);
+}
+
+.theme_dark :is(.mobile_task_action_list button, .mobile_task_action_list select) {
+    border-color: #48515e;
+    background: #292e37;
+    color: #edf0f4;
+}
+
+.theme_dark :is(.edit_task_header, .edit_task_body, .edit_modal_footer, .project_create_header, .project_create_body, .project_create_footer) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: #edf0f4;
+}
+
+.theme_dark :is(.edit_task_title, .edit_task_header h2, .project_create_header h2) {
+    color: #f4f6f8 !important;
+}
+
+.theme_dark :is(.edit_task_modal, .project_create_modal) :is(input, textarea, select) {
+    border-color: #48515e;
+    background-color: #292e37;
+    color: #edf0f4;
+}
+
+.theme_dark :is(.edit_task_modal, .project_create_modal) :is(input, textarea)::placeholder {
+    color: #858e9b;
+}
+
+.theme_dark :is(.edit_cancel_btn, .project_create_footer button:first-child) {
+    border-color: #48515e;
+    background: #303640;
+    color: #e8ebef;
+}
+
+.theme_dark :is(.detail_action_btn, .detail_close_circle_btn, .detail_comment_send_btn) {
+    border-color: #48515e;
+    background: #303640;
+    color: #dce1e8;
+}
+
+.theme_dark :is(.detail_action_btn, .detail_close_circle_btn):hover {
+    background: #3b424d;
+    color: #ffffff;
+}
+
+.theme_dark .detail_description_text {
+    color: #c3cad4;
+}
+
+.theme_dark .inbox_activity_actions button {
+    color: #aeb6c2;
+}
+
+.theme_dark .custom_datepicker_actions {
+    border-color: var(--bold_line);
+}
+
+.theme_dark .custom_datepicker_day_btn {
+    color: #dce1e8;
+}
+
+.theme_dark .custom_datepicker_day_btn:hover {
+    background: #3b2d31;
+    color: #ff7373;
+}
+
+.theme_dark .custom_datepicker_day_btn.active_day {
+    background: var(--bold_red);
+    color: #ffffff;
 }
 
 .theme_dark :is(.bold_text_input, .bold_textarea_input)::placeholder {

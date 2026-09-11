@@ -1505,7 +1505,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
             {selected_task.description ? (
                 <div className="detail_description_block">
                     <p className="meta_label" style={{ marginBottom: "6px" }}>Descripción</p>
-                    <p style={{ fontSize: "13px", color: "#374151", lineHeight: 1.6 }}>{selected_task.description}</p>
+                    <p className="detail_description_text">{selected_task.description}</p>
                 </div>
             ) : null}
 

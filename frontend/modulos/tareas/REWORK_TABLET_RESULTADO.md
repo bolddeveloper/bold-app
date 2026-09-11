@@ -12,6 +12,7 @@ La franja tablet usa `761–1023px`, entre la representación móvil y el shell 
 - **Bandeja:** hasta 899px abre el detalle como drawer; entre 900 y 1023px usa una vista maestro/detalle en dos paneles.
 - **Inicio:** métricas en tres columnas y contenido secundario en una cuadrícula de dos columnas.
 - **Informes:** cuatro métricas compactas; gráficas y bloques mantienen el ancho disponible.
+- **Modo oscuro:** cards, drawers, Bandeja, notificaciones, formularios y controles responsive reutilizan la paleta oscura del escritorio.
 
 ## Archivos
 
@@ -27,3 +28,4 @@ La franja tablet usa `761–1023px`, entre la representación móvil y el shell 
 - Drawer, Escape y cierre exterior comprobados.
 - Lista, detalle, creación, Kanban, cronograma, calendario, Bandeja, Inicio, Informes, proyecto y modo oscuro recorridos en navegador.
 - `npm test` y `npm run build` correctos.
+- Auditoría oscura automatizada y visual en 320, 768, 900 y 1024px.
