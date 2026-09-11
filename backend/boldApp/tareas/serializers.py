@@ -1,3 +1,6 @@
+import base64
+import binascii
+
 from django.db import transaction
 from rest_framework import serializers
 
@@ -40,6 +43,22 @@ class ProjectSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("El nombre del proyecto es obligatorio.")
+        return value
+
+    def validate_avatar_data_url(self, value):
+        if not value:
+            return None
+        prefix = "data:image/webp;base64,"
+        if not value.startswith(prefix):
+            raise serializers.ValidationError("La imagen del proyecto debe ser WebP.")
+        try:
+            decoded = base64.b64decode(value[len(prefix):], validate=True)
+        except (ValueError, binascii.Error):
+            raise serializers.ValidationError("La imagen del proyecto no contiene Base64 válido.")
+        if len(decoded) > 300 * 1024:
+            raise serializers.ValidationError("La imagen del proyecto no puede superar 300 KB.")
+        if not decoded.startswith(b"RIFF") or decoded[8:12] != b"WEBP":
+            raise serializers.ValidationError("El contenido enviado no es una imagen WebP válida.")
         return value
 
     def validate(self, attrs):

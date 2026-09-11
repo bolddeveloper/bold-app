@@ -14,7 +14,7 @@ export function useDialog(open, selector, onClose) {
         document.body.style.overflow = "hidden";
         const controls = () => [...panel.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')].filter(el => !el.closest('[inert]') && el.getClientRects().length);
         panel.setAttribute("tabindex", "-1");
-        (controls()[0] || panel).focus();
+        (controls()[0] || panel).focus({ preventScroll: true });
         const keydown = event => {
             if (dialogs.at(-1) !== panel) return;
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close.current(); }
@@ -29,7 +29,7 @@ export function useDialog(open, selector, onClose) {
             document.removeEventListener("keydown", keydown);
             dialogs.splice(dialogs.lastIndexOf(panel), 1);
             if (!dialogs.length) document.body.style.overflow = originalOverflow;
-            if (previous?.isConnected) previous.focus();
+            if (previous?.isConnected) previous.focus({ preventScroll: true });
         };
     }, [open, selector]);
 }

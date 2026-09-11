@@ -9176,3 +9176,106 @@ button {
     .projects_index_button,
     .project_summary_card .project_summary_actions button { animation: none; transition: none; }
 }
+
+/* Shared right-side drawer for primary task and project workflows. */
+.task_drawer_overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    overflow: clip;
+    isolation: isolate;
+}
+.task_drawer_overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: rgba(15, 18, 26, .42);
+    animation: task_drawer_backdrop_in 500ms ease-out both;
+}
+
+.task_drawer_panel,
+.bold_modal_window.task_drawer_panel,
+.project_create_modal.task_drawer_panel,
+.task_detail_sidebar.task_drawer_panel {
+    position: absolute !important;
+    inset: 0 0 0 auto !important;
+    display: flex;
+    flex-direction: column;
+    width: min(var(--task_drawer_width), 70vw) !important;
+    min-width: 360px;
+    max-width: 70vw !important;
+    height: 100dvh;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    overflow: hidden;
+    border-radius: 20px 0 0 20px !important;
+    background: var(--bold_surface, #fff);
+    box-shadow: -20px 0 55px rgba(0, 0, 0, .24);
+    animation: task_drawer_in 800ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
+.task_drawer_closing::before { animation: task_drawer_backdrop_out 200ms ease-in both; }
+.task_drawer_overlay.task_drawer_closing > .task_drawer_panel { animation: task_drawer_out 200ms cubic-bezier(.4, 0, 1, 1) both; }
+.task_drawer_panel > form { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 0 !important; padding: 0 !important; overflow: hidden; }
+.task_drawer_panel > .task_detail_panel_card { min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.task_drawer_panel .modal_scroll_fields { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 16px; padding: 20px 28px; overflow-y: auto; }
+.project_create_modal.task_drawer_panel .modal_scroll_fields { gap: 18px; padding: 8px 30px 20px; }
+.project_create_modal.task_drawer_panel .project_create_footer { margin: 0 !important; }
+.project_create_modal.task_drawer_panel .project_create_header { justify-content: flex-end; padding: 10px 20px 0 !important; }
+.task_drawer_panel .bold_modal_header,
+.task_drawer_panel .project_create_header,
+.task_drawer_panel .bold_modal_footer,
+.task_drawer_panel .project_create_footer { flex: 0 0 auto; }
+
+.task_drawer_resizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 16px;
+    cursor: col-resize;
+    touch-action: none;
+}
+.task_drawer_resizer::after { position: absolute; top: 42%; bottom: 42%; left: 7px; width: 2px; border-radius: 2px; background: transparent; content: ""; }
+.task_drawer_resizer:hover::after,
+.task_drawer_resizer:focus-visible::after { background: var(--bold_red); }
+.task_drawer_resizer:focus-visible { outline: 0; }
+
+@keyframes task_drawer_in { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
+@keyframes task_drawer_out { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
+@keyframes task_drawer_backdrop_in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes task_drawer_backdrop_out { from { opacity: 1; } to { opacity: 0; } }
+
+/* Circular project identity: uploaded image first, color fallback otherwise. */
+.project_identity { flex: 0 0 auto; overflow: hidden; border-radius: 50%; object-fit: cover; }
+.project_identity > img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.project_identity_card { width: 38px !important; height: 38px !important; border: 2px solid #fff !important; box-shadow: 0 2px 8px rgba(0, 0, 0, .14); }
+.task_select_project_image { width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
+
+.project_avatar_step { padding-top: 4px; }
+.project_avatar_editor { display: flex; align-items: center; gap: 16px; padding: 14px; border: 1px solid var(--bold_line); border-radius: 12px; background: rgba(127, 127, 127, .035); }
+.project_avatar_preview { display: grid; width: 72px; height: 72px; flex: 0 0 72px; place-items: center; }
+.project_identity_preview { width: 72px !important; height: 72px !important; border: 3px solid #fff !important; box-shadow: 0 4px 15px rgba(0, 0, 0, .16); }
+.project_avatar_actions { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; }
+.project_avatar_actions button,
+.project_avatar_upload { display: inline-flex; min-height: 34px; align-items: center; padding: 6px 11px; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface, #fff); color: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.project_avatar_upload { position: relative; }
+.project_avatar_upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.project_avatar_actions small { width: 100%; color: var(--bold_muted); font-size: 11px; }
+
+@media (max-width: 760px) {
+    .task_drawer_panel,
+    .bold_modal_window.task_drawer_panel,
+    .project_create_modal.task_drawer_panel,
+    .task_detail_sidebar.task_drawer_panel { width: calc(100vw - 12px) !important; min-width: 0; max-width: none !important; border-radius: 16px 0 0 16px !important; }
+    .task_drawer_resizer { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .task_drawer_overlay::before,
+    .task_drawer_overlay > .task_drawer_panel,
+    .task_drawer_overlay.task_drawer_closing > .task_drawer_panel { animation-duration: 1ms !important; }
+}
