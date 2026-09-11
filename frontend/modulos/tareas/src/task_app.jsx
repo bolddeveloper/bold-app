@@ -1,3 +1,6 @@
+import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
+import { useMediaQuery } from "./shared/use_media_query.js";
+import { useDialog } from "./shared/use_dialog.js";
 import { Component as react_component, createElement as create_element, useEffect as use_effect, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import {
     ArrowUp as arrow_up_icon,
@@ -55,6 +58,8 @@ import {
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
 
+
+const notification_type_icons = { assignment: user_plus_icon, comment: message_circle_icon, status_changed: check_circle_icon };
 
 // Defines the project views available in the focused tasks module.
 const view_items = [
@@ -726,7 +731,7 @@ function render_inbox_module(props) {
     const selected_visible_count = inbox_selected_ids.filter((id) => visible_activities.some((activity) => activity.id === id)).length;
 
     return (
-        <section className="inbox_module">
+        <section className={`inbox_module ${props.inbox_detail_open ? "inbox_detail_open" : ""}`}>
             <header className="inbox_header">
                 <div>
                     <h1>Bandeja de entrada</h1>
@@ -776,24 +781,24 @@ function render_inbox_module(props) {
                                     Filtrar{active_filter_count ? ` ${active_filter_count}` : ""}
                                 </button>
                                 {inbox_filter_menu === "filters" ? (
-                                    <div className="task_tool_panel inbox_dropdown">
+                                    <ResponsiveOverlay onClose={() => set_inbox_filter_menu(null)}><div className="task_tool_panel inbox_dropdown">
                                         <label className="filter_group_label">Estado</label>
-                                        <select value={inbox_filters.state} onChange={(event) => set_inbox_filters((current) => ({ ...current, state: event.target.value }))}>
+                                        <select aria-label="Estado" value={inbox_filters.state} onChange={(event) => set_inbox_filters((current) => ({ ...current, state: event.target.value }))}>
                                             {inbox_state_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                                         </select>
                                         <label className="filter_group_label">Tipo</label>
-                                        <select value={inbox_filters.type} onChange={(event) => set_inbox_filters((current) => ({ ...current, type: event.target.value }))}>
+                                        <select aria-label="Tipo" value={inbox_filters.type} onChange={(event) => set_inbox_filters((current) => ({ ...current, type: event.target.value }))}>
                                             {inbox_type_options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                                         </select>
                                         <label className="filter_group_label">Proyecto</label>
-                                        <select value={inbox_filters.project_id} onChange={(event) => set_inbox_filters((current) => ({ ...current, project_id: event.target.value }))}>
+                                        <select aria-label="Proyecto" value={inbox_filters.project_id} onChange={(event) => set_inbox_filters((current) => ({ ...current, project_id: event.target.value }))}>
                                             <option value="all">Todos los proyectos</option>
                                             {project_items.map((project_item) => <option key={project_item.id} value={project_item.id}>{project_item.label}</option>)}
                                         </select>
                                         <button className="link_button" type="button" onClick={() => set_inbox_filters((current) => ({ ...current, state: "all", type: "all", project_id: "all" }))}>
                                             Limpiar filtros
                                         </button>
-                                    </div>
+                                    <button type="button" className="secondary_button" onClick={() => set_inbox_filter_menu(null)}>Cerrar opciones</button></div></ResponsiveOverlay>
                                 ) : null}
                             </div>
                             <div className="task_tool_anchor">
@@ -802,7 +807,7 @@ function render_inbox_module(props) {
                                     {render_icon(chevron_down_icon, 16)}
                                 </button>
                                 {inbox_filter_menu === "sort" ? (
-                                    <div className="task_tool_panel inbox_dropdown inbox_dropdown_small">
+                                    <ResponsiveOverlay onClose={() => set_inbox_filter_menu(null)}><div className="task_tool_panel inbox_dropdown inbox_dropdown_small">
                                         {inbox_sort_options.map((option) => (
                                             <button
                                                 className={`sort_option ${inbox_filters.sort === option.id ? "sort_option_active" : ""}`}
@@ -817,7 +822,7 @@ function render_inbox_module(props) {
                                                 {inbox_filters.sort === option.id ? render_icon(check_icon, 14) : null}
                                             </button>
                                         ))}
-                                    </div>
+                                    <button type="button" className="secondary_button" onClick={() => set_inbox_filter_menu(null)}>Cerrar opciones</button></div></ResponsiveOverlay>
                                 ) : null}
                             </div>
                             <button className="secondary_button" type="button" onClick={() => set_inbox_view(inbox_view === "detail" ? "compact" : "detail")}>
@@ -897,7 +902,7 @@ function render_inbox_module(props) {
                         </div>
                     </div>
 
-                    <aside className="inbox_detail_panel">
+                    <ResponsiveOverlay><aside className={`inbox_detail_panel ${props.inbox_detail_open ? "inbox_detail_panel_open" : ""}`}><button className="mobile_only secondary_button" type="button" onClick={props.close_inbox_detail}>Volver a la bandeja</button>
                         {selected_activity ? (
                             <>
                                 <span className="inbox_status_badge">{selected_activity.task?.status || "Activa"}</span>
@@ -926,7 +931,7 @@ function render_inbox_module(props) {
                                 </button>
                             </>
                         ) : null}
-                    </aside>
+                    </aside></ResponsiveOverlay>
                 </div>
             </div>
         </section>
@@ -961,7 +966,7 @@ function render_filter_panel(props) {
     ];
 
     return (
-        <div className="task_tool_panel">
+        <ResponsiveOverlay onClose={handle_close_task_tool}><div className="task_tool_panel task_options_panel" role="dialog" aria-label="Opciones de tareas">
             <h3>Filtrar</h3>
             <div className="filter_list">
                 {filter_groups.map((group_item) => (
@@ -992,7 +997,7 @@ function render_filter_panel(props) {
                     Aplicar
                 </button>
             </footer>
-        </div>
+        </div></ResponsiveOverlay>
     );
 }
 
@@ -1014,7 +1019,7 @@ function render_sort_panel(props) {
     ];
 
     return (
-        <div className="task_tool_panel">
+        <ResponsiveOverlay onClose={handle_close_task_tool}><div className="task_tool_panel task_options_panel" role="dialog" aria-label="Opciones de tareas">
             <h3>Ordenar</h3>
             <div className="filter_option_list">
                 {sort_field_items.map((field_item) => (
@@ -1041,7 +1046,7 @@ function render_sort_panel(props) {
                     Listo
                 </button>
             </footer>
-        </div>
+        </div></ResponsiveOverlay>
     );
 }
 
@@ -1055,7 +1060,7 @@ function render_customize_panel(props) {
     } = props;
 
     return (
-        <div className="task_tool_panel">
+        <ResponsiveOverlay onClose={handle_close_task_tool}><div className="task_tool_panel task_options_panel" role="dialog" aria-label="Opciones de tareas">
             <h3>Campos visibles</h3>
             <div className="filter_option_list">
                 {optional_column_items.map((column_item) => (
@@ -1074,7 +1079,7 @@ function render_customize_panel(props) {
                     Guardar
                 </button>
             </footer>
-        </div>
+        </div></ResponsiveOverlay>
     );
 }
 
@@ -1200,6 +1205,8 @@ function QuickStatusPopover({ current_status, on_close, on_select, status_option
 
 // Custom calendar date picker popover (Images 2 & 4 of design reference).
 function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
+    const mobile = useMediaQuery("(max-width: 760px)");
+    const [native_date, set_native_date] = use_state(current_date || "");
     const initial_date = dateFromISO(current_date) || new Date();
     const [view_month, set_view_month] = use_state(initial_date.getMonth());
     const [view_year, set_view_year] = use_state(initial_date.getFullYear());
@@ -1220,10 +1227,14 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
         else set_view_month((m) => m + 1);
     }
 
+    if (mobile) return <div className="native_date_picker">
+        <label>Fecha límite<input type="date" value={native_date} onChange={event => set_native_date(event.target.value)} /></label>
+        <div><button type="button" onClick={on_clear}>Quitar fecha</button><button type="button" disabled={!dateFromISO(native_date)} onClick={() => { const date = dateFromISO(native_date); on_apply(date.getDate(), date.getMonth(), date.getFullYear()); }}>Aplicar fecha</button></div>
+    </div>;
     return (
         <div className="custom_datepicker_popover" onClick={(e) => e.stopPropagation()}>
             <div className="custom_datepicker_nav">
-                <button type="button" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
+                <button type="button" aria-label="Mes anterior" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
                 <select aria-label="Mes" value={view_month} onChange={(event) => set_view_month(Number(event.target.value))}>
                     {month_names_es.map((month_name, month_index) => (
                         <option key={month_name} value={month_index}>{month_name}</option>
@@ -1232,7 +1243,7 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
                 <select aria-label="Año" value={view_year} onChange={(event) => set_view_year(Number(event.target.value))}>
                     {year_options.map((year) => <option key={year} value={year}>{year}</option>)}
                 </select>
-                <button type="button" onClick={go_next}>{render_icon(chevron_right_icon, 16)}</button>
+                <button type="button" aria-label="Mes siguiente" onClick={go_next}>{render_icon(chevron_right_icon, 16)}</button>
             </div>
             <div className="custom_datepicker_grid">
                 {["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"].map((d) => (
@@ -1671,6 +1682,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                 </div>
 
                 <form className="bold_modal_body" onSubmit={on_save}>
+                    <div className="modal_scroll_fields">
                     {/* Nombre */}
                     <div className="bold_field_group">
                         <label className="bold_field_label">Nombre de la tarea</label>
@@ -1841,6 +1853,7 @@ function EditTaskModal({ board_columns, edit_attachments, edit_draft, handle_add
                     )}
 
                     </>}
+                    </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
                         <button type="submit" className="primary_button" disabled={pending || (real && !edit_draft.status)}>Guardar cambios</button>
@@ -1918,6 +1931,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                 </div>
 
                 <form className="bold_modal_body" onSubmit={handle_submit}>
+                    <div className="modal_scroll_fields">
                     <div className="bold_field_group">
                         <label className="bold_field_label">Nombre de la tarea *</label>
                         <input
@@ -2048,6 +2062,7 @@ function CreateTaskModal({ board_columns, on_cancel, on_create, projects = proje
                     </button>
 
                     </>}
+                    </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" onClick={on_cancel}>Cancelar</button>
                         <button type="submit" className="primary_button" disabled={pending || !title.trim() || (real && !status)}>Crear tarea</button>
@@ -2226,7 +2241,7 @@ function render_tasks_module(props) {
                                 type="button"
                                 onClick={() => handle_toggle_task_tool("filter")}
                             >
-                                Filtrar
+                                Filtrar{Object.values(active_filters).flat().filter(Boolean).length ? ` (${Object.values(active_filters).flat().filter(Boolean).length})` : ""}
                             </button>
                             {active_task_tool === "filter" ? render_filter_panel({
                                 board_columns,
@@ -2256,12 +2271,6 @@ function render_tasks_module(props) {
                     </div>
                 ) : null}
 
-                {active_section === "tasks" ? (
-                    <button className="mobile_filter_button" type="button" onClick={() => set_search_query(search_query ? "" : "zzz")}>
-                        {render_icon(sliders_icon, 15)}
-                        Filtrar
-                    </button>
-                ) : null}
                 <button className="mobile_floating_add" type="button" aria-label="Agregar tarea" onClick={() => set_active_modal("task")}>
                     {render_icon(plus_icon, 28)}
                 </button>
@@ -2272,6 +2281,7 @@ function render_tasks_module(props) {
                 <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
                     <div className="tasks_main_area">
                         {active_view === "list" ? render_list_view({
+                    mobile_actions: props.mobile_actions,
                             active_quick_popover,
                             board_columns,
                             collapsed_sections,
@@ -2305,6 +2315,7 @@ function render_tasks_module(props) {
                         }) : null}
 
                         {active_view === "board" ? render_board_view({
+                    mobile_actions: props.mobile_actions,
                             active_quick_popover,
                             board_columns,
                             dragged_task_id,
@@ -2377,7 +2388,9 @@ function render_tasks_module(props) {
                         handle_task_select,
                         set_active_modal
                     })}
+                    <TaskDetailSidebar handle_add_comment={handle_add_comment} handle_delete_task={handle_delete_task} handle_open_edit_task={handle_open_edit_task} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </div>
+
             ) : null}
         </section>
     );
@@ -2531,6 +2544,7 @@ function render_list_view(props) {
 
             <div className="mobile_task_stack mobile_only">
                 {board_columns.map((section_item) => render_mobile_section({
+                    mobile_actions: props.mobile_actions,
                     collapsed_sections,
                     filtered_tasks,
                     handle_task_select,
@@ -2817,6 +2831,7 @@ function render_mobile_section(props) {
                 <span>{section_tasks.length}</span>
             </button>
             {is_collapsed ? null : section_tasks.map((task_item) => render_task_card({
+                    mobile_actions: props.mobile_actions,
                 handle_task_select,
                 handle_toggle_task,
                 task_item
@@ -2825,6 +2840,20 @@ function render_mobile_section(props) {
     );
 }
 
+
+function TaskMobileActions({ task, actions }) {
+    if (!actions) return null;
+    return <details className="mobile_task_actions" onClick={event => event.stopPropagation()}>
+        <summary aria-label={`Acciones de ${task.title}`}>••• <span>Acciones</span></summary>
+        <div className="mobile_task_action_list">
+            <button type="button" onClick={() => actions.onEdit(task.id)}>Editar tarea</button>
+            <label>Mover a sección<select aria-label={`Mover ${task.title} a sección`} value={task.section || "unsectioned"} onChange={event => actions.onMove(task.id, event.target.value)}>
+                {actions.sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
+            </select></label>
+            <button type="button" className="danger_menu_item" onClick={() => actions.onDelete(task.id)}>Eliminar tarea</button>
+        </div>
+    </details>;
+}
 
 // Renders a mobile card for a task.
 function render_task_card(props) {
@@ -2871,17 +2900,12 @@ function render_task_card(props) {
                     <span className={`task_badge status_badge ${get_status_class(task_item.status)}`}>
                         {task_item.status}
                     </span>
-                    {task_item.priority === "Alta" ? (
-                        <span className="alert_meta">
-                            {render_project_dot(project_item.color)}
-                            Vence hoy - Prioridad alta
-                        </span>
-                    ) : (
-                        <span className="muted_meta">{task_item.due_label} - Prioridad {task_item.priority.toLowerCase()}</span>
-                    )}
+                    <span className="muted_meta">{task_item.due_label || "Sin fecha"} · Prioridad {task_item.priority}</span>
+                    <span className="muted_meta">{member_item?.name || "Sin responsable"} · {project_item.label}</span>
                 </span>
             </button>
             {render_avatar(member_item, "avatar_medium")}
+            <TaskMobileActions task={task_item} actions={props.mobile_actions} />
         </article>
     );
 }
@@ -2963,6 +2987,7 @@ function render_board_view(props) {
                         </header>
                         <div className="board_card_stack">
                             {section_tasks.map((task_item) => render_board_card({
+                    mobile_actions: props.mobile_actions,
                                 handle_drag_start,
                                 handle_task_select,
                                 handle_toggle_task,
@@ -3073,6 +3098,7 @@ function render_board_card(props) {
                     {task_item.priority}
                 </span>
             </footer>
+            <TaskMobileActions task={task_item} actions={props.mobile_actions} />
         </article>
     );
 }
@@ -3348,7 +3374,7 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
                 onKeyDown={handle_detail_resize_key_down}
                 onPointerDown={handle_detail_resize_start}
             />
-            <div className="task_detail_sidebar" style={{ width: `min(${task_detail_width}px, 50%)` }}>
+            <ResponsiveOverlay><div className="task_detail_sidebar" role="dialog" aria-label="Detalle de tarea" style={{ width: `min(${task_detail_width}px, 50%)` }}>
                 <TaskDetailPanel
                     handle_add_comment={handle_add_comment}
                     handle_delete_task={handle_delete_task}
@@ -3359,7 +3385,7 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
                     selected_task={selected_task}
                     show_comments={show_comments}
                 />
-            </div>
+            </div></ResponsiveOverlay>
         </>
     );
 }
@@ -3478,6 +3504,7 @@ function render_project_modal(props) {
                 </header>
 
                 <form className="project_create_body" onSubmit={handle_create_project}>
+                    <div className="modal_scroll_fields">
                     <label className="project_create_step">
                         <span><strong>1</strong> Nombre del proyecto</span>
                         <input name="project_name" type="text" placeholder="Ej. Campana de lanzamiento Q4" defaultValue={editing_project?.label || ""} required />
@@ -3568,6 +3595,7 @@ function render_project_modal(props) {
                         </div>
                     </section>
 
+                    </div>
                     <footer className="project_create_footer">
                         <button type="button" onClick={() => set_active_modal(null)}>Cancelar</button>
                         <button type="submit">{editing_project ? "Guardar cambios" : "Crear proyecto"}</button>
@@ -3703,6 +3731,9 @@ function TaskAppContent() {
     const refresh = use_ref(async () => {});
     const [active_view, set_active_view] = use_state("list");
     const [active_modal, set_active_modal] = use_state(null);
+    const [inbox_detail_open, set_inbox_detail_open] = use_state(false);
+    const mobile = useMediaQuery("(max-width: 760px)");
+    useDialog(!!active_modal && !["project_menu"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
@@ -3893,22 +3924,22 @@ function TaskAppContent() {
         set_dragged_task_id(task_id);
     }
 
-    function handle_column_drop(column_id) {
+    function handle_column_drop(column_id, task_id = dragged_task_id) {
         if (real) {
-            const task = data.tasks.find(item => item.id === dragged_task_id);
+            const task = data.tasks.find(item => item.id === task_id);
             const link = task?.taskProjects.find(item => item.projectId === selected_project_id);
             set_dragged_task_id(null);
             if (link) mutate(() => api.updateTaskProjectLink(link.id, { section: column_id === "unsectioned" ? null : column_id, position: String(Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === column_id).map(item => Number(item.position))) + 1000) }));
             return;
         }
-        if (!dragged_task_id) return;
+        if (!task_id) return;
         const target_column = board_columns.find((c) => c.id === column_id);
         const next_section = column_id;
         const next_status = target_column ? target_column.status : "Pend.";
         const next_completed = column_id === "completed";
 
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
-            if (task_item.id !== dragged_task_id) {
+            if (task_item.id !== task_id) {
                 return task_item;
             }
 
@@ -4019,7 +4050,7 @@ function TaskAppContent() {
 
     use_effect(() => {
         function handle_pointer_down(event) {
-            if (event.target.closest(".task_tool_anchor, .quick_popover_container, .project_menu_popover, .project_item_wrap")) {
+            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .project_menu_popover, .project_item_wrap")) {
                 return;
             }
 
@@ -4094,6 +4125,16 @@ function TaskAppContent() {
         } finally { mutation_pending.current = false; set_pending(false); }
     }
 
+    useDialog(mobile && !!inbox_filter_menu, ".inbox_dropdown", () => set_inbox_filter_menu(null));
+    useDialog(mobile && inbox_detail_open && active_module === "inbox", ".inbox_detail_panel_open", () => set_inbox_detail_open(false));
+    useDialog(mobile && !!active_task_tool, ".task_options_panel", () => set_active_task_tool(null));
+    useDialog(mobile && !!selected_task && !active_modal, ".task_detail_sidebar", () => set_selected_task_id(null));
+    use_effect(() => {
+        const escape = event => { if (event.key === "Escape") { set_active_task_tool(null); set_active_quick_popover(null); set_active_project_menu_id(null); set_inbox_filter_menu(null); set_active_modal(current => current === "project_menu" ? null : current); } };
+        document.addEventListener("keydown", escape);
+        return () => document.removeEventListener("keydown", escape);
+    }, []);
+
     // Opens/closes one of the Ordenar/Filtrar/Personalizar dropdown panels,
     // closing the others if one is already open.
     function handle_toggle_task_tool(tool_id) {
@@ -4123,6 +4164,7 @@ function TaskAppContent() {
     }
 
     function handle_inbox_activity_select(notification_id) {
+        set_inbox_detail_open(true);
         if (real) { set_selected_inbox_id(notification_id); mutate(async () => { for (const id of [notification_id]) await api.markNotificationRead(id); }); return; }
         set_selected_inbox_id(notification_id);
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
@@ -4217,6 +4259,7 @@ function TaskAppContent() {
 
     // Changes the active shell module and closes mobile navigation.
     function handle_module_change(module_id) {
+        set_inbox_detail_open(false);
         if (module_id === "schedules") {
             set_active_module("tasks");
             set_active_section("timeline");
@@ -4683,8 +4726,8 @@ function TaskAppContent() {
     return (
         <AppShell
             sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open) } } }}
-            mobileHeaderProps={{ detailOpen: !!selected_task, detailTitle: selected_task ? "Detalle de tarea" : null, onBack: () => set_active_modal(null), onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
-            topBarProps={{ searchPlaceholder: "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: ({ assignment: user_plus_icon, comment: message_circle_icon, status_changed: check_circle_icon })[item.type] })), search_query, set_search_query }}
+            mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
+            topBarProps={{ searchPlaceholder: "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
             overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}</>}
         >
@@ -4707,6 +4750,7 @@ function TaskAppContent() {
                     projects={projects}
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "tasks" ? render_tasks_module({
+                    mobile_actions: { onEdit: handle_open_edit_task, onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
                     active_quick_popover,
                     active_section,
@@ -4765,6 +4809,7 @@ function TaskAppContent() {
                     tasks,
                     visible_fields
                 }) : active_module === "inbox" ? render_inbox_module({
+                    inbox_detail_open, close_inbox_detail: () => set_inbox_detail_open(false),
                     archived_inbox_ids,
                     handle_inbox_activity_select,
                     handle_inbox_bulk_archive,

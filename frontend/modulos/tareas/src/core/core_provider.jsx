@@ -76,7 +76,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const { account, assignments, error } = state;
     const active = state.activeAssignment?.id || "", busy = state.sessionStatus === "loading";
-    if (real && (!account || !active)) return <div className="bold_modal_backdrop"><div className="bold_modal_window" role="dialog" aria-label="Iniciar sesión">
+    if (real && (!account || !active)) return <div className="bold_modal_backdrop"><div className="bold_modal_window core_login_panel" role="dialog" aria-label="Iniciar sesión">
         <div className="bold_modal_header"><h2>{loginTitle}</h2></div>
         <form className="bold_modal_body" onSubmit={login}>
             {error && <p role="alert" style={{ whiteSpace: "pre-wrap", color: "#c22" }}>{error}</p>}

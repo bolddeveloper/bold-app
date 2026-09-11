@@ -1,3 +1,6 @@
+import { ResponsiveOverlay } from "../shared/responsive_overlay.jsx";
+import { useMediaQuery } from "../shared/use_media_query.js";
+import { useDialog } from "../shared/use_dialog.js";
 import { createContext, useContext, useEffect, useState, createElement } from "react";
 import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, Home as home_icon, Inbox as inbox_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
@@ -21,17 +24,23 @@ export function ShellProvider({ children, navigation }) {
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, children }) {
     const shell = useShell();
     const core = useCore();
+    const compact = useMediaQuery("(max-width: 1023px)");
+    useDialog(compact && shell.is_sidebar_open, ".sidebar_shell", () => shell.set_is_sidebar_open(false));
+    useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment };
+    const sessionControls = is_using_real_backend() && <div className="session_toolbar"><label>Cargo <select aria-label="Asignación activa" value={core.activeAssignment.id} onChange={event => core.setActiveAssignment(event.target.value)}>{core.assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label><button className="secondary_button" onClick={core.logout}>Cerrar sesión</button></div>;
     return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
-        {render_sidebar({ ...sidebarProps, ...shell, ...identity })}
+        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, sessionControls: compact ? sessionControls : null })}
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
-        <main className="main_workspace">
-            {is_using_real_backend() && <div className="session_toolbar"><label>Cargo <select aria-label="Asignación activa" value={core.activeAssignment.id} onChange={event => core.setActiveAssignment(event.target.value)}>{core.assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label><button className="secondary_button" onClick={core.logout}>Cerrar sesión</button></div>}
+        <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
+            {!compact && sessionControls}
             {feedback}
-            {render_mobile_header({ ...mobileHeaderProps, ...shell, ...identity })}
+            {render_mobile_header({ ...mobileHeaderProps, ...shell, ...identity, ...topBarProps })}
             {render_top_bar({ ...topBarProps, ...shell, ...identity })}
+            {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{render_notifications_panel(topBarProps)}</div></ResponsiveOverlay>}
             {children}
         </main>
+        <div id="bold-overlay-root" />
         {overlays}
     </div>;
 }
@@ -80,7 +89,7 @@ function render_sidebar(props) {
     const primary_navigation_items = navigation_items;
 
     return (
-        <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`}>
+        <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
             <div className="sidebar_header">
                 {render_logo()}
                 <button
@@ -109,6 +118,7 @@ function render_sidebar(props) {
                 </div>
             </div>
 
+            {props.sessionControls}
             <div className="sidebar_footer">
                 <span className="profile_avatar">{current_user.initials}</span>
                 <div className="profile_text">
@@ -133,9 +143,9 @@ function render_notifications_panel(props) {
     } = props;
 
     return (
-        <div className="task_tool_panel notifications_panel">
+        <div className="task_tool_panel notifications_panel" role="dialog" aria-label="Notificaciones">
             <header className="notifications_panel_header">
-                <h3>Notificaciones</h3>
+                <h3>Notificaciones</h3><button type="button" className="icon_button" aria-label="Cerrar notificaciones" onClick={handle_close_notifications}>{render_icon(x_icon, 20)}</button>
                 <button className="link_button" type="button" onClick={handle_mark_notifications_read}>
                     Marcar como leidas
                 </button>
@@ -164,7 +174,7 @@ function render_notifications_panel(props) {
             </div>
             <footer className="modal_footer">
                 <button className="link_button" type="button" onClick={handle_close_notifications}>
-                    Ver todas las notificaciones
+                    Cerrar notificaciones
                 </button>
             </footer>
         </div>
@@ -219,11 +229,7 @@ function render_top_bar(props) {
                         {render_icon(bell_icon, 18)}
                         {has_unread_notifications ? <span className="bell_unread_dot"></span> : null}
                     </button>
-                    {is_notifications_open ? render_notifications_panel({
-                        handle_close_notifications,
-                        handle_mark_notifications_read,
-                        notifications
-                    }) : null}
+
                 </div>
                 <span className="soft_avatar">{current_user.initials}</span>
             </div>
@@ -246,10 +252,6 @@ function render_mobile_header(props) {
 
     return (
         <header className="mobile_header">
-            <div className="mobile_status_bar">
-                <span>9:41</span>
-                <span className="mobile_battery"></span>
-            </div>
             <div className="mobile_header_row">
                 <button
                     className="mobile_menu_button"
@@ -260,13 +262,9 @@ function render_mobile_header(props) {
                     {detailOpen ? render_icon(arrow_left_icon, 24) : render_icon(menu_icon, 24)}
                 </button>
                 {detailOpen ? <h1>{title}</h1> : active_item?.brand ? render_logo() : <h1>{title}</h1>}
-                <button
-                    className="mobile_more_button"
-                    type="button"
-                    aria-label="Mas opciones"
-                    onClick={() => onMore()}
-                >
-                    {detailOpen ? render_icon(more_horizontal_icon, 21) : <span>{current_user.initials}</span>}
+                <button className="mobile_more_button" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
+                    {render_icon(bell_icon, 22)}
+                    {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
                 </button>
             </div>
         </header>

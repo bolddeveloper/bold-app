@@ -53,7 +53,7 @@ const pause = () => new Promise(resolve => setTimeout(resolve, 20));
 async function until(check, label) { const end = Date.now() + 12000; while (!check()) { if (Date.now() > end) throw new Error(label + ": " + document.body.textContent.slice(0, 1400)); await pause(); } }
 function select(el, value) { el.value = value; el.dispatchEvent(new Event("change", { bubbles: true })); }
 async function login() {
-    await until(() => document.querySelector('[name="email"]'), "login");
+    await until(() => document.querySelector('[name="email"]') && !document.querySelector('form button[type="submit"], form .primary_button')?.disabled, "login ready");
     document.querySelector('[name="email"]').value = "ana@bold.gt";
     document.querySelector('[name="password"]').value = "test";
     document.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

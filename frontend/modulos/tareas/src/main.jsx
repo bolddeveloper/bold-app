@@ -3,6 +3,9 @@ import { createRoot as create_root } from "react-dom/client";
 import task_app from "./app.jsx";
 import { register_service_worker } from "./service_worker.js";
 import "./styles.css";
+import "./shared/responsive.css";
+import "./core/app_shell.css";
+import "./tasks_mobile.css";
 
 
 // Mounts the React application into the document root.
