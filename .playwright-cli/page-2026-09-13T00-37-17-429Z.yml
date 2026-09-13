@@ -1,0 +1,67 @@
+- generic [ref=e3]:
+  - complementary "Navegación" [ref=e4]:
+    - generic "Bold" [ref=e6]: bold
+    - generic [ref=e10]:
+      - paragraph [ref=e11]: NAVEGACION
+      - navigation "Principal" [ref=e12]:
+        - button "Inicio" [ref=e13] [cursor=pointer]
+        - generic [ref=e19]:
+          - button "Tareas" [expanded] [ref=e20] [cursor=pointer]
+          - generic [ref=e28]:
+            - button "Mis tareas" [ref=e29] [cursor=pointer]
+            - generic [ref=e32]:
+              - paragraph [ref=e33]: WORKSPACE
+              - button "Ver Workspaces" [active] [ref=e35] [cursor=pointer]
+            - generic [ref=e42]:
+              - paragraph [ref=e43]: PROYECTOS
+              - generic [ref=e44]:
+                - button "Proyectos Ver todos" [ref=e45] [cursor=pointer]:
+                  - generic [ref=e49]:
+                    - strong [ref=e50]: Proyectos
+                    - generic [ref=e51]: Ver todos
+                - button "Crear proyecto" [ref=e54] [cursor=pointer]
+              - generic [ref=e56]:
+                - generic [ref=e57]:
+                  - button "Ver información de Lanzamiento Q4 Lanzamiento Q4" [ref=e58] [cursor=pointer]:
+                    - button "Ver información de Lanzamiento Q4" [ref=e59]
+                    - generic [ref=e60]: Lanzamiento Q4
+                  - button "Opciones de Lanzamiento Q4" [ref=e61] [cursor=pointer]
+                - generic [ref=e66]:
+                  - button "Ver información de Contenido mensual Contenido mensual" [ref=e67] [cursor=pointer]:
+                    - button "Ver información de Contenido mensual" [ref=e68]
+                    - generic [ref=e69]: Contenido mensual
+                  - button "Opciones de Contenido mensual" [ref=e70] [cursor=pointer]
+                - generic [ref=e75]:
+                  - button "Ver información de Rediseno web Rediseno web" [ref=e76] [cursor=pointer]:
+                    - button "Ver información de Rediseno web" [ref=e77]
+                    - generic [ref=e78]: Rediseno web
+                  - button "Opciones de Rediseno web" [ref=e79] [cursor=pointer]
+                - generic [ref=e84]:
+                  - button "Ver información de Campanas activas Campanas activas" [ref=e85] [cursor=pointer]:
+                    - button "Ver información de Campanas activas" [ref=e86]
+                    - generic [ref=e87]: Campanas activas
+                  - button "Opciones de Campanas activas" [ref=e88] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=e93] [cursor=pointer]
+        - button "Informes" [ref=e99] [cursor=pointer]
+    - generic [ref=e104]:
+      - generic [ref=e105]: AM
+      - generic [ref=e106]:
+        - strong [ref=e107]: Ana Martinez
+        - generic [ref=e108]: Administrador
+  - main [ref=e109]:
+    - generic [ref=e110]:
+      - searchbox [ref=e115]
+      - generic [ref=e116]:
+        - button "Activar modo oscuro" [ref=e117] [cursor=pointer]
+        - button "Notificaciones" [ref=e122] [cursor=pointer]
+        - generic [ref=e127]: AM
+    - generic [ref=e416]:
+      - navigation "Ruta de carpetas" [ref=e417]:
+        - button "Workspaces" [ref=e418] [cursor=pointer]
+      - generic [ref=e419]:
+        - generic [ref=e420]:
+          - heading "Workspaces" [level=1] [ref=e421]
+          - paragraph [ref=e422]: Organiza proyectos y tareas en carpetas.
+        - button "Crear carpeta" [ref=e424] [cursor=pointer]
+      - heading "Carpetas" [level=2] [ref=e426]
+      - paragraph [ref=e427]: Crea tu primera carpeta.

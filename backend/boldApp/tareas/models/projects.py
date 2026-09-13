@@ -22,6 +22,7 @@ class Project(UUIDPrimaryKeyModel, SoftDeleteModel):
     avatar_data_url = models.TextField(null=True, blank=True)
     color_hex = models.CharField(max_length=7, null=True, blank=True)
     status = models.CharField(max_length=30)
+    priority = models.CharField(max_length=10, choices=[("Alta", "Alta"), ("Media", "Media"), ("Baja", "Baja")], default="Media")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     sensitivity_level = models.CharField(max_length=20, null=True, blank=True)

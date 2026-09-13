@@ -1,0 +1,38 @@
+.folder_module h1, .folder_module p, .folder_module h2 { overflow-wrap: anywhere; }
+.folder_module > h2 { margin: 26px 0 14px; font-size: 18px; }
+.folder_breadcrumb { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 20px; }
+.folder_breadcrumb button { border: 0; background: transparent; color: inherit; text-decoration: underline; overflow-wrap: anywhere; }
+.folder_actions, .folder_selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.folder_actions button, .folder_selection button { border: 1px solid var(--bold_line); border-radius: 8px; padding: 9px 12px; background: var(--bold_surface, #fff); color: inherit; }
+.folder_actions .primary_button { background: var(--bold_red); color: white; }
+.folder_module .projects_grid { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
+.folder_module .folder_card { border-left: 4px solid var(--folder-color); }
+.folder_module .folder_card::before { background: var(--folder-color); }
+.folder_card_title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.folder_card_title > span { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; color: var(--folder-color); background: color-mix(in srgb, var(--folder-color) 12%, transparent); }
+.folder_card_title button { border: 0; background: transparent; color: inherit; font-size: 17px; font-weight: 800; text-align: left; overflow-wrap: anywhere; min-width: 0; }
+.folder_card progress { width: 100%; height: 8px; accent-color: var(--folder-color); }
+.folder_card progress::-webkit-progress-bar { background: #ece9e5; border-radius: 10px; }
+.folder_card progress::-webkit-progress-value { background: var(--folder-color); border-radius: 10px; }
+.folder_card progress { appearance: none; border: 0; border-radius: 10px; overflow: hidden; }
+.folder_card footer button { display: inline-flex; align-items: center; gap: 6px; }
+.folder_content { display: grid; border: 1px solid var(--bold_line); border-radius: 12px; background: var(--bold_surface, #fff); padding: 8px; }
+.folder_content_row { display: flex; align-items: center; gap: 10px; padding: 10px 6px; min-width: 0; border-bottom: 1px solid var(--bold_line); }
+.folder_content_row:last-child { border-bottom: 0; }
+.folder_content_row input { flex-shrink: 0; accent-color: var(--bold_red); width: 18px; height: 18px; }
+.folder_content_row button { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; text-align: left; overflow-wrap: anywhere; }
+.folder_content_row small { color: var(--bold_muted); max-width: 35%; }
+.folder_selection { margin-top: 24px; padding: 12px; border: 1px solid var(--bold_line); border-radius: 10px; }
+.folder_selection p { width: 100%; font-size: 13px; }
+.folder_module button:disabled { opacity: .5; cursor: not-allowed; }
+.folder_overlay { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; background: #0006; padding: 12px; }
+.folder_dialog { width: min(560px, 100%); max-height: calc(100dvh - 24px); overflow-y: auto; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); border-radius: 16px; padding: 20px; box-sizing: border-box; }
+.folder_dialog header, .folder_dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.folder_dialog h2 { margin: 0; font-size: 20px; }
+.folder_dialog footer { justify-content: flex-end; margin-top: 20px; }
+.folder_dialog label { display: grid; gap: 6px; margin-top: 16px; }
+.folder_dialog input:not([type=checkbox]), .folder_dialog textarea, .folder_dialog select { width: 100%; box-sizing: border-box; min-height: 38px; border: 1px solid var(--bold_line); border-radius: 8px; padding: 8px; background: var(--bold_surface, #fff); color: inherit; }
+.folder_dialog button { border: 1px solid var(--bold_line); border-radius: 8px; padding: 8px 12px; }
+.folder_picker { max-height: 45vh; overflow-y: auto; }
+.folder_dialog [role=alert] { color: #c52232; }
+@media (max-width: 600px) { .folder_module .projects_grid { grid-template-columns: minmax(0, 1fr); } .folder_actions { width: 100%; } .folder_actions button { flex: 1 1 auto; } }

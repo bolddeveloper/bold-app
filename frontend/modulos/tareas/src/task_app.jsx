@@ -1,7 +1,7 @@
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
-import { Component as react_component, createElement as create_element, useEffect as use_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
+import { createContext, useContext, Component as react_component, createElement as create_element, useEffect as use_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import Swal from "sweetalert2";
 import { createPortal } from "react-dom";
 import {
@@ -40,8 +40,10 @@ import { useCore } from "../../core/core_provider.jsx";
 import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
-import { loadTaskData, saveTaskDraft } from "./services/task_service.js";
+import { loadTaskData, saveTaskDraft, saveFollowers } from "./services/task_service.js";
 import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isMyTask } from "./services/task_models.js";
+import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
+import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
 import {
@@ -151,7 +153,6 @@ const today_iso = () => {
     const today = new Date();
     return toISODate(today.getFullYear(), today.getMonth(), today.getDate());
 };
-const open_date_picker = event => { try { event.currentTarget.showPicker?.(); } catch {} };
 const attachment_later = () => Swal.fire({ icon: "info", title: "Próximamente", text: "Esta función estará disponible más adelante", confirmButtonColor: "#ef1f2d" });
 
 
@@ -536,6 +537,26 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
 }
 
 function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_down, on_resize_start, width }) {
+    const available_height = () => {
+        const toolbar = [...document.querySelectorAll(".top_bar, .mobile_header")].find(element => element.getClientRects().length);
+        return Math.max(0, window.innerHeight - Math.max(0, toolbar?.getBoundingClientRect().bottom || 0));
+    };
+    const [max_height, set_max_height] = use_state(available_height);
+    const [height, set_height] = use_state(available_height);
+    const height_drag = use_ref(null);
+    const min_height = Math.min(280, max_height);
+    const resize_height = value => set_height(Math.max(min_height, Math.min(max_height, value)));
+    use_effect(() => {
+        const measure = () => {
+            const maximum = available_height();
+            set_max_height(maximum);
+            set_height(current => Math.min(maximum, current));
+        };
+        const observer = new ResizeObserver(measure);
+        document.querySelectorAll(".top_bar, .mobile_header, .session_toolbar").forEach(element => observer.observe(element));
+        window.addEventListener("resize", measure);
+        return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
+    }, []);
     const [closing, set_closing] = use_state(false);
     const close_timer = use_ref(null);
     const request_close = () => {
@@ -547,8 +568,13 @@ function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_
     use_effect(() => () => window.clearTimeout(close_timer.current), []);
 
     return createPortal(<div className={`task_drawer_overlay ${closing ? "task_drawer_closing" : ""}`} onPointerDown={event => { if (event.target === event.currentTarget) request_close(); }}>
-        <section className={`task_drawer_panel ${class_name}`} data-task-drawer="true" role="dialog" aria-modal="true" aria-label={label} style={{ "--task_drawer_width": `${width}px` }} onClickCapture={event => { if (event.target.closest("[data-drawer-close]")) { event.preventDefault(); event.stopPropagation(); request_close(); } }}>
+        <section className={`task_drawer_panel ${class_name}`} data-task-drawer="true" role="dialog" aria-modal="true" aria-label={label} style={{ "--task_drawer_width": `${width}px`, "--task_drawer_height": `${height}px`, "--task_drawer_max_height": `${max_height}px` }} onClickCapture={event => { if (event.target.closest("[data-drawer-close]")) { event.preventDefault(); event.stopPropagation(); request_close(); } }}>
             {children}
+            <div className="task_drawer_height_resizer" role="separator" aria-label="Cambiar altura del panel" aria-orientation="horizontal" aria-valuemin={min_height} aria-valuemax={max_height} aria-valuenow={Math.round(height)} tabIndex={0}
+                onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); event.currentTarget.setPointerCapture(event.pointerId); height_drag.current = { y: event.clientY, height }; }}
+                onPointerMove={event => { if (height_drag.current) resize_height(height_drag.current.height + height_drag.current.y - event.clientY); }}
+                onPointerUp={() => { height_drag.current = null; }} onPointerCancel={() => { height_drag.current = null; }} onLostPointerCapture={() => { height_drag.current = null; }}
+                onKeyDown={event => { if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return; event.preventDefault(); resize_height(event.key === "Home" ? min_height : event.key === "End" ? max_height : height + (event.key === "ArrowUp" ? 16 : -16)); }} />
             <div className="task_drawer_resizer" role="separator" aria-label="Cambiar ancho del panel" aria-orientation="vertical" aria-valuemin={360} aria-valuemax={Math.round(window.innerWidth * .7)} aria-valuenow={width} tabIndex={0} onKeyDown={on_resize_key_down} onPointerDown={on_resize_start} />
         </section>
     </div>, document.body);
@@ -580,18 +606,52 @@ function crop_project_avatar(file) {
 
 
 // Renders a colored project dot.
+const ProjectPreviewContext = createContext(null);
+
 function render_project_dot(project_or_color, size_class = "") {
+    return <ProjectIdentity project_or_color={project_or_color} size_class={size_class} />;
+}
+
+function ProjectIdentity({ project_or_color, size_class }) {
+    const show_preview = useContext(ProjectPreviewContext);
     const project = typeof project_or_color === "object" ? project_or_color : null;
     const color = project?.color || project_or_color;
+    const open = event => {
+        event.preventDefault(); event.stopPropagation();
+        show_preview?.({ id: project.id, rect: event.currentTarget.getBoundingClientRect() });
+    };
+    const interaction = project?.id ? { role: "button", tabIndex: 0, "aria-label": `Ver información de ${project.label}`, onClick: open, onKeyDown: event => { if (["Enter", " "].includes(event.key)) open(event); } } : {};
     return project?.avatar_data_url
-        ? <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} role="img" aria-label={`Imagen de ${project.label || "proyecto"}`}><img src={project.avatar_data_url} alt="" onError={event => event.currentTarget.remove()} /></span>
-        : <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} aria-hidden="true" />;
+        ? <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} {...interaction}><img src={project.avatar_data_url} alt="" onError={event => event.currentTarget.remove()} /></span>
+        : <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} {...interaction} />;
+}
+
+function ProjectPreview({ project, anchor, onClose, onSave, onUpdate, pending }) {
+    useDialog(true, ".project_preview", onClose);
+    const width = Math.min(360, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(anchor.left, window.innerWidth - width - 12));
+    const top = Math.max(12, Math.min(anchor.top - 80, window.innerHeight - 520));
+    const status = ({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project.status?.toLowerCase()] || project.status || "Activo";
+    return createPortal(<div className="project_preview_overlay" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+        <section className="project_preview" role="dialog" aria-modal="true" aria-label={`Información de ${project.label}`} style={{ left, top, width, "--project_color": project.color, transformOrigin: `${anchor.left - left + anchor.width / 2}px ${anchor.top - top}px` }}>
+            <div className="project_preview_cover"><button type="button" aria-label="Cerrar" onClick={onClose}>{render_icon(x_icon, 18)}</button></div>
+            <div className="project_preview_content">
+                {render_project_dot({ ...project, id: null }, "project_identity_preview")}
+                <h2>{project.label}</h2>
+                <p>{project.description || "Sin descripción"}</p>
+                <div className="project_summary_badges"><TaskSelect aria_label="Estado del proyecto" class_name="project_preview_select" disabled={pending} variant="status" value={status} options={["Activo", "Pendiente", "Inactivo"]} on_change={value => onUpdate({ status: value })} /><TaskSelect aria_label="Prioridad del proyecto" class_name="project_preview_select" disabled={pending} variant="priority" value={project.priority || "Media"} options={priority_items} on_change={value => onUpdate({ priority: value })} /></div>
+                <fieldset disabled={pending}>
+                    <CollaboratorsSelector selected_ids={project.member_ids || []} on_change={onSave} label="Personas del proyecto" action_label="Agregar persona" picker_title="Personas del proyecto" empty_text="Sin personas agregadas" />
+                </fieldset>
+            </div>
+        </section>
+    </div>, document.body);
 }
 
 
 // Renders one navigation item in the sidebar.
 // Renders a project item in the sidebar workspace list.
-function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id) {
+function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, onAssignWorkspace, pinned = false) {
     const is_active = selected_project_id === project_item.id;
     const is_menu_open = active_project_menu_id === project_item.id;
 
@@ -603,7 +663,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
             onClick={() => handle_project_select(project_item.id)}
         >
             {render_project_dot(project_item)}
-            <span>{project_item.label}</span>
+            <span>{pinned ? "📌 " : ""}{project_item.label}</span>
             {is_active ? (
                 <span className="project_more">•••</span>
             ) : null}
@@ -612,6 +672,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
                 className="project_more_button"
                 type="button"
                 aria-label={`Opciones de ${project_item.label}`}
+                aria-expanded={is_menu_open}
                 onClick={(event) => {
                     event.stopPropagation();
                     handle_project_menu_toggle(project_item.id);
@@ -620,6 +681,8 @@ function render_project_item(project_item, selected_project_id, handle_project_s
                 {render_icon(more_horizontal_icon, 18)}
             </button>
                 <div className={`sidebar_project_menu animated_overflow_menu ${is_menu_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_menu_open}>
+                    <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "pin")}>{pinned ? "Desanclar" : "Anclar al acceso rápido"}</button>
+                    <button type="button" onClick={() => onAssignWorkspace(project_item)}>Asignar a Workspace</button>
                     <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "edit")}>Editar proyecto</button>
                     <button className="danger_menu_item" type="button" onClick={() => handle_project_menu_toggle(project_item.id, "delete")}>Eliminar proyecto</button>
                 </div>
@@ -654,7 +717,32 @@ function get_split_content_width(split_element) {
 
 
 // Renders the task workspace content nested below Tareas.
-function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open, projects_active) {
+function WorkspaceSelector({ onManage }) {
+    return <div className="workspace_selector_wrap">
+        <button className="workspace_selector" type="button" onClick={onManage}>
+            <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
+            <span>Ver Workspaces</span>
+            {render_icon(chevron_right_icon, 16)}
+        </button>
+    </div>;
+}
+
+function WorkspaceAssignmentModal({ item, itemType, onClose, onToggle, workspaces }) {
+    const field = itemType === "project" ? "projectIds" : "taskIds";
+    return <div className="modal_overlay" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+        <section className="workspace_assignment_modal" role="dialog" aria-modal="true" aria-label="Asignar a Workspaces">
+            <header><div><h2>Asignar a Workspaces</h2><p>{item.label || item.title}</p></div><button type="button" aria-label="Cerrar" onClick={onClose}>{render_icon(x_icon, 18)}</button></header>
+            <div className="workspace_assignment_list">
+                {workspaces.map(workspace => <label key={workspace.id}><input type="checkbox" checked={workspace[field].includes(String(item.id))} onChange={() => onToggle(workspace.id, field, String(item.id))} /><span>{folderPath(workspaces, workspace.id).map(folder => folder.name).join(" / ")}</span></label>)}
+                {!workspaces.length && <p>No hay Workspaces. Crea uno desde Ver Workspaces en la barra lateral.</p>}
+            </div>
+            <footer><button className="primary_button" type="button" onClick={onClose}>Listo</button></footer>
+        </section>
+    </div>;
+}
+
+
+function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open, projects_active, workspaceProps) {
     return (
         <div className={`tasks_submenu ${is_open ? "tasks_submenu_open" : "tasks_submenu_closed"}`} id="tasks_workspace_menu" aria-hidden={!is_open}>
             <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
@@ -664,14 +752,11 @@ function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_ope
 
             <div className="sidebar_section workspace_block">
                 <p className="sidebar_label">WORKSPACE</p>
-                <button className="workspace_selector" type="button">
-                    <span className="workspace_badge">B</span>
-                    <span>{is_using_real_backend() ? current_user?.unit_name : "BOLD Workspace"}</span>
-                    {render_icon(chevron_down_icon, 16)}
-                </button>
+                <WorkspaceSelector {...workspaceProps} />
             </div>
 
             <div className="sidebar_section projects_block">
+                <p className="sidebar_label projects_navigation_label">PROYECTOS</p>
                 <div className="projects_heading">
                     <button className={`projects_index_button ${projects_active ? "projects_index_button_active" : ""}`} type="button" onClick={handle_projects_open}>
                         <span className="projects_index_icon">{render_icon(folder_icon, 17)}</span>
@@ -689,7 +774,7 @@ function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_ope
                 </div>
 
                 <div className="project_list">
-                    {projects.map((project_item) => render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id))}
+                    {projects.map((project_item) => render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, workspaceProps.onAssignProject, workspaceProps.pinnedIds.includes(project_item.id)))}
                 </div>
             </div>
         </div>
@@ -1330,13 +1415,41 @@ function QuickStatusPopover({ current_status, on_close, on_select, status_option
 
 
 // Custom calendar date picker popover (Images 2 & 4 of design reference).
-function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
-    const mobile = useMediaQuery("(max-width: 760px)");
-    const [native_date, set_native_date] = use_state(current_date || "");
+function CalendarDateField({ name, value, defaultValue = "", onChange }) {
+    const [local_value, set_local_value] = use_state(defaultValue);
+    const [open, set_open] = use_state(false);
+    const selected = value === undefined ? local_value : value;
+    const change = next => { set_local_value(next); onChange?.(next); set_open(false); };
+    return <div className="calendar_date_field">
+        {name && <input type="hidden" name={name} value={selected || ""} />}
+        <button type="button" className="bold_date_trigger_btn" aria-label="Elegir fecha" aria-expanded={open} onClick={() => set_open(!open)}>
+            {render_icon(calendar_days_icon, 15)}
+            {dateFromISO(selected)?.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) || "Seleccionar fecha"}
+        </button>
+        {open && <CustomDatePicker current_date={selected} on_close={() => set_open(false)} on_clear={() => change("")} on_apply={(day, month, year) => change(toISODate(year, month, day))} />}
+    </div>;
+}
+
+function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_close }) {
+    const root_ref = use_ref(null);
     const initial_date = dateFromISO(current_date) || new Date();
     const [view_month, set_view_month] = use_state(initial_date.getMonth());
     const [view_year, set_view_year] = use_state(initial_date.getFullYear());
-    const [picked_day, set_picked_day] = use_state(current_day || null);
+    const [picked_date, set_picked_date] = use_state(current_date || toISODate(initial_date.getFullYear(), initial_date.getMonth(), current_day) || "");
+    const today = new Date();
+    const today_iso_value = toISODate(today.getFullYear(), today.getMonth(), today.getDate());
+    const apply = () => {
+        const date = dateFromISO(picked_date);
+        if (date) on_apply?.(date.getDate(), date.getMonth(), date.getFullYear());
+        else on_close?.();
+    };
+    use_effect(() => {
+        const outside = event => { if (!root_ref.current?.parentElement.contains(event.target)) apply(); };
+        const escape = event => { if (event.key === "Escape") { event.stopPropagation(); on_close?.(); } };
+        document.addEventListener("pointerdown", outside);
+        document.addEventListener("keydown", escape, true);
+        return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape, true); };
+    }, [picked_date, on_apply, on_close]);
     const year_options = Array.from({ length: 101 }, (_, index) => 2000 + index);
 
     const days_in_month = new Date(view_year, view_month + 1, 0).getDate();
@@ -1353,12 +1466,8 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
         else set_view_month((m) => m + 1);
     }
 
-    if (mobile) return <div className="native_date_picker">
-        <label>Fecha límite<input type="date" value={native_date} onClick={open_date_picker} onChange={event => set_native_date(event.target.value)} /></label>
-        <div><button type="button" onClick={on_clear}>Quitar fecha</button><button type="button" disabled={!dateFromISO(native_date)} onClick={() => { const date = dateFromISO(native_date); on_apply(date.getDate(), date.getMonth(), date.getFullYear()); }}>Aplicar fecha</button></div>
-    </div>;
     return (
-        <div className="custom_datepicker_popover" onClick={(e) => e.stopPropagation()}>
+        <div ref={root_ref} className="custom_datepicker_popover" role="group" aria-label="Calendario" onClick={(e) => e.stopPropagation()}>
             <div className="custom_datepicker_nav">
                 <button type="button" aria-label="Mes anterior" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
                 <TaskSelect aria_label="Mes" class_name="task_select_compact" value={view_month} options={month_names_es.map((label, value) => ({ value, label }))} on_change={set_view_month} />
@@ -1374,22 +1483,25 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
                     <button
                         key={d}
                         type="button"
-                        className={`day_cell ${picked_day === d ? "day_cell_active" : ""}`}
-                        onClick={() => set_picked_day(d)}
+                        className={`day_cell ${picked_date === toISODate(view_year, view_month, d) ? "day_cell_active" : ""} ${today_iso_value === toISODate(view_year, view_month, d) ? "day_cell_today" : ""}`}
+                        aria-current={today_iso_value === toISODate(view_year, view_month, d) ? "date" : undefined}
+                        aria-pressed={picked_date === toISODate(view_year, view_month, d)}
+                        aria-label={`${d} ${month_names_es[view_month]} ${view_year}`}
+                        onClick={() => set_picked_date(toISODate(view_year, view_month, d))}
                     >
                         {d}
                     </button>
                 ))}
             </div>
             <div className="custom_datepicker_actions">
-                <button type="button" className="dp_clear_btn" onClick={() => { set_picked_day(null); on_clear && on_clear(); }}>
+                <button type="button" className="dp_clear_btn" onClick={() => { set_picked_date(""); on_clear?.(); }}>
                     Quitar fecha
                 </button>
                 <button
                     type="button"
                     className="dp_apply_btn"
-                    disabled={!toISODate(view_year, view_month, picked_day)}
-                    onClick={() => on_apply && on_apply(picked_day, view_month, view_year)}
+                    disabled={!picked_date}
+                    onClick={apply}
                 >
                     Aplicar
                 </button>
@@ -1400,14 +1512,14 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear }) {
 
 
 // Right-side task detail sidebar panel (Image 3 of design reference).
-function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, selected_task, show_comments = true }) {
+function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, on_followers_change, on_workspace, selected_task, show_comments = true }) {
     const [comment_text, set_comment_text] = use_state("");
     const [comment_images, set_comment_images] = use_state([]);
     const member_item = get_member(selected_task.assignee_id);
     const project_item = get_project(selected_task.project_id);
+    const collaborators = (selected_task.collaborator_ids || []).map(get_member).filter(Boolean);
     const subtasks = Array.isArray(selected_task.subtasks) ? selected_task.subtasks : [];
     const comments = Array.isArray(selected_task.comments) ? selected_task.comments : [];
-    const collaborators = get_task_collaborators(selected_task);
     const done_count = subtasks.filter((s) => s.completed).length;
     const subtask_pct = subtasks.length ? Math.round((done_count / subtasks.length) * 100) : 0;
 
@@ -1437,6 +1549,15 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
             <div className="detail_top_eyebrow_row">
                 <span style={{ fontSize: "11px", color: "#9ca3af", fontWeight: 600, letterSpacing: "0.08em" }}>DETALLE DE TAREA</span>
                 <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                        type="button"
+                        className="detail_action_btn"
+                        title="Asignar a Workspace"
+                        aria-label="Asignar a Workspace"
+                        onClick={() => on_workspace(selected_task)}
+                    >
+                        {render_icon(folder_icon, 15)}
+                    </button>
                     <button
                         type="button"
                         className="detail_action_btn"
@@ -1515,39 +1636,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
 
             {/* Apartado visual de colaboradores del proyecto en el detalle */}
             <div className="detail_collaborators_card">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "11px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                        COLABORADORES ({collaborators.length})
-                    </span>
-                    <button
-                        type="button"
-                        className="detail_add_collab_link"
-                        onClick={() => handle_open_edit_task(selected_task.id)}
-                        title="Modificar colaboradores de la tarea"
-                    >
-                        {render_icon(user_plus_icon, 13)}
-                        <span>Modificar</span>
-                    </button>
-                </div>
-
-                {collaborators.length > 0 ? (
-                    <div className="detail_collab_list">
-                        {collaborators.map((c) => (
-                            <div key={c.id} className="detail_collab_row">
-                                {render_avatar(c, "avatar_small")}
-                                <div className="detail_collab_info">
-                                    <strong className="detail_collab_name">{c.name}</strong>
-                                    <small className="detail_collab_email">{c.email}</small>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="detail_collab_empty" onClick={() => handle_open_edit_task(selected_task.id)}>
-                        {render_icon(user_plus_icon, 16)}
-                        <span>Haz clic para asignar colaboradores a esta tarea</span>
-                    </div>
-                )}
+                <CollaboratorsSelector selected_ids={selected_task.collaborator_ids || []} on_change={ids => on_followers_change(selected_task.id, ids)} action_label="Modificar" />
             </div>
 
             {selected_task.description ? (
@@ -1649,7 +1738,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
 
 
 // Selector de colaboradores para los modales de Crear y Editar tarea
-function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Personas del proyecto", empty_text = "Selecciona personas para seguir esta tarea" }) {
+function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Agregar colaborador", empty_text = "Selecciona personas para seguir esta tarea" }) {
     const [is_picker_open, set_is_picker_open] = use_state(false);
     const [query, set_query] = use_state("");
 
@@ -1832,7 +1921,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                         </div>
                     </div>
 
-                    {real && <label className="bold_field_group">Fecha de inicio<input className="bold_text_input" type="date" value={edit_draft.start_date || ""} onClick={open_date_picker} onChange={event => handle_edit_field_change("start_date", event.target.value || null)} /></label>}
+                    {real && <div className="bold_field_group">Fecha de inicio<CalendarDateField value={edit_draft.start_date || ""} onChange={value => handle_edit_field_change("start_date", value || null)} /></div>}
                     {/* Fecha límite */}
                     <div className="bold_field_group" style={{ position: "relative" }}>
                         <label className="bold_field_label">Fecha límite</label>
@@ -1847,6 +1936,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                         {show_datepicker ? (
                             <CustomDatePicker
                                 current_day={edit_draft.due_day}
+                                on_close={() => set_show_datepicker(false)}
                                 current_date={edit_draft.due_date}
                                 on_clear={() => { handle_edit_field_change("due_date", null); handle_edit_field_change("due_day", null); set_show_datepicker(false); }}
                                 on_apply={(day, month, year) => {
@@ -2069,6 +2159,7 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
                         {show_datepicker ? (
                             <CustomDatePicker
                                 current_day={due_day}
+                                on_close={() => set_show_datepicker(false)}
                                 current_date={toISODate(due_year, due_month, due_day)}
                                 on_clear={() => { set_due_day(null); set_show_datepicker(false); }}
                                 on_apply={(day, month, year) => {
@@ -2204,6 +2295,7 @@ function render_tasks_module(props) {
         handle_toggle_task,
         handle_toggle_task_tool,
         handle_toggle_visible_field,
+        on_workspace,
         handle_save_column_name,
         handle_start_edit_column,
         is_adding_column,
@@ -2434,6 +2526,8 @@ function render_tasks_module(props) {
                     </div>
 
                     <TaskDetailSidebar
+                        on_workspace={on_workspace}
+                        on_followers_change={props.on_followers_change}
                         handle_add_comment={handle_add_comment}
                         handle_delete_task={handle_delete_task}
                         handle_detail_resize_key_down={handle_detail_resize_key_down}
@@ -2455,6 +2549,8 @@ function render_tasks_module(props) {
                         <TimelineComments comments={timeline_comments} on_add_comment={handle_add_timeline_comment} />
                     </div>
                     <TaskDetailSidebar
+                        on_workspace={on_workspace}
+                        on_followers_change={props.on_followers_change}
                         handle_add_comment={handle_add_comment}
                         handle_delete_task={handle_delete_task}
                         handle_detail_resize_key_down={handle_detail_resize_key_down}
@@ -2957,6 +3053,7 @@ function TaskMobileActions({ task, actions }) {
         <summary aria-label={`Acciones de ${task.title}`}>••• <span>Acciones</span></summary>
         <div className="mobile_task_action_list">
             <button type="button" onClick={() => actions.onEdit(task.id)}>Editar tarea</button>
+            <button type="button" onClick={() => actions.onWorkspace(task)}>Asignar a Workspace</button>
             <label>Mover a sección<TaskSelect aria_label={`Mover ${task.title} a sección`} variant="section" value={task.section || "unsectioned"} options={actions.sections.map(section => ({ value: section.id, label: section.label, icon: columns_icon }))} stop_propagation on_change={value => actions.onMove(task.id, value)} /></label>
             <button type="button" className="danger_menu_item" onClick={() => actions.onDelete(task.id)}>Eliminar tarea</button>
         </div>
@@ -3470,12 +3567,14 @@ function TimelineComments({ comments, on_add_comment }) {
 }
 
 
-function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_detail_resize_key_down, handle_detail_resize_start, handle_open_edit_task, handle_task_select, handle_toggle_subtask, handle_toggle_task, selected_task, show_comments = true, task_detail_width }) {
+function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_detail_resize_key_down, handle_detail_resize_start, handle_open_edit_task, handle_task_select, handle_toggle_subtask, handle_toggle_task, on_followers_change, on_workspace, selected_task, show_comments = true, task_detail_width }) {
     if (!selected_task) return null;
 
     return (
         <TaskDrawer class_name="task_detail_sidebar" label="Detalle de tarea" on_close={() => handle_task_select(null)} width={task_detail_width} on_resize_key_down={handle_detail_resize_key_down} on_resize_start={handle_detail_resize_start}>
                 <TaskDetailPanel
+                    on_followers_change={on_followers_change}
+                    on_workspace={on_workspace}
                     handle_add_comment={handle_add_comment}
                     handle_delete_task={handle_delete_task}
                     handle_open_edit_task={handle_open_edit_task}
@@ -3563,9 +3662,12 @@ function ShareProjectModal({ project, onClose, onSave, onError, pending }) {
     </section></div>;
 }
 
-function render_projects_module({ projects, selected_project_id, tasks, search_query, onCreate, onOpen, onEdit, onShare, onDelete }) {
+function render_projects_module({ projects, selected_project_id, tasks, search_query, onCreate, onOpen, onPreview, onEdit, onShare, onDelete, onWorkspace }) {
     const query = search_query.trim().toLowerCase();
-    const visible = projects.filter(project => project.label.toLowerCase().includes(query));
+    const priority_order = { Alta: 0, Media: 1, Baja: 2 };
+    const visible = projects.filter(project => project.label.toLowerCase().includes(query)).sort((a, b) =>
+        Number(["inactivo", "inactive"].includes(a.status?.toLowerCase())) - Number(["inactivo", "inactive"].includes(b.status?.toLowerCase()))
+        || (priority_order[a.priority] ?? 1) - (priority_order[b.priority] ?? 1));
     return <section className="projects_module">
         <header className="projects_module_header"><div><p className="breadcrumb_text">PROYECTOS</p><h1>Proyectos</h1><p>Gestiona el trabajo del departamento en un solo lugar.</p></div><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
         <div className="projects_grid">{visible.map(project => {
@@ -3573,7 +3675,7 @@ function render_projects_module({ projects, selected_project_id, tasks, search_q
             const done = projectTasks.filter(task => task.completed).length;
             const progress = projectTasks.length ? Math.round(done / projectTasks.length * 100) : 0;
             return <article className={`project_summary_card ${selected_project_id === project.id ? "project_summary_card_active" : ""}`} key={project.id}>
-                <div className="project_summary_title">{render_project_dot(project, "project_identity_card")}<button type="button" onClick={() => onOpen(project.id)}>{project.label}</button><span>{project.status || "Activo"}</span></div>
+                <div className="project_summary_title"><button type="button" className="project_info_button" aria-label={`Ver información de ${project.label}`} aria-haspopup="dialog" title="Ver información del proyecto" onClick={event => { event.stopPropagation(); onPreview({ id: project.id, rect: event.currentTarget.getBoundingClientRect() }); }}>{render_project_dot({ ...project, id: null }, "project_identity_card")}</button><button type="button" onClick={() => onOpen(project.id)}>{project.label}</button><div className="project_summary_badges"><span data-status={(project.status || "Activo").toLowerCase()}>{project.status || "Activo"}</span><span data-priority={(project.priority || "Media").toLowerCase()} aria-label={`Prioridad ${project.priority || "Media"}`}>{project.priority || "Media"}</span></div></div>
                 <p>{project.start_date || "Sin inicio"} — {project.end_date || "Sin fecha final"}</p>
                 <div className="project_summary_progress"><span><i style={{ width: `${progress}%` }} /></span><strong>{progress}%</strong></div>
                 <small>{done} de {projectTasks.length} tareas completadas</small>
@@ -3581,6 +3683,7 @@ function render_projects_module({ projects, selected_project_id, tasks, search_q
                     <button className="project_action_primary" type="button" onClick={() => onOpen(project.id)}>{render_icon(external_link_icon, 15)} Abrir tareas</button>
                     <button className="project_action_secondary" type="button" onClick={() => onEdit(project.id)}>{render_icon(pencil_icon, 15)} Editar</button>
                     <button className="project_action_secondary" type="button" onClick={() => onShare(project.id)}>{render_icon(link_icon, 15)} Compartir</button>
+                    <button className="project_action_secondary" type="button" onClick={() => onWorkspace(project)}>{render_icon(folder_icon, 15)} Workspace</button>
                     <button className="project_action_danger" type="button" onClick={() => onDelete(project.id)}>{render_icon(trash_icon, 15)} Eliminar</button>
                 </footer>
             </article>;
@@ -3687,20 +3790,20 @@ function render_project_modal(props) {
                         <div className="project_create_grid_3">
                             <label>
                                 Fecha de inicio
-                                <input name="project_start" type="date" defaultValue={editing_project?.start_date || today_iso()} onClick={open_date_picker} />
+                                <CalendarDateField name="project_start" defaultValue={editing_project?.start_date || today_iso()} />
                             </label>
                             <label>
                                 Fecha de fin
-                                <input name="project_end" type="date" defaultValue={editing_project?.end_date || ""} onClick={open_date_picker} />
+                                <CalendarDateField name="project_end" defaultValue={editing_project?.end_date || ""} />
                             </label>
                             <label>
                                 Estado inicial
-                                <TaskSelect aria_label="Estado inicial" name="project_status" variant="status" default_value={editing_project?.status || "Activo"} options={["Activo", "Pendiente", "Inactivo"]} />
+                                <TaskSelect aria_label="Estado inicial" name="project_status" variant="status" value={props.project_status} on_change={props.set_project_status} options={["Activo", "Pendiente", "Inactivo"]} />
                             </label>
                         </div>
                         <label className="project_create_full_select">
                             Prioridad
-                            <TaskSelect aria_label="Prioridad" name="project_priority" variant="priority" disabled={is_using_real_backend()} default_value={editing_project?.priority || "Media"} options={priority_items} />
+                            <TaskSelect aria_label="Prioridad" name="project_priority" variant="priority" value={props.project_priority} on_change={props.set_project_priority} options={priority_items} />
                         </label>
                     </section>
 
@@ -3841,6 +3944,7 @@ class TaskAppErrorBoundary extends react_component {
 
 
 function TaskAppContent() {
+    const [project_preview, set_project_preview] = use_state(null);
     const session = useCore();
     const { active_module, set_active_module, set_is_sidebar_open } = useShell();
     const real = is_using_real_backend();
@@ -3892,9 +3996,25 @@ function TaskAppContent() {
         }
     });
     visible_project_items = projects.length ? projects : project_items;
+    const workspace_unit_id = session.activeUnit?.id || current_user?.unit_name || "demo";
+    const load_workspace_state = () => {
+        try { return { unitId: workspace_unit_id, items: readWorkspaces(localStorage, workspace_unit_id), activeId: localStorage.getItem(activeWorkspaceStorageKey(workspace_unit_id)) || "all", error: "" }; }
+        catch { return { unitId: workspace_unit_id, items: [], activeId: "all", error: "No se pudieron cargar las carpetas. Los datos guardados se conservaron. Reintenta recargando la página." }; }
+    };
+    const [workspace_state, set_workspace_state] = use_state(load_workspace_state);
+    const [workspace_assignment, set_workspace_assignment] = use_state(null);
+    const workspaces = workspace_state.items;
+    const active_workspace_id = workspaces.some(item => item.id === workspace_state.activeId) ? workspace_state.activeId : "all";
+    const active_workspace = workspaces.find(item => item.id === active_workspace_id) || null;
     const recent_projects_key = `bold_recent_projects:${session.activeAssignment?.personId || "demo"}:${session.activeAssignment?.id || current_user_id}`;
     const [recent_project_ids, set_recent_project_ids] = use_state([]);
+    const pinned_projects_key = `${recent_projects_key}:pinned`;
+    const [pinned_project_ids, set_pinned_project_ids] = use_state(() => {
+        try { const ids = JSON.parse(localStorage.getItem(pinned_projects_key)); return Array.isArray(ids) ? ids : []; } catch { return []; }
+    });
     const [project_avatar_data_url, set_project_avatar_data_url] = use_state("");
+    const [project_status, set_project_status] = use_state("Activo");
+    const [project_priority, set_project_priority] = use_state("Media");
     const [project_color, set_project_color] = use_state(project_color_options[0]);
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
@@ -3913,14 +4033,14 @@ function TaskAppContent() {
     const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
     const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
-    const board_columns = real ? (task_scope === "mine"
-        ? [{ id: "unsectioned", label: "Mis tareas" }]
+    const board_columns = real ? (task_scope !== "project"
+        ? [{ id: "unsectioned", label: task_scope === "workspace" ? active_workspace?.name || "Workspace" : "Mis tareas" }]
         : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])])
         : [...(mock_sections_by_project[selected_project_id] || []), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])];
 
     const [task_detail_width, set_task_detail_width] = use_state(() => {
         const saved = Number(localStorage.getItem("bold_task_drawer_width"));
-        return saved || Math.min(720, Math.round(window.innerWidth * .44));
+        return saved || Math.min(480, Math.round(window.innerWidth * .7));
     });
     const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
     const [editing_project_id, set_editing_project_id] = use_state(null);
@@ -3939,6 +4059,19 @@ function TaskAppContent() {
         project_id: "all"
     });
     const [timeline_comments_by_scope, set_timeline_comments_by_scope] = use_state(get_saved_timeline_comments);
+
+    use_effect(() => {
+        if (workspace_state.unitId !== workspace_unit_id) set_workspace_state(load_workspace_state());
+    }, [workspace_state.unitId, workspace_unit_id]);
+
+    function save_workspace_items(items) {
+        if (workspace_state.error) { set_api_error(workspace_state.error); return false; }
+        try {
+            const saved = saveWorkspaces(localStorage, workspace_unit_id, items);
+            set_workspace_state(state => ({ ...state, items: saved }));
+            return true;
+        } catch { set_api_error("No se pudieron guardar las carpetas. El cambio no se aplicó."); return false; }
+    }
 
     use_effect(() => {
         if (!real) localStorage.setItem(projects_storage_key, JSON.stringify(projects));
@@ -3984,7 +4117,12 @@ function TaskAppContent() {
     }, [task_detail_width]);
 
     use_effect(() => {
-        if (active_modal === "project") set_project_avatar_data_url(projects.find(project => project.id === editing_project_id)?.avatar_data_url || "");
+        if (active_modal === "project") {
+            const project = projects.find(project => project.id === editing_project_id);
+            set_project_avatar_data_url(project?.avatar_data_url || "");
+            set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
+            set_project_priority(project?.priority || "Media");
+        }
     }, [active_modal, editing_project_id]);
 
     function handle_create_project(event) {
@@ -4006,8 +4144,8 @@ function TaskAppContent() {
             color: project_color,
             start_date,
             end_date,
-            status: form_data.get("project_status") || "Activo",
-            priority: form_data.get("project_priority") || "Media",
+            status: project_status,
+            priority: project_priority,
             member_ids: project_people_ids
         };
 
@@ -4015,7 +4153,7 @@ function TaskAppContent() {
             let created_project_id = editing_project_id;
             mutate(async () => {
                 const assignment = session.activeAssignment;
-                const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, start_date: start_date || null, end_date: end_date || null };
+                const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, priority: project_payload.priority, start_date: start_date || null, end_date: end_date || null };
                 const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
                 created_project_id = project.id;
                 const members = data.members.filter(item => item.project === project.id);
@@ -4060,6 +4198,14 @@ function TaskAppContent() {
     }
 
     function handle_project_menu_toggle(project_id, action = "toggle") {
+        if (action === "pin") {
+            const next = pinned_project_ids.includes(project_id) ? pinned_project_ids.filter(id => id !== project_id) : [...pinned_project_ids, project_id];
+            try { localStorage.setItem(pinned_projects_key, JSON.stringify(next)); }
+            catch { set_api_error("No se pudo guardar el acceso rápido."); return; }
+            set_pinned_project_ids(next);
+            set_active_project_menu_id(null);
+            return;
+        }
         if (action !== "toggle") {
             const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
             set_selected_project_id(project_id);
@@ -4091,17 +4237,22 @@ function TaskAppContent() {
         set_active_modal("share");
     }
 
-    function handle_save_project_members(member_ids) {
+    function handle_save_project_members(member_ids, project_id = selected_project_id, close_modal = true) {
         if (!real) {
-            set_projects(items => items.map(project => project.id === selected_project_id ? { ...project, member_ids } : project));
-            set_active_modal(null);
+            set_projects(items => items.map(project => project.id === project_id ? { ...project, member_ids } : project));
+            if (close_modal) set_active_modal(null);
             return;
         }
         mutate(async () => {
-            const members = data.members.filter(item => item.project === selected_project_id);
+            const members = data.members.filter(item => item.project === project_id);
             for (const member of members) if (!member_ids.includes(member.assignment)) await api.remove("project-members", member.id);
-            for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: selected_project_id, assignment: id, member_role: "member", status: "active" });
-        }, () => set_active_modal(null));
+            for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: project_id, assignment: id, member_role: "member", status: "active" });
+        }, () => { if (close_modal) set_active_modal(null); });
+    }
+
+    function handle_update_project(project_id, changes) {
+        if (!real) return set_projects(items => items.map(project => project.id === project_id ? { ...project, ...changes } : project));
+        mutate(() => api.update("projects", project_id, changes));
     }
 
     function handle_drag_start(task_id, event) {
@@ -4218,14 +4369,28 @@ function TaskAppContent() {
 
     const [notifications, set_notifications] = use_state(notification_items);
 
+    function select_workspace(id) {
+        try { localStorage.setItem(activeWorkspaceStorageKey(workspace_unit_id), id); }
+        catch { set_api_error("No se pudo guardar la carpeta seleccionada."); return; }
+        set_workspace_state(state => ({ ...state, activeId: id }));
+        set_search_query(""); set_active_module("workspaces"); set_selected_task_id(null);
+    }
+
+    function toggle_workspace_assignment(workspaceId, field, itemId) {
+        save_workspace_items(toggleWorkspaceItem(workspaces, workspaceId, field, itemId));
+    }
+
+    const workspace_projects = active_workspace ? projects.filter(project => active_workspace.projectIds.includes(String(project.id))) : projects;
+    const workspace_tasks = tasksInWorkspace(active_workspace, tasks);
+
     const filtered_tasks = use_memo(() => {
-        const by_search = get_filtered_tasks(tasks, search_query);
+        const by_search = get_filtered_tasks(task_scope === "workspace" ? workspace_tasks : tasks, search_query);
         const by_filters = get_tasks_matching_active_filters(by_search, active_filters);
         const scoped_tasks = task_scope === "mine"
             ? by_filters.filter((task_item) => isMyTask(task_item, current_user_id))
-            : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
+            : task_scope === "workspace" ? by_filters : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope === "mine" ? { ...task, section: "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
+        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
@@ -4233,17 +4398,19 @@ function TaskAppContent() {
         sort_direction,
         sort_field,
         task_scope,
-        tasks
+        tasks,
+        workspace_tasks
     ]);
 
     const selected_project = use_memo(() => (
         task_scope === "mine"
             ? { id: "my_tasks", label: "Mis tareas", description: "Tareas asignadas a ti" }
+            : task_scope === "workspace" ? { id: active_workspace?.id || "all", label: active_workspace?.name || "Todos", description: active_workspace ? "Proyectos y tareas del Workspace" : "Todos los proyectos y tareas" }
             : projects.find((project_item) => project_item.id === selected_project_id) || projects[0] || project_items[0] || { id: "", label: "Sin proyectos" }
-    ), [projects, selected_project_id, task_scope]);
+    ), [active_workspace, projects, selected_project_id, task_scope]);
 
-    const timeline_scope_id = task_scope === "mine" ? "my_tasks" : selected_project_id;
-    const timeline_comments = real ? tasks.filter(item => task_scope === "mine" ? item.assignee_id === current_user_id : item.taskProjects.some(link => link.projectId === selected_project_id)).flatMap(item => item.comments).sort((a, b) => a.created_at.localeCompare(b.created_at)) : timeline_comments_by_scope[timeline_scope_id] || [];
+    const timeline_scope_id = task_scope === "mine" ? "my_tasks" : task_scope === "workspace" ? active_workspace_id : selected_project_id;
+    const timeline_comments = real ? tasks.filter(item => task_scope === "mine" ? item.assignee_id === current_user_id : task_scope === "workspace" ? workspace_tasks.some(task => task.id === item.id) : item.taskProjects.some(link => link.projectId === selected_project_id)).flatMap(item => item.comments).sort((a, b) => a.created_at.localeCompare(b.created_at)) : timeline_comments_by_scope[timeline_scope_id] || [];
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
@@ -4889,6 +5056,7 @@ function TaskAppContent() {
 
         if (active_modal === "project") {
             return render_project_modal({
+                project_status, set_project_status, project_priority, set_project_priority,
                 drawer,
                 editing_project: projects.find((project_item) => project_item.id === editing_project_id) || null,
                 handle_create_project,
@@ -4934,12 +5102,12 @@ function TaskAppContent() {
 
     // Returns the full shell with the focused tasks module.
     return (
-        <AppShell
-            sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => handle_module_change("projects"), set_active_modal, recent_project_ids.map(id => projects.find(project => project.id === id)).filter(Boolean), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, active_module === "projects") } } }}
+        <ProjectPreviewContext.Provider value={set_project_preview}><AppShell
+sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
-            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}</>}
+            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
         >
                 <div className="module_transition" key={active_module}>
                 {active_module === "home" ? <HomeModule
@@ -4959,18 +5127,28 @@ function TaskAppContent() {
                     parseDueDate={parse_due_date}
                     projects={projects}
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
-                /> : active_module === "projects" ? render_projects_module({
-                    projects,
+                /> : active_module === "workspaces" ? <>
+                    {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
+                    <WorkspacesModule key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onTask={id => { set_active_module("tasks"); set_active_section("tasks"); handle_task_select(id); }} />
+                </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
+                    projects: active_module === "department_projects" ? projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id) : workspace_projects,
                     selected_project_id,
                     tasks: stored_tasks,
                     search_query,
                     onCreate: () => { set_editing_project_id(null); set_project_color(project_color_options[0]); set_project_people_ids([]); set_active_modal("project"); },
                     onOpen: handle_project_select,
+                    onPreview: set_project_preview,
                     onEdit: id => handle_project_menu_toggle(id, "edit"),
                     onShare: handle_share_project,
+                    onWorkspace: project => set_workspace_assignment({ type: "project", item: project }),
                     onDelete: id => handle_project_menu_toggle(id, "delete")
                 }) : active_module === "tasks" ? render_tasks_module({
-                    mobile_actions: { onEdit: handle_open_edit_task, onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
+                    on_workspace: task => set_workspace_assignment({ type: "task", item: task }),
+                    on_followers_change: (task_id, ids) => {
+                        if (real) return mutate(() => saveFollowers(task_id, ids, data));
+                        set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task));
+                    },
+                    mobile_actions: { onEdit: handle_open_edit_task, onWorkspace: task => set_workspace_assignment({ type: "task", item: task }), onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
                     active_modal,
                     active_quick_popover,
@@ -5067,7 +5245,7 @@ function TaskAppContent() {
                     set_schedule_view
                 }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module)}
                 </div>
-        </AppShell>
+        </AppShell></ProjectPreviewContext.Provider>
     );
 }
 

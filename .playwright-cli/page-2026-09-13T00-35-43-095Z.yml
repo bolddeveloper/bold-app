@@ -1,0 +1,193 @@
+- generic [ref=e3]:
+  - complementary "Navegación" [ref=e4]:
+    - generic "Bold" [ref=e6]: bold
+    - generic [ref=e10]:
+      - paragraph [ref=e11]: NAVEGACION
+      - navigation "Principal" [ref=e12]:
+        - button "Inicio" [ref=e13] [cursor=pointer]
+        - generic [ref=e19]:
+          - button "Tareas" [expanded] [ref=e20] [cursor=pointer]
+          - generic [ref=e28]:
+            - button "Mis tareas" [ref=e29] [cursor=pointer]
+            - generic [ref=e32]:
+              - paragraph [ref=e33]: WORKSPACE
+              - button "Ver Workspaces" [ref=e35] [cursor=pointer]
+            - generic [ref=e42]:
+              - paragraph [ref=e43]: PROYECTOS
+              - generic [ref=e44]:
+                - button "Proyectos Ver todos" [ref=e45] [cursor=pointer]:
+                  - generic [ref=e49]:
+                    - strong [ref=e50]: Proyectos
+                    - generic [ref=e51]: Ver todos
+                - button "Crear proyecto" [ref=e54] [cursor=pointer]
+              - generic [ref=e56]:
+                - generic [ref=e57]:
+                  - button "Ver información de Lanzamiento Q4 Lanzamiento Q4" [ref=e58] [cursor=pointer]:
+                    - button "Ver información de Lanzamiento Q4" [ref=e59]
+                    - generic [ref=e60]: Lanzamiento Q4
+                  - button "Opciones de Lanzamiento Q4" [ref=e61] [cursor=pointer]
+                - generic [ref=e66]:
+                  - button "Ver información de Contenido mensual Contenido mensual" [ref=e67] [cursor=pointer]:
+                    - button "Ver información de Contenido mensual" [ref=e68]
+                    - generic [ref=e69]: Contenido mensual
+                  - button "Opciones de Contenido mensual" [ref=e70] [cursor=pointer]
+                - generic [ref=e75]:
+                  - button "Ver información de Rediseno web Rediseno web" [ref=e76] [cursor=pointer]:
+                    - button "Ver información de Rediseno web" [ref=e77]
+                    - generic [ref=e78]: Rediseno web
+                  - button "Opciones de Rediseno web" [ref=e79] [cursor=pointer]
+                - generic [ref=e84]:
+                  - button "Ver información de Campanas activas Campanas activas" [ref=e85] [cursor=pointer]:
+                    - button "Ver información de Campanas activas" [ref=e86]
+                    - generic [ref=e87]: Campanas activas
+                  - button "Opciones de Campanas activas" [ref=e88] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=e93] [cursor=pointer]
+        - button "Informes" [ref=e99] [cursor=pointer]
+    - generic [ref=e104]:
+      - generic [ref=e105]: AM
+      - generic [ref=e106]:
+        - strong [ref=e107]: Ana Martinez
+        - generic [ref=e108]: Administrador
+  - main [ref=e109]:
+    - generic [ref=e110]:
+      - searchbox [ref=e115]
+      - generic [ref=e116]:
+        - button "Activar modo oscuro" [ref=e117] [cursor=pointer]
+        - button "Notificaciones" [ref=e122] [cursor=pointer]
+        - generic [ref=e127]: AM
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - generic [ref=e131]:
+          - heading "Lanzamiento Q4" [level=1] [ref=e132]
+          - paragraph [ref=e133]: Campaña y entregables del último trimestre
+        - generic [ref=e134]:
+          - generic "Miembros del proyecto" [ref=e135]:
+            - generic [ref=e136]: AM
+            - generic [ref=e137]: DU
+            - generic [ref=e138]: CR
+            - generic [ref=e139]: "+2"
+          - button "Compartir" [ref=e140] [cursor=pointer]
+          - button "Agregar tarea" [ref=e141] [cursor=pointer]
+          - button "Más opciones" [ref=e143] [cursor=pointer]
+      - generic [ref=e148]:
+        - tablist "Navegación principal" [ref=e149]:
+          - tab "Tareas" [selected] [ref=e150] [cursor=pointer]
+          - tab "Cronograma" [ref=e151] [cursor=pointer]
+        - generic [ref=e152]:
+          - button "Ordenar" [ref=e154] [cursor=pointer]
+          - button "Filtrar" [ref=e156] [cursor=pointer]
+          - button "Personalizar" [ref=e158] [cursor=pointer]
+          - group "Cambiar estilo de visualización" [ref=e159] [cursor=pointer]:
+            - button "Vista en lista" [pressed] [ref=e160]
+            - button "Vista en columnas" [ref=e168]
+      - region "Lista de tareas desplazable" [ref=e176]:
+        - generic [ref=e177]:
+          - generic [ref=e178]: TAREA
+          - generic [ref=e179]: RESPONSABLE
+          - generic [ref=e180]: FECHA
+          - generic [ref=e181]: PRIORIDAD
+          - generic [ref=e182]: ESTADO
+        - generic [ref=e183]:
+          - button "POR HACER 3" [ref=e184] [cursor=pointer]:
+            - strong [ref=e188]: POR HACER
+            - generic [ref=e189]: "3"
+          - generic "Arrastra la tarea a otra sección" [ref=e190]:
+            - button "Completar tarea" [ref=e191] [cursor=pointer]
+            - button "Definir concepto creativo -2d" [ref=e193] [cursor=pointer]:
+              - generic [ref=e194]: Definir concepto creativo
+              - generic "Vencida hace 2 día(s)" [ref=e195]: "-2d"
+            - generic "Acciones de tarea" [ref=e196]:
+              - button "Editar Definir concepto creativo" [ref=e197] [cursor=pointer]
+              - button "Eliminar Definir concepto creativo" [ref=e201] [cursor=pointer]
+            - generic [ref=e205]: AM
+            - generic [ref=e207]: 10 sep
+            - button "ALTA" [ref=e209] [cursor=pointer]
+            - button "PEND." [ref=e213] [cursor=pointer]
+          - generic "Arrastra la tarea a otra sección" [ref=e216]:
+            - button "Completar tarea" [ref=e217] [cursor=pointer]
+            - button "Preparar calendario de contenidos Hoy" [ref=e219] [cursor=pointer]:
+              - generic [ref=e220]: Preparar calendario de contenidos
+              - generic "Vence hoy" [ref=e221]: Hoy
+            - generic "Acciones de tarea" [ref=e222]:
+              - button "Editar Preparar calendario de contenidos" [ref=e223] [cursor=pointer]
+              - button "Eliminar Preparar calendario de contenidos" [ref=e227] [cursor=pointer]
+            - generic [ref=e231]: CR
+            - generic [ref=e233]: 12 sep
+            - button "MEDIA" [ref=e235] [cursor=pointer]
+            - button "PEND." [ref=e239] [cursor=pointer]
+          - generic "Arrastra la tarea a otra sección" [ref=e242]:
+            - button "Completar tarea" [ref=e243] [cursor=pointer]
+            - button "Validar presupuesto de pauta +1d" [ref=e245] [cursor=pointer]:
+              - generic [ref=e246]: Validar presupuesto de pauta
+              - generic "Faltan 1 día(s)" [ref=e247]: +1d
+            - generic "Acciones de tarea" [ref=e248]:
+              - button "Editar Validar presupuesto de pauta" [ref=e249] [cursor=pointer]
+              - button "Eliminar Validar presupuesto de pauta" [ref=e253] [cursor=pointer]
+            - generic [ref=e260]: 13 sep
+            - button "ALTA" [ref=e262] [cursor=pointer]
+            - button "PEND." [ref=e266] [cursor=pointer]
+        - generic [ref=e269]:
+          - button "EN CURSO 2" [ref=e270] [cursor=pointer]:
+            - strong [ref=e274]: EN CURSO
+            - generic [ref=e275]: "2"
+          - generic "Arrastra la tarea a otra sección" [ref=e276]:
+            - button "Completar tarea" [ref=e277] [cursor=pointer]
+            - button "Disenar piezas de lanzamiento -4d" [ref=e279] [cursor=pointer]:
+              - generic [ref=e280]: Disenar piezas de lanzamiento
+              - generic "Vencida hace 4 día(s)" [ref=e281]: "-4d"
+            - generic "Acciones de tarea" [ref=e282]:
+              - button "Editar Disenar piezas de lanzamiento" [ref=e283] [cursor=pointer]
+              - button "Eliminar Disenar piezas de lanzamiento" [ref=e287] [cursor=pointer]
+            - generic [ref=e291]: DU
+            - generic [ref=e293]: 8 sep
+            - button "ALTA" [ref=e295] [cursor=pointer]
+            - button "ACTIVA" [ref=e299] [cursor=pointer]
+          - generic "Arrastra la tarea a otra sección" [ref=e302]:
+            - button "Completar tarea" [ref=e303] [cursor=pointer]
+            - button "Configurar campana en Meta -3d" [ref=e305] [cursor=pointer]:
+              - generic [ref=e306]: Configurar campana en Meta
+              - generic "Vencida hace 3 día(s)" [ref=e307]: "-3d"
+            - generic "Acciones de tarea" [ref=e308]:
+              - button "Editar Configurar campana en Meta" [ref=e309] [cursor=pointer]
+              - button "Eliminar Configurar campana en Meta" [ref=e313] [cursor=pointer]
+            - generic [ref=e317]: AM
+            - generic [ref=e319]: 9 sep
+            - button "MEDIA" [ref=e321] [cursor=pointer]
+            - button "ACTIVA" [ref=e325] [cursor=pointer]
+        - generic [ref=e328]:
+          - button "COMPLETADAS 2" [ref=e329] [cursor=pointer]:
+            - strong [ref=e333]: COMPLETADAS
+            - generic [ref=e334]: "2"
+          - generic "Arrastra la tarea a otra sección" [ref=e335]:
+            - button "Completar tarea" [ref=e336] [cursor=pointer]
+            - button "Reunion de arranque" [ref=e340] [cursor=pointer]
+            - generic "Acciones de tarea" [ref=e342]:
+              - button "Editar Reunion de arranque" [ref=e343] [cursor=pointer]
+              - button "Eliminar Reunion de arranque" [ref=e347] [cursor=pointer]
+            - generic [ref=e351]: AM
+            - generic [ref=e353]: 2 sep
+            - button "BAJA" [ref=e355] [cursor=pointer]
+            - button "LISTA" [ref=e359] [cursor=pointer]
+          - generic "Arrastra la tarea a otra sección" [ref=e362]:
+            - button "Completar tarea" [ref=e363] [cursor=pointer]
+            - button "Aprobar mensajes principales" [ref=e367] [cursor=pointer]
+            - generic "Acciones de tarea" [ref=e369]:
+              - button "Editar Aprobar mensajes principales" [ref=e370] [cursor=pointer]
+              - button "Eliminar Aprobar mensajes principales" [ref=e374] [cursor=pointer]
+            - generic [ref=e378]: CR
+            - generic [ref=e380]: 4 sep
+            - button "MEDIA" [ref=e382] [cursor=pointer]
+            - button "LISTA" [ref=e386] [cursor=pointer]
+        - button "SIN SECCIÓN 0" [ref=e390] [cursor=pointer]:
+          - strong [ref=e394]: SIN SECCIÓN
+          - generic [ref=e395]: "0"
+          - generic [ref=e396]:
+            - button "Renombrar sección" [ref=e397]
+            - button "Eliminar sección" [ref=e401]
+        - button "+ Agregar tarea" [ref=e405] [cursor=pointer]
+        - button "+ Nueva sección" [ref=e407] [cursor=pointer]
+        - generic [ref=e408]:
+          - generic [ref=e409]:
+            - strong [ref=e410]: 7 tareas
+            - generic [ref=e411]: 2 completadas
+          - strong [ref=e414]: 29%

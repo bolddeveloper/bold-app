@@ -28,12 +28,10 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     useDialog(compact && shell.is_sidebar_open, ".sidebar_shell", () => shell.set_is_sidebar_open(false));
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment };
-    const sessionControls = is_using_real_backend() && <div className="session_toolbar"><label>Cargo <select aria-label="Asignación activa" value={core.activeAssignment.id} onChange={event => core.setActiveAssignment(event.target.value)}>{core.assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label><button className="secondary_button" onClick={core.logout}>Cerrar sesión</button></div>;
     return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
-        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, sessionControls: compact ? sessionControls : null })}
+        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, onLogout: core.logout })}
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
-            {!compact && sessionControls}
             {feedback}
             {render_mobile_header({ ...mobileHeaderProps, ...shell, ...identity, ...topBarProps })}
             {render_top_bar({ ...topBarProps, ...shell, ...identity })}
@@ -118,16 +116,16 @@ function render_sidebar(props) {
                 </div>
             </div>
 
-            {props.sessionControls}
             <div className="sidebar_footer">
                 <span className="profile_avatar">{current_user.initials}</span>
                 <div className="profile_text">
                     <strong>{current_user.name}</strong>
                     <span>{current_user?.job_role_title || "Administrador"}</span>
                 </div>
-                <button className="profile_menu_button" type="button" aria-label="Perfil">
-                    {render_icon(more_horizontal_icon, 18)}
-                </button>
+                {is_using_real_backend() && <details className="profile_session_menu" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary").focus(); } }}>
+                    <summary className="profile_menu_button" aria-label="Opciones del perfil">{render_icon(more_horizontal_icon, 18)}</summary>
+                    <div className="profile_session_popover"><button type="button" onClick={props.onLogout}>Cerrar sesión</button></div>
+                </details>}
             </div>
         </aside>
     );

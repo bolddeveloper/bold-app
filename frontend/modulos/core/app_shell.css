@@ -174,6 +174,12 @@
     font-size: 11px;
 }
 
+.profile_session_menu { position: relative; }
+.profile_session_menu > summary { list-style: none; cursor: pointer; }
+.profile_session_menu > summary::-webkit-details-marker { display: none; }
+.profile_session_popover { position: absolute; right: 0; bottom: calc(100% + 12px); z-index: 10; width: 170px; padding: 6px; border: 1px solid #414651; border-radius: 10px; background: #22262e; box-shadow: 0 8px 24px #0004; }
+.profile_session_popover button { width: 100%; padding: 10px 12px; border: 0; border-radius: 6px; background: transparent; color: #ff858d; text-align: left; font: inherit; cursor: pointer; }
+.profile_session_popover button:hover, .profile_session_popover button:focus-visible { background: #ffffff12; }
 .profile_menu_button {
     border: 0;
     background: transparent;
