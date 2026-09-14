@@ -3,6 +3,7 @@ import { http, is_using_real_backend } from "./http_client.js";
 import { coreApi } from "./core_api.js";
 import { normalizeAssignment, selectAssignment } from "./core_models.js";
 import { getCoreState, subscribeCore, updateCore, clearCore } from "./core_store.js";
+import { LoginScreen } from "./login_screen.jsx";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -76,15 +77,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const { account, assignments, error } = state;
     const active = state.activeAssignment?.id || "", busy = state.sessionStatus === "loading";
-    if (real && (!account || !active)) return <div className="bold_modal_backdrop"><div className="bold_modal_window core_login_panel" role="dialog" aria-label="Iniciar sesión">
-        <div className="bold_modal_header"><h2>{loginTitle}</h2></div>
-        <form className="bold_modal_body" onSubmit={login}>
-            {error && <p role="alert" style={{ whiteSpace: "pre-wrap", color: "#c22" }}>{error}</p>}
-            {!account ? <><label>Correo<input className="bold_text_input" name="email" type="email" autoComplete="username" required /></label><label>Contraseña<input className="bold_text_input" name="password" type="password" autoComplete="current-password" required /></label><button className="primary_button" disabled={busy}>{busy ? "Cargando…" : "Iniciar sesión"}</button></> : <>
-                <label>Selecciona tu cargo<select className="bold_select_input" value={active} onChange={event => setActiveAssignment(event.target.value)}><option value="">Seleccionar asignación</option>{assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select></label>
-                <button type="button" className="secondary_button" onClick={logout}>Cerrar sesión</button>
-            </>}
-        </form></div></div>;
+    if (real && (!account || !active)) return <LoginScreen
+        title={loginTitle} error={error} busy={busy} account={account} assignments={assignments}
+        active={active} onLogin={login} onAssignmentChange={setActiveAssignment} onLogout={logout}
+    />;
     if (state.sessionStatus !== "ready") return null;
     const value = { ...state, ...http.getSession(), setActiveAssignment, logout, permissions: { can } };
     return <CoreContext.Provider value={value}>{children}</CoreContext.Provider>;

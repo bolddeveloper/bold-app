@@ -18,6 +18,8 @@ export function ShellProvider({ children, navigation }) {
     useEffect(() => {
         try { localStorage.setItem("bold_color_theme", is_dark_mode ? "dark" : "light"); } catch {}
         document.documentElement.style.colorScheme = is_dark_mode ? "dark" : "light";
+        document.documentElement.dataset.boldTheme = is_dark_mode ? "dark" : "light";
+        document.documentElement.classList.toggle("theme_dark", is_dark_mode);
     }, [is_dark_mode]);
     return <ShellContext.Provider value={{ active_module, set_active_module, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }

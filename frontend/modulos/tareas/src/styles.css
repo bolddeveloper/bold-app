@@ -16,6 +16,15 @@
     --bold_surface_soft: #f7f7f7;
     --bold_line: #e6e3df;
     --bold_muted: #7b808a;
+    --bold_canvas: #f4f3f1;
+    --bold_text: #2c3038;
+    --bold_elevated: #ffffff;
+    --bold_hover: #f7f4f1;
+    --bold_progress_track: #ece9e5;
+    --bold_chart_pending: #cbc9cc;
+    --bold_red_tint: #ffe9e9;
+    --bold_blue_tint: #e7f2ff;
+    --bold_green_tint: #e8f6ed;
 }
 
 * {

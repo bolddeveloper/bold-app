@@ -44,8 +44,8 @@ export default function ReportsModule({ tasks, projects, parseDueDate }) {
                 {!report.weeks.some(week => week.count) && <p className="reports_empty">Sin tareas completadas con vencimiento en estas semanas.</p>}
             </article>
             <article className="reports_card"><h2>Estado del trabajo</h2><p>Distribución de tareas del período</p>
-                <div className="reports_donut" role="img" aria-label={`${completion}% completado, ${report.active} en curso, ${report.pending} por hacer`} style={{ background: `conic-gradient(#e73535 0 ${completion}%, #4d99df ${completion}% ${completion + active}%, #efeeec ${completion + active}% 100%)` }}><div><strong>{completion}%</strong><span>completado</span></div></div>
-                <ul className="reports_legend">{[["Completadas", report.completed, "#e73535"], ["En curso", report.active, "#4d99df"], ["Por hacer", report.pending, "#cbc9cc"]].map(([label, count, color]) => <li key={label}><i style={{ background: color }} />{label}<strong>{count}</strong></li>)}</ul>
+                <div className="reports_donut" role="img" aria-label={`${completion}% completado, ${report.active} en curso, ${report.pending} por hacer`} style={{ background: `conic-gradient(#e73535 0 ${completion}%, #4d99df ${completion}% ${completion + active}%, var(--bold_chart_pending) ${completion + active}% 100%)` }}><div><strong>{completion}%</strong><span>completado</span></div></div>
+                <ul className="reports_legend">{[["Completadas", report.completed, "#e73535"], ["En curso", report.active, "#4d99df"], ["Por hacer", report.pending, "var(--bold_chart_pending)"]].map(([label, count, color]) => <li key={label}><i style={{ background: color }} />{label}<strong>{count}</strong></li>)}</ul>
             </article>
         </div>
         <article className="reports_card reports_projects"><h2>Progreso por proyecto</h2>

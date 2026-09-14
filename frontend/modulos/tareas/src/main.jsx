@@ -5,8 +5,10 @@ import { register_service_worker } from "./service_worker.js";
 import "./styles.css";
 import "../../core/shared/responsive.css";
 import "../../core/app_shell.css";
+import "../../core/login_screen.css";
 import "./tasks_mobile.css";
 import "./tasks_tablet.css";
+import "./theme_rework.css";
 
 
 // Mounts the React application into the document root.

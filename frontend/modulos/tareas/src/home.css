@@ -3,7 +3,7 @@
 .home_header h1 { margin: 0 0 6px; font-size: 32px; }
 .home_header p, .home_card small { color: var(--bold_muted); font-size: 12px; }
 .home_metrics { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 18px; margin-bottom: 24px; }
-.home_metric { min-height: 140px; padding: 22px; background: white; border: 1px solid var(--bold_line); border-radius: 14px; display: flex; justify-content: space-between; box-shadow: 0 7px 22px #2824200b; }
+.home_metric { min-height: 140px; padding: 22px; background: var(--bold_surface); border: 1px solid var(--bold_line); border-radius: 14px; display: flex; justify-content: space-between; box-shadow: 0 7px 22px #2824200b; }
 .home_metric > div { display: flex; flex-direction: column; align-items: flex-start; }
 .home_metric span { text-transform: uppercase; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .home_metric strong { margin: 12px 0 6px; font-size: 40px; line-height: 1; }
@@ -16,7 +16,7 @@
 .home_metric .home_metric_blue { border-radius: 12px; background: #e7f2ff; color: #438edc; }
 .home_metric_blue span { font-size: 22px; }
 .home_grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, .95fr); gap: 20px; }
-.home_card { background: white; border: 1px solid var(--bold_line); border-radius: 14px; box-shadow: 0 7px 22px #2824200b; min-width: 0; }
+.home_card { background: var(--bold_surface); border: 1px solid var(--bold_line); border-radius: 14px; box-shadow: 0 7px 22px #2824200b; min-width: 0; }
 .home_card h2 { margin: 0; font-size: 20px; }
 .home_card_header { display: flex; align-items: center; justify-content: space-between; padding: 21px 24px 12px; }
 .home_card_header button, .home_tabs button { border: 0; background: none; color: var(--bold_red); font-size: 12px; font-weight: 700; }
@@ -24,7 +24,7 @@
 .home_tabs button { color: var(--bold_muted); padding: 11px 0 13px; border-bottom: 2px solid transparent; }
 .home_tabs button.active { color: var(--bold_red); border-color: var(--bold_red); }
 .home_task { min-height: 82px; margin: 0 24px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 190px; align-items: center; gap: 14px; border-bottom: 1px solid var(--bold_line); cursor: pointer; }
-.home_task_check { width: 22px; height: 22px; border: 1px solid #c8c8c8; border-radius: 7px; background: white; }
+.home_task_check { width: 22px; height: 22px; border: 1px solid var(--bold_line); border-radius: 7px; background: var(--bold_surface); }
 .home_task > div { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
 .home_task strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .home_priority { padding: 5px 13px; border-radius: 8px; background: #fff2d5; color: #70551c; font-size: 10px !important; letter-spacing: 0 !important; }
@@ -33,10 +33,10 @@
 .home_task_project { align-items: flex-end !important; }
 .home_task_project > span { width: 10px; height: 10px; border-radius: 50%; position: absolute; margin: 2px 0 0 -18px; }
 .home_task_project small { color: var(--bold_muted); }
-.home_quick_add { border: 0; background: #f5f3f1; color: var(--bold_red); margin: 10px 24px 16px; width: calc(100% - 48px); padding: 6px 10px; text-align: left; font-weight: 700; font-size: 11px; border-radius: 6px; }
+.home_quick_add { border: 0; background: var(--bold_surface_soft); color: var(--bold_red); margin: 10px 24px 16px; width: calc(100% - 48px); padding: 6px 10px; text-align: left; font-weight: 700; font-size: 11px; border-radius: 6px; }
 .home_empty { color: var(--bold_muted); text-align: center; padding: 34px 16px; }
 .home_projects_card { padding-bottom: 14px; }
-.home_project { width: calc(100% - 48px); margin: 10px 24px 4px; padding: 17px; border: 0; border-radius: 11px; background: #f7f6f5; text-align: left; color: inherit; }
+.home_project { width: calc(100% - 48px); margin: 10px 24px 4px; padding: 17px; border: 0; border-radius: 11px; background: var(--bold_surface_soft); text-align: left; color: inherit; }
 .home_project > div { display: flex; align-items: center; gap: 11px; }
 .home_project > div span { width: 13px; height: 13px; border-radius: 50%; }
 .home_project b { margin-left: auto; }
@@ -48,7 +48,7 @@
 .home_activity_item strong { font-size: 12px; }
 .home_shortcuts { padding: 20px 24px; }
 .home_shortcuts h2 { margin-bottom: 16px; }
-.home_shortcuts button { width: 100%; display: flex; align-items: center; gap: 13px; border: 0; border-radius: 9px; background: #f7f6f5; padding: 8px 10px; margin-top: 10px; color: inherit; }
+.home_shortcuts button { width: 100%; display: flex; align-items: center; gap: 13px; border: 0; border-radius: 9px; background: var(--bold_surface_soft); padding: 8px 10px; margin-top: 10px; color: inherit; }
 .home_shortcuts button > span { font-weight: 700; font-size: 12px; }
 .home_shortcuts button > svg { margin-left: auto; width: 18px; color: var(--bold_muted); }
 .home_shortcuts .shortcut_red { background: #ffe8e8; color: var(--bold_red); }.home_shortcuts .shortcut_blue { background: #e7f2ff; color: #438edc; }.home_shortcuts .shortcut_green { background: #e8f6ed; color: #43a66a; }

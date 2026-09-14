@@ -1,0 +1,70 @@
+/* Theme coverage for module surfaces introduced after the original dark palette. */
+.theme_dark {
+    color-scheme: dark;
+    scrollbar-color: #4b5360 #22262e;
+}
+.theme_dark :is(.home_module, .reports_module, .folder_module, .projects_module) { color: var(--bold_text); }
+.theme_dark :is(.home_metric:not(.home_metric_primary), .home_card, .reports_metric, .reports_card, .project_summary_card, .folder_card, .folder_dialog, .workspace_assignment_modal) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: var(--bold_text);
+}
+.theme_dark :is(.home_project, .home_quick_add, .home_shortcuts button, .workspace_menu, .workspace_assignment_modal header button) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface_soft);
+    color: var(--bold_text);
+}
+.theme_dark :is(.home_metric_red, .home_shortcuts .shortcut_red) { background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark :is(.home_shortcuts .shortcut_blue, .home_metric .home_metric_blue) { background: var(--bold_blue_tint); color: #94c7ff; }
+.theme_dark :is(.home_shortcuts .shortcut_green) { background: var(--bold_green_tint); color: #8bdeb0; }
+.theme_dark .home_metric_primary { background: #363a42; color: #fff; }
+.theme_dark :is(.home_priority, .project_summary_badges > [data-priority="media"]) { background: #50432b; color: #ffda8a; }
+.theme_dark :is(.home_priority_alta, .project_summary_badges > [data-priority="alta"]) { background: #4a3037; color: #ff9aa1; }
+.theme_dark :is(.home_priority_baja, .project_summary_badges > [data-priority="baja"]) { background: #294637; color: #9ce2b8; }
+.theme_dark .reports_bars { background-image: repeating-linear-gradient(to top, transparent 0, transparent 68px, #414853 69px, transparent 70px); }
+.theme_dark :is(.reports_project progress, .reports_project progress::-webkit-progress-bar, .project_summary_progress > span, .folder_card progress::-webkit-progress-bar) { background: var(--bold_progress_track); }
+.theme_dark .reports_metric_2 span { background: var(--bold_blue_tint); color: #94c7ff; }
+.theme_dark .reports_metric_3 span { background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark :is(.reports_scope span, .home_priority_baja) { color: #9ce2b8; }
+.theme_dark .workspace_menu > button:hover,
+.theme_dark .workspace_menu_row > button:hover,
+.theme_dark .workspace_menu .workspace_menu_active { background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark :is(.project_summary_card .project_action_secondary, .project_summary_title .project_info_button, .project_preview, .project_preview_content) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: var(--bold_text);
+}
+.theme_dark .project_summary_card .project_action_secondary:hover,
+.theme_dark .project_summary_title .project_info_button:hover { background: var(--bold_hover); }
+.theme_dark .project_summary_card .project_action_danger { border-color: #6a424a; background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark .project_summary_card::before { background: var(--bold_line); }
+.theme_dark :is(.project_summary_badges > span, .project_summary_badges > [data-status="inactivo"], .project_summary_badges > [data-status="inactive"]) { background: var(--bold_surface_soft); color: var(--bold_muted); }
+.theme_dark :is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown, .task_select_menu, .row_subtask_popover, .custom_datepicker_popover, .project_preview) {
+    border-color: var(--bold_line);
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+}
+.theme_dark :is(.bold_select_input, .project_create_body select, .mobile_task_action_list select, .inbox_dropdown select, .sort_menu select, .custom_datepicker_nav select, .task_select_trigger, .row_subtask_popover input, .quick_subtask_form input) {
+    border-color: var(--bold_line);
+    background-color: var(--bold_surface_soft);
+    color: var(--bold_text);
+}
+.theme_dark :is(.bold_select_input, .project_create_body select, .mobile_task_action_list select, .inbox_dropdown select, .sort_menu select, .custom_datepicker_nav select, .task_select_trigger):hover { border-color: #747e8d; background-color: var(--bold_hover); }
+.theme_dark :is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown) button:hover,
+.theme_dark :is(.task_select_option:hover, .task_select_option_focused, .subtask_toggle_area:hover) { background: var(--bold_hover); }
+.theme_dark :is(.task_select, .task_select_option, .task_select_trigger, .task_select_icon, .task_select_trigger > svg) { color: var(--bold_text); }
+.theme_dark .task_select_option[aria-selected="true"] { background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark :is(.task_select_text small, .project_preview p, .row_subtask_popover small) { color: var(--bold_muted); }
+.theme_dark :is(.quick_subtask_form, .row_subtask_popover, .project_preview_content > .project_identity) { border-color: var(--bold_line); }
+.theme_dark :is(.api_feedback, .swal2-popup) { border: 1px solid var(--bold_line); background: var(--bold_elevated); color: var(--bold_text); }
+.theme_dark .api_feedback { background: #4c422e; color: #ffdfa2; }
+.theme_dark :is(.bold_modal_window, .project_create_modal, .edit_task_modal, .task_tool_panel, .notifications_panel) { color: var(--bold_text); }
+.theme_dark :is(.bold_modal_window, .project_create_modal, .edit_task_modal) :is(input, textarea, select)::placeholder { color: var(--bold_muted); }
+.theme_dark :is(input, textarea, select, button):disabled { opacity: .65; }
+html[data-bold-theme="dark"] { background: #171a20; scrollbar-color: #4b5360 #22262e; }
+html[data-bold-theme="dark"] body { background: #171a20; }
+html[data-bold-theme="dark"] .swal2-popup { border: 1px solid #414853; background: #303640; color: #edf0f4; }
+html[data-bold-theme="dark"] .swal2-title,
+html[data-bold-theme="dark"] .swal2-html-container { color: #edf0f4; }
+html[data-bold-theme="dark"] .swal2-timer-progress-bar { background: #ff7c84; }
+@media (prefers-reduced-motion: reduce) { .theme_dark :is(.project_summary_card, .task_select_menu, .project_preview) { animation: none; transition: none; } }

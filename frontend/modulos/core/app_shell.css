@@ -594,6 +594,15 @@
     --bold_surface_soft: #292e37;
     --bold_line: #393f49;
     --bold_muted: #a9b0bb;
+    --bold_canvas: #171a20;
+    --bold_text: #edf0f4;
+    --bold_elevated: #303640;
+    --bold_hover: #343a45;
+    --bold_progress_track: #383e48;
+    --bold_chart_pending: #69717d;
+    --bold_red_tint: #4a3037;
+    --bold_blue_tint: #263b53;
+    --bold_green_tint: #273e35;
     background: #171a20;
     color: #edf0f4;
 }

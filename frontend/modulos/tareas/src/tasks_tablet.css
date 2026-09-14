@@ -1,5 +1,7 @@
 /* Tablet layout: portrait and landscape between the mobile and desktop shells. */
 @media (min-width: 761px) and (max-width: 1023px) {
+    .board_card_stack { overflow: visible; }
+    .board_card:has(.task_select_open) { position: relative; z-index: 2; }
     .tasks_module,
     .inbox_module,
     .home_module,

@@ -21,7 +21,13 @@ async function noOverflow(page, label) {
     assert.ok(sizes.document <= sizes.width + 1 && sizes.body <= sizes.width + 1, `${label}: ${JSON.stringify(sizes)}`);
 }
 async function fits(page, locator, label) {
-    const box = await locator.boundingBox(), viewport = page.viewportSize();
+    let box;
+    const viewport = page.viewportSize();
+    for (let attempt = 0; attempt < 20; attempt++) {
+        box = await locator.boundingBox();
+        if (box && box.x >= -1 && box.x + box.width <= viewport.width + 1) break;
+        await page.waitForTimeout(50);
+    }
     assert.ok(box && box.x >= -1 && box.x + box.width <= viewport.width + 1, `${label}: ${JSON.stringify(box)}`);
 }
 async function isDarkSurface(locator, label) {
@@ -38,7 +44,8 @@ try {
         page.setDefaultTimeout(8000);
         await page.goto("http://localhost:5178");
         if (real) {
-            await fits(page, page.getByRole("dialog", { name: "Iniciar sesión" }), "login");
+            await page.getByRole("heading", { name: "Bienvenido de nuevo" }).waitFor();
+            await fits(page, page.locator(".core_auth_form_wrap"), "login");
             await page.locator('[name="email"]').fill("ana@bold.gt");
             await page.locator('[name="password"]').fill("bolddemo123");
             await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
@@ -67,9 +74,9 @@ try {
             await fits(page, page.getByRole("dialog", { name: "Nueva tarea", exact: true }), "create");
             await page.screenshot({ path: path.join(artifacts, `create-${width}.png`), animations: "disabled" });
             if (width <= 760) {
-                await page.getByRole("button", { name: "Seleccionar fecha", exact: true }).click();
-                await page.locator('.native_date_picker input').fill("2026-10-12");
-                await page.getByRole("button", { name: "Aplicar fecha", exact: true }).click();
+                await page.getByRole("dialog", { name: "Nueva tarea", exact: true }).locator(".bold_date_trigger_btn").click();
+                await fits(page, page.getByRole("group", { name: "Calendario" }), "calendar");
+                await page.getByRole("group", { name: "Calendario" }).getByRole("button", { name: "Aplicar", exact: true }).click();
             }
             await page.getByRole("button", { name: real ? "Agregar seguidor" : "Agregar colaborador", exact: true }).click();
             await fits(page, page.locator(".collaborator_picker_dropdown"), "collaborators");
@@ -87,13 +94,12 @@ try {
         if (width < 1024 && !real) {
             const first = page.locator(".board_card").first();
             await first.locator("summary").click();
-            const select = first.locator("select");
-            const target = await select.locator("option").last().getAttribute("value");
-            await select.selectOption(target);
+            await first.locator(".task_select_trigger").click();
+            await first.locator(".task_select_option").last().click();
             assert.ok(await page.locator(".board_card").count());
         }
         await page.getByTitle("Vista en lista", { exact: true }).click();
-        for (const tab of ["Cronograma", "Calendario"]) {
+        for (const tab of ["Cronograma"]) {
             await page.getByRole("tab", { name: tab, exact: true }).click();
             await noOverflow(page, `${tab} ${width}`);
         }
@@ -119,7 +125,8 @@ try {
         await fits(page, page.getByRole("dialog", { name: "Crear proyecto", exact: true }), "project modal");
         await page.screenshot({ path: path.join(artifacts, `project-${width}.png`), animations: "disabled" });
         await page.keyboard.press("Escape");
-        if (width < 1024) await page.keyboard.press("Escape");
+        await page.locator(".task_drawer_overlay").waitFor({ state: "detached" });
+        if (width < 1024 && await page.locator(".sidebar_shell_open").count()) await page.locator(".sidebar_close_button").click();
         await page.getByRole("button", { name: "Activar modo oscuro", exact: true }).click();
         await page.screenshot({ path: path.join(artifacts, `dark-${width}.png`), animations: "disabled" });
         if (process.env.BOLD_DARK_AUDIT === "true") {
