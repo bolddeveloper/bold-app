@@ -2,6 +2,7 @@ import { Children, Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useDialog } from "../../core/shared/use_dialog.js";
+import { dateFromISO } from "./services/task_models.js";
 import { emptyWorkspaceFilters, filterWorkspaceTasks, groupWorkspaceTasks, sortWorkspaceTasks, workspaceProjectIds, workspaceSectionIds } from "./services/workspace_operations.js";
 import "./workspace_operations.css";
 
@@ -109,17 +110,16 @@ export default function WorkspaceOperations({ TaskSelect, tasks, projects, secti
     const option = (id, label) => <option value={id} key={id}>{label}</option>;
     const projectOptions = projects.map(item => option(item.id, item.label || item.name));
     const memberOptions = members.map(item => option(item.id, item.name));
-    const statusOptions = statuses.map(item => option(item.id, item.label || item.name));
     const memberOptionsFor = unitId => members.filter(item => !item.unitId || item.unitId === unitId).map(item => option(item.id, item.name));
     const statusOptionsFor = unitId => statuses.filter(item => !item.unitId || item.unitId === unitId).map(item => option(item.id, item.label || item.name));
     const visible = field => fields.includes(field);
     const cell = (task, field) => {
-        if (field === "assignee") return <Select aria-label={`Responsable de ${task.title}`} value={task.assignee_id || ""} onChange={event => inlineUpdate(task, "assignee_assignment", event.target.value || null)}><option value="">Sin responsable</option>{memberOptionsFor(task.unitId)}</Select>;
-        if (field === "priority") return <Select aria-label={`Prioridad de ${task.title}`} value={task.priority || "Media"} onChange={event => inlineUpdate(task, "priority", event.target.value)}>{PRIORITIES.map(([id, label]) => option(id, label))}</Select>;
-        if (field === "status") return <Select aria-label={`Estado de ${task.title}`} value={task.statusId || task.status || ""} onChange={event => inlineUpdate(task, "status", event.target.value)}><option value="" disabled>Estado</option>{statusOptionsFor(task.unitId)}</Select>;
-        if (field === "due") return <input aria-label={`Fecha límite de ${task.title}`} type="date" value={task.due_date || ""} onChange={event => inlineUpdate(task, "due_date", event.target.value || null)} />;
-        if (field === "project") return <Select aria-label={`Proyecto de ${task.title}`} value={workspaceProjectIds(task)[0] || ""} onChange={event => inlineUpdate(task, "project", event.target.value)}><option value="">Sin proyecto</option>{projectOptions}</Select>;
-        if (field === "section") return <Select aria-label={`Sección de ${task.title}`} value={workspaceSectionIds(task)[0] || ""} onChange={event => inlineUpdate(task, "section", event.target.value)}><option value="">Sin sección</option>{sections.filter(item => String(item.projectId || item.project) === workspaceProjectIds(task)[0]).map(item => option(item.id, item.label || item.name))}</Select>;
+        if (field === "assignee") return <span className="workspace_cell_value">{memberNames[String(task.assignee_id)] || "Sin responsable"}</span>;
+        if (field === "priority") return <span className={`workspace_cell_badge is_${String(task.priority || "Media").toLowerCase()}`}>{task.priority || "Media"}</span>;
+        if (field === "status") return <span className="workspace_cell_badge">{statuses.find(item => String(item.id) === String(task.statusId || task.status))?.label || task.status || "Sin estado"}</span>;
+        if (field === "due") return <span className="workspace_cell_value">{dateFromISO(task.due_date)?.toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" }) || "Sin fecha"}</span>;
+        if (field === "project") return <span className="workspace_cell_value">{projectNames[workspaceProjectIds(task)[0]] || "Sin proyecto"}</span>;
+        if (field === "section") return <span className="workspace_cell_value">{sectionNames[workspaceSectionIds(task)[0]] || "Sin sección"}</span>;
         if (field === "created") return <span>{(task.created_at || "").slice(0, 10) || "—"}</span>;
         if (field === "creator") return <span>{memberNames[String(task.created_by_assignment)] || "—"}</span>;
         if (field === "subtasks") return <span>{(task.subtasks || []).filter(child => child.completed).length}/{(task.subtasks || []).length}</span>;
