@@ -40,7 +40,7 @@ import { useCore } from "../../core/core_provider.jsx";
 import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
-import { loadTaskData, saveTaskDraft, saveFollowers } from "./services/task_service.js";
+import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
 import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isMyTask } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
@@ -64,6 +64,7 @@ import { create_task_event, task_event_types } from "./services/task_events.js";
 
 
 const notification_type_icons = { assignment: user_plus_icon, comment: message_circle_icon, status_changed: check_circle_icon };
+const app_toast = Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 2400, timerProgressBar: true });
 
 // Defines the project views available in the focused tasks module.
 const view_items = [
@@ -1512,9 +1513,11 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_cl
 
 
 // Right-side task detail sidebar panel (Image 3 of design reference).
-function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_edit_task, handle_toggle_subtask, handle_toggle_task, on_close, on_followers_change, on_workspace, selected_task, show_comments = true }) {
+function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_delete_task, handle_open_edit_task, handle_open_subtask, handle_toggle_subtask, handle_toggle_task, on_close, on_followers_change, on_workspace, selected_task, show_comments = true }) {
     const [comment_text, set_comment_text] = use_state("");
     const [comment_images, set_comment_images] = use_state([]);
+    const [quick_subtask_title, set_quick_subtask_title] = use_state("");
+    const [adding_subtask, set_adding_subtask] = use_state(false);
     const member_item = get_member(selected_task.assignee_id);
     const project_item = get_project(selected_task.project_id);
     const collaborators = (selected_task.collaborator_ids || []).map(get_member).filter(Boolean);
@@ -1542,6 +1545,17 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
     function handle_comment_images(event) {
         read_image_files(event.target.files).then((images) => set_comment_images((current_images) => [...current_images, ...images]));
         event.target.value = "";
+    }
+
+    async function submit_quick_subtask(open_details = false) {
+        const title = quick_subtask_title.trim();
+        if (!title || adding_subtask) return;
+        set_adding_subtask(true);
+        const saved = await handle_add_quick_subtask(selected_task.id, title);
+        set_adding_subtask(false);
+        if (!saved) return;
+        set_quick_subtask_title("");
+        if (open_details) handle_open_edit_task(selected_task.id);
     }
 
     return (
@@ -1646,8 +1660,7 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                 </div>
             ) : null}
 
-            {subtasks.length > 0 ? (
-                <div className="detail_subtasks_block">
+            <div className="detail_subtasks_block">
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                         <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em" }}>SUBTAREAS</span>
                         <span className="subtasks_badge">{done_count} de {subtasks.length}</span>
@@ -1659,16 +1672,23 @@ function TaskDetailPanel({ handle_add_comment, handle_delete_task, handle_open_e
                         <div key={sub.id} className="subtask_check_row">
                             <button
                                 type="button"
-                                className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}
+                                className={`subtask_toggle_area ${sub.completed ? "subtask_toggle_done" : ""}`}
+                                aria-label={`${sub.completed ? "Marcar pendiente" : "Marcar lista"}: ${sub.title}`}
                                 onClick={() => handle_toggle_subtask(selected_task.id, sub.id)}
                             >
-                                {sub.completed ? render_icon(check_icon, 11) : null}
+                                <span className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}>{sub.completed ? render_icon(check_icon, 11) : null}</span>
+                                <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>{sub.title}</span>
                             </button>
-                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>{sub.title}</span>
+                            <button type="button" className="subtask_open_button" onClick={() => handle_open_subtask(selected_task.id, sub.id)} aria-label={`Abrir detalles de ${sub.title}`}>{render_icon(chevron_right_icon, 15)}</button>
                         </div>
                     ))}
+                    <div className="quick_subtask_form">
+                        {render_icon(plus_icon, 16)}
+                        <input value={quick_subtask_title} maxLength={220} aria-label="Nombre de la nueva subtarea" placeholder="Agregar subtarea…" onChange={event => set_quick_subtask_title(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); submit_quick_subtask(false); } }} />
+                        <button type="button" disabled={!quick_subtask_title.trim() || adding_subtask} onClick={() => submit_quick_subtask(false)}>Agregar</button>
+                        <button type="button" className="quick_subtask_more" disabled={!quick_subtask_title.trim() || adding_subtask} onClick={() => submit_quick_subtask(true)}>Más detalles</button>
+                    </div>
                 </div>
-            ) : null}
 
             {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
             {show_comments ? <>{comments.length ? (
@@ -2013,7 +2033,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                                 </button>
                             </div>
                         ))}
-                        <button type="button" className="attachment_add_more_btn" onClick={handle_add_edit_subtask}>
+                        <button type="button" className="attachment_add_more_btn" disabled={subtasks.some(item => !item.title.trim())} onClick={handle_add_edit_subtask}>
                             {render_icon(plus_icon, 14)} Agregar subtarea
                         </button>
                     </div>
@@ -2275,6 +2295,7 @@ function render_tasks_module(props) {
         filtered_tasks,
         handle_add_column,
         handle_add_comment,
+        handle_add_quick_subtask,
         handle_add_timeline_comment,
         handle_clear_filters,
         handle_close_task_tool,
@@ -2468,6 +2489,7 @@ function render_tasks_module(props) {
                             editing_column_name,
                             filtered_tasks,
                             handle_add_column,
+                            handle_add_quick_subtask,
                             handle_column_drop,
                             handle_delete_column,
                             handle_delete_task,
@@ -2529,10 +2551,12 @@ function render_tasks_module(props) {
                         on_workspace={on_workspace}
                         on_followers_change={props.on_followers_change}
                         handle_add_comment={handle_add_comment}
+                        handle_add_quick_subtask={handle_add_quick_subtask}
                         handle_delete_task={handle_delete_task}
                         handle_detail_resize_key_down={handle_detail_resize_key_down}
                         handle_detail_resize_start={handle_detail_resize_start}
                         handle_open_edit_task={handle_open_edit_task}
+                        handle_open_subtask={props.handle_open_subtask}
                         handle_task_select={handle_task_select}
                         handle_toggle_subtask={handle_toggle_subtask}
                         handle_toggle_task={handle_toggle_task}
@@ -2552,10 +2576,12 @@ function render_tasks_module(props) {
                         on_workspace={on_workspace}
                         on_followers_change={props.on_followers_change}
                         handle_add_comment={handle_add_comment}
+                        handle_add_quick_subtask={handle_add_quick_subtask}
                         handle_delete_task={handle_delete_task}
                         handle_detail_resize_key_down={handle_detail_resize_key_down}
                         handle_detail_resize_start={handle_detail_resize_start}
                         handle_open_edit_task={handle_open_edit_task}
+                        handle_open_subtask={props.handle_open_subtask}
                         handle_task_select={handle_task_select}
                         handle_toggle_subtask={handle_toggle_subtask}
                         handle_toggle_task={handle_toggle_task}
@@ -2603,6 +2629,7 @@ function render_list_view(props) {
         editing_column_name,
         filtered_tasks,
         handle_add_column,
+        handle_add_quick_subtask,
         handle_column_drop,
         handle_delete_column,
         handle_delete_task,
@@ -2652,6 +2679,7 @@ function render_list_view(props) {
                 {board_columns.map((section_item) => render_task_group({
                     mobile_actions: props.mobile_actions,
                     active_quick_popover,
+                    handle_add_quick_subtask,
                     collapsed_sections,
                     column_items: field_items,
                     editing_column_id,
@@ -2745,6 +2773,7 @@ function render_list_view(props) {
 function render_task_group(props) {
     const {
         active_quick_popover,
+        handle_add_quick_subtask,
         collapsed_sections = [],
         column_items = optional_column_items,
         editing_column_id,
@@ -2821,6 +2850,7 @@ function render_task_group(props) {
             </div>
             {is_collapsed ? null : section_tasks.map((task_item) => render_task_row({
                 active_quick_popover,
+                handle_add_quick_subtask,
                 column_items,
                 handle_delete_task,
                 handle_drag_end,
@@ -2842,10 +2872,29 @@ function render_task_group(props) {
 }
 
 
+function QuickSubtaskRowAction({ onAdd, task }) {
+    const [open, setOpen] = use_state(false);
+    const [title, setTitle] = use_state("");
+    const [saving, setSaving] = use_state(false);
+    const count = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
+    async function save() {
+        if (!title.trim() || saving) return;
+        setSaving(true);
+        const saved = await onAdd(task.id, title.trim());
+        setSaving(false);
+        if (saved) { setTitle(""); setOpen(false); }
+    }
+    return <div className={`row_subtask_action ${open ? "row_subtask_action_open" : ""}`} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
+        <button type="button" className="task_edit_pencil_btn row_subtask_trigger" title="Agregar subtarea" aria-label={`Agregar subtarea a ${task.title}. ${count} existentes`} onClick={() => setOpen(value => !value)}>{render_icon(plus_icon, 15)}{count > 0 && <span>{count}</span>}</button>
+        {open && <div className="row_subtask_popover"><input autoFocus value={title} maxLength={220} placeholder="Nombre de la subtarea" aria-label="Nombre de la subtarea" onChange={event => setTitle(event.target.value)} onKeyDown={event => { if (event.key === "Enter") save(); if (event.key === "Escape") setOpen(false); }} /><button type="button" disabled={!title.trim() || saving} onClick={save}>{render_icon(check_icon, 14)}</button></div>}
+    </div>;
+}
+
 // Renders one task row in desktop list view.
 function render_task_row(props) {
     const {
         active_quick_popover,
+        handle_add_quick_subtask,
         column_items = optional_column_items,
         handle_delete_task,
         handle_drag_end,
@@ -2915,6 +2964,7 @@ function render_task_row(props) {
             </div>
 
             <div className="task_quick_actions" aria-label="Acciones de tarea">
+                <QuickSubtaskRowAction task={task_item} onAdd={handle_add_quick_subtask} />
                 <button
                     type="button"
                     className="task_edit_pencil_btn"
@@ -3567,7 +3617,7 @@ function TimelineComments({ comments, on_add_comment }) {
 }
 
 
-function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_detail_resize_key_down, handle_detail_resize_start, handle_open_edit_task, handle_task_select, handle_toggle_subtask, handle_toggle_task, on_followers_change, on_workspace, selected_task, show_comments = true, task_detail_width }) {
+function TaskDetailSidebar({ handle_add_comment, handle_add_quick_subtask, handle_delete_task, handle_detail_resize_key_down, handle_detail_resize_start, handle_open_edit_task, handle_open_subtask, handle_task_select, handle_toggle_subtask, handle_toggle_task, on_followers_change, on_workspace, selected_task, show_comments = true, task_detail_width }) {
     if (!selected_task) return null;
 
     return (
@@ -3576,8 +3626,10 @@ function TaskDetailSidebar({ handle_add_comment, handle_delete_task, handle_deta
                     on_followers_change={on_followers_change}
                     on_workspace={on_workspace}
                     handle_add_comment={handle_add_comment}
+                    handle_add_quick_subtask={handle_add_quick_subtask}
                     handle_delete_task={handle_delete_task}
                     handle_open_edit_task={handle_open_edit_task}
+                    handle_open_subtask={handle_open_subtask}
                     handle_toggle_subtask={handle_toggle_subtask}
                     handle_toggle_task={handle_toggle_task}
                     on_close={() => handle_task_select(null)}
@@ -3965,6 +4017,7 @@ function TaskAppContent() {
     const [selected_task_id, set_selected_task_id] = use_state(null);
     const [delete_target, set_delete_target] = use_state(null);
     const [edit_draft, set_edit_draft] = use_state(null);
+    const [editing_subtask_parent_id, set_editing_subtask_parent_id] = use_state(null);
     const [edit_attachments, set_edit_attachments] = use_state([]);
     const [active_task_tool, set_active_task_tool] = use_state(null);
     const [sort_field, set_sort_field] = use_state(real ? "position" : "due_day");
@@ -4061,6 +4114,12 @@ function TaskAppContent() {
     const [timeline_comments_by_scope, set_timeline_comments_by_scope] = use_state(get_saved_timeline_comments);
 
     use_effect(() => {
+        if (!api_error || !data) return;
+        app_toast.fire({ icon: "error", title: api_error });
+        set_api_error("");
+    }, [api_error, data]);
+
+    use_effect(() => {
         if (workspace_state.unitId !== workspace_unit_id) set_workspace_state(load_workspace_state());
     }, [workspace_state.unitId, workspace_unit_id]);
 
@@ -4069,6 +4128,7 @@ function TaskAppContent() {
         try {
             const saved = saveWorkspaces(localStorage, workspace_unit_id, items);
             set_workspace_state(state => ({ ...state, items: saved }));
+            app_toast.fire({ icon: "success", title: "Workspace guardado" });
             return true;
         } catch { set_api_error("No se pudieron guardar las carpetas. El cambio no se aplicó."); return false; }
     }
@@ -4414,8 +4474,8 @@ function TaskAppContent() {
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
-        return tasks.find((task_item) => task_item.id === selected_task_id) || null;
-    }, [selected_task_id, tasks]);
+        return tasks.find((task_item) => task_item.id === selected_task_id) || (editing_subtask_parent_id && edit_draft?.id === selected_task_id ? edit_draft : null);
+    }, [selected_task_id, tasks, editing_subtask_parent_id, edit_draft]);
 
     use_effect(() => {
         if (selected_inbox_id || !notifications.length) return;
@@ -4483,7 +4543,7 @@ function TaskAppContent() {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
         try {
-            await operation(); await refresh.current(); on_success(); return true;
+            await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: "Cambios guardados" }); return true;
         } catch (error) {
             if (error.name !== "AbortError") {
                 set_api_error(error.message);
@@ -4708,6 +4768,7 @@ function TaskAppContent() {
     function handle_open_edit_task(task_id) {
         const task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
+        set_editing_subtask_parent_id(null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
             title: task_item.title,
@@ -4910,6 +4971,47 @@ function TaskAppContent() {
         });
     }
 
+    async function handle_add_quick_subtask(task_id, title) {
+        const task = tasks.find(item => item.id === task_id);
+        if (!task || !title.trim()) return false;
+        const next = [...(task.subtasks || []), { id: `subtask_${Date.now()}`, title: title.trim(), completed: false }];
+        if (real) return mutate(() => saveSubtasks(task, next, data));
+        set_tasks(current => current.map(item => item.id === task_id ? { ...item, subtasks: next } : item));
+        update_task_request(task_id, { ...task, subtasks: next }).catch(() => {});
+        app_toast.fire({ icon: "success", title: "Subtarea agregada" });
+        return true;
+    }
+
+    function handle_open_subtask(parent_id, subtask_id) {
+        if (tasks.some(item => item.id === subtask_id)) {
+            handle_open_edit_task(subtask_id);
+            return;
+        }
+        const parent = tasks.find(item => item.id === parent_id);
+        const subtask = parent?.subtasks?.find(item => item.id === subtask_id);
+        if (!parent || !subtask) return;
+        set_editing_subtask_parent_id(parent_id);
+        set_selected_task_id(subtask_id);
+        set_edit_draft({
+            ...parent,
+            ...subtask,
+            id: subtask.id,
+            parentTaskId: parent_id,
+            description: subtask.description || "",
+            project_id: subtask.project_id || parent.project_id,
+            section: subtask.section || parent.section,
+            assignee_id: subtask.assignee_id || parent.assignee_id,
+            collaborator_ids: subtask.collaborator_ids || [],
+            due_day: subtask.due_day || null,
+            due_label: subtask.due_label || "",
+            priority: subtask.priority || "Media",
+            status: subtask.status || "Pend.",
+            subtasks: subtask.subtasks || []
+        });
+        set_edit_attachments([]);
+        set_active_modal("edit_task");
+    }
+
     function handle_edit_subtask_title_change(subtask_id, title) {
         set_edit_draft((current_draft) => ({
             ...current_draft,
@@ -4922,7 +5024,7 @@ function TaskAppContent() {
     function handle_add_edit_subtask() {
         set_edit_draft((current_draft) => ({
             ...current_draft,
-            subtasks: [...current_draft.subtasks, { id: `subtask_${Date.now()}`, title: "", completed: false }]
+            subtasks: current_draft.subtasks.some(item => !item.title.trim()) ? current_draft.subtasks : [...current_draft.subtasks, { id: `subtask_${Date.now()}`, title: "", completed: false }]
         }));
     }
 
@@ -4976,6 +5078,18 @@ function TaskAppContent() {
         const due_label = validated_draft.due_day ? validated_draft.due_label || `${validated_draft.due_day} sep` : "";
         const completed = validated_draft.section === "completed";
         const updated_fields = { ...validated_draft, due_label, completed };
+
+        if (editing_subtask_parent_id) {
+            set_tasks(current_tasks => current_tasks.map(task_item => task_item.id === editing_subtask_parent_id ? {
+                ...task_item,
+                subtasks: (task_item.subtasks || []).map(subtask => subtask.id === task_id ? { ...subtask, ...updated_fields } : subtask)
+            } : task_item));
+            set_active_modal(null);
+            set_selected_task_id(editing_subtask_parent_id);
+            set_editing_subtask_parent_id(null);
+            app_toast.fire({ icon: "success", title: "Subtarea guardada" });
+            return;
+        }
 
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.id === task_id ? { ...task_item, ...updated_fields } : task_item
@@ -5042,7 +5156,7 @@ function TaskAppContent() {
                     handle_remove_edit_attachment={handle_remove_edit_attachment}
                     handle_remove_edit_subtask={handle_remove_edit_subtask}
                     handle_toggle_edit_subtask={handle_toggle_edit_subtask}
-                    on_cancel={() => { set_active_modal(null); }}
+                    on_cancel={() => { set_active_modal(null); if (editing_subtask_parent_id) { set_selected_task_id(editing_subtask_parent_id); set_editing_subtask_parent_id(null); } }}
                     on_save={(event) => handle_save_task_edits(event, selected_task.id)}
                     projects={projects}
                     status_options={status_options}
@@ -5106,7 +5220,7 @@ function TaskAppContent() {
 sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
-            feedback={real && (api_error || pending) && <div className="api_feedback" role={api_error ? "alert" : "status"}>{pending ? "Guardando…" : api_error}<button type="button" onClick={() => set_api_error("")} aria-label="Cerrar mensaje">×</button></div>}
+            feedback={null}
             overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
         >
                 <div className="module_transition" key={active_module}>
@@ -5163,6 +5277,8 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     filtered_tasks,
                     handle_add_column,
                     handle_add_comment,
+                    handle_add_quick_subtask,
+                    handle_open_subtask,
                     handle_add_timeline_comment,
                     handle_clear_filters,
                     handle_close_task_tool,

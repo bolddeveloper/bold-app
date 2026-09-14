@@ -9223,6 +9223,36 @@ button {
 .projects_index_button:hover,
 .projects_index_button:focus-visible { outline: 0; border-color: rgba(239, 31, 45, .6); background: rgba(255, 255, 255, .1); transform: translateY(-1px); }
 .projects_index_button_active { border-color: rgba(239, 31, 45, .72); background: linear-gradient(100deg, rgba(239, 31, 45, .28), rgba(255, 255, 255, .08)); box-shadow: inset 3px 0 0 var(--bold_red); }
+.workspace_selector { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; min-height: 46px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.11); border-radius: 11px; background: rgba(255,255,255,.055); text-align: left; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.workspace_selector:hover, .workspace_selector:focus-visible { border-color: rgba(239,31,45,.6); background: rgba(255,255,255,.1); transform: translateY(-1px); }
+.workspace_badge { width: 30px; height: 30px; border-radius: 8px; background: rgba(239,31,45,.2); color: #ff6570; }
+.quick_subtask_form { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #ebe7e2; }
+.quick_subtask_form > svg { color: #8b929d; }
+.quick_subtask_form input { min-width: 0; height: 36px; padding: 0 10px; border: 1px solid #ded9d3; border-radius: 8px; background: var(--bold_surface, #fff); color: inherit; }
+.quick_subtask_form button { height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--bold_red); color: #fff; font-size: 11px; font-weight: 750; cursor: pointer; }
+.quick_subtask_form .quick_subtask_more { border: 1px solid #ded9d3; background: transparent; color: inherit; }
+.quick_subtask_form button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 560px) { .quick_subtask_form { grid-template-columns: auto minmax(0, 1fr) auto; } .quick_subtask_more { grid-column: 2 / -1; } }
+@keyframes section_content_enter { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: translateY(0); } }
+.task_group > .task_row, .mobile_task_section > .task_card { animation: section_content_enter 190ms cubic-bezier(.2,.7,.3,1) both; }
+@media (prefers-reduced-motion: reduce) { .task_group > .task_row, .mobile_task_section > .task_card { animation: none; } }
+.detail_subtasks_block .subtask_check_row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: stretch; gap: 5px; min-height: 42px; }
+.subtask_toggle_area { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 7px 9px; border: 0; border-radius: 9px; background: transparent; color: inherit; text-align: left; cursor: pointer; transition: background 140ms ease; }
+.subtask_toggle_area:hover { background: #f5f3f0; }
+.subtask_toggle_area .subtask_circle_btn { display: inline-grid; flex: 0 0 20px; place-items: center; }
+.subtask_toggle_area .subtask_text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subtask_open_button { display: grid; width: 34px; border: 0; border-radius: 8px; place-items: center; background: transparent; color: #8b929d; cursor: pointer; }
+.subtask_open_button:hover { background: #fff0f1; color: var(--bold_red); }
+.attachment_add_more_btn:disabled { opacity: .45; cursor: not-allowed; }
+.row_subtask_action { position: relative; }
+.row_subtask_action_open .row_subtask_trigger, .row_subtask_trigger:has(span) { opacity: 1; }
+.row_subtask_trigger { position: relative; }
+.row_subtask_trigger > span { position: absolute; top: -5px; right: -5px; display: grid; min-width: 16px; height: 16px; padding: 0 3px; place-items: center; border: 2px solid #fff; border-radius: 999px; background: var(--bold_red); color: #fff; font-size: 9px; font-weight: 900; }
+.row_subtask_popover { position: absolute; top: calc(100% + 7px); left: -8px; z-index: 100; display: grid; grid-template-columns: 190px 34px; gap: 6px; padding: 8px; border: 1px solid #ded9d3; border-radius: 11px; background: var(--bold_surface, #fff); box-shadow: 0 14px 34px #20242b2b; }
+.row_subtask_popover input { min-width: 0; height: 34px; padding: 0 9px; border: 1px solid #d8d3cd; border-radius: 7px; background: inherit; color: inherit; }
+.row_subtask_popover button { display: grid; place-items: center; border: 0; border-radius: 7px; background: var(--bold_red); color: #fff; }
+.row_subtask_popover button:disabled { opacity: .45; }
+.task_quick_actions { grid-template-columns: repeat(3, 28px); }
 
 /* Clear hierarchy for project actions. */
 .project_summary_card .project_summary_actions { display: flex; flex-wrap: wrap; gap: 6px; }

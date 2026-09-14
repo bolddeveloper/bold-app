@@ -7,7 +7,10 @@
     min-height: 100vh;
     background: #f4f3f1;
     color: #2c3038;
+    user-select: none;
 }
+
+.app_shell :is(input, textarea, [contenteditable="true"], .detail_description_text) { user-select: text; }
 
 .sidebar_shell {
     position: sticky;
@@ -191,6 +194,9 @@
 }
 
 .top_bar {
+    position: sticky;
+    top: 0;
+    z-index: 35;
     display: flex;
     min-height: 72px;
     align-items: center;
@@ -746,12 +752,12 @@
     .session_toolbar label { display: grid; gap: 6px; min-width: 0; }
     .session_toolbar select { width: 100%; max-width: 100%; min-height: 44px; background: #fff; color: #252830; }
     .session_toolbar button { min-height: 44px; }
-    .mobile_header { display: block; background: var(--bold_surface); border-bottom: 1px solid var(--bold_line); padding-top: env(safe-area-inset-top); }
+    .mobile_header { display: block; position: sticky; top: 0; z-index: 36; background: var(--bold_surface); border-bottom: 1px solid var(--bold_line); padding-top: env(safe-area-inset-top); }
     .mobile_header_row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; align-items: center; min-height: 60px; padding: 8px 12px; }
     .mobile_header_row h1 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
     .mobile_header .brand_logo { color: inherit; font-size: 28px; }
     .mobile_menu_button, .mobile_more_button { display: inline-flex; position: relative; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 10px; background: transparent; color: inherit; }
-    .top_bar { display: flex; min-height: 60px; height: auto; padding: 8px 12px; gap: 8px; }
+    .top_bar { display: flex; top: calc(60px + env(safe-area-inset-top)); min-height: 60px; height: auto; padding: 8px 12px; gap: 8px; }
     .search_box { flex: 1; width: auto; min-width: 0; max-width: none; }
     .search_box input { width: 100%; min-width: 0; font-size: 16px; }
     .top_bar_actions { flex: 0 0 auto; }
