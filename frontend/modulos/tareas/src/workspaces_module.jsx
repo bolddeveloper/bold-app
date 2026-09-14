@@ -11,7 +11,7 @@ function Dialog({ title, onClose, children }) {
     return createPortal(<div className="folder_overlay" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="folder_dialog" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button type="button" aria-label="Cerrar" onClick={onClose}><X size={20} /></button></header>{children}</section></div>, document.body);
 }
 
-export default function WorkspacesModule({ TaskSelect, workspaces, activeId, onOpen, onSave, projects, tasks, allTasks, sections, statuses, members, units, activeUnitId, storageKey, pending, loading, permissionsCan, searchQuery, onProject, onProjectPreview, onEditProject, onShareProject, onTask, onEditTask, onCreateTask, onQuickCreate, onBulk }) {
+export default function WorkspacesModule({ TaskSelect, CalendarDateField, workspaces, activeId, onOpen, onSave, projects, tasks, allTasks, sections, statuses, members, units, activeUnitId, storageKey, pending, loading, permissionsCan, searchQuery, onProject, onProjectPreview, onEditProject, onShareProject, onTask, onEditTask, onCreateTask, onQuickCreate, onBulk }) {
     const current = workspaces.find(item => item.id === activeId);
     const parentId = current?.id || null;
     const [dialog, setDialog] = useState(null);
@@ -55,7 +55,7 @@ export default function WorkspacesModule({ TaskSelect, workspaces, activeId, onO
         </article>;
     });
 
-    if (activeId === "total") return <section className="projects_module folder_module"><WorkspaceOperations TaskSelect={TaskSelect} tasks={allTasks} projects={projects} sections={sections} statuses={statuses} members={members} units={units} activeUnitId={activeUnitId} storageKey={storageKey} pending={pending} loading={loading} permissionsCan={permissionsCan} onOpenTask={onTask} onEditTask={onEditTask} onOpenCreate={onCreateTask} onQuickCreate={onQuickCreate} onBulk={onBulk} /></section>;
+    if (activeId === "total") return <section className="projects_module folder_module"><WorkspaceOperations TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} tasks={allTasks} projects={projects} sections={sections} statuses={statuses} members={members} units={units} activeUnitId={activeUnitId} storageKey={storageKey} pending={pending} loading={loading} permissionsCan={permissionsCan} onOpenTask={onTask} onOpenCreate={onCreateTask} onBulk={onBulk} /></section>;
 
     return <section className="projects_module folder_module">
         <nav className="folder_breadcrumb" aria-label="Ruta de carpetas"><button type="button" onClick={() => open(null)}>Workspaces</button>{folderPath(workspaces, parentId).map(folder => <span key={folder.id}> / <button type="button" aria-current={folder.id === parentId ? "page" : undefined} onClick={() => open(folder.id)}>{folder.name}</button></span>)}</nav>
