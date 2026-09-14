@@ -177,7 +177,7 @@ function get_task_table_columns_style(visible_fields, with_checkbox_column, colu
         .map((column_item) => column_item.width);
     const checkbox_column = with_checkbox_column ? "32px " : "";
 
-    return { gridTemplateColumns: `${checkbox_column}minmax(280px, 1fr) 68px ${visible_widths.join(" ")}` };
+    return { gridTemplateColumns: `${checkbox_column}minmax(280px, 1fr) 96px ${visible_widths.join(" ")}` };
 }
 
 
@@ -718,14 +718,15 @@ function get_split_content_width(split_element) {
 
 
 // Renders the task workspace content nested below Tareas.
-function WorkspaceSelector({ onManage }) {
-    return <div className="workspace_selector_wrap">
-        <button className="workspace_selector" type="button" onClick={onManage}>
+function WorkspaceSelector({ onManage, onTotal }) {
+    return <details className="workspace_selector_wrap">
+        <summary className="workspace_selector">
             <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
-            <span>Ver Workspaces</span>
-            {render_icon(chevron_right_icon, 16)}
-        </button>
-    </div>;
+            <span>Work Space</span>
+            {render_icon(chevron_down_icon, 16)}
+        </summary>
+        <div className="workspace_selector_menu"><button type="button" onClick={onManage}>BOLD</button><button type="button" onClick={onTotal}>Vista total</button></div>
+    </details>;
 }
 
 function WorkspaceAssignmentModal({ item, itemType, onClose, onToggle, workspaces }) {
@@ -2308,6 +2309,8 @@ function render_tasks_module(props) {
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
+        handle_task_click,
+        handle_quick_add_tasks,
         handle_task_select,
         handle_toggle_filter_value,
         handle_toggle_quick_popover,
@@ -2320,10 +2323,13 @@ function render_tasks_module(props) {
         handle_save_column_name,
         handle_start_edit_column,
         is_adding_column,
+        quick_task_open,
+        quick_task_text,
         new_column_name,
         selected_project,
         selected_task,
         selected_task_id,
+        selected_task_ids,
         task_detail_width,
         timeline_comments,
         set_active_modal,
@@ -2331,6 +2337,8 @@ function render_tasks_module(props) {
         set_active_view,
         set_editing_column_id,
         set_is_adding_column,
+        set_quick_task_open,
+        set_quick_task_text,
         set_editing_column_name,
         set_new_column_name,
         set_search_query,
@@ -2497,6 +2505,8 @@ function render_tasks_module(props) {
                             handle_drag_start,
                             handle_open_edit_task,
                             handle_quick_change,
+                            handle_task_click,
+                            handle_quick_add_tasks,
                             handle_save_column_name,
                             handle_start_edit_column,
                             handle_task_select,
@@ -2504,11 +2514,16 @@ function render_tasks_module(props) {
                             handle_toggle_section,
                             handle_toggle_task,
                             is_adding_column,
+                            quick_task_open,
+                            quick_task_text,
                             new_column_name,
                             selected_task_id,
+                            selected_task_ids,
                             set_editing_column_id,
                             set_editing_column_name,
                             set_is_adding_column,
+                            set_quick_task_open,
+                            set_quick_task_text,
                             set_active_modal,
                             set_new_column_name,
                             status_options,
@@ -2637,6 +2652,8 @@ function render_list_view(props) {
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
+        handle_task_click,
+        handle_quick_add_tasks,
         handle_save_column_name,
         handle_start_edit_column,
         handle_task_select,
@@ -2644,12 +2661,17 @@ function render_list_view(props) {
         handle_toggle_section,
         handle_toggle_task,
         is_adding_column,
+        quick_task_open,
+        quick_task_text,
         new_column_name,
         selected_task_id,
+        selected_task_ids,
         set_active_modal,
         set_editing_column_id,
         set_editing_column_name,
         set_is_adding_column,
+        set_quick_task_open,
+        set_quick_task_text,
         set_new_column_name,
         status_options,
         tasks,
@@ -2693,6 +2715,7 @@ function render_list_view(props) {
                     handle_drag_start,
                     handle_open_edit_task,
                     handle_quick_change,
+                    handle_task_click,
                     handle_save_column_name,
                     handle_start_edit_column,
                     handle_task_select,
@@ -2701,15 +2724,19 @@ function render_list_view(props) {
                     handle_toggle_task,
                     section_item,
                     selected_task_id,
+                    selected_task_ids,
                     set_editing_column_id,
                     set_editing_column_name,
                     status_options,
                     visible_fields
                 }))}
 
-                <button className="add_row_button" type="button" onClick={() => set_active_modal("task")}>
+                {quick_task_open ? <form className="quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(); }}>
+                    <textarea autoFocus rows="3" aria-label="Nombres de las nuevas tareas" placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
+                    <button type="submit" aria-label="Agregar tareas" disabled={!quick_task_text.trim()}>→</button>
+                </form> : <button className="add_row_button" type="button" onClick={() => set_quick_task_open(true)}>
                     + Agregar tarea
-                </button>
+                </button>}
                 <div className="list_section_creator">
                     {is_adding_column ? (
                         <div className="board_column_form">
@@ -2787,6 +2814,7 @@ function render_task_group(props) {
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
+        handle_task_click,
         handle_save_column_name,
         handle_start_edit_column,
         handle_task_select,
@@ -2796,6 +2824,7 @@ function render_task_group(props) {
         mobile_actions,
         section_item,
         selected_task_id,
+        selected_task_ids,
         set_editing_column_id,
         set_editing_column_name,
         status_options = default_status_items,
@@ -2857,12 +2886,14 @@ function render_task_group(props) {
                 handle_drag_start,
                 handle_open_edit_task,
                 handle_quick_change,
+                handle_task_click,
                 handle_task_select,
                 handle_toggle_quick_popover,
                 handle_toggle_task,
                 mobile_actions,
                 is_dragging: dragged_task_id === task_item.id,
                 is_selected: selected_task_id === task_item.id,
+                is_multi_selected: selected_task_ids.includes(task_item.id),
                 status_options,
                 task_item,
                 visible_fields
@@ -2876,17 +2907,26 @@ function QuickSubtaskRowAction({ onAdd, task }) {
     const [open, setOpen] = use_state(false);
     const [title, setTitle] = use_state("");
     const [saving, setSaving] = use_state(false);
+    const root = use_ref(null);
     const count = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
+    use_effect(() => {
+        if (!open) return;
+        const close = event => { if (!root.current?.contains(event.target)) setOpen(false); };
+        document.addEventListener("pointerdown", close);
+        return () => document.removeEventListener("pointerdown", close);
+    }, [open]);
     async function save() {
-        if (!title.trim() || saving) return;
+        const titles = title.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+        if (!titles.length || titles.length > 100 || saving) return;
         setSaving(true);
-        const saved = await onAdd(task.id, title.trim());
+        let saved = true;
+        for (const value of titles) if (!await onAdd(task.id, value.slice(0, 220))) { saved = false; break; }
         setSaving(false);
         if (saved) { setTitle(""); setOpen(false); }
     }
-    return <div className={`row_subtask_action ${open ? "row_subtask_action_open" : ""}`} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
+    return <div ref={root} className={`row_subtask_action ${open ? "row_subtask_action_open" : ""}`} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>
         <button type="button" className="task_edit_pencil_btn row_subtask_trigger" title="Agregar subtarea" aria-label={`Agregar subtarea a ${task.title}. ${count} existentes`} onClick={() => setOpen(value => !value)}>{render_icon(plus_icon, 15)}{count > 0 && <span>{count}</span>}</button>
-        {open && <div className="row_subtask_popover"><input autoFocus value={title} maxLength={220} placeholder="Nombre de la subtarea" aria-label="Nombre de la subtarea" onChange={event => setTitle(event.target.value)} onKeyDown={event => { if (event.key === "Enter") save(); if (event.key === "Escape") setOpen(false); }} /><button type="button" disabled={!title.trim() || saving} onClick={save}>{render_icon(check_icon, 14)}</button></div>}
+        {open && <div className="row_subtask_popover"><textarea autoFocus rows="3" value={title} placeholder="Escribe una o pega varias subtareas" aria-label="Nombres de las nuevas subtareas" onChange={event => setTitle(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); save(); } else if (event.key === "Escape") setOpen(false); }} /><button type="button" disabled={!title.trim() || saving} onClick={save}>{render_icon(check_icon, 14)}</button></div>}
     </div>;
 }
 
@@ -2901,10 +2941,12 @@ function render_task_row(props) {
         handle_drag_start,
         handle_open_edit_task,
         handle_quick_change,
+        handle_task_click,
         handle_task_select,
         handle_toggle_quick_popover,
         handle_toggle_task,
         is_dragging,
+        is_multi_selected,
         is_selected,
         mobile_actions,
         status_options = default_status_items,
@@ -2919,7 +2961,7 @@ function render_task_row(props) {
 
     return (
         <div
-            className={`task_row ${task_item.completed ? "task_row_completed" : ""} ${is_selected ? "task_row_selected" : ""}`}
+            className={`task_row ${task_item.completed ? "task_row_completed" : ""} ${is_selected ? "task_row_selected" : ""} ${is_multi_selected ? "task_row_multi_selected" : ""}`}
             data-dragging={is_dragging ? "true" : "false"}
             draggable={Boolean(handle_drag_start)}
             key={task_item.id}
@@ -2931,7 +2973,7 @@ function render_task_row(props) {
             }}
             onDragEnd={handle_drag_end}
             onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
-            onClick={() => handle_task_select(task_item.id)}
+            onClick={event => handle_task_click(task_item.id, event)}
         >
             <button
                 className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
@@ -2954,7 +2996,7 @@ function render_task_row(props) {
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation();
-                        handle_task_select(task_item.id);
+                        handle_task_click(task_item.id, e);
                     }}
                     style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
                 >
@@ -3731,13 +3773,13 @@ function render_projects_module({ projects, selected_project_id, tasks, search_q
                 <p>{project.start_date || "Sin inicio"} — {project.end_date || "Sin fecha final"}</p>
                 <div className="project_summary_progress"><span><i style={{ width: `${progress}%` }} /></span><strong>{progress}%</strong></div>
                 <small>{done} de {projectTasks.length} tareas completadas</small>
-                <footer className="project_summary_actions">
+                <details className="project_actions_toggle"><summary aria-label={`Mostrar acciones de ${project.label}`}>{render_icon(chevron_down_icon, 18)}</summary><footer className="project_summary_actions">
                     <button className="project_action_primary" type="button" onClick={() => onOpen(project.id)}>{render_icon(external_link_icon, 15)} Abrir tareas</button>
                     <button className="project_action_secondary" type="button" onClick={() => onEdit(project.id)}>{render_icon(pencil_icon, 15)} Editar</button>
                     <button className="project_action_secondary" type="button" onClick={() => onShare(project.id)}>{render_icon(link_icon, 15)} Compartir</button>
                     <button className="project_action_secondary" type="button" onClick={() => onWorkspace(project)}>{render_icon(folder_icon, 15)} Workspace</button>
                     <button className="project_action_danger" type="button" onClick={() => onDelete(project.id)}>{render_icon(trash_icon, 15)} Eliminar</button>
-                </footer>
+                </footer></details>
             </article>;
         })}</div>
         {!visible.length && <div className="placeholder_card"><h2>No hay proyectos</h2><p>Prueba otro nombre o crea un proyecto.</p></div>}
@@ -4057,7 +4099,7 @@ function TaskAppContent() {
     const [workspace_state, set_workspace_state] = use_state(load_workspace_state);
     const [workspace_assignment, set_workspace_assignment] = use_state(null);
     const workspaces = workspace_state.items;
-    const active_workspace_id = workspaces.some(item => item.id === workspace_state.activeId) ? workspace_state.activeId : "all";
+    const active_workspace_id = workspace_state.activeId === "total" || workspaces.some(item => item.id === workspace_state.activeId) ? workspace_state.activeId : "all";
     const active_workspace = workspaces.find(item => item.id === active_workspace_id) || null;
     const recent_projects_key = `bold_recent_projects:${session.activeAssignment?.personId || "demo"}:${session.activeAssignment?.id || current_user_id}`;
     const [recent_project_ids, set_recent_project_ids] = use_state([]);
@@ -4072,8 +4114,24 @@ function TaskAppContent() {
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
     const [dragged_task_id, set_dragged_task_id] = use_state(null);
+    const [dragged_task_ids, set_dragged_task_ids] = use_state([]);
+    const [selected_task_ids, set_selected_task_ids] = use_state([]);
     const [is_adding_column, set_is_adding_column] = use_state(false);
     const [new_column_name, set_new_column_name] = use_state("");
+    const [quick_task_open, set_quick_task_open] = use_state(false);
+    const [quick_task_text, set_quick_task_text] = use_state("");
+    use_effect(() => {
+        if (!quick_task_open) return;
+        const close = event => {
+            if (event.type === "keydown" ? event.key === "Escape" : !document.querySelector(".quick_task_form")?.contains(event.target)) {
+                set_quick_task_text("");
+                set_quick_task_open(false);
+            }
+        };
+        document.addEventListener("pointerdown", close);
+        document.addEventListener("keydown", close);
+        return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", close); };
+    }, [quick_task_open]);
     const [editing_column_id, set_editing_column_id] = use_state(null);
     const [editing_column_name, set_editing_column_name] = use_state("");
     const [unsectioned_by_project, set_unsectioned_by_project] = use_state({});
@@ -4317,31 +4375,36 @@ function TaskAppContent() {
     }
 
     function handle_drag_start(task_id, event) {
+        const ids = selected_task_ids.includes(task_id) ? selected_task_ids : [task_id];
         set_dragged_task_id(task_id);
+        set_dragged_task_ids(ids);
         event?.dataTransfer?.setData("text/plain", String(task_id));
         if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
     }
 
     function handle_drag_end() {
         set_dragged_task_id(null);
+        set_dragged_task_ids([]);
     }
 
     function handle_column_drop(column_id, task_id = dragged_task_id) {
+        const task_ids = task_id === dragged_task_id && dragged_task_ids.length ? dragged_task_ids : [task_id].filter(Boolean);
         if (real) {
-            const task = data.tasks.find(item => item.id === task_id);
-            const link = task?.taskProjects.find(item => item.projectId === selected_project_id);
+            const links = task_ids.map(id => data.tasks.find(item => item.id === id)?.taskProjects.find(item => item.projectId === selected_project_id)).filter(Boolean);
             set_dragged_task_id(null);
-            if (link) mutate(() => api.updateTaskProjectLink(link.id, { section: column_id === "unsectioned" ? null : column_id, position: String(Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === column_id).map(item => Number(item.position))) + 1000) }));
+            set_dragged_task_ids([]);
+            set_selected_task_ids([]);
+            if (links.length) mutate(async () => { const start = Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === column_id).map(item => Number(item.position))); for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: column_id === "unsectioned" ? null : column_id, position: String(start + (index + 1) * 1000) }); });
             return;
         }
-        if (!task_id) return;
+        if (!task_ids.length) return;
         const target_column = board_columns.find((c) => c.id === column_id);
         const next_section = column_id;
         const next_status = target_column ? target_column.status : "Pend.";
         const next_completed = column_id === "completed";
 
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
-            if (task_item.id !== task_id) {
+            if (!task_ids.includes(task_item.id)) {
                 return task_item;
             }
 
@@ -4360,6 +4423,17 @@ function TaskAppContent() {
         }));
 
         set_dragged_task_id(null);
+        set_dragged_task_ids([]);
+        set_selected_task_ids([]);
+    }
+
+    function handle_task_click(task_id, event) {
+        if (event?.ctrlKey || event?.metaKey) {
+            set_selected_task_ids(ids => ids.includes(task_id) ? ids.filter(id => id !== task_id) : [...ids, task_id]);
+            return;
+        }
+        set_selected_task_ids([]);
+        handle_task_select(task_id);
     }
 
     function handle_add_column() {
@@ -4617,6 +4691,15 @@ function TaskAppContent() {
         }
         app_toast.fire({ icon: "success", title: success_title });
         return true;
+    }
+
+    async function handle_quick_add_tasks() {
+        const titles = quick_task_text.split(/\r?\n/).map(title => title.trim()).filter(Boolean);
+        if (!titles.length) return;
+        if (await handle_workspace_bulk("create", [], { items: titles.map(title => ({ title, unitId: session.activeUnit?.id, project_id: task_scope === "project" ? selected_project_id : "", assignee_id: task_scope === "mine" ? session.activeAssignment?.id : "", priority: "Media" })) })) {
+            set_quick_task_text("");
+            set_quick_task_open(false);
+        }
     }
 
     function changesFromWorkspace(values) {
@@ -5284,7 +5367,7 @@ function TaskAppContent() {
     // Returns the full shell with the focused tasks module.
     return (
         <ProjectPreviewContext.Provider value={set_project_preview}><AppShell
-sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
+sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
@@ -5310,7 +5393,8 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
-                    <WorkspacesModule key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); set_active_module("tasks"); set_active_section("tasks"); if (child) handle_open_subtask(child.parentTaskId, id); else handle_task_select(id); }} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
+                    <WorkspacesModule TaskSelect={TaskSelect} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
+                    <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={(task_id, ids) => real ? mutate(() => saveFollowers(task_id, ids, data)) : set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task))} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects" ? projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id) : workspace_projects,
                     selected_project_id,
@@ -5325,6 +5409,9 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     onDelete: id => handle_project_menu_toggle(id, "delete")
                 }) : active_module === "tasks" ? render_tasks_module({
                     on_workspace: task => set_workspace_assignment({ type: "task", item: task }),
+                    handle_quick_add_tasks,
+                    handle_task_click,
+                    selected_task_ids,
                     on_followers_change: (task_id, ids) => {
                         if (real) return mutate(() => saveFollowers(task_id, ids, data));
                         set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task));
@@ -5369,6 +5456,8 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     handle_toggle_task_tool,
                     handle_toggle_visible_field,
                     is_adding_column,
+                    quick_task_open,
+                    quick_task_text,
                     new_column_name,
                     selected_project,
                     search_query,
@@ -5382,6 +5471,8 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     set_editing_column_id,
                     set_editing_column_name,
                     set_is_adding_column,
+                    set_quick_task_open,
+                    set_quick_task_text,
                     set_new_column_name,
                     set_search_query,
                     set_sort_direction,

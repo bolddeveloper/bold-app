@@ -23,6 +23,8 @@ test("filtra fechas, subtareas, adjuntos y búsqueda simultáneamente", () => {
 
 test("ordena sin mutar la lista original y agrupa", () => {
     assert.deepEqual(sortWorkspaceTasks(tasks, "title").map(task => task.id), ["1", "3", "2"]);
+    assert.deepEqual(sortWorkspaceTasks(tasks, "completed").map(task => task.id), ["3", "1", "2"]);
+    assert.deepEqual(sortWorkspaceTasks(tasks, "incomplete").map(task => task.id), ["1", "2", "3"]);
     assert.deepEqual(tasks.map(task => task.id), ["1", "2", "3"]);
     assert.deepEqual(groupWorkspaceTasks(tasks, "project", { a: "Proyecto A", b: "Proyecto B" }).map(([label, rows]) => [label, rows.length]), [["Proyecto A", 2], ["Proyecto B", 1]]);
 });

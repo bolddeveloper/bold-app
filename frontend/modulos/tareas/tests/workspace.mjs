@@ -46,10 +46,10 @@ try {
             await page.getByRole("textbox", { name: "Nombre de la nueva tarea" }).fill("Nueva tarea Workspace");
             await page.getByRole("button", { name: "Crear", exact: true }).click();
             await page.getByRole("button", { name: "Nueva tarea Workspace", exact: true }).waitFor();
-            await page.getByRole("checkbox", { name: "Seleccionar Nueva tarea Workspace" }).check();
-            await page.getByRole("region", { name: "Acciones masivas" }).getByRole("combobox", { name: "Cambiar prioridad" }).selectOption("Baja");
-            await page.getByRole("combobox", { name: "Prioridad de Nueva tarea Workspace" }).waitFor();
-            assert.equal(await page.getByRole("combobox", { name: "Prioridad de Nueva tarea Workspace" }).inputValue(), "Baja");
+            await page.getByRole("button", { name: "Completar Nueva tarea Workspace" }).click();
+            await page.getByRole("button", { name: "Reabrir Nueva tarea Workspace" }).waitFor();
+            await page.getByRole("button", { name: "Nueva tarea Workspace", exact: true }).click();
+            await page.getByRole("dialog", { name: "Detalle de tarea" }).waitFor();
             }
         }
         if (width === 390 || width === 1440) {

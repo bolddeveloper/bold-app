@@ -55,6 +55,7 @@ export function sortWorkspaceTasks(tasks, field, direction = "asc") {
     const value = task => ({
         title: task.title || "", due: task.due_date || "9999-12-31", created: task.created_at || "", priority: ({ Alta: 3, high: 3, Media: 2, medium: 2, Baja: 1, low: 1 })[task.priority] || 0,
         status: task.status || "", assignee: task.assignee_name || task.assignee_id || "", project: workspaceProjectIds(task)[0] || "",
+        completed: Number(!task.completed), incomplete: Number(!!task.completed),
     })[field] ?? "";
     return [...tasks].sort((a, b) => direction === "desc" ? String(value(b)).localeCompare(String(value(a)), "es", { numeric: true }) : String(value(a)).localeCompare(String(value(b)), "es", { numeric: true }));
 }
