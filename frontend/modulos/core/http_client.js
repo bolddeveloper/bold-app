@@ -17,8 +17,11 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
     async function request(path, { method = "GET", body, anonymous = false, signal = controller.signal, ...options } = {}) {
         signal = AbortSignal.any([controller.signal, signal]);
-        const url = new URL(path, baseUrl);
-        if (url.origin !== new URL(baseUrl).origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
+        const base = new URL(baseUrl);
+        let url = new URL(path, base);
+        const loopback = host => ["localhost", "127.0.0.1", "[::1]"].includes(host);
+        if (url.origin !== base.origin && loopback(url.hostname) && loopback(base.hostname)) url = new URL(`${url.pathname}${url.search}`, base);
+        if (url.origin !== base.origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
         let response;
         try {
             response = await fetchImpl(url.href, {

@@ -10,15 +10,16 @@ test("network failures show a Spanish connection error without expiring the sess
     assert.equal(expired, false);
 });
 
-test("V2 serializes JSON, merges headers and follows every page", async () => {
+test("V2 serializes JSON, merges headers and follows every page through the local proxy", async () => {
     const calls = [];
-    const api = createApiClient({ fetchImpl: async (url, options) => {
+    const api = createApiClient({ baseUrl: "http://localhost:5173", fetchImpl: async (url, options) => {
         calls.push({ url, options });
         return new Response(JSON.stringify(calls.length === 1 ? { count: 2, next: "http://127.0.0.1:8000/api/v2/tasks/?page=2", results: [{ id: "a" }] } : { results: [{ id: "b" }], next: null }));
     } });
     api.setToken("secret"); api.setAssignment("assignment");
     assert.deepEqual(await api.listTasks({ unit: "unit" }), [{ id: "a" }, { id: "b" }]);
     assert.match(calls[0].url, /\/api\/v2\/tasks\/\?unit=unit/);
+    assert.match(calls[1].url, /^http:\/\/localhost:5173\/api\/v2\/tasks\/\?page=2$/);
     assert.equal(calls[1].options.headers.Authorization, "Token secret");
     assert.equal(calls[1].options.headers["X-Assignment-ID"], "assignment");
     await api.request("/api/v2/tasks/", { method: "POST", body: { title: "Tarea" }, headers: { Accept: "application/json" } });
