@@ -1,4 +1,6 @@
 .folder_module h1, .folder_module p, .folder_module h2 { overflow-wrap: anywhere; }
+.folder_module .projects_module_header h2 { margin: 0; font-size: 21px; }
+.folder_module .folder_breadcrumb { margin-top: 24px; }
 .folder_module > h2 { margin: 26px 0 14px; font-size: 18px; }
 .folder_breadcrumb { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 20px; }
 .folder_breadcrumb button { border: 0; background: transparent; color: inherit; text-decoration: underline; overflow-wrap: anywhere; }

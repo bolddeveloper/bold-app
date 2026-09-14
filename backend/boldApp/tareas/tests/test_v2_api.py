@@ -45,6 +45,52 @@ class TasksV2ApiTests(TransactionTestCase):
             "project_position": "1.0000000000",
         }
 
+    def test_bulk_create_update_delete_and_atomic_validation(self):
+        payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}
+        created = self.client.post("/api/v2/tasks/bulk/", {"operation": "create", "items": [{**payload, "title": "Uno"}, {**payload, "title": "Dos"}]}, format="json")
+        self.assertEqual(created.status_code, 201, getattr(created, "data", None))
+        ids = created.data["created"]
+        changed = self.client.post("/api/v2/tasks/bulk/", {"operation": "update", "ids": ids, "changes": {"priority": "low"}}, format="json")
+        self.assertEqual(changed.status_code, 200, getattr(changed, "data", None))
+        self.assertEqual(Task.objects.filter(id__in=ids, priority="low").count(), 2)
+        invalid = self.client.post("/api/v2/tasks/bulk/", {"operation": "update", "ids": ids, "changes": {"status": str(self.ops_status.id)}}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(Task.objects.filter(id__in=ids, priority="low").count(), 2)
+        deleted = self.client.post("/api/v2/tasks/bulk/", {"operation": "delete", "ids": ids}, format="json")
+        self.assertEqual(deleted.status_code, 200, getattr(deleted, "data", None))
+        self.assertEqual(Task.all_objects.filter(id__in=ids, deleted_at__isnull=False).count(), 2)
+
+    def test_bulk_parent_cycle_is_rejected(self):
+        payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}
+        created = self.client.post("/api/v2/tasks/bulk/", {"operation": "create", "items": [{**payload, "title": "Raiz"}, {**payload, "title": "Hija"}]}, format="json")
+        self.assertEqual(created.status_code, 201, getattr(created, "data", None))
+        root, child = created.data["created"]
+        first = self.client.post("/api/v2/tasks/bulk/", {"operation": "update", "ids": [child], "changes": {"parent_task": root}}, format="json")
+        self.assertEqual(first.status_code, 200, getattr(first, "data", None))
+        cycle = self.client.post("/api/v2/tasks/bulk/", {"operation": "update", "ids": [root], "changes": {"parent_task": child}}, format="json")
+        self.assertEqual(cycle.status_code, 400)
+        self.assertIsNone(Task.objects.get(pk=root).parent_task_id)
+
+    def test_bulk_project_link_and_invalid_ids(self):
+        created = self.client.post("/api/v2/tasks/", self.task_payload(), format="json")
+        self.assertEqual(created.status_code, 201, getattr(created, "data", None))
+        task_id = created.data["id"]
+        linked = self.client.post("/api/v2/tasks/bulk/", {"operation": "link", "ids": [task_id], "project": str(self.ops_project.id), "section": str(self.ops_section.id)}, format="json")
+        self.assertEqual(linked.status_code, 200, getattr(linked, "data", None))
+        self.assertEqual(TaskProject.objects.get(task_id=task_id, project=self.ops_project).section_id, self.ops_section.id)
+        again = self.client.post("/api/v2/tasks/bulk/", {"operation": "link", "ids": [task_id], "project": str(self.ops_project.id)}, format="json")
+        self.assertEqual(again.status_code, 200, getattr(again, "data", None))
+        self.assertEqual(TaskProject.objects.get(task_id=task_id, project=self.ops_project).section_id, self.ops_section.id)
+        invalid = self.client.post("/api/v2/tasks/bulk/", {"operation": "delete", "ids": ["not-a-uuid"]}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertTrue(Task.objects.filter(pk=task_id).exists())
+
+    def test_bulk_create_rolls_back_when_a_later_item_is_invalid(self):
+        payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}
+        response = self.client.post("/api/v2/tasks/bulk/", {"operation": "create", "items": [{**payload, "title": "No debe quedar"}, {**payload, "title": "   "}]}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Task.objects.filter(title="No debe quedar").exists())
+
     def test_requires_an_active_assignment_owned_by_the_account(self):
         foreign_client = APIClient()
         foreign_client.credentials(

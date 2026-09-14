@@ -12,16 +12,21 @@ export async function loadTaskData({ directory, units }) {
         api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), api.list("notifications"), api.list("task-tags"),
         Promise.all(units.map(unit => api.list("tags", { unit: unit.id }))).then(rows => rows.flat())
     ]);
-    for (const project of projects) project.member_ids = members.filter(item => item.project === project.id && item.status === "active" && !item.removed_at).map(item => item.assignment);
+    const by = (rows, key) => { const result = new Map(); for (const row of rows) { const id = row[key]; if (!result.has(id)) result.set(id, []); result.get(id).push(row); } return result; };
+    const linksByTask = by(links, "taskId"), commentsByTask = by(comments, "task"), childrenByParent = by(tasks.filter(item => item.parentTaskId), "parentTaskId");
+    const followersByTask = by(followers, "task"), attachmentsByTask = by(attachments, "task"), tagsByTask = by(taskTags, "task"), membersByProject = by(members, "project");
+    const directoryById = new Map(directory.map(person => [person.id, person]));
+    const tagById = new Map(tags.map(tag => [tag.id, tag]));
+    for (const project of projects) project.member_ids = (membersByProject.get(project.id) || []).filter(item => item.status === "active" && !item.removed_at).map(item => item.assignment);
     for (const task of tasks) {
         task.status_options = statuses.filter(item => !item.unitId || item.unitId === task.unitId).map(item => item.label);
-        task.taskProjects = links.filter(link => link.taskId === task.id);
-        task.comments = comments.filter(item => item.task === task.id).map(item => ({ ...item, task_id: item.task, author_name: directory.find(person => person.id === item.author_assignment)?.name || "Asignación anterior", images: [] }));
-        task.subtasks = tasks.filter(item => item.parentTaskId === task.id);
-        task.collaborator_ids = followers.filter(item => item.task === task.id).map(item => item.assignment);
-        task.attachments = attachments.filter(item => item.task === task.id && !item.deleted_at).map(item => ({ ...item, name: item.file_name, url: item.file_url }));
+        task.taskProjects = linksByTask.get(task.id) || [];
+        task.comments = (commentsByTask.get(task.id) || []).map(item => ({ ...item, task_id: item.task, author_name: directoryById.get(item.author_assignment)?.name || "Asignación anterior", images: [] }));
+        task.subtasks = childrenByParent.get(task.id) || [];
+        task.collaborator_ids = (followersByTask.get(task.id) || []).map(item => item.assignment);
+        task.attachments = (attachmentsByTask.get(task.id) || []).filter(item => !item.deleted_at).map(item => ({ ...item, name: item.file_name, url: item.file_url }));
         task.attachment_name = task.attachments[0]?.name || null;
-        task.tags = taskTags.filter(item => item.task === task.id).map(item => tags.find(tag => tag.id === item.tag)?.name).filter(Boolean);
+        task.tags = (tagsByTask.get(task.id) || []).map(item => tagById.get(item.tag)?.name).filter(Boolean);
     }
     return { directory, projects, units, sections, statuses, tasks, links, members, followers,
         notifications: notifications.map(item => ({ ...item, task_id: item.task, time_label: new Date(item.created_at).toLocaleString("es"), message: item.body || item.title })) };

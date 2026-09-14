@@ -13,6 +13,7 @@ export function createTasksApi(client = http) {
         listStatuses: unit => list("task-statuses", { unit }),
         listTasks: params => list("tasks", params),
         createTask: body => create("tasks", body),
+        bulkTasks: body => request("/api/v2/tasks/bulk/", { method: "POST", body }),
         updateTask: (id, body) => update("tasks", id, body),
         moveTask: (id, body) => request(`/api/v2/tasks/${id}/move/`, { method: "POST", body }),
         deleteTask: id => remove("tasks", id),

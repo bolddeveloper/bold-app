@@ -171,6 +171,18 @@ class TaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"section": "section requiere project en la misma operacion."})
         if section and section.project_id != project.id:
             raise serializers.ValidationError({"section": "La seccion no pertenece al proyecto indicado."})
+        parent = attrs.get("parent_task", getattr(self.instance, "parent_task", None))
+        if parent and ("parent_task" in attrs or "unit" in attrs):
+            if parent.deleted_at:
+                raise serializers.ValidationError({"parent_task": "La tarea principal no esta disponible."})
+            if unit and parent.unit_id != unit.id:
+                raise serializers.ValidationError({"parent_task": "La tarea principal debe pertenecer a la misma unidad."})
+            visited = set()
+            while parent:
+                if parent.pk in visited or (self.instance and parent.pk == self.instance.pk):
+                    raise serializers.ValidationError({"parent_task": "La relacion crearia un ciclo."})
+                visited.add(parent.pk)
+                parent = parent.parent_task
         return attrs
 
     @transaction.atomic

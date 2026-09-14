@@ -4083,6 +4083,7 @@ function TaskAppContent() {
     const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? "" : "launch_q4"));
     const [task_scope, set_task_scope] = use_state("project");
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
+    const all_workspace_tasks = use_memo(() => real ? (data?.tasks || []).map(task => projectTask(task, null)) : stored_tasks.flatMap(task => [task, ...(task.subtasks || []).map(child => ({ ...child, parentTaskId: task.id, project_id: child.project_id || task.project_id, unitId: child.unitId || task.unitId }))]), [real, data?.tasks, stored_tasks]);
     const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
     const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
@@ -4539,11 +4540,11 @@ function TaskAppContent() {
         return () => { mounted = false; clearInterval(timer); window.removeEventListener("focus", reconcile); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
-    async function mutate(operation, on_success = () => {}) {
+    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados") {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
         try {
-            await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: "Cambios guardados" }); return true;
+            await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
         } catch (error) {
             if (error.name !== "AbortError") {
                 set_api_error(error.message);
@@ -4558,6 +4559,72 @@ function TaskAppContent() {
             }
             return false;
         } finally { mutation_pending.current = false; set_pending(false); }
+    }
+
+    async function handle_workspace_bulk(operation, ids = [], values = {}) {
+        const count = operation === "create" ? values.items.length : ids.length;
+        const success_title = operation === "create" ? `${count} tarea${count === 1 ? "" : "s"} creada${count === 1 ? "" : "s"}` : operation === "delete" ? `${count} tarea${count === 1 ? "" : "s"} eliminada${count === 1 ? "" : "s"}` : operation === "link" ? `Proyecto o sección actualizado en ${count} tarea${count === 1 ? "" : "s"}` : `${count} tarea${count === 1 ? "" : "s"} actualizada${count === 1 ? "" : "s"}`;
+        if (real) {
+            if (operation === "create") {
+                const items = values.items.map(item => taskPayload({ ...item, parent_task: item.parentTaskId || null }, data.statuses, { create: true, unitId: item.unitId || session.activeUnit?.id }));
+                return mutate(() => api.bulkTasks({ operation, items }), () => {}, success_title);
+            }
+            const changes = operation === "update" && values.priority ? { ...values, priority: ({ Alta: "high", Media: "medium", Baja: "low" })[values.priority] || values.priority } : values;
+            return mutate(() => api.bulkTasks({ operation, ids, ...(operation === "update" ? { changes } : operation === "link" ? values : {}) }), () => {}, success_title);
+        }
+        if (operation === "create") {
+            set_tasks(current => {
+                const next = [...current];
+                values.items.forEach(item => {
+                    const created = normalize_task({ ...item, id: crypto.randomUUID(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: "todo" });
+                    const parentIndex = next.findIndex(task => String(task.id) === String(item.parentTaskId));
+                    if (parentIndex >= 0) next[parentIndex] = { ...next[parentIndex], subtasks: [...(next[parentIndex].subtasks || []), created] };
+                    else next.push(created);
+                });
+                return next;
+            });
+        } else if (operation === "delete") {
+            set_tasks(current => current.filter(task => !ids.includes(String(task.id))).map(task => ({ ...task, subtasks: (task.subtasks || []).filter(child => !ids.includes(String(child.id))) })));
+        } else if (operation === "update" && Object.prototype.hasOwnProperty.call(values, "parent_task")) {
+            const targetId = values.parent_task;
+            let ancestor = all_workspace_tasks.find(task => String(task.id) === String(targetId));
+            while (ancestor) {
+                if (ids.includes(String(ancestor.id))) { set_api_error("La relación crearía un ciclo de subtareas."); return false; }
+                ancestor = all_workspace_tasks.find(task => String(task.id) === String(ancestor.parentTaskId));
+            }
+            set_tasks(current => {
+                const flat = [];
+                const visit = (task, parentId = null) => { flat.push({ ...task, parentTaskId: task.parentTaskId || parentId, subtasks: [] }); (task.subtasks || []).forEach(child => visit(child, task.id)); };
+                current.forEach(task => visit(task));
+                const byId = new Map(flat.map(task => [String(task.id), task]));
+                const roots = [];
+                for (const task of flat) {
+                    if (ids.includes(String(task.id))) task.parentTaskId = targetId || null;
+                    const parent = byId.get(String(task.parentTaskId));
+                    if (parent) parent.subtasks.push(task); else roots.push(task);
+                }
+                return roots;
+            });
+        } else {
+            set_tasks(current => current.map(task => {
+                const patch = target => {
+                    if (!ids.includes(String(target.id))) return target;
+                    if (operation === "link") return { ...target, project_id: values.project, ...(Object.prototype.hasOwnProperty.call(values, "section") ? { section: values.section || "todo" } : {}) };
+                    return { ...target, ...changesFromWorkspace(values), ...(values.status ? { completed: values.status === "Lista" } : {}) };
+                };
+                return { ...patch(task), subtasks: (task.subtasks || []).map(patch) };
+            }));
+        }
+        app_toast.fire({ icon: "success", title: success_title });
+        return true;
+    }
+
+    function changesFromWorkspace(values) {
+        const result = { ...values };
+        if ("assignee_assignment" in result) { result.assignee_id = result.assignee_assignment; delete result.assignee_assignment; }
+        if ("parent_task" in result) { result.parentTaskId = result.parent_task; delete result.parent_task; }
+        if ("due_date" in result) result.due_label = result.due_date || "";
+        return result;
     }
 
     useDialog(mobile && !!inbox_filter_menu, ".inbox_dropdown", () => set_inbox_filter_menu(null));
@@ -5243,7 +5310,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
-                    <WorkspacesModule key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onTask={id => { set_active_module("tasks"); set_active_section("tasks"); handle_task_select(id); }} />
+                    <WorkspacesModule key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); set_active_module("tasks"); set_active_section("tasks"); if (child) handle_open_subtask(child.parentTaskId, id); else handle_task_select(id); }} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects" ? projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id) : workspace_projects,
                     selected_project_id,

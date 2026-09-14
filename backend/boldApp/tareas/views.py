@@ -1,9 +1,10 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from uuid import UUID
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from boldApp.core.authorization import check_and_log, resolve_access
@@ -232,6 +233,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
 
     def perform_create(self, serializer):
         self.require_permission("tasks.task.create", serializer.validated_data["unit"])
+        self._require_related_permissions(serializer.validated_data)
         serializer.save()
 
     def perform_update(self, serializer):
@@ -240,7 +242,97 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         new_unit = serializer.validated_data.get("unit")
         if new_unit and new_unit.id != task.unit_id:
             self.require_permission("tasks.task.assign", new_unit, task.id)
+        self._require_related_permissions(serializer.validated_data)
         serializer.save()
+
+    def _require_related_permissions(self, data):
+        parent = data.get("parent_task")
+        if parent:
+            if not self.visible_tasks().filter(pk=parent.pk).exists():
+                raise PermissionDenied("La tarea principal no esta disponible.")
+            self.require_permission("tasks.task.update", parent.unit, parent.pk)
+        project = data.get("project")
+        if project:
+            self.require_permission("tasks.project.manage", project.unit, project.pk)
+
+    @action(detail=False, methods=["post"], url_path="bulk")
+    def bulk(self, request):
+        """Atomic, bounded writes; one rejected row rolls back the whole operation."""
+        operation = request.data.get("operation")
+        if operation not in {"create", "update", "delete", "link"}:
+            raise ValidationError({"operation": "Usa create, update, link o delete."})
+        if operation == "create":
+            items = request.data.get("items")
+            if not isinstance(items, list) or not 1 <= len(items) <= 100:
+                raise ValidationError({"items": "Envia entre 1 y 100 tareas."})
+            with transaction.atomic():
+                created = []
+                for index, item in enumerate(items):
+                    if not isinstance(item, dict):
+                        raise ValidationError({"items": {index: "La tarea debe ser un objeto."}})
+                    serializer = self.get_serializer(data=item)
+                    try:
+                        serializer.is_valid(raise_exception=True)
+                        self.require_permission("tasks.task.create", serializer.validated_data["unit"])
+                        self._require_related_permissions(serializer.validated_data)
+                        created.append(str(serializer.save().pk))
+                    except ValidationError as error:
+                        raise ValidationError({"items": {index: error.detail}}) from error
+            return Response({"created": created, "count": len(created)}, status=status.HTTP_201_CREATED)
+
+        ids = request.data.get("ids")
+        if not isinstance(ids, list) or not 1 <= len(ids) <= 100 or len(set(map(str, ids))) != len(ids):
+            raise ValidationError({"ids": "Selecciona entre 1 y 100 tareas distintas."})
+        try:
+            ids = [UUID(str(value)) for value in ids]
+        except (ValueError, TypeError, AttributeError) as error:
+            raise ValidationError({"ids": "Los identificadores deben ser UUID validos."}) from error
+        tasks = list(self.get_queryset().filter(pk__in=ids, deleted_at__isnull=True))
+        if len(tasks) != len(ids):
+            raise ValidationError({"ids": "Una o mas tareas no existen o no estan disponibles."})
+        if operation == "update":
+            changes = request.data.get("changes")
+            allowed = {"title", "description", "assignee_assignment", "priority", "status", "start_date", "due_date", "parent_task"}
+            if not isinstance(changes, dict) or not changes or set(changes) - allowed:
+                raise ValidationError({"changes": "Incluye solo campos editables de tarea."})
+        if operation == "link":
+            project_id = request.data.get("project")
+            section_id = request.data.get("section")
+            section_provided = "section" in request.data
+            try:
+                project_id = UUID(str(project_id)) if project_id else None
+                section_id = UUID(str(section_id)) if section_id else None
+            except (ValueError, TypeError, AttributeError) as error:
+                raise ValidationError({"project": "Selecciona un proyecto y seccion validos."}) from error
+            project = Project.objects.filter(pk=project_id, deleted_at__isnull=True).first() if project_id else None
+            if not project:
+                raise ValidationError({"project": "Selecciona un proyecto disponible."})
+            section = Section.objects.filter(pk=section_id, project=project).first() if section_id else None
+            if section_id and not section:
+                raise ValidationError({"section": "La seccion no pertenece al proyecto."})
+            self.require_permission("tasks.project.manage", project.unit, project.pk)
+        with transaction.atomic():
+            for task in tasks:
+                if operation == "delete":
+                    self.require_permission("tasks.task.delete", task.unit, task.pk)
+                    task.deleted_at = timezone.now()
+                    task.save(update_fields=["deleted_at", "updated_at"])
+                elif operation == "link":
+                    self.require_permission("tasks.task.update", task.unit, task.pk)
+                    link, created = TaskProject.objects.get_or_create(
+                        task=task, project=project,
+                        defaults={"section": section, "position": 0, "added_by_assignment": request.assignment},
+                    )
+                    if not created and section_provided and link.section_id != (section.pk if section else None):
+                        link.section = section
+                        link.save(update_fields=["section"])
+                else:
+                    self.require_permission("tasks.task.update", task.unit, task.pk)
+                    serializer = self.get_serializer(task, data=changes, partial=True)
+                    serializer.is_valid(raise_exception=True)
+                    self._require_related_permissions(serializer.validated_data)
+                    serializer.save()
+        return Response({"count": len(tasks), "ids": [str(task.pk) for task in tasks]})
 
     def destroy(self, request, *args, **kwargs):
         task = self.get_object()

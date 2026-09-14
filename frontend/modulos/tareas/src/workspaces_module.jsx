@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { CalendarDays, Clock3, Folder, FolderPlus, ListPlus, Pencil, Settings2, Trash2, X } from "lucide-react";
 import { useDialog } from "../../core/shared/use_dialog.js";
 import { folderBranch, folderPath, folderSummary, tasksInWorkspace, transferFolderItems } from "./services/workspace_store.js";
+import WorkspaceOperations from "./workspace_operations.jsx";
 import "./workspaces.css";
 
 function Dialog({ title, onClose, children }) {
@@ -10,7 +11,7 @@ function Dialog({ title, onClose, children }) {
     return createPortal(<div className="folder_overlay" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="folder_dialog" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button type="button" aria-label="Cerrar" onClick={onClose}><X size={20} /></button></header>{children}</section></div>, document.body);
 }
 
-export default function WorkspacesModule({ workspaces, activeId, onOpen, onSave, projects, tasks, searchQuery, onProject, onTask }) {
+export default function WorkspacesModule({ workspaces, activeId, onOpen, onSave, projects, tasks, allTasks, sections, statuses, members, units, activeUnitId, storageKey, pending, loading, permissionsCan, searchQuery, onProject, onTask, onEditTask, onCreateTask, onQuickCreate, onBulk }) {
     const current = workspaces.find(item => item.id === activeId);
     const parentId = current?.id || null;
     const [dialog, setDialog] = useState(null);
@@ -42,8 +43,9 @@ export default function WorkspacesModule({ workspaces, activeId, onOpen, onSave,
     </div>);
 
     return <section className="projects_module folder_module">
+        <WorkspaceOperations tasks={allTasks} projects={projects} sections={sections} statuses={statuses} members={members} units={units} activeUnitId={activeUnitId} storageKey={storageKey} pending={pending} loading={loading} permissionsCan={permissionsCan} onOpenTask={onTask} onEditTask={onEditTask} onOpenCreate={onCreateTask} onQuickCreate={onQuickCreate} onBulk={onBulk} />
         <nav className="folder_breadcrumb" aria-label="Ruta de carpetas"><button type="button" onClick={() => open(null)}>Workspaces</button>{folderPath(workspaces, parentId).map(folder => <span key={folder.id}> / <button type="button" aria-current={folder.id === parentId ? "page" : undefined} onClick={() => open(folder.id)}>{folder.name}</button></span>)}</nav>
-        <header className="projects_module_header"><div><h1>{current?.name || "Workspaces"}</h1><p>{current?.description || "Organiza proyectos y tareas en carpetas."}</p></div><div className="folder_actions"><button type="button" className="folder_icon_action primary_button" title={current ? "Crear subcarpeta" : "Crear carpeta"} aria-label={current ? "Crear subcarpeta" : "Crear carpeta"} onClick={() => start("edit", null)}><FolderPlus size={21} /></button>{current && <><button type="button" className="folder_icon_action" title="Agregar proyectos o tareas" aria-label="Agregar proyectos o tareas" onClick={() => start("pick")}><ListPlus size={21} /></button><button type="button" className="folder_icon_action" title="Editar carpeta" aria-label="Editar carpeta" onClick={() => start("edit", current)}><Settings2 size={21} /></button></>}</div></header>
+        <header className="projects_module_header"><div><h2>{current?.name || "Carpetas"}</h2><p>{current?.description || "Organiza proyectos y tareas en carpetas."}</p></div><div className="folder_actions"><button type="button" className="folder_icon_action primary_button" title={current ? "Crear subcarpeta" : "Crear carpeta"} aria-label={current ? "Crear subcarpeta" : "Crear carpeta"} onClick={() => start("edit", null)}><FolderPlus size={21} /></button>{current && <><button type="button" className="folder_icon_action" title="Agregar proyectos o tareas" aria-label="Agregar proyectos o tareas" onClick={() => start("pick")}><ListPlus size={21} /></button><button type="button" className="folder_icon_action" title="Editar carpeta" aria-label="Editar carpeta" onClick={() => start("edit", current)}><Settings2 size={21} /></button></>}</div></header>
         <h2>{current ? "Subcarpetas" : "Carpetas"}</h2>
         <div className="projects_grid">{workspaces.filter(item => item.parentId === parentId && item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())).map(item => {
             const summary = folderSummary(workspaces, item.id, projects, tasks);
