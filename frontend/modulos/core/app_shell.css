@@ -10,6 +10,33 @@
     user-select: none;
 }
 
+.app_shell_session_enter .sidebar_shell {
+    animation: core_session_sidebar_enter 440ms cubic-bezier(.2, .8, .2, 1) backwards;
+}
+
+.app_shell_session_enter .main_workspace {
+    animation: core_session_workspace_enter 460ms cubic-bezier(.2, .8, .2, 1) 70ms backwards;
+}
+
+@keyframes core_session_sidebar_enter {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes core_session_workspace_enter {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 1023px) {
+    .app_shell_session_enter .sidebar_shell { animation: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app_shell_session_enter .sidebar_shell,
+    .app_shell_session_enter .main_workspace { animation: none; }
+}
+
 .app_shell :is(input, textarea, [contenteditable="true"], .detail_description_text) { user-select: text; }
 
 .sidebar_shell {
@@ -272,6 +299,16 @@
     right: 0;
     width: 320px;
     padding: 16px;
+    animation: core_notification_enter 190ms cubic-bezier(.2, .8, .2, 1) backwards;
+}
+
+@keyframes core_notification_enter {
+    from { opacity: 0; transform: translateY(6px) scale(.985); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notifications_panel { animation: none; }
 }
 
 .notifications_panel_header {

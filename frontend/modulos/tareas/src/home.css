@@ -24,6 +24,8 @@
 .home_tabs button { color: var(--bold_muted); padding: 11px 0 13px; border-bottom: 2px solid transparent; }
 .home_tabs button.active { color: var(--bold_red); border-color: var(--bold_red); }
 .home_task { min-height: 82px; margin: 0 24px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 190px; align-items: center; gap: 14px; border-bottom: 1px solid var(--bold_line); cursor: pointer; }
+.home_task { transition: background-color 160ms ease, box-shadow 160ms ease; }
+.home_task:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--bold_red) 5%, var(--bold_surface)); box-shadow: inset 3px 0 0 var(--bold_red); }
 .home_task_check { width: 22px; height: 22px; border: 1px solid var(--bold_line); border-radius: 7px; background: var(--bold_surface); }
 .home_task > div { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
 .home_task strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -37,6 +39,8 @@
 .home_empty { color: var(--bold_muted); text-align: center; padding: 34px 16px; }
 .home_projects_card { padding-bottom: 14px; }
 .home_project { width: calc(100% - 48px); margin: 10px 24px 4px; padding: 17px; border: 0; border-radius: 11px; background: var(--bold_surface_soft); text-align: left; color: inherit; }
+.home_project { transition: transform 160ms cubic-bezier(.2, .8, .2, 1), box-shadow 160ms ease; }
+.home_project:is(:hover, :focus-visible) { transform: translateY(-2px); box-shadow: 0 8px 20px #20242b18; }
 .home_project > div { display: flex; align-items: center; gap: 11px; }
 .home_project > div span { width: 13px; height: 13px; border-radius: 50%; }
 .home_project b { margin-left: auto; }
@@ -49,6 +53,9 @@
 .home_shortcuts { padding: 20px 24px; }
 .home_shortcuts h2 { margin-bottom: 16px; }
 .home_shortcuts button { width: 100%; display: flex; align-items: center; gap: 13px; border: 0; border-radius: 9px; background: var(--bold_surface_soft); padding: 8px 10px; margin-top: 10px; color: inherit; }
+.home_shortcuts button { transition: transform 160ms cubic-bezier(.2, .8, .2, 1), box-shadow 160ms ease; }
+.home_shortcuts button:is(:hover, :focus-visible) { transform: translateX(3px); box-shadow: 0 5px 14px #20242b14; }
+@media (prefers-reduced-motion: reduce) { .home_task, .home_project, .home_shortcuts button { transition: none; } }
 .home_shortcuts button > span { font-weight: 700; font-size: 12px; }
 .home_shortcuts button > svg { margin-left: auto; width: 18px; color: var(--bold_muted); }
 .home_shortcuts .shortcut_red { background: #ffe8e8; color: var(--bold_red); }.home_shortcuts .shortcut_blue { background: #e7f2ff; color: #438edc; }.home_shortcuts .shortcut_green { background: #e8f6ed; color: #43a66a; }

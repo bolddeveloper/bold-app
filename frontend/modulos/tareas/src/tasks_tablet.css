@@ -420,6 +420,7 @@
         overflow-y: auto;
         background: var(--bold_surface);
         box-shadow: -18px 0 48px rgba(25, 28, 34, .2);
+        animation: inbox_detail_enter 220ms cubic-bezier(.2, .8, .2, 1) backwards;
     }
 
     .inbox_detail_panel_open > .mobile_only {
@@ -427,6 +428,10 @@
         width: fit-content;
         min-height: 44px;
     }
+}
+
+@media (min-width: 761px) and (max-width: 899px) and (prefers-reduced-motion: reduce) {
+    .inbox_detail_panel_open { animation: none; }
 }
 
 @media (min-width: 761px) and (max-width: 820px) {

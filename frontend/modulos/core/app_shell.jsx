@@ -30,7 +30,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     useDialog(compact && shell.is_sidebar_open, ".sidebar_shell", () => shell.set_is_sidebar_open(false));
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment };
-    return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""}`}>
+    return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
         {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, onLogout: core.logout })}
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>

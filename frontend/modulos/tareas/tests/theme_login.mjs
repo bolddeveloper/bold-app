@@ -47,6 +47,12 @@ try {
             await page.getByRole("heading", { name: "Bienvenido de nuevo" }).waitFor();
             await fits(page, ".core_auth_form_wrap");
             await noOverflow(page);
+            if (width === 390) {
+                assert.equal(await page.locator(".core_auth_form_wrap").evaluate(element => getComputedStyle(element).animationName), "core_auth_enter");
+                await page.emulateMedia({ reducedMotion: "reduce" });
+                assert.equal(await page.locator(".core_auth_form_wrap").evaluate(element => getComputedStyle(element).animationName), "none");
+                await page.emulateMedia({ reducedMotion: "no-preference" });
+            }
             await page.locator('[name="password"]').fill("prueba");
             await page.getByRole("button", { name: "Mostrar contraseña" }).click();
             assert.equal(await page.locator('[name="password"]').getAttribute("type"), "text");
@@ -87,6 +93,18 @@ try {
                 await noLargeLightSurfaces(page);
                 await noOverflow(page);
                 await page.screenshot({ path: path.join(artifacts, `${name.replaceAll(" ", "-")}-dark-${width}.png`), animations: "disabled" });
+            }
+            if (width === 390 || width === 1440) {
+                if (width < 1024) await page.getByRole("button", { name: "Abrir navegacion" }).click();
+                await page.getByRole("button", { name: "Ver Workspaces" }).click();
+                await page.getByRole("button", { name: "Crear carpeta" }).click();
+                await page.getByRole("dialog", { name: "Crear carpeta" }).waitFor();
+                assert.equal(await page.locator(".folder_dialog").evaluate(element => getComputedStyle(element).animationName), "folder_dialog_enter");
+                await page.emulateMedia({ reducedMotion: "reduce" });
+                assert.equal(await page.locator(".folder_dialog").evaluate(element => getComputedStyle(element).animationName), "none");
+                await page.emulateMedia({ reducedMotion: "no-preference" });
+                await noOverflow(page);
+                await page.getByRole("dialog", { name: "Crear carpeta" }).getByRole("button", { name: "Cerrar" }).click();
             }
         }
         console.log(`${real ? "LOGIN" : "THEME"} PASS ${width}px`);

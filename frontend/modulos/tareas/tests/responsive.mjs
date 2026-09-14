@@ -51,6 +51,18 @@ try {
             await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
         }
         await page.locator(width < 1024 ? ".task_card" : ".task_row").first().waitFor();
+        if (real) {
+            assert.equal(await page.locator(".app_shell_session_enter").count(), 1, "entry animation follows login");
+            assert.equal(await page.locator(".main_workspace").evaluate(element => getComputedStyle(element).animationName), "core_session_workspace_enter");
+            if (width === 390) {
+                await page.emulateMedia({ reducedMotion: "reduce" });
+                assert.equal(await page.locator(".main_workspace").evaluate(element => getComputedStyle(element).animationName), "none");
+                await page.emulateMedia({ reducedMotion: "no-preference" });
+                await page.reload();
+                await page.locator(".task_card").first().waitFor();
+                assert.equal(await page.locator(".app_shell_session_enter").count(), 0, "restored session does not replay entry animation");
+            }
+        }
         await page.screenshot({ path: path.join(artifacts, `tasks-${width}.png`), fullPage: true, animations: "disabled" });
         await noOverflow(page, `tasks ${width}`);
         if (width < 1024) {
@@ -61,9 +73,16 @@ try {
         }
         await page.locator('button[aria-label="Notificaciones"]:visible').click();
         await fits(page, page.locator(".notifications_panel"), "notifications");
+        assert.equal(await page.locator(".notifications_panel").evaluate(element => getComputedStyle(element).animationName), "core_notification_enter");
+        if (width === 390) {
+            await page.emulateMedia({ reducedMotion: "reduce" });
+            assert.equal(await page.locator(".notifications_panel").evaluate(element => getComputedStyle(element).animationName), "none");
+            await page.emulateMedia({ reducedMotion: "no-preference" });
+        }
         await page.getByRole("button", { name: "Cerrar notificaciones", exact: true }).first().click();
         await page.getByRole("button", { name: /^Filtrar/ }).first().click();
         await fits(page, page.locator(".task_options_panel"), "filters");
+        assert.equal(await page.locator(".task_options_panel").evaluate(element => getComputedStyle(element).animationName), "task_tool_enter");
         await page.getByRole("button", { name: "Aplicar", exact: true }).click();
         if (width < 1024) {
             await page.locator(".task_card_content").first().click();
@@ -117,7 +136,23 @@ try {
             if (module === "Bandeja de entrada" && width < 900 && await page.locator(".inbox_activity_main").count()) {
                 await page.locator(".inbox_activity_main").first().click();
                 await fits(page, page.locator(".inbox_detail_panel_open"), "inbox detail");
+                assert.equal(await page.locator(".inbox_detail_panel_open").evaluate(element => getComputedStyle(element).animationName), "inbox_detail_enter");
+                if (width === 390 || width === 768) {
+                    await page.emulateMedia({ reducedMotion: "reduce" });
+                    assert.equal(await page.locator(".inbox_detail_panel_open").evaluate(element => getComputedStyle(element).animationName), "none");
+                    await page.emulateMedia({ reducedMotion: "no-preference" });
+                }
                 await page.getByRole("button", { name: "Volver a la bandeja", exact: true }).click();
+            }
+            if (module === "Inicio") assert.ok((await page.locator(".home_shortcuts button").first().evaluate(element => getComputedStyle(element).transitionProperty)).includes("transform"));
+            if (module === "Informes") {
+                assert.equal(await page.locator(".reports_bar").first().evaluate(element => getComputedStyle(element).animationName), "reports_bar_reveal");
+                assert.equal(await page.locator(".reports_donut").evaluate(element => getComputedStyle(element).animationName), "reports_donut_enter");
+                if (width === 390) {
+                    await page.emulateMedia({ reducedMotion: "reduce" });
+                    assert.equal(await page.locator(".reports_bar").first().evaluate(element => getComputedStyle(element).animationName), "none");
+                    await page.emulateMedia({ reducedMotion: "no-preference" });
+                }
             }
         }
         if (width < 1024) await page.getByRole("button", { name: "Abrir navegacion", exact: true }).click();

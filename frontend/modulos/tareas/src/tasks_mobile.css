@@ -542,6 +542,7 @@ body {
     .inbox_body { display: block; }
     .inbox_detail_panel { display: none; }
     .inbox_detail_panel_open { display: block; position: fixed; inset: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--bold_surface); z-index: 1450; overflow-y: auto; }
+    .inbox_detail_panel_open { animation: inbox_detail_enter 210ms cubic-bezier(.2, .8, .2, 1) backwards; }
     .inbox_activity { grid-template-columns: 44px minmax(0, 1fr); }
     .inbox_activity_main { grid-template-columns: 8px 36px minmax(0, 1fr); padding-inline: 8px; }
     .inbox_activity_actions { flex-wrap: wrap; padding-inline: 8px; }
@@ -607,5 +608,14 @@ body {
     .reports_actions select { width: 100%; font-size: 16px; }
     .reports_actions button { min-height: 44px; white-space: normal; }
     .reports_project { grid-template-columns: minmax(0, 1fr) 45px 55px; } }
+
+@keyframes inbox_detail_enter {
+    from { opacity: 0; transform: translateX(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .inbox_detail_panel_open { animation: none; }
+}
 
 

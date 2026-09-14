@@ -16,9 +16,11 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const state = useSyncExternalStore(subscribeCore, getCoreState);
     const generation = useRef(0);
     const permissionCache = useRef(new Map());
+    const enteredFromLogin = useRef(false);
     const real = is_using_real_backend();
     function logout() {
         generation.current++;
+        enteredFromLogin.current = false;
         http.setToken(null);
         permissionCache.current.clear();
         sessionStorage.removeItem("bold_v2_session");
@@ -72,8 +74,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     async function login(event) {
         event.preventDefault(); updateCore({ sessionStatus: "loading", error: "" });
         const form = new FormData(event.currentTarget);
-        try { await coreApi.login(form.get("email"), form.get("password")); await restore(); }
-        catch (error) { if (error.name !== "AbortError") updateCore({ error: error.message, sessionStatus: "anonymous" }); }
+        try { await coreApi.login(form.get("email"), form.get("password")); enteredFromLogin.current = true; await restore(); }
+        catch (error) { enteredFromLogin.current = false; if (error.name !== "AbortError") updateCore({ error: error.message, sessionStatus: "anonymous" }); }
     }
     const { account, assignments, error } = state;
     const active = state.activeAssignment?.id || "", busy = state.sessionStatus === "loading";
@@ -82,6 +84,6 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         active={active} onLogin={login} onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const value = { ...state, ...http.getSession(), setActiveAssignment, logout, permissions: { can } };
+    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, logout, permissions: { can } };
     return <CoreContext.Provider value={value}>{children}</CoreContext.Provider>;
 }

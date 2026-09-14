@@ -46,6 +46,11 @@
 .folder_module button:disabled { opacity: .5; cursor: not-allowed; }
 .folder_overlay { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; background: #0006; padding: 12px; }
 .folder_dialog { width: min(560px, 100%); max-height: calc(100dvh - 24px); overflow-y: auto; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); border-radius: 16px; padding: 20px; box-sizing: border-box; }
+.folder_overlay { animation: folder_backdrop_enter 180ms ease-out backwards; }
+.folder_dialog { animation: folder_dialog_enter 240ms cubic-bezier(.2, .8, .2, 1) backwards; }
+@keyframes folder_backdrop_enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes folder_dialog_enter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .folder_overlay, .folder_dialog { animation: none; } }
 .folder_dialog header, .folder_dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .folder_dialog h2 { margin: 0; font-size: 20px; }
 .folder_dialog footer { justify-content: flex-end; margin-top: 20px; }
