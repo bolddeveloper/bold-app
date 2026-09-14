@@ -31,6 +31,14 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Render termina TLS en su proxy y comunica el esquema original mediante
+# X-Forwarded-Proto. Estas opciones solo aplican al entorno de producción.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 
 # Define las aplicaciones instaladas del proyecto. "daphne" va primero
 # siguiendo la convencion de Channels: reemplaza el runserver de Django por
