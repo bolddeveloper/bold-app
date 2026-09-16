@@ -1,14 +1,14 @@
 import { StrictMode as strict_mode, createElement as create_element } from "react";
 import { createRoot as create_root } from "react-dom/client";
-import task_app from "./app.jsx";
+import app from "./app.jsx";
 import { register_service_worker } from "./service_worker.js";
-import "./styles.css";
-import "../../core/shared/responsive.css";
-import "../../core/app_shell.css";
-import "../../core/login_screen.css";
-import "./tasks_mobile.css";
-import "./tasks_tablet.css";
-import "./theme_rework.css";
+import "../tareas/src/styles.css";
+import "./shared/responsive.css";
+import "./app_shell.css";
+import "./login_screen.css";
+import "../tareas/src/tasks_mobile.css";
+import "../tareas/src/tasks_tablet.css";
+import "../tareas/src/theme_rework.css";
 
 
 // Mounts the React application into the document root.
@@ -21,7 +21,7 @@ if (root_element) {
         create_element(
             strict_mode,
             null,
-            create_element(task_app)
+            create_element(app)
         )
     );
 }

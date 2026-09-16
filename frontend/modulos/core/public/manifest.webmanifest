@@ -1,6 +1,6 @@
 {
-    "name": "Bold Tareas",
-    "short_name": "Tareas",
+    "name": "Bold",
+    "short_name": "Bold",
     "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
     "start_url": "/",
     "display": "standalone",

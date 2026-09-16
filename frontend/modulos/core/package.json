@@ -1,13 +1,13 @@
 {
-    "name": "bold-tasks-pwa",
+    "name": "bold-app-frontend",
     "private": true,
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "dev": "vite --host 0.0.0.0",
-        "build": "vite build",
-        "preview": "vite preview --host 0.0.0.0",
-        "test": "node --test src/*.test.js src/services/*.test.js"
+        "dev": "vite --configLoader runner --host 0.0.0.0",
+        "build": "vite build --configLoader runner",
+        "preview": "vite preview --configLoader runner --host 0.0.0.0",
+        "test": "node --test ../tareas/src/*.test.js ../tareas/src/services/*.test.js"
     },
     "dependencies": {
         "lucide-react": "^0.562.0",

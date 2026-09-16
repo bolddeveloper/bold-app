@@ -1,4 +1,4 @@
-const cache_name = "bold_tasks_shell_v2";
+const cache_name = "bold_app_shell_v3";
 
 
 // Lists the static assets that make the empty application shell available offline.
@@ -69,7 +69,7 @@ self.addEventListener("activate", (event) => {
         caches.keys().then((cache_keys) => {
             return Promise.all(
                 cache_keys
-                    .filter((cache_key) => cache_key.startsWith("bold_tasks_shell_") && cache_key !== cache_name)
+                    .filter((cache_key) => (cache_key.startsWith("bold_tasks_shell_") || cache_key.startsWith("bold_app_shell_")) && cache_key !== cache_name)
                     .map((cache_key) => caches.delete(cache_key))
             );
         })

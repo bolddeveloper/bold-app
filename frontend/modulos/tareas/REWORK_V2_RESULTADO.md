@@ -95,7 +95,7 @@ Todos bajo `/api/v2/`, salvo el socket:
 - `node tests/v2_live.mjs`: dos clientes REST/WebSocket reales; login incorrecto/correcto, creación atómica, edición, cambio de columna, traspaso, comentario, subtarea, borrado, desconexión/reconexión y refetch. Un cliente nuevo recupera el estado persistido.
 - Pruebas DOM con jsdom y React StrictMode en modo real y plantilla: login/lista, crear, calendario, cronograma, detalle/editar, traspaso, subtarea, comentario, recarga completa de sesión/datos, eliminación e Inicio/Informes. Sin errores de React registrados en esos recorridos.
 
-Para repetir las pruebas locales, inicia primero el backend sembrado según la guía. Desde `frontend/modulos/tareas`:
+Para repetir las pruebas locales, inicia primero el backend sembrado según la guía. Desde `frontend/modulos/core`:
 
 ```powershell
 npm test

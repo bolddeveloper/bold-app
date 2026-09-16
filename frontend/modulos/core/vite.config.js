@@ -1,12 +1,11 @@
 import { defineConfig as define_config } from "vite";
 import react from "@vitejs/plugin-react";
-import { fileURLToPath } from "node:url";
 
 
-// Defines the Vite setup for the Bold tasks PWA.
+// Defines the Vite host shared by every Bold frontend module.
 export default define_config({
     resolve: {
-        dedupe: ["react", "react-dom", "lucide-react"]
+        dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]
     },
     server: {
         proxy: {
@@ -14,7 +13,7 @@ export default define_config({
             "/ws": { target: "ws://127.0.0.1:8000", ws: true, headers: { Origin: "http://localhost:5173" } }
         },
         fs: {
-            allow: [fileURLToPath(new URL("..", import.meta.url))]
+            allow: [".."]
         }
     },
     preview: {

@@ -1,3 +1,4 @@
+# Artifacts owned by the Core frontend host.
 node_modules/
 dist/
 .vite/

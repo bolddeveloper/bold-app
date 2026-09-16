@@ -318,7 +318,7 @@ Sin `REDIS_URL`, el entorno local utiliza Channels en memoria y Celery eager. So
 
 ### Frontend
 
-Crear `frontend/modulos/tareas/.env.local`:
+Crear `frontend/modulos/core/.env.local`:
 
 ```dotenv
 VITE_USE_REAL_BACKEND=true
@@ -328,7 +328,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 Después:
 
 ```powershell
-Set-Location .\frontend\modulos\tareas
+Set-Location .\frontend\modulos\core
 npm install
 npm run dev
 ```

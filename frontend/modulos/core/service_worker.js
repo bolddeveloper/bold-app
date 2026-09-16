@@ -1,4 +1,4 @@
-// Registers the PWA service worker when the browser supports it.
+// Registers the Core-owned PWA service worker when the browser supports it.
 export function register_service_worker() {
     if (!("serviceWorker" in navigator)) {
         return;

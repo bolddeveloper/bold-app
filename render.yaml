@@ -89,7 +89,7 @@ services:
   - type: web
     name: bold-app-frontend
     runtime: static
-    rootDir: frontend/modulos/tareas
+    rootDir: frontend/modulos/core
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
