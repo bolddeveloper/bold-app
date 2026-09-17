@@ -1,6 +1,5 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from rest_framework.authtoken.views import obtain_auth_token
 
 from .views import (
     AccessGrantViewSet,
@@ -42,6 +41,5 @@ router.register(r"permission-audit-logs", PermissionAuditLogViewSet, basename="p
 # El endpoint de autorizacion va antes que el router: es el punto de
 # integracion que consultan otros modulos, no un CRUD mas.
 urlpatterns = [
-    path("auth/token/", obtain_auth_token, name="core-auth-token"),
     path("authorize/", AuthorizationCheckView.as_view(), name="core-authorize"),
 ] + router.urls

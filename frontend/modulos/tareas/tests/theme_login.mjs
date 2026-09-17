@@ -57,7 +57,7 @@ try {
             await page.getByRole("button", { name: "Mostrar contraseña" }).click();
             assert.equal(await page.locator('[name="password"]').getAttribute("type"), "text");
             await page.getByRole("button", { name: "¿Olvidaste tu contraseña?" }).click();
-            await page.locator(".core_auth_recovery").waitFor();
+            await page.locator("#core_auth_recovery_email").waitFor();
             await page.screenshot({ path: path.join(artifacts, `login-light-${width}.png`), animations: "disabled" });
             await page.getByRole("button", { name: "Activar modo oscuro" }).click();
             await darkSurface(page, ".core_auth_content");
@@ -72,7 +72,7 @@ try {
                 await page.getByRole("button", { name: "Activar modo oscuro" }).waitFor();
             }
             if (width === 390) {
-                await page.route("**/api/v2/core/auth/token/", route => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Credenciales incorrectas." }) }));
+                await page.route("**/api/v2/auth/login/", route => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Credenciales incorrectas." }) }));
                 await page.locator('[name="email"]').fill("prueba@bold.gt");
                 await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
                 await page.getByRole("alert").getByText("Credenciales incorrectas.").waitFor();

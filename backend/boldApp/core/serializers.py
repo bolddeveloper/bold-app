@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 
 from .models import (
     AccessGrant,
@@ -54,16 +56,41 @@ class UserAccountSerializer(serializers.ModelSerializer):
             "password",
             "avatar_url",
             "is_active",
+            "email_verified_at",
+            "password_changed_at",
+            "must_change_password",
+            "deactivated_at",
             "last_login_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "email_verified_at", "password_changed_at", "deactivated_at", "created_at", "updated_at"]
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if not email.endswith("@bold.gt"):
+            raise serializers.ValidationError("Se requiere un correo corporativo @bold.gt.")
+        if self.instance and email != self.instance.email:
+            raise serializers.ValidationError("El correo debe cambiarse mediante el flujo de verificación de Autenticación.")
+        return email
+
+    def validate_password(self, value):
+        request = self.context.get("request")
+        session = getattr(request, "auth", None) if request else None
+        if not request or not request.user.is_staff or not getattr(session, "mfa_verified_at", None):
+            raise serializers.ValidationError("Cambiar credenciales administrativamente requiere una sesión con MFA verificado.")
+        validate_password(value, self.instance)
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
         account = UserAccount(**validated_data)
-        account.set_password(password)
+        if password is None:
+            account.set_unusable_password()
+        else:
+            account.set_password(password)
+            account.password_changed_at = timezone.now()
+            account.must_change_password = True
         account.save()
         return account
 
@@ -71,8 +98,16 @@ class UserAccountSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password", None)
         instance = super().update(instance, validated_data)
         if password is not None:
+            from boldApp.autenticacion.services import record_event, revoke_all_sessions
+
             instance.set_password(password)
-            instance.save(update_fields=["password"])
+            instance.password_changed_at = timezone.now()
+            instance.must_change_password = True
+            instance.credentials_version += 1
+            instance.save(update_fields=["password", "password_changed_at", "must_change_password", "credentials_version", "updated_at"])
+            request = self.context["request"]
+            revoke_all_sessions(instance, "admin_password_reset", request.user)
+            record_event("password.admin_reset", request, user=instance, actor=request.user, session=request.auth)
         return instance
 
 

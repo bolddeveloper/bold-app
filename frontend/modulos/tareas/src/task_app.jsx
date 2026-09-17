@@ -4604,7 +4604,7 @@ function TaskAppContent() {
             for (const unit of units) {
                 if (!mounted) return;
                 const allowed = await session.permissions.can("tasks.task.read", unit.id);
-                if (mounted && allowed) connect_realtime_stream({ unitId: unit.id, token: session.token, assignmentId: session.activeAssignment.id, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+                if (mounted && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
             }
         }).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.

@@ -5,27 +5,32 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 
 @database_sync_to_async
-def authorize_connection(token_key, assignment_id, unit_id):
-    from rest_framework.authtoken.models import Token
-
+def authorize_connection(ticket_key, unit_id):
+    from django.db.models import F
+    from django.utils import timezone
+    from boldApp.autenticacion.models import AuthSession
+    from boldApp.autenticacion.services import consume_ws_ticket
     from boldApp.core.authorization import resolve_access
     from boldApp.core.models import OrganizationalUnit, Permission, PositionAssignment
 
     try:
-        token = Token.objects.select_related("user__employee").get(key=token_key)
+        ticket = consume_ws_ticket(ticket_key)
+        if not ticket or ticket.get("staff") or ticket.get("unit") != str(unit_id):
+            return False
+        session = AuthSession.objects.select_related("user_account").get(id=ticket["session"], user_account_id=ticket["user"], revoked_at__isnull=True, expires_at__gt=timezone.now(), credentials_version=F("user_account__credentials_version"))
         assignment = PositionAssignment.objects.select_related(
             "employee",
             "position__unit",
             "position__job_role",
         ).get(
-            id=assignment_id,
-            employee_id=token.user.employee_id,
+            id=ticket["assignment"],
+            employee_id=session.user_account.employee_id,
             is_active=True,
             released_at__isnull=True,
         )
         unit = OrganizationalUnit.objects.get(id=unit_id)
         permission = Permission.objects.get(code="tasks.task.read")
-    except (Token.DoesNotExist, PositionAssignment.DoesNotExist, OrganizationalUnit.DoesNotExist, Permission.DoesNotExist, ValueError):
+    except (AuthSession.DoesNotExist, PositionAssignment.DoesNotExist, OrganizationalUnit.DoesNotExist, Permission.DoesNotExist, ValueError, KeyError):
         return False
 
     return resolve_access(assignment, permission, unit).allowed
@@ -34,11 +39,10 @@ def authorize_connection(token_key, assignment_id, unit_id):
 class TaskEventsConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         query = parse_qs(self.scope.get("query_string", b"").decode("utf-8"))
-        token = query.get("token", [None])[0]
-        assignment = query.get("assignment", [None])[0]
+        ticket = query.get("ticket", [None])[0]
         unit_id = self.scope["url_route"]["kwargs"]["unit_id"]
 
-        if not token or not assignment or not await authorize_connection(token, assignment, unit_id):
+        if not ticket or not await authorize_connection(ticket, unit_id):
             await self.close(code=4403)
             return
 

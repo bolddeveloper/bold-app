@@ -101,7 +101,7 @@ Se recomienda incorporar ese segundo comando como `npm test`.
 Este es el primer archivo que debe modificarse. Debe dejar de resolver `workspaces` y `/api/users/` y convertirse en una capa V2 con estas responsabilidades:
 
 1. Construir rutas bajo `/api/v2/` y `/api/v2/core/`.
-2. Gestionar `Authorization: Token <token>`.
+2. Gestionar la cookie de sesión `HttpOnly`, `credentials: include` y CSRF.
 3. Gestionar `X-Assignment-ID: <assignment-id>` para Tareas.
 4. Desempaquetar respuestas paginadas `{count, next, previous, results}`.
 5. Serializar cuerpos JSON y aceptar respuestas 200, 201, 202 y 204.
@@ -111,7 +111,7 @@ Este es el primer archivo que debe modificarse. Debe dejar de resolver `workspac
 Interfaz base sugerida:
 
 ```js
-api.setToken(token);
+api.setSession(authenticated, email);
 api.setAssignment(assignmentId);
 api.login(email, password);
 api.getCurrentAccount();
@@ -134,10 +134,13 @@ api.createComment(taskId, body);
 El helper central de red debería producir, como mínimo:
 
 ```js
-const headers = {
-  "Content-Type": "application/json",
-  ...(token ? { Authorization: `Token ${token}` } : {}),
-  ...(assignmentId ? { "X-Assignment-ID": assignmentId } : {}),
+const options = {
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/json",
+    ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+    ...(assignmentId ? { "X-Assignment-ID": assignmentId } : {}),
+  },
 };
 ```
 
@@ -147,8 +150,8 @@ No se debe conservar en el nuevo cliente ninguna ruta `/api/workspaces/`, `/api/
 
 Flujo de inicio:
 
-1. `POST /api/v2/core/auth/token/` con `username` y `password`.
-2. Guardar el token de la sesión.
+1. `GET /api/v2/auth/session/` para inicializar CSRF y restaurar una sesión existente.
+2. `POST /api/v2/auth/login/` con `email` y `password`; el backend entrega una cookie `HttpOnly`.
 3. `GET /api/v2/core/user-accounts/` para obtener la cuenta propia y su `employee`.
 4. `GET /api/v2/core/position-assignments/` para obtener las asignaciones propias, o usar el directorio y filtrar por `employee`.
 5. Si existe una sola asignación activa, seleccionarla automáticamente.
@@ -164,7 +167,7 @@ GET /api/v2/core/position-assignments/directory/
 
 La respuesta incluye `id`, `employee`, `employee_name`, `unit`, `unit_name`, `job_role` y `job_role_title`.
 
-Para el test local puede usarse `ana@bold.gt` / `bolddemo123`. La contraseña no debe incluirse en el bundle ni en variables públicas de un despliegue real. Para esta primera integración es aceptable conservar token y asignación en memoria o `sessionStorage`; no colocar el token en código fuente.
+Para el test local puede usarse `ana@bold.gt` / `bolddemo123`. La contraseña no debe incluirse en el bundle ni en variables públicas de un despliegue real. La cookie de sesión nunca es accesible a JavaScript; `sessionStorage` conserva únicamente la asignación activa.
 
 ### Fase 3 — Catálogos y modelo de presentación
 

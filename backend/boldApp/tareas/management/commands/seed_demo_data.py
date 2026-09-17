@@ -16,6 +16,8 @@ DEMO_PEOPLE = [
     {"name": "Ana Martinez", "email": "ana@bold.gt", "unit": "Marketing"},
     {"name": "David Urbina", "email": "david@bold.gt", "unit": "Operaciones"},
     {"name": "Carla Ruiz", "email": "carla@bold.gt", "unit": "Marketing"},
+    {"name": "Samuel", "email": "samuel@bold.gt", "unit": "Marketing"},
+    {"name": "Josue", "email": "josue@bold.gt", "unit": "Operaciones"},
 ]
 
 DEMO_PROJECTS = [
@@ -55,8 +57,9 @@ class Command(BaseCommand):
         self.seed_statuses(units)
 
         self.stdout.write(self.style.SUCCESS(
-            "V2 lista: 2 unidades, 3 cuentas, 3 asignaciones, "
-            f"{len(projects)} proyectos. Cuenta demo: ana@bold.gt"
+            f"V2 lista: {len(units)} unidades, {len(assignments)} cuentas, "
+            f"{len(assignments)} asignaciones, {len(projects)} proyectos. "
+            "Cuentas demo: ana@bold.gt y samuel@bold.gt"
         ))
 
     def seed_units(self):

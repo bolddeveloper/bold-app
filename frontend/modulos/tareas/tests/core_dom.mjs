@@ -1,10 +1,10 @@
 // Deterministic integration: two assignments, stale REST, sockets, 401/403 and logout.
 // Uses the same optional temporary jsdom install as v2_dom.mjs.
-import { createServer } from "vite";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import os from "node:os";
 import assert from "node:assert/strict";
+const { createServer } = await import(pathToFileURL(path.resolve("node_modules/vite/dist/node/index.js")).href);
 const { JSDOM } = await import(pathToFileURL(path.join(os.tmpdir(), "bold-v2-dom/node_modules/jsdom/lib/api.js")).href);
 const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost:5173" });
 for (const key of ["window", "document", "localStorage", "sessionStorage", "FormData", "MouseEvent", "HTMLElement", "Event"]) globalThis[key] = dom.window[key];
@@ -17,13 +17,17 @@ globalThis.WebSocket = class {
     close() { this.closed = true; }
 };
 const assignments = ["a", "b"].map(id => ({ id, employee: "person", employee_name: "Ana", unit: "unit-" + id, unit_name: "Unidad " + id, job_role_title: "Cargo " + id, is_active: true }));
-let delayed = null, deferTasks = false, taskStatus = 200;
+let delayed = null, deferTasks = false, taskStatus = 200, loggedIn = false, ticketNumber = 0;
 globalThis.fetch = async (url, options) => {
     const resource = new URL(url).pathname.replace("/api/v2/", "").replace(/\/$/, "");
     const assignment = options.headers["X-Assignment-ID"];
     requests.push({ resource, assignment, options });
-    if (resource === "core/auth/token") return Response.json({ token: "test-token" });
-    assert.equal(options.headers.Authorization, "Token test-token");
+    assert.equal(options.credentials, "include");
+    assert.equal(options.headers.Authorization, undefined);
+    if (resource === "auth/session") return Response.json({ authenticated: loggedIn, csrf_token: "csrf-test", ...(loggedIn ? { account: { id: "account", email: "ana@bold.gt", employee: "person" } } : {}) });
+    if (resource === "auth/login") { loggedIn = true; return Response.json({ authenticated: true, mfa_required: false }); }
+    if (resource === "auth/logout") { loggedIn = false; return new Response(null, { status: 204 }); }
+    if (resource === "auth/websocket-ticket") return Response.json({ ticket: `ticket-${++ticketNumber}` });
     if (resource === "core/user-accounts") return Response.json([{ id: "account", email: "ana@bold.gt", employee: "person" }]);
     if (resource === "core/employees/person") return Response.json({ id: "person", first_name: "Ana" });
     if (resource === "core/position-assignments" || resource === "core/position-assignments/directory") return Response.json(assignments);
@@ -41,8 +45,8 @@ globalThis.fetch = async (url, options) => {
 };
 process.env.VITE_USE_REAL_BACKEND = "true";
 const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
-const React = await import("react");
-const { createRoot } = await import("react-dom/client");
+const React = await import(pathToFileURL(path.resolve("node_modules/react/index.js")).href);
+const { createRoot } = await import(pathToFileURL(path.resolve("node_modules/react-dom/client.js")).href);
 const App = (await server.ssrLoadModule("/app.jsx")).default;
 const store = await server.ssrLoadModule("/@fs/" + path.resolve("../core/core_store.js").replaceAll("\\", "/"));
 const http = (await server.ssrLoadModule("/@fs/" + path.resolve("../core/http_client.js").replaceAll("\\", "/"))).http;
@@ -78,7 +82,7 @@ try {
     assert.equal(http.getSession().assignmentId, "b");
     assert.equal(sockets[0].closed, true);
     await until(() => sockets.length === 2, "socket b");
-    assert.equal(new URL(sockets[1].url).searchParams.get("assignment"), "b");
+    assert.ok(new URL(sockets[1].url).searchParams.get("ticket"));
     console.log("CORE PASS: Employee, shared directory, assignment/unit/header, stale request isolation and socket disposal");
     root.unmount(); root = createRoot(document.getElementById("root"));
     root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
@@ -86,17 +90,17 @@ try {
     assert.equal(store.getCoreState().activeAssignment.id, "b");
     taskStatus = 403; window.dispatchEvent(new Event("focus"));
     await until(() => document.body.textContent.includes("Test denial"), "403 shown");
-    assert.equal(http.getSession().token, "test-token");
+    assert.equal(http.getSession().authenticated, true);
     taskStatus = 401; window.dispatchEvent(new Event("focus"));
     await until(() => document.querySelector('[name="email"]'), "global 401 login");
-    assert.equal(http.getSession().token, null); assert.equal(store.getCoreState().activeAssignment, null);
-    assert.equal(sessionStorage.getItem("bold_v2_session"), null);
+    assert.equal(http.getSession().authenticated, false); assert.equal(store.getCoreState().activeAssignment, null);
+    assert.equal(sessionStorage.getItem("bold_v2_context"), null);
     assert.ok(sockets.every(socket => socket.closed));
     taskStatus = 200; await login();
     [...document.querySelectorAll("button")].find(button => button.textContent === "Cerrar sesión").click();
     await until(() => document.querySelector('[name="email"]'), "explicit logout");
     assert.ok(!document.body.textContent.includes("Tarea exclusiva"));
-    assert.equal(http.getSession().token, null); assert.deepEqual(store.getCoreState().directory, []);
+    assert.equal(http.getSession().authenticated, false); assert.deepEqual(store.getCoreState().directory, []);
     assert.deepEqual(errors, []);
-    console.log("CORE PASS: restore selected assignment, 403 preserves session, 401 and logout clear Tasks/identity/token");
+    console.log("CORE PASS: restore selected assignment, 403 preserves session, 401 and logout clear Tasks/identity");
 } finally { delayed?.resolve(); root.unmount(); await server.close(); dom.window.close(); console.error = originalError; }

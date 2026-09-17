@@ -9,23 +9,27 @@ export function createEventDeduplicator(limit = 1000) {
         return true;
     };
 }
-export function websocketURL({ unitId, token, assignmentId, baseUrl = api_base_url }) {
+export function websocketURL({ unitId, ticket, baseUrl = api_base_url }) {
     const url = new URL(`/ws/unit/${encodeURIComponent(unitId)}/`, baseUrl);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.search = new URLSearchParams({ token, assignment: assignmentId });
+    url.search = new URLSearchParams({ ticket });
     return url.href;
 }
 export function createRealtimeAdapter({ WebSocketImpl = globalThis.WebSocket, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
     const connections = new Map();
     let accept = createEventDeduplicator();
-    function connect({ unitId, token, assignmentId, onEvent = () => {}, onReconnect = () => {}, onError = () => {}, baseUrl }) {
-        if (!unitId || !token || !assignmentId) throw new Error("Falta el contexto de la conexión en vivo.");
+    function connect({ unitId, assignmentId, getTicket, onEvent = () => {}, onReconnect = () => {}, onError = () => {}, baseUrl }) {
+        if (!unitId || !assignmentId || !getTicket) throw new Error("Falta el contexto de la conexión en vivo.");
         if (connections.has(unitId)) return;
         const state = { stopped: false, attempt: 0, socket: null, timer: null };
         connections.set(unitId, state);
-        function open() {
+        async function open() {
             if (state.stopped) return;
-            const socket = new WebSocketImpl(websocketURL({ unitId, token, assignmentId, baseUrl }));
+            let ticket;
+            try { ticket = await getTicket({ unit: unitId, assignment: assignmentId, channel: "tasks" }); }
+            catch { if (!state.stopped) state.timer = setTimer(open, Math.min(30000, 1000 * 2 ** Math.min(state.attempt++, 5))); return; }
+            if (state.stopped) return;
+            const socket = new WebSocketImpl(websocketURL({ unitId, ticket: ticket.ticket, baseUrl }));
             state.socket = socket;
             socket.addEventListener("open", () => {
                 if (state.stopped) return;

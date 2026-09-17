@@ -6,7 +6,7 @@ import { getCoreState, updateCore, clearCore, directory, activeAssignment, activ
 test("module disposal cancels only its requests; assignment change cancels every old context", async () => {
     const calls = [];
     const http = createHttpClient({ fetchImpl: (url, options) => new Promise(resolve => calls.push({ url, options, resolve })) });
-    http.setToken("token"); http.setAssignment("a");
+    http.setSession(true, "ana@bold.gt"); http.setAssignment("a");
     const tasks = createTasksApi(http);
     const oldTasks = tasks.listTasks();
     const coreRequest = http.list("core/organizational-units");

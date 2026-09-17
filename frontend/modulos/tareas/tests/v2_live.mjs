@@ -2,14 +2,30 @@
 import assert from "node:assert/strict";
 import { createApiClient } from "./test_client.js";
 import { createRealtimeAdapter } from "../src/services/realtime_adapter.js";
-const A = createApiClient(), B = createApiClient();
+function cookieFetch() {
+    const cookies = new Map();
+    return async (url, options = {}) => {
+        const headers = new Headers(options.headers);
+        if (cookies.size) headers.set("Cookie", [...cookies].map(([name, value]) => `${name}=${value}`).join("; "));
+        const response = await fetch(url, { ...options, headers });
+        for (const header of response.headers.getSetCookie?.() || []) {
+            const [pair] = header.split(";", 1);
+            const separator = pair.indexOf("=");
+            const name = pair.slice(0, separator), value = pair.slice(separator + 1);
+            if (value) cookies.set(name, value); else cookies.delete(name);
+        }
+        return response;
+    };
+}
+const A = createApiClient({ fetchImpl: cookieFetch() }), B = createApiClient({ fetchImpl: cookieFetch() });
 // Unlike Node fetch, browsers require CORS even when credentials are valid.
 for (const origin of ["http://localhost:5173", "http://127.0.0.1:5173"]) {
-    const preflight = await fetch("http://127.0.0.1:8000/api/v2/core/auth/token/", { method: "OPTIONS", headers: {
-        Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,authorization,x-assignment-id"
+    const preflight = await fetch("http://127.0.0.1:8000/api/v2/auth/login/", { method: "OPTIONS", headers: {
+        Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,x-csrftoken,x-assignment-id"
     } });
     assert.equal(preflight.status, 200);
     assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+    assert.equal(preflight.headers.get("access-control-allow-credentials"), "true");
     assert.ok(preflight.headers.get("access-control-allow-headers")?.includes("x-assignment-id"));
 }
 await assert.rejects(A.login("ana@bold.gt", "incorrect-password"));
@@ -18,7 +34,7 @@ const account = await A.getCurrentAccount();
 const own = await A.listOwnAssignments(account);
 assert.ok(own.length);
 A.setAssignment(own[0].id);
-B.setToken(A.getSession().token, account.email); B.setAssignment(own[0].id);
+await B.login("ana@bold.gt", "bolddemo123"); B.setAssignment(own[0].id);
 const directory = await A.listAssignmentDirectory();
 const origin = directory.find(item => item.id === own[0].id);
 const destination = directory.find(item => item.unit !== origin.unit);
@@ -36,9 +52,9 @@ const synchronize = async (client, index) => {
     try { const task = await read(client); if (index === 0) stateA = task; else { stateB = task; reloadsB++; } } catch (error) { failure = error; }
 };
 function connectB() {
-    for (const unitId of [origin.unit, destination.unit]) adapters[1].connect({ unitId, ...B.getSession(), onEvent: () => { eventsB++; synchronize(B, 1); }, onReconnect: () => synchronize(B, 1) });
+    for (const unitId of [origin.unit, destination.unit]) adapters[1].connect({ unitId, assignmentId: own[0].id, getTicket: B.websocketTicket, onEvent: () => { eventsB++; synchronize(B, 1); }, onReconnect: () => synchronize(B, 1) });
 }
-for (const unitId of [origin.unit, destination.unit]) adapters[0].connect({ unitId, ...A.getSession(), onEvent: () => { eventsA++; synchronize(A, 0); }, onReconnect: () => synchronize(A, 0) });
+for (const unitId of [origin.unit, destination.unit]) adapters[0].connect({ unitId, assignmentId: own[0].id, getTicket: A.websocketTicket, onEvent: () => { eventsA++; synchronize(A, 0); }, onReconnect: () => synchronize(A, 0) });
 connectB();
 async function until(check) {
     const deadline = Date.now() + 10000;
@@ -75,7 +91,7 @@ try {
     const beforeReconnect = reloadsB;
     connectB();
     await until(() => reloadsB > beforeReconnect && stateB?.title === "Changed while B was disconnected");
-    const refreshed = createApiClient(); refreshed.setToken(A.getSession().token, account.email); refreshed.setAssignment(own[0].id);
+    const refreshed = createApiClient({ fetchImpl: cookieFetch() }); await refreshed.login("ana@bold.gt", "bolddemo123"); refreshed.setAssignment(own[0].id);
     assert.equal((await read(refreshed)).title, stateB.title);
     await A.deleteTask(taskId);
     await until(() => stateB === undefined);

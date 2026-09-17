@@ -16,25 +16,30 @@ test("V2 serializes JSON, merges headers and follows every page through the loca
         calls.push({ url, options });
         return new Response(JSON.stringify(calls.length === 1 ? { count: 2, next: "http://127.0.0.1:8000/api/v2/tasks/?page=2", results: [{ id: "a" }] } : { results: [{ id: "b" }], next: null }));
     } });
-    api.setToken("secret"); api.setAssignment("assignment");
+    api.setSession(true, "ana@bold.gt"); api.setAssignment("assignment");
     assert.deepEqual(await api.listTasks({ unit: "unit" }), [{ id: "a" }, { id: "b" }]);
     assert.match(calls[0].url, /\/api\/v2\/tasks\/\?unit=unit/);
     assert.match(calls[1].url, /^http:\/\/localhost:5173\/api\/v2\/tasks\/\?page=2$/);
-    assert.equal(calls[1].options.headers.Authorization, "Token secret");
+    assert.equal(calls[1].options.headers.Authorization, undefined);
+    assert.equal(calls[1].options.credentials, "include");
     assert.equal(calls[1].options.headers["X-Assignment-ID"], "assignment");
     await api.request("/api/v2/tasks/", { method: "POST", body: { title: "Tarea" }, headers: { Accept: "application/json" } });
     assert.equal(calls[2].options.body, '{"title":"Tarea"}');
-    assert.equal(calls[2].options.headers.Authorization, "Token secret");
+    assert.equal(calls[2].options.headers.Authorization, undefined);
 });
-test("anonymous login uses username and sends no stale credentials", async () => {
+test("cookie login bootstraps CSRF and sends no stale assignment", async () => {
+    let call = 0;
     const api = createApiClient({ fetchImpl: async (_, options) => {
+        call++;
         assert.equal(options.headers.Authorization, undefined);
         assert.equal(options.headers["X-Assignment-ID"], undefined);
-        assert.deepEqual(JSON.parse(options.body), { username: "ana@example.com", password: "test" });
-        return new Response('{"token":"new"}');
+        if (call === 1) { assert.equal(options.method, "GET"); return new Response('{"authenticated":false}'); }
+        assert.deepEqual(JSON.parse(options.body), { email: "ana@bold.gt", password: "test" });
+        return new Response('{"authenticated":true,"mfa_required":false}');
     } });
-    api.setToken("old"); api.setAssignment("old"); await api.login("ana@example.com", "test");
-    assert.equal(api.getSession().token, "new");
+    api.setSession(true, "old@bold.gt"); api.setAssignment("old"); await api.login("ana@bold.gt", "test");
+    assert.equal(api.getSession().authenticated, true);
+    assert.equal(api.getSession().email, "ana@bold.gt");
     assert.equal(api.getSession().assignmentId, null);
 });
 test("204 never reads a body, 201 and 202 are successful", async () => {
@@ -61,6 +66,6 @@ test("context changes cancel in-flight responses and reject foreign pagination",
 });
 test("staff account discovery matches login email, never the first account", async () => {
     const api = createApiClient({ fetchImpl: async () => new Response(JSON.stringify([{ id: "other", email: "other@example.com" }, { id: "own", email: "own@example.com" }])) });
-    api.setToken("token", "own@example.com");
+    api.setSession(true, "own@example.com");
     assert.equal((await api.getCurrentAccount()).id, "own");
 });

@@ -38,6 +38,9 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "false").lower() == "true"
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
 # Define las aplicaciones instaladas del proyecto. "daphne" va primero
@@ -52,11 +55,11 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework.authtoken",
     "channels",
     "rest_framework",
     "corsheaders",
     "boldApp.core",
+    "boldApp.autenticacion",
     "boldApp.tareas",
 ]
 
@@ -120,6 +123,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Los hashes existentes siguen siendo verificables y se actualizan a Argon2
+# automaticamente cuando el usuario vuelve a autenticarse.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
 
 LANGUAGE_CODE = "es"
 TIME_ZONE = "America/Guatemala"
@@ -148,12 +161,14 @@ cors_origins_env = os.environ.get(
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 CORS_ALLOW_HEADERS = (*default_headers, "x-assignment-id")
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 
 # Define la configuracion base de Django REST Framework.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "boldApp.autenticacion.authentication.CookieSessionAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -161,7 +176,33 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
+    # Render agrega una capa proxy; en desarrollo no se confía en X-Forwarded-For.
+    "NUM_PROXIES": int(os.environ.get("AUTH_NUM_PROXIES", "0" if DEBUG else "1")),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login_ip": "20/15min",
+        "auth_login_account": "5/15min",
+        "auth_mfa": "5/5min",
+        "auth_recovery_ip": "10/hour",
+        "auth_recovery_account": "3/hour",
+        "auth_websocket_ticket": "30/min",
+    },
 }
+
+# Autenticacion web. La inactividad queda modelada pero deshabilitada con 0.
+AUTH_SESSION_COOKIE_NAME = os.environ.get("AUTH_SESSION_COOKIE_NAME", "bold_session")
+AUTH_SESSION_IDLE_SECONDS = int(os.environ.get("AUTH_SESSION_IDLE_SECONDS", "0"))
+AUTH_SESSION_CUTOFF_TIME = os.environ.get("AUTH_SESSION_CUTOFF_TIME", "07:00")
+AUTH_SESSION_TIME_ZONE = os.environ.get("AUTH_SESSION_TIME_ZONE", "America/Guatemala")
+AUTH_SESSION_COOKIE_SAMESITE = os.environ.get("AUTH_SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = AUTH_SESSION_COOKIE_SAMESITE
+CSRF_COOKIE_SECURE = not DEBUG
+AUTH_MFA_REQUIRED = os.environ.get("AUTH_MFA_REQUIRED", "false").lower() == "true"
+AUTH_CHALLENGE_TTL_SECONDS = int(os.environ.get("AUTH_CHALLENGE_TTL_SECONDS", "3600"))
+AUTH_WEBSOCKET_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_WEBSOCKET_TICKET_TTL_SECONDS", "45"))
+AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@bold.gt")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.

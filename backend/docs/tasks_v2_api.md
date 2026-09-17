@@ -18,23 +18,25 @@ La siembra crea la cuenta `ana@bold.gt` con contraseña `bolddemo123`, las unida
 
 ## Autenticación y contexto organizacional
 
-Obtén un token con:
+Inicializa CSRF e inicia una sesión web con:
 
 ```http
-POST /api/v2/core/auth/token/
+GET /api/v2/auth/session/
+POST /api/v2/auth/login/
 Content-Type: application/json
+X-CSRFToken: <csrf_token entregado por session>
 
-{"username":"ana@bold.gt","password":"bolddemo123"}
+{"email":"ana@bold.gt","password":"bolddemo123"}
 ```
 
 En todas las peticiones protegidas envía:
 
 ```http
-Authorization: Token <token>
+Cookie: bold_session=<cookie HttpOnly administrada por el navegador>
 X-Assignment-ID: <uuid-de-la-asignación-activa>
 ```
 
-El token identifica la cuenta y `X-Assignment-ID` identifica el cargo desde el cual actúa. El backend comprueba que la asignación pertenece a la persona autenticada, sigue activa y posee el permiso solicitado. Los permisos de dos asignaciones diferentes nunca se combinan.
+La cookie opaca identifica la sesión y `X-Assignment-ID` identifica el cargo desde el cual actúa. El backend comprueba que la asignación pertenece a la persona autenticada, sigue activa y posee el permiso solicitado. Los permisos de dos asignaciones diferentes nunca se combinan.
 
 El selector de personas/asignaciones del frontend puede cargarse con:
 
@@ -104,17 +106,17 @@ La operación exige permiso de actualización en la unidad de origen y de asigna
 
 ## Tiempo real
 
-Conecta una sesión por cada unidad que la interfaz necesite observar:
+Solicita primero un ticket efímero mediante `POST /api/v2/auth/websocket-ticket/` y conecta una sesión por cada unidad:
 
 ```text
-ws://127.0.0.1:8000/ws/unit/<unit-id>/?token=<token>&assignment=<assignment-id>
+ws://127.0.0.1:8000/ws/unit/<unit-id>/?ticket=<ticket-de-un-solo-uso>
 ```
 
-El servidor autentica el token, la pertenencia y vigencia de la asignación, y el permiso `tasks.task.read` sobre la unidad. Los eventos usan `event_version: 2` e incluyen `event_id`, `event_type`, `entity_type`, `entity_id`, `occurred_at`, `payload` y `source`.
+El servidor consume el ticket una sola vez y valida la sesión, asignación y permiso `tasks.task.read`. Los eventos usan `event_version: 2` e incluyen `event_id`, `event_type`, `entity_type`, `entity_id`, `occurred_at`, `payload` y `source`.
 
 Eventos actuales: `task.created`, `task.updated`, `task.status_changed`, `task.deleted`, `comment.created` y `webhook.test`. Un traspaso se publica tanto en la unidad anterior como en la nueva. El frontend debe deduplicar por `event_id`, volver a consultar REST al reconectar y tratar REST como fuente de verdad.
 
-En producción usa exclusivamente HTTPS/WSS. El token viaja como parámetro del WebSocket, por lo que debe evitarse que las URLs completas aparezcan en logs; una mejora posterior recomendable es canjearlo por un ticket efímero de conexión.
+En producción usa exclusivamente HTTPS/WSS. El ticket dura pocos segundos, tiene alcance de unidad/asignación y no puede reutilizarse.
 
 ## Webhooks
 

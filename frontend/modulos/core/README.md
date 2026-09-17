@@ -7,10 +7,10 @@ Core es el host ejecutable del frontend. Contiene Vite, la entrada HTML, el mont
 - `app.jsx`: raíz de composición y registro de módulos. Es el único archivo de Core autorizado a importar módulos hermanos.
 - `main.jsx`: monta la aplicación y reúne los estilos del shell y de los módulos registrados.
 - `vite.config.js`, `index.html`, `public/` y `service_worker.js`: host web y PWA compartidos.
-- `http_client.js`: transporte V2, token/contexto HTTP, JSON, paginación, 204, errores y cancelación global al cambiar sesión o cargo.
-- `core_api.js`: autenticación, cuenta, Employee, assignments, directorio, unidades y autorización.
+- `http_client.js`: transporte V2 con cookie `HttpOnly`, CSRF, contexto organizacional, JSON, paginación, errores y cancelación global al cambiar sesión o cargo.
+- `core_api.js`: sesión, MFA, recuperación de contraseña, cuenta, Employee, assignments, directorio, unidades y autorización.
 - `core_store.js`: única instantánea de identidad organizacional. Sus exports de directorio/asignación son referencias a esa instantánea, no un segundo estado de Tareas.
-- `core_provider.jsx`: restauración, login/logout, selección de cargo, Context y `useCore()`. Obtiene Employee desde su endpoint; activeUnit se deriva de activeAssignment. El token vive en el transporte Core; el contexto lo expone como proyección. sessionStorage es únicamente persistencia para restaurar.
+- `core_provider.jsx`: restauración, login/logout, MFA, cambio obligatorio de contraseña, selección de cargo, Context y `useCore()`. Obtiene Employee desde su endpoint; activeUnit se deriva de activeAssignment. La cookie de sesión nunca es accesible a JavaScript; `sessionStorage` conserva únicamente el identificador del cargo activo.
 - `app_shell.jsx`: navegación global, tema, sidebar, cabeceras, selector de cargo y presentación de notificaciones. Recibe submenús, notificaciones y acciones mediante props; no importa Tasks.
 - `../tareas/src/services/tasks_api.js`: endpoints de Tasks y cancelación de solicitudes del módulo, sin métodos de login ni almacenamiento de token.
 - `../tareas/src/task_app.jsx`, servicios, normalizadores y realtime: dominio y vistas de Tareas, Inicio/Informes basados en tareas, filtros, formularios y reconciliación REST.
@@ -31,7 +31,7 @@ Los helpers existentes de presentación leen las proyecciones de Core para conse
 
 ## Cambio de contexto
 
-Core actualiza el header, invalida solicitudes del contexto anterior y cambia su instantánea. La instancia de Tasks se desmonta por la clave de asignación: cancela únicamente sus solicitudes, cierra sus sockets, limpia su presentación y vuelve a cargar. Un logout desmonta el módulo y limpia también cuenta, persona, directorio y token. Un 401 activa ese mismo flujo; un 403 muestra el error sin cerrar sesión.
+Core actualiza el header, invalida solicitudes del contexto anterior y cambia su instantánea. La instancia de Tasks se desmonta por la clave de asignación: cancela únicamente sus solicitudes, cierra sus sockets, limpia su presentación y vuelve a cargar. Un logout desmonta el módulo y limpia también cuenta, persona y directorio. Un 401 limpia el estado local sin repetir la petición de logout; un 403 muestra el error sin cerrar sesión.
 
 El cliente HTTP combina la señal global con la señal del módulo y rechaza respuestas antiguas aunque el transporte ignore el aborto. Las notificaciones de tareas, su marcado y los eventos task.* permanecen en Tasks. El shell recibe datos de presentación y callbacks.
 
@@ -50,7 +50,7 @@ node ../tareas/tests/v2_live.mjs
 
 Las pruebas DOM usan la instalación temporal de jsdom descrita en `REWORK_V2_RESULTADO.md`. Las dos últimas requieren el backend local sembrado.
 
-- 25 comprobaciones automatizadas: regresiones existentes, cancelación aislada, identidad única e imports sin ciclos ni dependencias Core → Tasks.
+- 37 comprobaciones automatizadas: regresiones existentes, cookies/CSRF, tickets WebSocket, cancelación aislada, identidad única e imports sin ciclos ni dependencias Core → Tasks.
 - `core_dom.mjs`: dos cargos, Employee, activeUnit, headers, respuesta tardía, cierre/apertura de sockets, restauración, 403, 401 y logout usando respuestas controladas.
 - DOM real y plantilla: creación, vistas, edición, traspaso, subtarea, comentarios, restauración y eliminación.
 - Integración real: movimiento de sección mediante TaskProject y sincronización entre dos clientes WebSocket, además de CRUD y reconexión.

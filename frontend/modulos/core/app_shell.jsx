@@ -31,7 +31,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment };
     return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
-        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, onLogout: core.logout })}
+        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, onLogout: core.logout, onManageMfa: core.mfa.open, mfaEnabled: core.mfa.enabled })}
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
@@ -126,7 +126,10 @@ function render_sidebar(props) {
                 </div>
                 {is_using_real_backend() && <details className="profile_session_menu" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary").focus(); } }}>
                     <summary className="profile_menu_button" aria-label="Opciones del perfil">{render_icon(more_horizontal_icon, 18)}</summary>
-                    <div className="profile_session_popover"><button type="button" onClick={props.onLogout}>Cerrar sesión</button></div>
+                    <div className="profile_session_popover">
+                        <button className="profile_security_action" type="button" onClick={props.onManageMfa}>{props.mfaEnabled ? "Administrar MFA" : "Configurar MFA"}</button>
+                        <button type="button" onClick={props.onLogout}>Cerrar sesión</button>
+                    </div>
                 </details>}
             </div>
         </aside>

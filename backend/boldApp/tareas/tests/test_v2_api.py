@@ -3,14 +3,16 @@ from channels.testing import WebsocketCommunicator
 from channels.layers import get_channel_layer
 from django.core.management import call_command
 from django.test import TransactionTestCase, override_settings
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
+from django.test import RequestFactory
 
+from boldApp.autenticacion.services import create_session, issue_ws_ticket
 from boldApp.core.models import OrganizationalUnit, PositionAssignment, UserAccount
 from boldApp.tareas.models import Project, Section, Task, TaskProject, TaskStatus
 from config.asgi import application
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class TasksV2ApiTests(TransactionTestCase):
     reset_sequences = True
 
@@ -21,9 +23,9 @@ class TasksV2ApiTests(TransactionTestCase):
         self.david = UserAccount.objects.get(email="david@bold.gt")
         self.ana_assignment = PositionAssignment.objects.get(employee=self.ana.employee, is_active=True)
         self.david_assignment = PositionAssignment.objects.get(employee=self.david.employee, is_active=True)
-        self.token, _ = Token.objects.get_or_create(user=self.ana)
+        _, self.auth_session = create_session(self.ana, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        self.client.force_authenticate(user=self.ana, token=self.auth_session)
         self.client.credentials(
-            HTTP_AUTHORIZATION=f"Token {self.token.key}",
             HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id),
         )
         self.marketing = OrganizationalUnit.objects.get(name="Marketing")
@@ -44,6 +46,20 @@ class TasksV2ApiTests(TransactionTestCase):
             "section": str(self.ops_section.id),
             "project_position": "1.0000000000",
         }
+
+    def test_seed_includes_idempotent_samuel_authentication_account(self):
+        samuel = UserAccount.objects.get(email="samuel@bold.gt")
+        assignment = PositionAssignment.objects.get(employee=samuel.employee, is_active=True, released_at__isnull=True)
+        self.assertEqual(assignment.position.unit.name, "Marketing")
+        self.assertTrue(samuel.check_password("bolddemo123"))
+
+        samuel.set_password("Contraseña local preservada 2026!")
+        samuel.save(update_fields=["password"])
+        call_command("seed_demo_data", verbosity=0)
+        samuel.refresh_from_db()
+        self.assertTrue(samuel.check_password("Contraseña local preservada 2026!"))
+        self.assertEqual(UserAccount.objects.filter(email="samuel@bold.gt").count(), 1)
+        self.assertEqual(PositionAssignment.objects.filter(employee=samuel.employee, is_active=True, released_at__isnull=True).count(), 1)
 
     def test_bulk_create_update_delete_and_atomic_validation(self):
         payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}
@@ -93,8 +109,8 @@ class TasksV2ApiTests(TransactionTestCase):
 
     def test_requires_an_active_assignment_owned_by_the_account(self):
         foreign_client = APIClient()
+        foreign_client.force_authenticate(user=self.ana, token=self.auth_session)
         foreign_client.credentials(
-            HTTP_AUTHORIZATION=f"Token {self.token.key}",
             HTTP_X_ASSIGNMENT_ID=str(self.david_assignment.id),
         )
         response = foreign_client.get("/api/v2/projects/")
@@ -103,7 +119,8 @@ class TasksV2ApiTests(TransactionTestCase):
     def test_assignment_directory_is_paginated_and_exposes_only_safe_fields(self):
         response = self.client.get("/api/v2/core/position-assignments/directory/")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(response.data["count"], 4)
+        self.assertIn("samuel@bold.gt", {row["employee_email"] for row in response.data["results"]})
         self.assertEqual(
             set(response.data["results"][0]),
             {"id", "employee", "employee_name", "employee_email", "unit", "unit_name", "job_role", "job_role_title"},
@@ -202,11 +219,13 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(task.unit, self.operations)
         self.assertEqual(task.assignee_assignment, self.david_assignment)
 
-    def test_websocket_requires_token_and_matching_assignment(self):
+    def test_websocket_requires_single_use_ticket_and_matching_assignment(self):
+        valid_ticket = issue_ws_ticket(self.ana, self.auth_session, self.ana_assignment.id, self.operations.id)
+        invalid_ticket = issue_ws_ticket(self.ana, self.auth_session, self.david_assignment.id, self.operations.id)
         async def checks():
             valid = WebsocketCommunicator(
                 application,
-                f"/ws/unit/{self.operations.id}/?token={self.token.key}&assignment={self.ana_assignment.id}",
+                f"/ws/unit/{self.operations.id}/?ticket={valid_ticket}",
                 headers=[(b"origin", b"http://localhost:5173")],
             )
             connected, _ = await valid.connect()
@@ -215,7 +234,7 @@ class TasksV2ApiTests(TransactionTestCase):
 
             invalid = WebsocketCommunicator(
                 application,
-                f"/ws/unit/{self.operations.id}/?token={self.token.key}&assignment={self.david_assignment.id}",
+                f"/ws/unit/{self.operations.id}/?ticket={invalid_ticket}",
                 headers=[(b"origin", b"http://localhost:5173")],
             )
             connected, _ = await invalid.connect()

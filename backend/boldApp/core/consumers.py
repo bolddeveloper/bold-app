@@ -7,17 +7,20 @@ from .events import CORE_EVENTS_GROUP
 
 
 @database_sync_to_async
-def is_staff_token(token_key):
-    from rest_framework.authtoken.models import Token
-
-    return Token.objects.filter(key=token_key, user__is_active=True, user__is_staff=True).exists()
+def is_staff_ticket(ticket_key):
+    from django.db.models import F
+    from django.utils import timezone
+    from boldApp.autenticacion.models import AuthSession
+    from boldApp.autenticacion.services import consume_ws_ticket
+    ticket = consume_ws_ticket(ticket_key)
+    return bool(ticket and ticket.get("staff") and AuthSession.objects.filter(id=ticket.get("session"), user_account_id=ticket.get("user"), user_account__is_active=True, user_account__is_staff=True, revoked_at__isnull=True, expires_at__gt=timezone.now(), credentials_version=F("user_account__credentials_version")).exists())
 
 
 class CoreEventsConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         query = parse_qs(self.scope.get("query_string", b"").decode("utf-8"))
-        token = query.get("token", [None])[0]
-        if not token or not await is_staff_token(token):
+        ticket = query.get("ticket", [None])[0]
+        if not ticket or not await is_staff_ticket(ticket):
             await self.close(code=4403)
             return
 

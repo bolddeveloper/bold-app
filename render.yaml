@@ -41,6 +41,8 @@ services:
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: AUTH_ENCRYPTION_KEY
+        generateValue: true
       - key: DEBUG
         value: "false"
       - key: PYTHON_VERSION
@@ -49,6 +51,15 @@ services:
         value: "bold-app-backend.onrender.com"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://bold-app-frontend.onrender.com"
+      - key: FRONTEND_URL
+        value: "https://bold-app-frontend.onrender.com"
+      - key: AUTH_SESSION_COOKIE_SAMESITE
+        value: "None"
+      # Activar después de validar el enrolamiento de las cuentas existentes.
+      - key: AUTH_MFA_REQUIRED
+        value: "false"
+      - key: AUTH_NUM_PROXIES
+        value: "1"
       - key: DATABASE_URL
         fromDatabase:
           name: bold-app-db

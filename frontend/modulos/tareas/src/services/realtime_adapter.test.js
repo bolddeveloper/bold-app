@@ -7,11 +7,11 @@ test("V2 events deduplicate across units using a bounded cache", () => {
     assert.equal(accept({ ...event("2"), event_version: 3 }), false); assert.equal(accept({}), false);
     accept(event("2")); accept(event("3")); assert.equal(accept(event("1")), true);
 });
-test("WS URL uses unit, token and assignment with automatic WSS", () => {
-    const url = new URL(websocketURL({ unitId: "u", token: "a&b", assignmentId: "a", baseUrl: "https://example.com" }));
-    assert.equal(url.protocol, "wss:"); assert.equal(url.pathname, "/ws/unit/u/"); assert.equal(url.searchParams.get("token"), "a&b"); assert.equal(url.searchParams.get("assignment"), "a");
+test("WS URL uses a single-use ticket with automatic WSS", () => {
+    const url = new URL(websocketURL({ unitId: "u", ticket: "a&b", baseUrl: "https://example.com" }));
+    assert.equal(url.protocol, "wss:"); assert.equal(url.pathname, "/ws/unit/u/"); assert.equal(url.searchParams.get("ticket"), "a&b"); assert.equal(url.searchParams.get("token"), null);
 });
-test("reconnect refetches REST, ignores invalid messages and cancels timers on disposal", () => {
+test("reconnect obtains a fresh ticket, refetches REST and cancels timers", async () => {
     const sockets = [], timers = []; let refetches = 0, events = 0;
     class Socket {
         constructor() { this.handlers = {}; sockets.push(this); }
@@ -20,11 +20,13 @@ test("reconnect refetches REST, ignores invalid messages and cancels timers on d
         close() { this.emit("close"); }
     }
     const adapter = createRealtimeAdapter({ WebSocketImpl: Socket, setTimer: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimer: id => { if (id) timers[id - 1].cancelled = true; } });
-    adapter.connect({ unitId: "u", token: "t", assignmentId: "a", onReconnect: () => refetches++, onEvent: () => events++ });
+    let tickets = 0;
+    adapter.connect({ unitId: "u", assignmentId: "a", getTicket: async () => ({ ticket: `t${++tickets}` }), onReconnect: () => refetches++, onEvent: () => events++ });
+    await Promise.resolve();
     sockets[0].emit("open"); sockets[0].emit("message", { data: "bad json" });
     for (let i = 0; i < 2; i++) sockets[0].emit("message", { data: '{"event_id":"e","event_version":2}' });
     assert.equal(events, 1);
-    sockets[0].emit("close"); assert.equal(timers[0].delay, 1000); timers[0].fn(); sockets[1].emit("open");
+    sockets[0].emit("close"); assert.equal(timers[0].delay, 1000); timers[0].fn(); await Promise.resolve(); sockets[1].emit("open");
     assert.equal(refetches, 2);
     sockets[1].emit("close"); adapter.disconnect(); assert.equal(timers[1].cancelled, true);
     timers[1].fn(); assert.equal(sockets.length, 2);

@@ -12,7 +12,7 @@ export class ApiError extends Error {
 }
 
 export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args) => fetch(...args), onUnauthorized = () => {} } = {}) {
-    let token = null, assignmentId = null, email = null;
+    let authenticated = false, assignmentId = null, email = null, csrfToken = null;
     let controller = new AbortController();
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
     async function request(path, { method = "GET", body, anonymous = false, signal = controller.signal, ...options } = {}) {
@@ -23,10 +23,12 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         if (url.origin !== base.origin && loopback(url.hostname) && loopback(base.hostname)) url = new URL(`${url.pathname}${url.search}`, base);
         if (url.origin !== base.origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
         let response;
+        const unsafe = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase());
+        const csrf = csrfToken || globalThis.document?.cookie?.split("; ").find(item => item.startsWith("csrftoken="))?.split("=").slice(1).join("=");
         try {
             response = await fetchImpl(url.href, {
-                ...options, method, signal,
-                headers: { "Content-Type": "application/json", ...(!anonymous && token ? { Authorization: `Token ${token}` } : {}), ...(!anonymous && assignmentId ? { "X-Assignment-ID": assignmentId } : {}), ...options.headers },
+                ...options, method, signal, credentials: "include",
+                headers: { "Content-Type": "application/json", ...(unsafe && csrf ? { "X-CSRFToken": decodeURIComponent(csrf) } : {}), ...(!anonymous && assignmentId ? { "X-Assignment-ID": assignmentId } : {}), ...options.headers },
                 ...(body !== undefined ? { body: JSON.stringify(body) } : {})
             });
         } catch (error) {
@@ -43,6 +45,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
                 ? "El servidor tuvo un error interno. Inténtalo de nuevo en unos momentos."
                 : "El servidor devolvió una respuesta inesperada." };
         }
+        if (data?.csrf_token) csrfToken = data.csrf_token;
         if (!response.ok) {
             if (response.status === 401 && !anonymous) onUnauthorized();
             throw new ApiError(response.status, data);
@@ -67,9 +70,9 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     const remove = (resource, id, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "DELETE" });
     return {
         request, list, create, update, remove, cancelRequests,
-        setToken(value, accountEmail = null) { cancelRequests(); token = value; email = accountEmail; assignmentId = null; },
+        setSession(value, accountEmail = null) { cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
         setAssignment(value) { cancelRequests(); assignmentId = value; },
-        getSession: () => ({ token, assignmentId, email }),
+        getSession: () => ({ authenticated, assignmentId, email }),
     };
 }
 

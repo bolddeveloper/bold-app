@@ -29,7 +29,7 @@ Se contrastó el contrato con `backend/docs/tasks_v2_api.md`, la colección Post
 
 ## Funcionalidad implementada
 
-- Cliente central exclusivamente V2: JSON, paginación completa, token, X-Assignment-ID, cancelación de peticiones y errores con campos. Acepta 200/201/202/204; 204 no lee cuerpo. Solo 401 cierra sesión; 403 conserva la sesión y presenta el error; 404 limpia selecciones obsoletas.
+- Cliente central exclusivamente V2: cookie `HttpOnly`, CSRF, JSON, paginación completa, X-Assignment-ID, cancelación de peticiones y errores con campos. Acepta 200/201/202/204; 204 no lee cuerpo. Solo 401 cierra sesión; 403 conserva la sesión y presenta el error; 404 limpia selecciones obsoletas.
 - Login, restauración mediante sessionStorage, descubrimiento de la cuenta por correo autenticado, selección automática de una asignación y selector para varias. Cambiar asignación desmonta el contexto, aborta peticiones, cierra sockets y elimina los datos autorizados anteriores.
 - Directorio de PositionAssignment para responsables y seguidores, con responsable compatible con la unidad. Miembros de proyecto, seguidores y responsable se mantienen separados.
 - Proyectos, miembros, secciones, estados por unidad, tareas, vínculos, comentarios, seguidores, adjuntos, etiquetas y notificaciones reales. Las colecciones vacías reemplazan correctamente el estado anterior.
@@ -72,7 +72,8 @@ Todos bajo `/api/v2/`, salvo el socket:
 
 | Recurso | Uso |
 | --- | --- |
-| `core/auth/token/` | POST login con username/password |
+| `auth/session/`, `auth/login/`, `auth/logout/` | Restauración CSRF, login con cookie y cierre de sesión |
+| `auth/mfa/*`, `auth/password/*` | MFA, recuperación y cambio obligatorio de contraseña |
 | `core/user-accounts/` | GET cuenta autenticada |
 | `core/position-assignments/?employee=…` | GET asignaciones propias |
 | `core/position-assignments/directory/` | GET directorio |
@@ -85,7 +86,7 @@ Todos bajo `/api/v2/`, salvo el socket:
 | `task-followers/`, `attachments/` | GET/POST/DELETE |
 | `tags/?unit=…`, `task-tags/` | GET etiquetas visibles |
 | `notifications/`, `notifications/<id>/mark-read/` | GET y POST lectura |
-| `/ws/unit/<id>/?token=…&assignment=…` | Eventos V2; WSS bajo HTTPS |
+| `/ws/unit/<id>/?ticket=…` | Eventos V2 con ticket de un solo uso; WSS bajo HTTPS |
 
 ## Validación realizada
 

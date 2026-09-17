@@ -9,6 +9,7 @@ from django.urls import include, path
 # prefijo api/ actual hasta que se reescriba para integrarse con el nucleo.
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/v2/auth/", include("boldApp.autenticacion.urls")),
     path("api/v2/core/", include("boldApp.core.urls")),
     path("api/v2/", include("boldApp.tareas.urls")),
 ]
