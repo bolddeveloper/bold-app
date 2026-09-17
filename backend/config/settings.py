@@ -206,6 +206,7 @@ AUTH_CHALLENGE_TTL_SECONDS = int(os.environ.get("AUTH_CHALLENGE_TTL_SECONDS", "3
 AUTH_INVITATION_TTL_SECONDS = int(os.environ.get("AUTH_INVITATION_TTL_SECONDS", "259200"))
 AUTH_WEBSOCKET_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_WEBSOCKET_TICKET_TTL_SECONDS", "45"))
 ADMIN_STEP_UP_MFA_SECONDS = int(os.environ.get("ADMIN_STEP_UP_MFA_SECONDS", "600"))
+SEED_PRIVILEGED_DEMO_ACCOUNTS = os.environ.get("SEED_PRIVILEGED_DEMO_ACCOUNTS", "false").lower() == "true"
 AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@bold.gt")

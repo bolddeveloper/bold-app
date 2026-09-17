@@ -13,7 +13,7 @@ from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, DEBUG=True)
 class TasksV2ApiTests(TransactionTestCase):
     reset_sequences = True
 
@@ -61,6 +61,24 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertTrue(samuel.check_password("Contraseña local preservada 2026!"))
         self.assertEqual(UserAccount.objects.filter(email="samuel@bold.gt").count(), 1)
         self.assertEqual(PositionAssignment.objects.filter(employee=samuel.employee, is_active=True, released_at__isnull=True).count(), 1)
+
+    def test_seed_includes_owner_and_high_management_demo_accounts(self):
+        luis = UserAccount.objects.get(email="luis@bold.gt")
+        paulus = UserAccount.objects.get(email="paulus@bold.gt")
+        self.assertTrue(luis.is_staff)
+        self.assertTrue(luis.is_superuser)
+        self.assertTrue(luis.check_password("LuisBold2026!"))
+        self.assertEqual(luis.employee.position_assignments.get(is_active=True).position.job_role.title, "Propietario")
+        self.assertTrue(paulus.is_staff)
+        self.assertFalse(paulus.is_superuser)
+        self.assertTrue(paulus.check_password("PaulusBold2026!"))
+        self.assertEqual(paulus.employee.position_assignments.get(is_active=True).position.job_role.title, "Alta Gerencia")
+
+        luis.set_password("Contraseña de dueño modificada 2026!")
+        luis.save(update_fields=["password"])
+        call_command("seed_demo_data", verbosity=0)
+        luis.refresh_from_db()
+        self.assertTrue(luis.check_password("Contraseña de dueño modificada 2026!"))
 
     def test_bulk_create_update_delete_and_atomic_validation(self):
         payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}

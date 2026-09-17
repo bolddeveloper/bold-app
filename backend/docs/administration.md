@@ -146,13 +146,13 @@ La auditoría acepta `module`, `event_type`, `outcome`, `search`, `date_from`, `
 
 ## Preparación y pruebas
 
-No se crea un dueño privilegiado desde la seed para evitar credenciales administrativas predecibles en despliegues. En desarrollo se puede promover una cuenta existente desde la consola:
+En desarrollo la seed crea un dueño y un cargo de alta gerencia para probar la separación de niveles:
 
-```powershell
-cd backend
-..\.venv\Scripts\python.exe manage.py shell -c "from boldApp.core.models import UserAccount; u=UserAccount.objects.get(email='ana@bold.gt'); u.is_superuser=True; u.is_staff=True; u.save()"
-..\.venv\Scripts\python.exe manage.py migrate
-..\.venv\Scripts\python.exe manage.py test boldApp.administrativo
+```text
+luis@bold.gt   / LuisBold2026!   → Propietario, acceso administrativo
+paulus@bold.gt / PaulusBold2026! → Alta Gerencia, sin acceso de dueño
 ```
 
-El dueño debe iniciar sesión con MFA para ejecutar acciones sensibles. La navegación mostrará **Administración** únicamente a esa cuenta.
+Estas cuentas privilegiadas solo se crean con `DEBUG=True` o `SEED_PRIVILEGED_DEMO_ACCOUNTS=true`, evitando publicar un superusuario conocido en producción. Las contraseñas se establecen únicamente al crear las cuentas y una ejecución posterior de la seed no sobrescribe cambios.
+
+El dueño debe iniciar sesión con MFA para ejecutar acciones sensibles. La navegación mostrará **Administración** únicamente a Luis. Paulus permite comprobar que `is_staff` o un cargo alto no otorgan automáticamente autoridad de dueño; la delegación granular se incorporará desde el módulo de Permisos.
