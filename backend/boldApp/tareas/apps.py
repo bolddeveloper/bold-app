@@ -12,3 +12,4 @@ class TareasConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        from . import admin_provider  # noqa: F401

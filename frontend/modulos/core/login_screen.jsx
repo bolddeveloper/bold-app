@@ -11,13 +11,14 @@ function readTheme() {
 }
 function readEmail() { try { return localStorage.getItem(emailKey) || ""; } catch { return ""; } }
 
-export function LoginScreen({ title, error, busy, account, assignments, active, mfaChallenge, recoveryMessage, passwordChangeRequired, mfaEnrollmentRequired, totpSetup, recoveryCodes, onLogin, onMfa, onRecovery, onRecoveryConfirm, onPasswordChange, onStartMfaEnrollment, onConfirmMfaEnrollment, onFinishMfaEnrollment, onAssignmentChange, onLogout }) {
+export function LoginScreen({ title, error, busy, account, assignments, active, mfaChallenge, recoveryMessage, passwordChangeRequired, mfaEnrollmentRequired, totpSetup, recoveryCodes, onLogin, onMfa, onRecovery, onRecoveryConfirm, onInvitationConfirm, onPasswordChange, onStartMfaEnrollment, onConfirmMfaEnrollment, onFinishMfaEnrollment, onAssignmentChange, onLogout }) {
     const [dark, setDark] = useState(readTheme);
     const [showPassword, setShowPassword] = useState(false);
     const [remember, setRemember] = useState(() => Boolean(readEmail()));
     const [recoveryHelp, setRecoveryHelp] = useState(false);
     const [savedEmail] = useState(readEmail);
     const [resetToken, setResetToken] = useState(() => new URLSearchParams(location.search).get("reset_token") || "");
+    const [invitationToken, setInvitationToken] = useState(() => new URLSearchParams(location.search).get("invitation_token") || "");
     useEffect(() => {
         try { localStorage.setItem(themeKey, dark ? "dark" : "light"); } catch {}
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
@@ -48,8 +49,8 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
                 <div className="core_auth_form_wrap">
                     <div className="core_auth_mobile_logo" aria-hidden="true">bold<span>.</span></div>
                     <p className="core_auth_section">{title}</p>
-                    <h2 id="core_auth_heading">{account ? "Selecciona tu cargo" : passwordChangeRequired ? "Cambia tu contraseña" : mfaEnrollmentRequired ? "Protege tu cuenta" : resetToken ? "Crea una contraseña nueva" : mfaChallenge ? "Verificación en dos pasos" : recoveryHelp ? "Recupera tu cuenta" : "Bienvenido de nuevo"}</h2>
-                    <p className="core_auth_subtitle">{account ? "Elige la asignación con la que quieres continuar." : passwordChangeRequired ? "Debes reemplazar la contraseña temporal antes de continuar." : mfaEnrollmentRequired ? "Configura una aplicación autenticadora para completar el acceso." : resetToken ? "El enlace se puede utilizar una sola vez." : mfaChallenge ? "Ingresa el código de tu aplicación autenticadora." : recoveryHelp ? "Enviaremos un enlace de un solo uso si la cuenta existe." : "Ingresa a tu cuenta para continuar."}</p>
+                    <h2 id="core_auth_heading">{account ? "Selecciona tu cargo" : passwordChangeRequired ? "Cambia tu contraseña" : mfaEnrollmentRequired ? "Protege tu cuenta" : invitationToken ? "Activa tu cuenta" : resetToken ? "Crea una contraseña nueva" : mfaChallenge ? "Verificación en dos pasos" : recoveryHelp ? "Recupera tu cuenta" : "Bienvenido de nuevo"}</h2>
+                    <p className="core_auth_subtitle">{account ? "Elige la asignación con la que quieres continuar." : passwordChangeRequired ? "Debes reemplazar la contraseña temporal antes de continuar." : mfaEnrollmentRequired ? "Configura una aplicación autenticadora para completar el acceso." : invitationToken ? "Define tu contraseña para aceptar la invitación corporativa." : resetToken ? "El enlace se puede utilizar una sola vez." : mfaChallenge ? "Ingresa el código de tu aplicación autenticadora." : recoveryHelp ? "Enviaremos un enlace de un solo uso si la cuenta existe." : "Ingresa a tu cuenta para continuar."}</p>
                     {error && <p className="core_auth_error" role="alert">{error}</p>}
                     {recoveryMessage && !recoveryHelp && <p role="status">{recoveryMessage}</p>}
                     {!account && passwordChangeRequired ? <form key="required-password" className="core_auth_form" onSubmit={onPasswordChange}>
@@ -72,7 +73,7 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
                             <input id="core_auth_enrollment_code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus disabled={busy} />
                             <button className="core_auth_submit" type="submit" disabled={busy}>{busy ? "Verificando…" : "Activar MFA"}</button>
                         </form> : <button className="core_auth_submit" type="button" onClick={onStartMfaEnrollment} disabled={busy}>{busy ? "Preparando…" : "Configurar autenticador"}</button>}
-                    </div> : !account && resetToken ? <form key="password-reset" className="core_auth_form" onSubmit={async event => { if (await onRecoveryConfirm(event, resetToken)) setResetToken(""); }}>
+                    </div> : !account && (resetToken || invitationToken) ? <form key={invitationToken ? "account-invitation" : "password-reset"} className="core_auth_form" onSubmit={async event => { const completed = invitationToken ? await onInvitationConfirm(event, invitationToken) : await onRecoveryConfirm(event, resetToken); if (completed) { setResetToken(""); setInvitationToken(""); } }}>
                         <label htmlFor="core_auth_new_password">Contraseña nueva</label>
                         <input id="core_auth_new_password" name="password" type="password" autoComplete="new-password" required minLength="8" />
                         <label htmlFor="core_auth_new_password_confirm">Confirmar contraseña</label>

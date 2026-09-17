@@ -148,6 +148,14 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         try { const result = await coreApi.confirmPasswordReset(token, password); formElement.reset(); history.replaceState({}, "", location.pathname); setRecoveryMessage(result.detail); updateCore({ error: "" }); return true; }
         catch (error) { updateCore({ error: error.message }); return false; }
     }
+    async function confirmInvitation(event, token) {
+        event.preventDefault();
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement), password = form.get("password");
+        if (password !== form.get("password_confirm")) { updateCore({ error: "Las contraseñas no coinciden." }); return false; }
+        try { const result = await coreApi.confirmInvitation(token, password); formElement.reset(); history.replaceState({}, "", location.pathname); setRecoveryMessage(result.detail); updateCore({ error: "" }); return true; }
+        catch (error) { updateCore({ error: error.message }); return false; }
+    }
     async function changeRequiredPassword(event) {
         event.preventDefault();
         const form = new FormData(event.currentTarget), password = form.get("password");
@@ -214,7 +222,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         title={loginTitle} error={error} busy={busy} account={account} assignments={assignments}
         active={active} mfaChallenge={mfaChallenge} recoveryMessage={recoveryMessage}
         passwordChangeRequired={passwordChangeRequired} mfaEnrollmentRequired={mfaEnrollmentRequired} totpSetup={totpSetup} recoveryCodes={recoveryCodes}
-        onLogin={login} onMfa={verifyMfa} onRecovery={requestRecovery} onRecoveryConfirm={confirmRecovery} onPasswordChange={changeRequiredPassword}
+        onLogin={login} onMfa={verifyMfa} onRecovery={requestRecovery} onRecoveryConfirm={confirmRecovery} onInvitationConfirm={confirmInvitation} onPasswordChange={changeRequiredPassword}
         onStartMfaEnrollment={startMfaEnrollment} onConfirmMfaEnrollment={confirmMfaEnrollment} onFinishMfaEnrollment={finishMfaEnrollment}
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;

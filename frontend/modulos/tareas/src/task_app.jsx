@@ -4037,7 +4037,7 @@ class TaskAppErrorBoundary extends react_component {
 }
 
 
-function TaskAppContent() {
+function TaskAppContent({ externalModules = {} }) {
     const [project_preview, set_project_preview] = use_state(null);
     const session = useCore();
     const { active_module, set_active_module, set_is_sidebar_open } = useShell();
@@ -5374,7 +5374,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
         >
                 <div className="module_transition" key={active_module}>
-                {active_module === "home" ? <HomeModule
+                {externalModules[active_module] || (active_module === "home" ? <HomeModule
                     currentUser={current_user}
                     notifications={notifications}
                     onCreateProject={() => set_active_modal("project")}
@@ -5517,14 +5517,14 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     schedule_view,
                     set_active_modal,
                     set_schedule_view
-                }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module)}
+                }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module))}
                 </div>
         </AppShell></ProjectPreviewContext.Provider>
     );
 }
 
 
-export default function TasksModule() {
+export default function TasksModule({ externalModules = {} }) {
     const core = useCore();
-    return <TaskAppErrorBoundary><TaskAppContent key={core.activeAssignment?.id || "template"} /></TaskAppErrorBoundary>;
+    return <TaskAppErrorBoundary><TaskAppContent externalModules={externalModules} key={core.activeAssignment?.id || "template"} /></TaskAppErrorBoundary>;
 }

@@ -9,6 +9,7 @@ from django.test import RequestFactory
 from boldApp.autenticacion.services import create_session, issue_ws_ticket
 from boldApp.core.models import OrganizationalUnit, PositionAssignment, UserAccount
 from boldApp.tareas.models import Project, Section, Task, TaskProject, TaskStatus
+from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
 
 
@@ -119,7 +120,7 @@ class TasksV2ApiTests(TransactionTestCase):
     def test_assignment_directory_is_paginated_and_exposes_only_safe_fields(self):
         response = self.client.get("/api/v2/core/position-assignments/directory/")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data["count"], 4)
+        self.assertEqual(response.data["count"], len(DEMO_PEOPLE))
         self.assertIn("samuel@bold.gt", {row["employee_email"] for row in response.data["results"]})
         self.assertEqual(
             set(response.data["results"][0]),

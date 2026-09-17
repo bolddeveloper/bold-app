@@ -190,8 +190,18 @@ def create_challenge(user, purpose, request, target_email=None, ttl=None):
 
 
 def send_password_reset(user, raw_token):
-    frontend = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    frontend = getattr(settings, "FRONTEND_URL", "http://localhost:5174").rstrip("/")
     send_mail("Restablecer contraseña de Bold", f"Abre este enlace para continuar: {frontend}/?reset_token={raw_token}", settings.DEFAULT_FROM_EMAIL, [user.email])
+
+
+def send_account_invitation(user, raw_token):
+    frontend = getattr(settings, "FRONTEND_URL", "http://localhost:5174").rstrip("/")
+    send_mail(
+        "Invitación a Bold",
+        f"Tu cuenta corporativa fue creada. Define tu contraseña en: {frontend}/?invitation_token={raw_token}",
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+    )
 
 
 def issue_ws_ticket(user, session, assignment_id, unit_id, staff=False):

@@ -48,9 +48,9 @@ Mientras frontend y backend de Render sean sitios distintos se usa `AUTH_SESSION
 
 Para introducir MFA en cuentas existentes, primero se despliega con `AUTH_MFA_REQUIRED=false`, se valida el flujo y después se activa la variable. Las cuentas sin método configurado recibirán el asistente de enrolamiento antes de acceder a los módulos.
 
-## Operaciones pendientes del módulo Administrativo
+## Integración con el módulo Administrativo
 
-La API ya permite que un administrador con una sesión verificada por MFA asigne una contraseña temporal sin verla posteriormente; obliga al empleado a reemplazarla y revoca sus sesiones. La interfaz administrativa, creación de cuentas, invitaciones, restablecimiento de MFA, baja de empleados y transferencia de responsabilidades se implementarán en Administrativo usando estos servicios. Una cuenta nunca debe reasignarse a otra persona.
+Administrativo crea cuentas sin contraseña y envía invitaciones de un solo uso. También puede iniciar una recuperación por correo, restablecer MFA y revocar sesiones con MFA reciente del dueño. Nunca revela ni asigna directamente la contraseña de un empleado, y una cuenta nunca se reasigna a otra persona.
 
 ## Desarrollo
 

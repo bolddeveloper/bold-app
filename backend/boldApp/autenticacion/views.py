@@ -195,6 +195,41 @@ class RecoveryConfirmView(APIView):
         return Response({"detail": "Contraseña actualizada. Ya puedes iniciar sesión."})
 
 
+class InvitationConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [RecoveryIPThrottle]
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = RecoveryConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        challenge = AuthChallenge.objects.select_for_update().select_related("user_account").filter(
+            token_hash=token_hash(serializer.validated_data["token"]),
+            purpose=AuthChallenge.PURPOSE_INVITATION,
+            consumed_at__isnull=True,
+            invalidated_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).first()
+        if not challenge:
+            return Response({"detail": "La invitación no es válida o expiró."}, status=status.HTTP_400_BAD_REQUEST)
+        user = challenge.user_account
+        try:
+            validate_password(serializer.validated_data["password"], user)
+        except DjangoValidationError as error:
+            return Response({"password": error.messages}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(serializer.validated_data["password"])
+        user.password_changed_at = timezone.now()
+        user.email_verified_at = timezone.now()
+        user.must_change_password = False
+        user.credentials_version += 1
+        user.save(update_fields=["password", "password_changed_at", "email_verified_at", "must_change_password", "credentials_version", "updated_at"])
+        challenge.consumed_at = timezone.now()
+        challenge.save(update_fields=["consumed_at"])
+        record_event("account.invitation_accepted", request, user=user)
+        return Response({"detail": "Cuenta activada. Ya puedes iniciar sesión."})
+
+
 class TOTPSetupView(APIView):
     permission_classes = [IsAuthenticated]
 

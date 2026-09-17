@@ -56,6 +56,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
             "password",
             "avatar_url",
             "is_active",
+            "is_superuser",
             "email_verified_at",
             "password_changed_at",
             "must_change_password",
@@ -64,7 +65,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "email_verified_at", "password_changed_at", "deactivated_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "is_superuser", "email_verified_at", "password_changed_at", "deactivated_at", "created_at", "updated_at"]
 
     def validate_email(self, value):
         email = value.strip().lower()

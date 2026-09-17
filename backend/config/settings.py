@@ -21,10 +21,14 @@ base_dir = Path(__file__).resolve().parent.parent
 
 # Define los valores sensibles leidos desde variables de entorno.
 # Nota: Django exige que los settings sean atributos en MAYUSCULAS a nivel
-# de modulo para poder detectarlos; por eso SECRET_KEY, DEBUG y
-# ALLOWED_HOSTS rompen la convencion snake_case usada en el resto del codigo.
+# de modulo para poder detectarlos. DJANGO_DEBUG evita colisiones con la
+# variable DEBUG genérica que algunas terminales definen como "release".
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-boldapp-dev-key")
-DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
+debug_value = os.environ.get("DJANGO_DEBUG")
+if debug_value is None:
+    legacy_debug_value = os.environ.get("DEBUG", "")
+    debug_value = legacy_debug_value if legacy_debug_value.lower() in {"true", "false", "1", "0"} else "true"
+DEBUG = debug_value.lower() in {"true", "1"}
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
@@ -60,6 +64,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "boldApp.core",
     "boldApp.autenticacion",
+    "boldApp.administrativo",
     "boldApp.tareas",
 ]
 
@@ -156,7 +161,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Define los origenes permitidos para que el PWA (frontend) consuma la API.
 cors_origins_env = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173",
+    "http://localhost:5174,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:5173",
 )
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
@@ -198,11 +203,13 @@ CSRF_COOKIE_SAMESITE = AUTH_SESSION_COOKIE_SAMESITE
 CSRF_COOKIE_SECURE = not DEBUG
 AUTH_MFA_REQUIRED = os.environ.get("AUTH_MFA_REQUIRED", "false").lower() == "true"
 AUTH_CHALLENGE_TTL_SECONDS = int(os.environ.get("AUTH_CHALLENGE_TTL_SECONDS", "3600"))
+AUTH_INVITATION_TTL_SECONDS = int(os.environ.get("AUTH_INVITATION_TTL_SECONDS", "259200"))
 AUTH_WEBSOCKET_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_WEBSOCKET_TICKET_TTL_SECONDS", "45"))
+ADMIN_STEP_UP_MFA_SECONDS = int(os.environ.get("ADMIN_STEP_UP_MFA_SECONDS", "600"))
 AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@bold.gt")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174")
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.

@@ -1,0 +1,70 @@
+.administration_module { min-height: 100%; padding: 28px; color: var(--text-primary, #172033); background: #f6f8fb; }
+.admin_module_header, .admin_panel > header, .admin_employee_detail > header, .admin_audit_header, .admin_directory_tools, .admin_form footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.admin_module_header { margin-bottom: 24px; align-items: flex-end; }
+.admin_module_header h1, .admin_panel h2 { margin: 4px 0; }
+.admin_module_header p { margin: 0; color: #657084; }
+.admin_module_header nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.admin_module_header nav button, .admin_action_grid button, .admin_directory_tools button, .admin_refresh_detail, .admin_form button, .admin_danger_zone button { border: 1px solid #dce2ea; border-radius: 9px; padding: 9px 12px; background: #fff; color: inherit; cursor: pointer; }
+.admin_module_header nav button.is_active, .admin_primary { background: #172033 !important; color: #fff !important; }
+.admin_eyebrow { color: #64748b; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
+.admin_metric_grid, .admin_module_grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.admin_metric_card, .admin_module_card, .admin_panel, .admin_employee_detail, .admin_form { background: #fff; border: 1px solid #e2e7ee; border-radius: 14px; padding: 18px; box-shadow: 0 2px 9px rgb(15 23 42 / 4%); }
+.admin_metric_card { display: grid; gap: 8px; }
+.admin_metric_card span, .admin_module_card span { color: #667085; font-size: 13px; }
+.admin_metric_card strong { font-size: 28px; }
+.admin_module_card p { display: flex; justify-content: space-between; gap: 10px; }
+.admin_panel { margin-bottom: 18px; }
+.admin_activity_list article, .admin_session_list p, .admin_organization article { display: flex; align-items: center; gap: 14px; padding: 12px 0; margin: 0; border-bottom: 1px solid #edf0f4; }
+.admin_activity_list article > div, .admin_organization article > div { flex: 1; display: grid; gap: 3px; }
+.admin_activity_list p { margin: 0; color: #64748b; }
+.admin_activity_list time, .admin_session_list time { margin-left: auto; color: #64748b; font-size: 12px; }
+.admin_event_module, .admin_status, .admin_outcome { border-radius: 999px; padding: 4px 8px; background: #eef2f7; font-size: 11px; }
+.admin_directory { display: grid; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); gap: 18px; }
+.admin_directory > aside { background: #fff; border: 1px solid #e2e7ee; border-radius: 14px; overflow: hidden; }
+.admin_directory_tools { padding: 12px; border-bottom: 1px solid #e2e7ee; }
+.admin_directory_tools label { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.admin_directory_tools input { min-width: 0; border: 0; outline: 0; }
+.admin_employee_list { max-height: 68vh; overflow: auto; }
+.admin_employee_list button { display: grid; width: 100%; gap: 3px; padding: 12px 15px; border: 0; border-bottom: 1px solid #edf0f4; background: transparent; text-align: left; cursor: pointer; }
+.admin_employee_list button.is_selected { background: #eef6ff; box-shadow: inset 3px 0 #2878d0; }
+.admin_employee_list small { color: #64748b; }
+.admin_person_avatar { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #dcecff; font-weight: 800; }
+.admin_employee_detail > header > div:nth-child(2) { flex: 1; }
+.admin_employee_detail h2, .admin_employee_detail header p { margin: 0; }
+.admin_status.is_active, .admin_outcome.is_success { background: #daf7e8; color: #137044; }
+.admin_detail_grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.admin_detail_grid div { padding: 12px; border-radius: 10px; background: #f7f9fc; }
+.admin_detail_grid dt { color: #64748b; font-size: 12px; }
+.admin_detail_grid dd { margin: 5px 0 0; font-weight: 700; }
+.admin_action_grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin_action_grid .is_danger, .admin_danger_button { color: #a51d2d; border-color: #efbcc2; }
+.admin_security_note { display: flex; align-items: center; gap: 7px; color: #64748b; font-size: 13px; }
+.admin_danger_zone { margin-top: 20px; padding: 16px; border: 1px solid #f0c3c7; border-radius: 12px; background: #fff9f9; }
+.admin_form, .admin_offboarding { display: grid; gap: 14px; }
+.admin_catalog_form { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
+.admin_catalog_form > header, .admin_catalog_form > footer, .admin_catalog_form > label:last-of-type { grid-column: 1 / -1; }
+.admin_catalog_form header select, .admin_catalog_form textarea { border: 1px solid #ccd4df; border-radius: 8px; padding: 10px; font: inherit; }
+.admin_form label, .admin_offboarding label { display: grid; gap: 6px; }
+.admin_form input, .admin_form select, .admin_offboarding select, .admin_offboarding textarea, .admin_audit_header input, .admin_audit_header select { border: 1px solid #ccd4df; border-radius: 8px; padding: 10px; font: inherit; }
+.admin_notice { padding: 11px 14px; border-radius: 9px; background: #daf7e8; }
+.admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied { background: #fee7e9; color: #9b1c2b; }
+.admin_audit_table { overflow-x: auto; }
+.admin_audit_row { display: grid; grid-template-columns: 170px 130px minmax(210px, 1fr) minmax(180px, 1fr) 90px; gap: 12px; align-items: center; min-width: 780px; padding: 11px 0; border-bottom: 1px solid #edf0f4; }
+.admin_audit_row.is_header { color: #64748b; font-size: 12px; font-weight: 700; }
+.admin_organization { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.admin_organization article span { color: #64748b; font-size: 12px; }
+.admin_state { display: grid; place-items: center; min-height: 45vh; }
+
+@media (max-width: 1000px) {
+    .admin_metric_grid, .admin_module_grid { grid-template-columns: repeat(2, 1fr); }
+    .admin_detail_grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+    .administration_module { padding: 14px; }
+    .admin_module_header { align-items: stretch; flex-direction: column; }
+    .admin_directory, .admin_organization { grid-template-columns: 1fr; }
+    .admin_catalog_form { grid-template-columns: 1fr; }
+    .admin_catalog_form > header, .admin_catalog_form > footer, .admin_catalog_form > label:last-of-type { grid-column: auto; }
+    .admin_employee_list { max-height: 220px; }
+    .admin_metric_grid, .admin_module_grid { grid-template-columns: 1fr 1fr; }
+}

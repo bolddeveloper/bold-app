@@ -28,6 +28,7 @@ export function createCoreApi(client = http) {
         websocketTicket: body => request("/api/v2/auth/websocket-ticket/", { method: "POST", body }),
         requestPasswordReset: email => request("/api/v2/auth/password/reset/request/", { method: "POST", body: { email }, anonymous: true }),
         confirmPasswordReset: (token, password) => request("/api/v2/auth/password/reset/confirm/", { method: "POST", body: { token, password }, anonymous: true }),
+        confirmInvitation: (token, password) => request("/api/v2/auth/invitation/confirm/", { method: "POST", body: { token, password }, anonymous: true }),
         async getCurrentAccount() {
             const accounts = await list("core/user-accounts");
             const account = accounts.find(item => item.email.toLowerCase() === client.getSession().email?.toLowerCase());
