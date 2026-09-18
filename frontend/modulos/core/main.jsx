@@ -10,6 +10,7 @@ import "../tareas/src/tasks_mobile.css";
 import "../tareas/src/tasks_tablet.css";
 import "../tareas/src/theme_rework.css";
 import "../administrativo/admin.css";
+import "./shared/universal_responsive.css";
 
 
 // Mounts the React application into the document root.

@@ -1,0 +1,238 @@
+/* Universal responsive layout layer. Color remains owned by each theme/module. */
+:root {
+    --layout-sidebar: clamp(14.5rem, 17vw, 16.5rem);
+    --layout-content-max: 100rem;
+    --layout-page-inline: clamp(.875rem, 2.25vw, 2rem);
+    --layout-page-block: clamp(1rem, 2vw, 2rem);
+    --layout-section-gap: clamp(.875rem, 1.5vw, 1.5rem);
+    --layout-card-padding: clamp(.875rem, 1.4vw, 1.25rem);
+    --layout-control-min: 2.75rem;
+    --layout-modal-width: min(92vw, 46rem);
+    --layout-panel-width: clamp(21rem, 36vw, 34rem);
+    --layout-radius: clamp(.625rem, .8vw, .875rem);
+    --icon-sm: 1rem;
+    --icon-md: 1.25rem;
+    --icon-lg: 1.5rem;
+}
+
+html { min-width: 20rem; font-size: 100%; }
+body, #root { min-width: 0; min-height: 100dvh; }
+img, svg, video, canvas { max-width: 100%; }
+img, video { height: auto; }
+
+.app_shell {
+    grid-template-columns: var(--layout-sidebar) minmax(0, 1fr);
+    min-height: 100dvh;
+}
+.sidebar_shell {
+    width: 100%;
+    height: 100dvh;
+    padding: clamp(1.5rem, 2vw, 2rem) clamp(1rem, 1.6vw, 1.375rem) 1.5rem;
+}
+.main_workspace,
+.top_bar,
+.top_bar > *,
+.top_bar_actions,
+.search_box,
+.tasks_workspace_split,
+.tasks_main_area { min-width: 0; }
+.top_bar {
+    min-height: clamp(4rem, 6vw, 5rem);
+    height: auto;
+    padding-inline: var(--layout-page-inline);
+    gap: clamp(.5rem, 1vw, 1rem);
+}
+.search_box { width: clamp(15rem, 32vw, 31rem); max-width: 100%; }
+.session_toolbar { padding-inline: var(--layout-page-inline); }
+
+:is(.tasks_module, .home_module, .reports_module, .folder_module, .projects_module, .inbox_module, .administration_module, .placeholder_module) {
+    width: 100%;
+    min-width: 0;
+    max-width: var(--layout-content-max);
+    margin-inline: auto;
+    padding: var(--layout-page-block) var(--layout-page-inline);
+}
+:is(.task_project_header, .projects_module_header, .home_header, .reports_header, .inbox_header, .admin_module_header, .workspace_ops_heading) {
+    min-width: 0;
+    gap: var(--layout-section-gap);
+}
+:is(.project_title_group, .project_title_group h1, .home_header > *, .reports_header > *, .inbox_header > *, .admin_module_header > *, .workspace_ops_heading > *) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+:is(.project_title_group h1, .projects_module_header h1, .home_header h1, .reports_header h1, .inbox_header h1, .admin_module_header h1, .workspace_ops_heading h1) {
+    font-size: clamp(1.65rem, 2.6vw, 2.45rem);
+    line-height: 1.12;
+}
+
+:is(.home_metrics, .reports_metrics, .admin_metric_grid) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
+    gap: var(--layout-section-gap);
+}
+:is(.projects_grid, .folder_content, .admin_module_grid) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: var(--layout-section-gap);
+}
+:is(.home_metric, .home_card, .reports_metric, .reports_card, .project_summary_card, .folder_card, .admin_metric_card, .admin_module_card, .admin_panel, .admin_employee_detail, .admin_form) {
+    min-width: 0;
+}
+.home_grid, .reports_charts, .admin_organization { gap: var(--layout-section-gap); }
+.home_grid { grid-template-columns: minmax(0, 1.6fr) minmax(min(100%, 18rem), .9fr); }
+.reports_charts { grid-template-columns: minmax(0, 1.7fr) minmax(min(100%, 18rem), 1fr); }
+
+:is(.project_actions, .reports_actions, .inbox_header_actions, .task_tools, .view_shortcuts, .workspace_toolbar, .workspace_bulk, .folder_actions, .admin_action_grid) {
+    min-width: 0;
+    flex-wrap: wrap;
+}
+:is(.project_actions, .reports_actions, .inbox_header_actions, .task_tools, .workspace_toolbar) > * { max-width: 100%; }
+
+:is(.form_grid, .edit_form_row, .bold_field_row_2, .project_create_grid_3, .admin_catalog_form) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+:is(.form_field, .bold_field_group, .edit_form_field, .project_create_step, .admin_form label, .admin_offboarding label) { min-width: 0; }
+:is(.form_field, .bold_field_group, .edit_form_field, .project_create_step, .admin_form, .admin_offboarding, .workspace_modal, .folder_dialog) :is(input, textarea, select) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+:is(.bold_modal_window, .form_modal, .edit_task_modal, .project_create_modal, .workspace_modal, .folder_dialog, .core_mfa_dialog) {
+    width: var(--layout-modal-width);
+    max-width: calc(100vw - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+}
+:is(.bold_modal_body, .form_grid, .edit_task_body, .project_create_body, .share_content, .modal_scroll_fields) {
+    min-width: 0;
+    min-height: 0;
+}
+.task_drawer_panel,
+.bold_modal_window.task_drawer_panel,
+.project_create_modal.task_drawer_panel,
+.task_detail_sidebar.task_drawer_panel {
+    width: min(var(--task_drawer_width, var(--layout-panel-width)), 70vw);
+    min-width: min(22.5rem, 100vw);
+    max-width: min(70vw, 44rem);
+    max-height: 100dvh;
+}
+
+:is(.task_table_card, .calendar_view, .timeline_view_card, .workspace_table, .admin_audit_table) {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+}
+:is(.task_title, .task_card_title_text, .board_title_text, .workspace_task_title, .inbox_activity_title, .detail_task_title, .admin_activity_list strong) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.administration_module { container-type: inline-size; }
+.admin_directory { grid-template-columns: minmax(14rem, 19rem) minmax(0, 1fr); gap: var(--layout-section-gap); }
+.admin_catalog_form > :is(header, footer, label:last-of-type) { grid-column: 1 / -1; }
+.admin_audit_header > div:last-child { display: flex; min-width: min(100%, 24rem); flex-wrap: wrap; justify-content: flex-end; gap: .625rem; }
+.admin_audit_header input { flex: 1 1 14rem; }
+.admin_audit_header .admin_select { flex: 1 1 12rem; }
+.admin_select { min-width: min(100%, 11.875rem); max-width: 100%; }
+.admin_select_menu { width: 100%; max-width: min(24rem, calc(100vw - 2rem)); }
+.admin_module_card > div { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.75rem), 1fr)); }
+
+.core_auth_layout { grid-template-columns: minmax(0, 1.2fr) minmax(25rem, .8fr); min-height: 100dvh; }
+.core_auth_brand { padding: clamp(2rem, 5vw, 4.5rem); }
+.core_auth_brand_message { max-width: 34rem; }
+.core_auth_brand p { max-width: 27rem; font-size: clamp(.9rem, 1.15vw, 1.0625rem); }
+.core_auth_content { padding-inline: clamp(1.5rem, 5vw, 5rem); }
+.core_auth_form_wrap { width: min(100%, 26.25rem); }
+
+@container (max-width: 42rem) {
+    .admin_catalog_form { grid-template-columns: minmax(0, 1fr); }
+    .admin_catalog_form > :is(header, footer, label:last-of-type) { grid-column: auto; }
+    .admin_catalog_form > header { align-items: stretch; flex-direction: column; }
+    .admin_catalog_form > header .admin_select { width: 100%; }
+}
+
+@media (max-width: 1023px) {
+    :root {
+        --layout-page-inline: clamp(.875rem, 3vw, 1.5rem);
+        --layout-page-block: clamp(1rem, 2.5vw, 1.5rem);
+    }
+    .app_shell { display: block; }
+    .sidebar_shell { width: min(21.25rem, calc(100vw - 1.5rem)); }
+    .top_bar { padding-inline: var(--layout-page-inline); }
+    .home_grid, .reports_charts { grid-template-columns: minmax(0, 1fr); }
+    .task_drawer_panel,
+    .bold_modal_window.task_drawer_panel,
+    .project_create_modal.task_drawer_panel,
+    .task_detail_sidebar.task_drawer_panel {
+        width: min(var(--task_drawer_width, 36rem), calc(100vw - 1rem));
+        max-width: calc(100vw - 1rem);
+    }
+    .admin_directory { grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr); }
+    .core_auth_layout { grid-template-columns: minmax(0, .8fr) minmax(24rem, 1.2fr); }
+}
+
+@media (max-width: 767px) {
+    :root {
+        --layout-page-inline: clamp(.75rem, 4vw, 1.125rem);
+        --layout-page-block: clamp(.875rem, 3vw, 1.25rem);
+        --layout-modal-width: 100%;
+    }
+    .mobile_header_row { padding-inline: var(--layout-page-inline); }
+    .top_bar { min-height: 3.75rem; }
+    .search_box { width: 100%; }
+    :is(.home_header, .reports_header, .inbox_header, .projects_module_header, .admin_module_header, .workspace_ops_heading) {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    :is(.home_metrics, .reports_metrics, .admin_metric_grid, .projects_grid, .folder_content, .admin_module_grid) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    :is(.primary_button, .secondary_button, .outline_button, .dark_button, .icon_button, .text_tool_button, .admin_module_header button, .admin_select_trigger) {
+        min-height: var(--layout-control-min);
+    }
+    .task_tabs_row { gap: .625rem; }
+    .view_tabs { min-width: 0; flex-wrap: wrap; gap: clamp(.875rem, 5vw, 1.5rem); }
+    .board_view { grid-auto-columns: min(20rem, 88vw); }
+    .calendar_grid { min-width: 35rem; }
+    .admin_directory, .admin_organization { grid-template-columns: minmax(0, 1fr); }
+    .admin_module_header nav { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin_module_header nav button { min-width: 0; justify-content: center; }
+    .admin_audit_header { align-items: stretch; flex-direction: column; }
+    .admin_audit_header > div:last-child { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+    .admin_audit_header .admin_select { width: 100%; }
+    .admin_select_menu { width: 100%; max-width: 100%; }
+    .admin_activity_list article { align-items: flex-start; flex-wrap: wrap; }
+    .admin_activity_list time { width: 100%; margin-left: 0; }
+    :is(.bold_modal_window, .form_modal, .edit_task_modal, .project_create_modal) {
+        width: 100%;
+        max-width: 100%;
+        max-height: 100dvh;
+    }
+    .task_drawer_panel,
+    .bold_modal_window.task_drawer_panel,
+    .project_create_modal.task_drawer_panel,
+    .task_detail_sidebar.task_drawer_panel {
+        width: calc(100vw - .75rem);
+        min-width: 0;
+        max-width: none;
+    }
+    .core_auth_layout { display: block; }
+    .core_auth_content { min-height: 100dvh; padding-inline: var(--layout-page-inline); }
+}
+
+@media (max-width: 479px) {
+    :root { --layout-section-gap: .75rem; --layout-card-padding: .875rem; }
+    .mobile_header_row { grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem; }
+    :is(.project_title_group h1, .projects_module_header h1, .home_header h1, .reports_header h1, .inbox_header h1, .admin_module_header h1, .workspace_ops_heading h1) {
+        font-size: clamp(1.5rem, 8vw, 1.875rem);
+    }
+    .admin_module_card > div { grid-template-columns: minmax(0, 1fr); }
+    .admin_detail_grid { grid-template-columns: minmax(0, 1fr); }
+    .admin_module_header nav { gap: .5rem; }
+    .admin_module_header nav button { padding-inline: .5rem; font-size: .8125rem; }
+    .admin_activity_list article > div { min-width: calc(100% - 5rem); }
+    .workspace_task_cell::before { flex-basis: 5rem; }
+    .core_auth_options { align-items: flex-start; flex-direction: column; }
+}
+
+@media (min-width: 1440px) {
+    :root { --layout-page-inline: clamp(2rem, 2.5vw, 3rem); }
+    .tasks_module, .home_module, .reports_module, .folder_module, .projects_module, .inbox_module, .administration_module { max-width: 112rem; }
+}
