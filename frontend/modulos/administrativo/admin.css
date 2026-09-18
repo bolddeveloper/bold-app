@@ -55,6 +55,86 @@
 .admin_organization article span { color: #64748b; font-size: 12px; }
 .admin_state { display: grid; place-items: center; min-height: 45vh; }
 
+/* Administration uses the shared Bold palette when the application is dark. */
+.theme_dark .administration_module {
+    background: var(--bold_canvas);
+    color: var(--bold_text);
+}
+.theme_dark .admin_module_header p,
+.theme_dark :is(.admin_eyebrow, .admin_metric_card span, .admin_module_card span, .admin_activity_list p, .admin_activity_list time, .admin_session_list time, .admin_employee_list small, .admin_detail_grid dt, .admin_security_note, .admin_audit_row.is_header, .admin_organization article span) {
+    color: var(--bold_muted);
+}
+.theme_dark :is(.admin_metric_card, .admin_module_card, .admin_panel, .admin_employee_detail, .admin_form, .admin_directory > aside) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface);
+    color: var(--bold_text);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+.theme_dark :is(.admin_module_header nav button, .admin_action_grid button, .admin_directory_tools button, .admin_refresh_detail, .admin_form button, .admin_danger_zone button) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface_soft);
+    color: var(--bold_text);
+}
+.theme_dark :is(.admin_module_header nav button, .admin_action_grid button, .admin_directory_tools button, .admin_refresh_detail, .admin_form button, .admin_danger_zone button):hover {
+    background: var(--bold_hover);
+}
+.theme_dark .admin_module_header nav button.is_active,
+.theme_dark .admin_primary {
+    border-color: var(--bold_red) !important;
+    background: var(--bold_red) !important;
+    color: #fff !important;
+}
+.theme_dark :is(.admin_activity_list article, .admin_session_list p, .admin_organization article, .admin_directory_tools, .admin_employee_list button, .admin_audit_row) {
+    border-color: var(--bold_line);
+}
+.theme_dark .admin_directory_tools input {
+    background: transparent;
+}
+.theme_dark .admin_employee_list button {
+    color: var(--bold_text);
+}
+.theme_dark .admin_employee_list button:hover {
+    background: var(--bold_hover);
+}
+.theme_dark .admin_employee_list button.is_selected {
+    background: var(--bold_red_tint);
+    box-shadow: inset 3px 0 var(--bold_red);
+}
+.theme_dark .admin_person_avatar {
+    background: var(--bold_blue_tint);
+    color: #94c7ff;
+}
+.theme_dark .admin_detail_grid div,
+.theme_dark :is(.admin_event_module, .admin_status, .admin_outcome) {
+    background: var(--bold_surface_soft);
+}
+.theme_dark :is(.admin_form input, .admin_form select, .admin_form textarea, .admin_offboarding select, .admin_offboarding textarea, .admin_audit_header input, .admin_audit_header select, .admin_catalog_form header select) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface_soft);
+    color: var(--bold_text);
+}
+.theme_dark :is(.admin_form input, .admin_form textarea, .admin_audit_header input)::placeholder {
+    color: var(--bold_muted);
+}
+.theme_dark .admin_danger_zone {
+    border-color: #6a424a;
+    background: var(--bold_red_tint);
+}
+.theme_dark :is(.admin_action_grid .is_danger, .admin_danger_button) {
+    border-color: #7a4650;
+    color: #ff9aa1;
+}
+.theme_dark .admin_status.is_active,
+.theme_dark .admin_outcome.is_success,
+.theme_dark .admin_notice:not(.is_error) {
+    background: var(--bold_green_tint);
+    color: #8bdeb0;
+}
+.theme_dark :is(.admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied) {
+    background: var(--bold_red_tint);
+    color: #ff9aa1;
+}
+
 @media (max-width: 1000px) {
     .admin_metric_grid, .admin_module_grid { grid-template-columns: repeat(2, 1fr); }
     .admin_detail_grid { grid-template-columns: repeat(2, 1fr); }

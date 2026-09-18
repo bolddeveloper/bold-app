@@ -59,6 +59,53 @@
 .theme_dark :is(.api_feedback, .swal2-popup) { border: 1px solid var(--bold_line); background: var(--bold_elevated); color: var(--bold_text); }
 .theme_dark .api_feedback { background: #4c422e; color: #ffdfa2; }
 .theme_dark :is(.bold_modal_window, .project_create_modal, .edit_task_modal, .task_tool_panel, .notifications_panel) { color: var(--bold_text); }
+.theme_dark .text_tool_button:hover,
+.theme_dark .text_tool_button:focus-visible {
+    background: var(--bold_hover);
+    color: var(--bold_text);
+}
+.theme_dark .text_tool_button_active,
+.theme_dark .text_tool_button_active:hover,
+.theme_dark .text_tool_button[aria-expanded="true"] {
+    background: var(--bold_red_tint);
+    color: #ff9aa1;
+}
+.theme_dark .task_options_panel,
+.theme_dark .filter_list {
+    border-color: var(--bold_line);
+    background: var(--bold_elevated);
+}
+.theme_dark .filter_list_group {
+    border-color: var(--bold_line);
+}
+.theme_dark .filter_list_group summary {
+    color: var(--bold_muted);
+}
+.theme_dark .filter_list_group summary:hover,
+.theme_dark .filter_list_group[open] > summary,
+.theme_dark .filter_list_option:hover,
+.theme_dark .sort_option:hover,
+.theme_dark .customize_option:hover {
+    background: var(--bold_hover);
+    color: var(--bold_text);
+}
+.theme_dark .filter_list_group summary span:nth-child(2) {
+    border: 1px solid var(--bold_line);
+    background: var(--bold_surface_soft);
+    color: var(--bold_muted);
+}
+.theme_dark .sort_option_active,
+.theme_dark .sort_option_active:hover {
+    background: var(--bold_red_tint);
+    color: #ff9aa1;
+}
+.theme_dark .inbox_empty,
+.theme_dark .inbox_empty strong {
+    color: var(--bold_text);
+}
+.theme_dark .inbox_empty span {
+    color: var(--bold_muted);
+}
 .theme_dark :is(.bold_modal_window, .project_create_modal, .edit_task_modal) :is(input, textarea, select)::placeholder { color: var(--bold_muted); }
 .theme_dark :is(input, textarea, select, button):disabled { opacity: .65; }
 html[data-bold-theme="dark"] { background: #171a20; scrollbar-color: #4b5360 #22262e; }
