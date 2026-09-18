@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Activity, Building2, LayoutDashboard, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Building2, Check, ChevronDown, LayoutDashboard, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 
 import { useCore } from "../core/core_provider.jsx";
 import { adminApi } from "./admin_api.js";
@@ -11,8 +11,67 @@ const tabs = [
     ["organization", "Organización", Building2],
 ];
 
-const metricLabel = value => value.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
+const metricLabels = {
+    tasks_total: "Tareas totales",
+    tasks_completed: "Completadas",
+    tasks_overdue: "Vencidas",
+    projects_active: "Proyectos activos",
+};
+const metricLabel = value => metricLabels[value] || value.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
 const dateTime = value => value ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guatemala" }).format(new Date(value)) : "—";
+
+function AdminSelect({ defaultValue = "", label, name, onValueChange, options, required = false, value }) {
+    const controlled = value !== undefined;
+    const [internalValue, setInternalValue] = useState(defaultValue);
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef(null);
+    const triggerRef = useRef(null);
+    const currentValue = controlled ? value : internalValue;
+    const selected = options.find(option => String(option.value) === String(currentValue)) || options[0];
+
+    useEffect(() => {
+        if (!open) return undefined;
+        const closeOutside = event => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
+        const closeEscape = event => { if (event.key === "Escape") { setOpen(false); triggerRef.current?.focus(); } };
+        document.addEventListener("pointerdown", closeOutside);
+        document.addEventListener("keydown", closeEscape);
+        return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape); };
+    }, [open]);
+
+    useEffect(() => {
+        if (controlled) return undefined;
+        const form = rootRef.current?.closest("form");
+        const reset = () => { setInternalValue(defaultValue); setOpen(false); };
+        form?.addEventListener("reset", reset);
+        return () => form?.removeEventListener("reset", reset);
+    }, [controlled, defaultValue]);
+
+    function select(nextValue) {
+        if (!controlled) setInternalValue(nextValue);
+        onValueChange?.(nextValue);
+        setOpen(false);
+        triggerRef.current?.focus();
+    }
+
+    function moveSelection(direction) {
+        const currentIndex = Math.max(0, options.findIndex(option => String(option.value) === String(currentValue)));
+        select(options[(currentIndex + direction + options.length) % options.length].value);
+    }
+
+    return <div className={`admin_select ${open ? "is_open" : ""}`} ref={rootRef}>
+        {name && <select className="admin_select_native" name={name} value={currentValue} required={required} tabIndex={-1} aria-hidden="true" onChange={() => {}} onInvalid={event => { event.preventDefault(); triggerRef.current?.focus(); }}>
+            {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>}
+        <button ref={triggerRef} className="admin_select_trigger" type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(current => !current)} onKeyDown={event => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); open ? moveSelection(event.key === "ArrowDown" ? 1 : -1) : setOpen(true); }
+        }}>
+            <span>{selected?.label || "Seleccionar"}</span><ChevronDown size={16} />
+        </button>
+        {open && <div className="admin_select_menu" role="listbox" aria-label={label}>
+            {options.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
+        </div>}
+    </div>;
+}
 
 function Loading({ error, onRetry }) {
     return <div className="admin_state"><p>{error || "Cargando información administrativa…"}</p>{error && <button type="button" onClick={onRetry}>Reintentar</button>}</div>;
@@ -28,7 +87,7 @@ function Dashboard({ data }) {
     return <div className="admin_dashboard">
         <section className="admin_metric_grid">{baseMetrics.map(([label, value]) => <article className="admin_metric_card" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
         <section className="admin_panel"><header><div><span className="admin_eyebrow">PANORAMA MODULAR</span><h2>Actividad de la aplicación</h2></div></header>
-            <div className="admin_module_grid">{data.modules.map(module => <article className="admin_module_card" key={module.code}><h3>{module.title}</h3><div>{Object.entries(module.metrics).map(([key, value]) => <p key={key}><span>{metricLabel(key)}</span><strong>{value}</strong></p>)}</div>{module.by_unit?.length > 0 && <small>{module.by_unit.length} departamentos con actividad</small>}</article>)}</div>
+            <div className="admin_module_grid">{data.modules.map(module => <article className="admin_module_card" data-module={module.code} key={module.code}><h3>{module.title}</h3><div>{Object.entries(module.metrics).map(([key, value]) => <p data-metric={key} key={key}><span>{metricLabel(key)}</span><strong>{value}</strong></p>)}</div>{module.by_unit?.length > 0 && <small>{module.by_unit.length} departamentos con actividad</small>}</article>)}</div>
         </section>
         <section className="admin_panel"><header><div><span className="admin_eyebrow">ÚLTIMOS EVENTOS</span><h2>Actividad reciente</h2></div></header>
             <div className="admin_activity_list">{data.recent_activity.length ? data.recent_activity.map(item => <article key={`${item.module_code}:${item.id}`}><span className="admin_event_module">{item.module_code}</span><div><strong>{item.label || item.event_type}</strong><p>{item.actor || "Sistema"} · {item.unit || "General"}</p></div><time>{dateTime(item.occurred_at)}</time></article>) : <p>Sin actividad reciente registrada.</p>}</div>
@@ -41,7 +100,7 @@ function CreateEmployee({ positions, onCreate, onCancel, busy }) {
         <h3>Crear empleado y enviar invitación</h3>
         <label>Nombre completo<input name="full_name" required maxLength="140" /></label>
         <label>Correo corporativo<input name="email" type="email" placeholder="nombre@bold.gt" required /></label>
-        <label>Plaza inicial<select name="position"><option value="">Sin plaza por ahora</option>{positions.filter(item => !item.occupied && item.is_open).map(item => <option value={item.id} key={item.id}>{item.role_title} · {item.unit_name}</option>)}</select></label>
+        <label>Plaza inicial<AdminSelect name="position" label="Plaza inicial" options={[{ value: "", label: "Sin plaza por ahora" }, ...positions.filter(item => !item.occupied && item.is_open).map(item => ({ value: item.id, label: `${item.role_title} · ${item.unit_name}` }))]} /></label>
         <p>La cuenta se crea sin contraseña y recibirá un enlace de activación de un solo uso.</p>
         <footer><button type="button" onClick={onCancel}>Cancelar</button><button className="admin_primary" type="submit" disabled={busy}>{busy ? "Creando…" : "Crear e invitar"}</button></footer>
     </form>;
@@ -63,7 +122,7 @@ function EmployeeDetail({ employee, employees, organization, sessions, onRefresh
         </div><p className="admin_security_note"><ShieldCheck size={16} /> Las acciones sensibles requieren MFA reciente del dueño y quedan auditadas.</p></section>
         {sessions?.length > 0 && <section><h3>Historial de sesiones</h3><div className="admin_session_list">{sessions.map(row => <p key={row.id}><span>{row.auth_strength} · {row.last_ip || "IP desconocida"}</span><time>{dateTime(row.last_used_at)}</time></p>)}</div></section>}
         <section className="admin_danger_zone"><h3>Baja y transferencia</h3><p>Previsualiza todas las responsabilidades antes de desactivar al empleado.</p><button type="button" onClick={onPreviewOffboarding}>Preparar baja</button>
-            {offboarding && <form className="admin_offboarding" onSubmit={onExecuteOffboarding}><p><strong>{offboarding.modules.reduce((sum, module) => sum + module.resources.length, 0)}</strong> responsabilidades detectadas y <strong>{offboarding.active_sessions}</strong> sesiones activas.</p><label>Transferir por defecto a<select name="default_target_assignment" required><option value="">Seleccionar reemplazo</option>{targets.map(row => <option value={row.id} key={row.id}>{row.employee_name} · {row.role_title} · {row.unit_name}</option>)}</select></label><label>Motivo<textarea name="reason" minLength="8" required /></label><button className="admin_danger_button" type="submit" disabled={busy}>Ejecutar baja y transferencia</button></form>}
+            {offboarding && <form className="admin_offboarding" onSubmit={onExecuteOffboarding}><p><strong>{offboarding.modules.reduce((sum, module) => sum + module.resources.length, 0)}</strong> responsabilidades detectadas y <strong>{offboarding.active_sessions}</strong> sesiones activas.</p><label>Transferir por defecto a<AdminSelect name="default_target_assignment" label="Transferir por defecto a" required options={[{ value: "", label: "Seleccionar reemplazo" }, ...targets.map(row => ({ value: row.id, label: `${row.employee_name} · ${row.role_title} · ${row.unit_name}` }))]} /></label><label>Motivo<textarea name="reason" minLength="8" required /></label><button className="admin_danger_button" type="submit" disabled={busy}>Ejecutar baja y transferencia</button></form>}
         </section>
         <button className="admin_refresh_detail" type="button" onClick={onRefresh}><RefreshCw size={15} /> Actualizar ficha</button>
     </article>;
@@ -106,7 +165,7 @@ function Audit({ rows }) {
     const [query, setQuery] = useState("");
     const [module, setModule] = useState("");
     const filtered = rows.filter(row => (!module || row.module_code === module) && `${row.event_type} ${row.actor_email || ""} ${row.target_type || ""}`.toLowerCase().includes(query.toLowerCase()));
-    return <section className="admin_panel"><header className="admin_audit_header"><div><span className="admin_eyebrow">TRAZABILIDAD</span><h2>Auditoría del sistema</h2></div><div><input placeholder="Buscar evento o actor" value={query} onChange={event => setQuery(event.target.value)} /><select value={module} onChange={event => setModule(event.target.value)}><option value="">Todos los módulos</option><option value="administration">Administrativo</option><option value="authentication">Autenticación</option><option value="permissions">Permisos</option></select></div></header><div className="admin_audit_table"><div className="admin_audit_row is_header"><span>Fecha</span><span>Módulo</span><span>Evento</span><span>Actor</span><span>Resultado</span></div>{filtered.map(row => <div className="admin_audit_row" key={`${row.module_code}:${row.id}`}><time>{dateTime(row.occurred_at)}</time><span>{row.module_code}</span><strong>{row.event_type}</strong><span>{row.actor_email || "Sistema"}</span><span className={`admin_outcome is_${row.outcome}`}>{row.outcome}</span></div>)}</div></section>;
+    return <section className="admin_panel"><header className="admin_audit_header"><div><span className="admin_eyebrow">TRAZABILIDAD</span><h2>Auditoría del sistema</h2></div><div><input placeholder="Buscar evento o actor" value={query} onChange={event => setQuery(event.target.value)} /><AdminSelect label="Filtrar por módulo" value={module} onValueChange={setModule} options={[{ value: "", label: "Todos los módulos" }, { value: "administration", label: "Administrativo" }, { value: "authentication", label: "Autenticación" }, { value: "permissions", label: "Permisos" }]} /></div></header><div className="admin_audit_table"><div className="admin_audit_row is_header"><span>Fecha</span><span>Módulo</span><span>Evento</span><span>Actor</span><span>Resultado</span></div>{filtered.map(row => <div className="admin_audit_row" key={`${row.module_code}:${row.id}`}><time>{dateTime(row.occurred_at)}</time><span>{row.module_code}</span><strong>{row.event_type}</strong><span>{row.actor_email || "Sistema"}</span><span className={`admin_outcome is_${row.outcome}`}>{row.outcome}</span></div>)}</div></section>;
 }
 
 function OrganizationManager({ data: initialData, setNotice = message => globalThis.alert?.(message) }) {
@@ -127,10 +186,10 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
             setData(await adminApi.organization());
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
-    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><select value={kind} onChange={event => setKind(event.target.value)}><option value="unit">Unidad o departamento</option><option value="role">Cargo</option><option value="position">Plaza</option></select></header>
-        {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<input name="unit_type" placeholder="department" required /></label><label>Sensibilidad<select name="sensitivity_level"><option value="normal">Normal</option><option value="high">Alta</option><option value="critical">Crítica</option></select></label><label>Unidad superior<select name="parent_unit"><option value="">Ninguna</option>{data.units.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label></>}
+    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={setKind} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
+        {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<input name="unit_type" placeholder="department" required /></label><label>Sensibilidad<AdminSelect name="sensitivity_level" label="Sensibilidad" defaultValue="normal" options={[{ value: "normal", label: "Normal" }, { value: "high", label: "Alta" }, { value: "critical", label: "Crítica" }]} /></label><label>Unidad superior<AdminSelect name="parent_unit" label="Unidad superior" options={[{ value: "", label: "Ninguna" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label></>}
         {kind === "role" && <><label>Título<input name="title" required /></label><label>Nivel<input name="level" /></label><label>Descripción<textarea name="description" /></label></>}
-        {kind === "position" && <><label>Unidad<select name="unit" required><option value="">Seleccionar</option>{data.units.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label>Cargo<select name="job_role" required><option value="">Seleccionar</option>{data.roles.map(row => <option key={row.id} value={row.id}>{row.title}</option>)}</select></label><label>Reporta a<select name="reports_to_position"><option value="">Ninguna plaza</option>{data.positions.map(row => <option key={row.id} value={row.id}>{row.role_title} · {row.unit_name}</option>)}</select></label><label>Orden<input name="display_order" type="number" defaultValue="0" /></label></>}
+        {kind === "position" && <><label>Unidad<AdminSelect name="unit" label="Unidad" required options={[{ value: "", label: "Seleccionar" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label><label>Cargo<AdminSelect name="job_role" label="Cargo" required options={[{ value: "", label: "Seleccionar" }, ...data.roles.map(row => ({ value: row.id, label: row.title }))]} /></label><label>Reporta a<AdminSelect name="reports_to_position" label="Reporta a" options={[{ value: "", label: "Ninguna plaza" }, ...data.positions.map(row => ({ value: row.id, label: `${row.role_title} · ${row.unit_name}` }))]} /></label><label>Orden<input name="display_order" type="number" defaultValue="0" /></label></>}
         <label>Motivo<textarea name="reason" minLength="8" required /></label><footer><span>Los catálogos conservan su historial; no hay borrado físico.</span><button className="admin_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Crear registro"}</button></footer>
     </form><OrganizationCatalog data={data} /></>;
 }
