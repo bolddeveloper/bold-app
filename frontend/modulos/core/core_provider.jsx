@@ -5,6 +5,7 @@ import { normalizeAssignment, selectAssignment } from "./core_models.js";
 import { getCoreState, subscribeCore, updateCore, clearCore } from "./core_store.js";
 import { LoginScreen } from "./login_screen.jsx";
 import { MfaManagementDialog } from "./mfa_management.jsx";
+import { createPermissionCache } from "./permission_cache.js";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -16,7 +17,7 @@ function persistSession() { sessionStorage.setItem("bold_v2_context", JSON.strin
 export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const state = useSyncExternalStore(subscribeCore, getCoreState);
     const generation = useRef(0);
-    const permissionCache = useRef(new Map());
+    const permissionCache = useRef(null);
     const enteredFromLogin = useRef(false);
     const [mfaChallenge, setMfaChallenge] = useState("");
     const [pendingEmail, setPendingEmail] = useState("");
@@ -32,6 +33,16 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [mfaManageBusy, setMfaManageBusy] = useState(false);
     const [mfaManageError, setMfaManageError] = useState("");
     const real = is_using_real_backend();
+    if (!permissionCache.current) {
+        permissionCache.current = createPermissionCache({
+            authorize: ({ assignmentId, permissionCode, unitId, resourceId }) => coreApi.authorize({
+                assignment: assignmentId,
+                permission_code: permissionCode,
+                target_unit: unitId,
+                ...(resourceId ? { resource_id: resourceId } : {}),
+            }),
+        });
+    }
     function clearLocalSession() {
         generation.current++;
         enteredFromLogin.current = false;
@@ -77,15 +88,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         if (!assignments.length) updateCore({ error: "Tu cuenta no tiene asignaciones activas. Contacta al administrador." });
     }
     async function can(permissionCode, unitId = getCoreState().activeUnit?.id, resourceId) {
+        if (!real) return true;
         const assignment = getCoreState().activeAssignment?.id;
         if (!assignment) return false;
-        const key = JSON.stringify([assignment, permissionCode, unitId, resourceId]);
-        if (!permissionCache.current.has(key)) {
-            const result = coreApi.authorize({ assignment, permission_code: permissionCode, target_unit: unitId, ...(resourceId ? { resource_id: resourceId } : {}) }).then(result => !!result.allowed);
-            permissionCache.current.set(key, result);
-            result.catch(() => { if (permissionCache.current.get(key) === result) permissionCache.current.delete(key); });
-        }
-        return permissionCache.current.get(key);
+        return permissionCache.current.can({ assignmentId: assignment, permissionCode, unitId, resourceId });
     }
     useEffect(() => {
         if (!real) { updateCore({ ...mockIdentity, sessionStatus: "ready" }); return () => clearCore(); }
@@ -112,6 +118,31 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         });
         return () => { mounted = false; generation.current++; http.setSession(false); clearCore(); permissionCache.current.clear(); window.removeEventListener("bold:unauthorized", clearLocalSession); };
     }, []);
+    useEffect(() => {
+        if (!real || state.sessionStatus !== "ready") return undefined;
+        let active = true;
+        const refreshRevision = () => coreApi.getPermissionRevision()
+            .then(result => {
+                if (active && permissionCache.current.setRevision(result.revision)) {
+                    window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision: result.revision } }));
+                }
+            })
+            .catch(() => {});
+        const handlePermissionChange = event => {
+            const revision = event.detail?.revision;
+            if (revision === undefined) permissionCache.current.invalidate();
+            else permissionCache.current.setRevision(revision);
+            window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision } }));
+        };
+        window.addEventListener("bold:permissions-changed", handlePermissionChange);
+        refreshRevision();
+        const interval = window.setInterval(refreshRevision, 5_000);
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+            window.removeEventListener("bold:permissions-changed", handlePermissionChange);
+        };
+    }, [real, state.sessionStatus]);
     async function login(event) {
         event.preventDefault(); updateCore({ sessionStatus: "loading", error: "" });
         const form = new FormData(event.currentTarget);
@@ -169,15 +200,19 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             if (error.name !== "AbortError") updateCore({ error: error.message, sessionStatus: "anonymous" });
         }
     }
-    async function startMfaEnrollment() {
+    async function startMfaEnrollment(event) {
+        event.preventDefault();
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement);
         updateCore({ sessionStatus: "loading", error: "" });
-        try { setTotpSetup(await coreApi.setupTotp("Aplicación autenticadora")); updateCore({ sessionStatus: "anonymous" }); }
+        try { setTotpSetup(await coreApi.setupTotp("Aplicación autenticadora", form.get("current_password"))); formElement.reset(); updateCore({ sessionStatus: "anonymous" }); }
         catch (error) { if (error.name !== "AbortError") updateCore({ error: error.message, sessionStatus: "anonymous" }); }
     }
     async function confirmMfaEnrollment(event) {
         event.preventDefault(); updateCore({ sessionStatus: "loading", error: "" });
         try {
-            const result = await coreApi.confirmTotp(totpSetup.method_id, new FormData(event.currentTarget).get("code"));
+            const form = new FormData(event.currentTarget);
+            const result = await coreApi.confirmTotp(totpSetup.method_id, form.get("code"), form.get("current_password"));
             setMfaEnabled(true);
             setRecoveryCodes(result.recovery_codes);
             updateCore({ sessionStatus: "anonymous" });
@@ -194,16 +229,20 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         if (mfaManageBusy) return;
         setMfaDialogOpen(false); setMfaManageSetup(null); setMfaManageCodes([]); setMfaManageError("");
     }
-    async function startManagedMfa() {
+    async function startManagedMfa(event) {
+        event.preventDefault();
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement);
         setMfaManageBusy(true); setMfaManageError("");
-        try { setMfaManageSetup(await coreApi.setupTotp("Aplicación autenticadora")); }
+        try { setMfaManageSetup(await coreApi.setupTotp("Aplicación autenticadora", form.get("current_password"))); formElement.reset(); }
         catch (error) { setMfaManageError(error.message); }
         finally { setMfaManageBusy(false); }
     }
     async function confirmManagedMfa(event) {
         event.preventDefault(); setMfaManageBusy(true); setMfaManageError("");
         try {
-            const result = await coreApi.confirmTotp(mfaManageSetup.method_id, new FormData(event.currentTarget).get("code"));
+            const form = new FormData(event.currentTarget);
+            const result = await coreApi.confirmTotp(mfaManageSetup.method_id, form.get("code"), form.get("current_password"));
             setMfaEnabled(true); setMfaManageSetup(null); setMfaManageCodes(result.recovery_codes);
         } catch (error) { setMfaManageError(error.message); }
         finally { setMfaManageBusy(false); }

@@ -90,18 +90,37 @@ def create_session(user, request, auth_strength="password", mfa_verified=False):
     return raw, session
 
 
+def _notify_revoked_sessions(session_ids):
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    for session_id in session_ids:
+        async_to_sync(layer.group_send)(
+            f"session_{session_id}",
+            {"type": "session.revoked"},
+        )
+
+
 def revoke_session(session, reason="logout", actor=None):
     if session and session.revoked_at is None:
         session.revoked_at = timezone.now()
         session.revocation_reason = reason
         session.revoked_by_account = actor
         session.save(update_fields=["revoked_at", "revocation_reason", "revoked_by_account"])
+        transaction.on_commit(lambda: _notify_revoked_sessions([str(session.id)]))
 
 
 def revoke_all_sessions(user, reason, actor=None):
-    return AuthSession.objects.filter(user_account=user, revoked_at__isnull=True).update(
+    queryset = AuthSession.objects.filter(user_account=user, revoked_at__isnull=True)
+    session_ids = [str(value) for value in queryset.values_list("id", flat=True)]
+    updated = queryset.update(
         revoked_at=timezone.now(), revocation_reason=reason, revoked_by_account=actor
     )
+    transaction.on_commit(lambda: _notify_revoked_sessions(session_ids))
+    return updated
 
 
 def _fernet():
@@ -204,9 +223,16 @@ def send_account_invitation(user, raw_token):
     )
 
 
-def issue_ws_ticket(user, session, assignment_id, unit_id, staff=False):
+def issue_ws_ticket(user, session, assignment_id, unit_id, channel="tasks"):
     raw = secrets.token_urlsafe(32)
-    payload = {"user": str(user.id), "session": str(session.id), "assignment": str(assignment_id or ""), "unit": str(unit_id or ""), "staff": bool(staff)}
+    payload = {
+        "user": str(user.id),
+        "session": str(session.id),
+        "assignment": str(assignment_id or ""),
+        "unit": str(unit_id or ""),
+        "channel": channel,
+        "credentials_version": user.credentials_version,
+    }
     key = f"auth:ws:{token_hash(raw)}"
     if os.environ.get("REDIS_URL"):
         from redis import Redis

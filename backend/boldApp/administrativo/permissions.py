@@ -18,7 +18,12 @@ class HasRecentOwnerMFA(IsCompanyOwner):
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
             return False
-        verified_at = getattr(getattr(request, "auth", None), "mfa_verified_at", None)
+        session = getattr(request, "auth", None)
+        verified_at = getattr(session, "mfa_verified_at", None)
         max_age = timedelta(seconds=getattr(settings, "ADMIN_STEP_UP_MFA_SECONDS", 600))
-        return bool(verified_at and verified_at >= timezone.now() - max_age)
+        return bool(
+            verified_at
+            and getattr(session, "auth_strength", "") in {"password_totp", "webauthn"}
+            and verified_at >= timezone.now() - max_age
+        )
 

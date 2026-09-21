@@ -82,7 +82,46 @@ export default function WorkspaceOperations({ TaskSelect, CalendarDateField, tas
     const persistViews = next => { try { localStorage.setItem(storageKey, JSON.stringify(next)); setViews(next); } catch { setError("No se pudo guardar la vista en este navegador."); } };
     const saveView = event => { event.preventDefault(); const name = viewName.trim(); if (!name) return; persistViews([...views.filter(view => view.name !== name), { name, query, filters, sort, direction, group, fields }]); setViewName(""); setModal(""); };
     const applyView = view => { setQuery(view?.query || ""); setFilters(view?.filters || emptyWorkspaceFilters()); setSort(view?.sort || "due"); setDirection(view?.direction || "asc"); setGroup(view?.group || ""); setFields(view?.fields || DEFAULT_FIELDS); setSelected([]); };
-    const run = async (operation, ids, changes) => { setError(""); if (ids.length > 100 || changes?.items?.length > 100) { setError("Cada operación admite hasta 100 tareas. Reduce la selección y vuelve a intentarlo."); return false; } try { if (permissionsCan) { const code = operation === "create" ? "tasks.task.create" : operation === "delete" ? "tasks.task.delete" : "tasks.task.update"; const targets = operation === "create" ? changes.items.map(item => [item.unitId || activeUnitId, null]) : ids.map(id => [allById.get(String(id))?.unitId, id]); const checks = await Promise.all(targets.map(([unitId, id]) => permissionsCan(code, unitId, id))); if (checks.some(value => !value)) { setError("No tienes permiso para aplicar esta acción a todas las tareas seleccionadas."); return false; } } const ok = await onBulk(operation, ids, changes); if (ok) { setSelected([]); setModal(""); return true; } setError("No se aplicaron los cambios. Revisa el mensaje de la aplicación."); } catch (exception) { setError(exception.message); } return false; };
+    const run = async (operation, ids, changes) => {
+        setError("");
+        if (ids.length > 100 || changes?.items?.length > 100) {
+            setError("Cada operación admite hasta 100 tareas. Reduce la selección y vuelve a intentarlo.");
+            return false;
+        }
+        try {
+            if (permissionsCan) {
+                const checks = [];
+                if (operation === "create") {
+                    for (const item of changes.items) {
+                        checks.push(permissionsCan("tasks.task.create", item.unitId || activeUnitId));
+                        const parent = item.parentTaskId ? allById.get(String(item.parentTaskId)) : null;
+                        if (parent) checks.push(permissionsCan("tasks.task.update", parent.unitId, parent.id));
+                        const project = item.project_id ? projects.find(row => String(row.id) === String(item.project_id)) : null;
+                        if (project) checks.push(permissionsCan("tasks.project.manage", project.unitId, project.id));
+                    }
+                } else {
+                    const code = operation === "delete" ? "tasks.task.delete" : "tasks.task.update";
+                    for (const id of ids) {
+                        checks.push(permissionsCan(code, allById.get(String(id))?.unitId, id));
+                    }
+                    if (operation === "link") {
+                        const project = projects.find(row => String(row.id) === String(changes.project));
+                        if (project) checks.push(permissionsCan("tasks.project.manage", project.unitId, project.id));
+                    }
+                }
+                if ((await Promise.all(checks)).some(value => !value)) {
+                    setError("No tienes todos los permisos requeridos para aplicar esta acción.");
+                    return false;
+                }
+            }
+            const ok = await onBulk(operation, ids, changes);
+            if (ok) { setSelected([]); setModal(""); return true; }
+            setError("No se aplicaron los cambios. Revisa el mensaje de la aplicación.");
+        } catch (exception) {
+            setError(exception.message);
+        }
+        return false;
+    };
     const batchCreate = async event => { event.preventDefault(); const titles = batchText.split(/\r?\n/).map(title => title.trim()).filter(Boolean); if (!titles.length || titles.length > 100) { setError("Escribe entre 1 y 100 nombres de tarea, uno por línea."); return; } const parent = batchParent ? allById.get(String(batchParent)) : null; const ok = await run("create", [], { items: titles.map(title => ({ title, parentTaskId: parent?.id || null, unitId: parent?.unitId || activeUnitId, project_id: batchProject || workspaceProjectIds(parent || {})[0] || "", section: batchSection || null, assignee_id: batchAssignee || parent?.assignee_id || "", priority: batchPriority, due_date: batchDate || null })) }); if (ok) setBatchText(""); };
     const bulkUpdate = (field, value) => { if (value === "") return; if (field === "project" || field === "section") { const projectsInSelection = [...new Set(selectedIds.map(id => workspaceProjectIds(allById.get(id))[0]).filter(Boolean))]; if (field === "section" && projectsInSelection.length !== 1) { setError("Selecciona tareas de un mismo proyecto para cambiar su sección."); return; } const project = field === "project" ? value : projectsInSelection[0]; if (!project) { setError("Selecciona primero un proyecto."); return; } run("link", selectedIds, { project, ...(field === "section" ? { section: value } : {}) }); } else run("update", selectedIds, { [field]: value }); };
     const changeCompletion = done => { const unitIds = [...new Set(selectedIds.map(id => allById.get(id)?.unitId || activeUnitId))]; if (unitIds.length !== 1) { setError("Selecciona tareas de una misma unidad para cambiar su finalización juntas."); return; } const status = statuses.find(item => (item.unitId || item.unit || activeUnitId) === unitIds[0] && !!item.isFinal === done); if (!status) { setError("No hay un estado compatible para estas tareas."); return; } bulkUpdate("status", status.id); };

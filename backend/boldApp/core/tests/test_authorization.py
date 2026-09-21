@@ -9,6 +9,7 @@ from boldApp.core.models import (
     Permission,
     Position,
     PositionAssignment,
+    UserAccount,
 )
 
 
@@ -20,6 +21,7 @@ class AssignmentIsolationTests(TestCase):
             sensitivity_level="medium",
         )
         employee = Employee.objects.create(full_name="Persona con dos plazas")
+        UserAccount.objects.create_user("dos.plazas@bold.gt", employee, "UnaClaveSegura2026!")
         denied_role = JobRole.objects.create(title="Sin permiso")
         allowed_role = JobRole.objects.create(title="Con permiso")
         denied_assignment = PositionAssignment.objects.create(
@@ -30,7 +32,7 @@ class AssignmentIsolationTests(TestCase):
             employee=employee,
             position=Position.objects.create(unit=unit, job_role=allowed_role, display_order=2),
         )
-        permission = Permission.objects.create(code="tasks.task.read", resource="task", action="read")
+        permission = Permission.objects.get(code="tasks.task.read")
         JobRolePermission.objects.create(
             job_role=allowed_role,
             permission=permission,

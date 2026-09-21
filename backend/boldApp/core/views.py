@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authorization import check_and_log
-from .permissions import IsAdminOrReadOnly
 from .models import (
     AccessGrant,
     Employee,
@@ -38,10 +37,9 @@ from .serializers import (
 
 
 # Define los viewsets del nucleo organizacional.
-class OrganizationalUnitViewSet(viewsets.ModelViewSet):
+class OrganizationalUnitViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OrganizationalUnit.objects.all()
     serializer_class = OrganizationalUnitSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -51,16 +49,14 @@ class OrganizationalUnitViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class JobRoleViewSet(viewsets.ModelViewSet):
+class JobRoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = JobRole.objects.all()
     serializer_class = JobRoleSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
 
-class PositionViewSet(viewsets.ModelViewSet):
+class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Position.objects.all()
     serializer_class = PositionSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -70,36 +66,33 @@ class PositionViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class EmployeeViewSet(viewsets.ModelViewSet):
+class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser:
             return super().get_queryset()
         return super().get_queryset().filter(id=self.request.user.employee_id)
 
 
-class UserAccountViewSet(viewsets.ModelViewSet):
+class UserAccountViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UserAccount.objects.select_related("employee").all()
     serializer_class = UserAccountSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
+        if self.request.user.is_superuser:
             return super().get_queryset()
         return super().get_queryset().filter(id=self.request.user.id)
 
 
-class PositionAssignmentViewSet(viewsets.ModelViewSet):
+class PositionAssignmentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PositionAssignment.objects.all()
     serializer_class = PositionAssignmentSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not self.request.user.is_staff:
+        if not self.request.user.is_superuser:
             queryset = queryset.filter(employee_id=self.request.user.employee_id)
         employee_id = self.request.query_params.get("employee")
         if employee_id:
@@ -112,6 +105,7 @@ class PositionAssignmentViewSet(viewsets.ModelViewSet):
             is_active=True,
             released_at__isnull=True,
             employee__is_active=True,
+            employee__user_account__is_active=True,
         ).select_related("employee__user_account", "position__unit", "position__job_role")
         page = self.paginate_queryset(queryset)
         serializer = AssignmentDirectorySerializer(page, many=True)
@@ -119,19 +113,23 @@ class PositionAssignmentViewSet(viewsets.ModelViewSet):
 
 
 # Define los viewsets de permisos base.
-class PermissionViewSet(viewsets.ModelViewSet):
-    queryset = Permission.objects.all()
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Permission.objects.filter(is_active=True)
     serializer_class = PermissionSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
 
-class JobRolePermissionViewSet(viewsets.ModelViewSet):
-    queryset = JobRolePermission.objects.all()
+class JobRolePermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = JobRolePermission.objects.filter(permission__is_active=True)
     serializer_class = JobRolePermissionSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(
+                job_role__positions__assignments__employee_id=self.request.user.employee_id,
+                job_role__positions__assignments__is_active=True,
+                job_role__positions__assignments__released_at__isnull=True,
+            ).distinct()
         job_role_id = self.request.query_params.get("job_role")
         if job_role_id:
             queryset = queryset.filter(job_role_id=job_role_id)
@@ -139,14 +137,13 @@ class JobRolePermissionViewSet(viewsets.ModelViewSet):
 
 
 # Define los viewsets de accesos especiales, delegacion y auditoria.
-class AccessGrantViewSet(viewsets.ModelViewSet):
+class AccessGrantViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AccessGrant.objects.all()
     serializer_class = AccessGrantSerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not self.request.user.is_staff:
+        if not self.request.user.is_superuser:
             queryset = queryset.filter(grantee_assignment__employee_id=self.request.user.employee_id)
         assignment_id = self.request.query_params.get("grantee_assignment")
         if assignment_id:
@@ -154,14 +151,13 @@ class AccessGrantViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class GrantAuthorityViewSet(viewsets.ModelViewSet):
+class GrantAuthorityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = GrantAuthority.objects.all()
     serializer_class = GrantAuthoritySerializer
-    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not self.request.user.is_staff:
+        if not self.request.user.is_superuser:
             queryset = queryset.filter(assignment__employee_id=self.request.user.employee_id)
         assignment_id = self.request.query_params.get("assignment")
         if assignment_id:
@@ -169,10 +165,15 @@ class GrantAuthorityViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class GrantAuthorityPermissionViewSet(viewsets.ModelViewSet):
+class GrantAuthorityPermissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = GrantAuthorityPermission.objects.all()
     serializer_class = GrantAuthorityPermissionSerializer
-    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(grant_authority__assignment__employee_id=self.request.user.employee_id)
+        return queryset
 
 
 # Define el viewset de solo lectura del log de auditoria de permisos,
@@ -183,7 +184,7 @@ class PermissionAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not self.request.user.is_staff:
+        if not self.request.user.is_superuser:
             queryset = queryset.filter(employee_id=self.request.user.employee_id)
         employee_id = self.request.query_params.get("employee")
         if employee_id:
@@ -203,7 +204,7 @@ class AuthorizationCheckView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            result = check_and_log(**serializer.validated_data)
+            result = check_and_log(**serializer.validated_data, request=request)
         except Permission.DoesNotExist:
             return Response(
                 {"detail": f"Permiso desconocido: {serializer.validated_data['permission_code']}"},
@@ -214,6 +215,11 @@ class AuthorizationCheckView(APIView):
             {
                 "allowed": result.allowed,
                 "reason": result.reason,
+                "reason_code": result.reason_code,
+                "matched_rule_type": result.matched_rule_type,
+                "matched_rule_id": result.matched_rule_id,
+                "policy_version": result.policy_version,
+                "policy_revision": result.policy_version,
                 "audit_log_id": result.audit_log_id,
             },
             status=status.HTTP_200_OK,

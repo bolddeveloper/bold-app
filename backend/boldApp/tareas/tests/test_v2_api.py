@@ -3,6 +3,7 @@ from channels.testing import WebsocketCommunicator
 from channels.layers import get_channel_layer
 from django.core.management import call_command
 from django.test import TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 from django.test import RequestFactory
 
@@ -22,12 +23,14 @@ class TasksV2ApiTests(TransactionTestCase):
         self.client = APIClient()
         self.ana = UserAccount.objects.get(email="ana@bold.gt")
         self.david = UserAccount.objects.get(email="david@bold.gt")
+        self.actor = UserAccount.objects.get(email="developer@bold.gt")
         self.ana_assignment = PositionAssignment.objects.get(employee=self.ana.employee, is_active=True)
         self.david_assignment = PositionAssignment.objects.get(employee=self.david.employee, is_active=True)
-        _, self.auth_session = create_session(self.ana, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
-        self.client.force_authenticate(user=self.ana, token=self.auth_session)
+        self.actor_assignment = PositionAssignment.objects.get(employee=self.actor.employee, is_active=True)
+        _, self.auth_session = create_session(self.actor, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        self.client.force_authenticate(user=self.actor, token=self.auth_session)
         self.client.credentials(
-            HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id),
+            HTTP_X_ASSIGNMENT_ID=str(self.actor_assignment.id),
         )
         self.marketing = OrganizationalUnit.objects.get(name="Marketing")
         self.operations = OrganizationalUnit.objects.get(name="Operaciones")
@@ -69,7 +72,7 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertTrue(luis.is_superuser)
         self.assertTrue(luis.check_password("LuisBold2026!"))
         self.assertEqual(luis.employee.position_assignments.get(is_active=True).position.job_role.title, "Propietario")
-        self.assertTrue(paulus.is_staff)
+        self.assertFalse(paulus.is_staff)
         self.assertFalse(paulus.is_superuser)
         self.assertTrue(paulus.check_password("PaulusBold2026!"))
         self.assertEqual(paulus.employee.position_assignments.get(is_active=True).position.job_role.title, "Alta Gerencia")
@@ -128,7 +131,7 @@ class TasksV2ApiTests(TransactionTestCase):
 
     def test_requires_an_active_assignment_owned_by_the_account(self):
         foreign_client = APIClient()
-        foreign_client.force_authenticate(user=self.ana, token=self.auth_session)
+        foreign_client.force_authenticate(user=self.actor, token=self.auth_session)
         foreign_client.credentials(
             HTTP_X_ASSIGNMENT_ID=str(self.david_assignment.id),
         )
@@ -142,8 +145,26 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertIn("samuel@bold.gt", {row["employee_email"] for row in response.data["results"]})
         self.assertEqual(
             set(response.data["results"][0]),
-            {"id", "employee", "employee_name", "employee_email", "unit", "unit_name", "job_role", "job_role_title"},
+            {
+                "id", "employee", "employee_name", "employee_email", "unit", "unit_name",
+                "job_role", "job_role_title", "account_is_superuser",
+            },
         )
+
+    def test_nonprivileged_seed_neutralizes_every_known_privileged_demo_account(self):
+        with self.settings(
+            DEBUG=False,
+            SEED_DEMO_ACCOUNTS=True,
+            SEED_PRIVILEGED_DEMO_ACCOUNTS=False,
+        ):
+            call_command("seed_demo_data", verbosity=0)
+
+        for email in {"luis@bold.gt", "paulus@bold.gt", "developer@bold.gt"}:
+            account = UserAccount.objects.get(email=email)
+            self.assertFalse(account.is_active)
+            self.assertFalse(account.is_staff)
+            self.assertFalse(account.is_superuser)
+            self.assertFalse(account.has_usable_password())
 
     def test_project_dates_validation_duplicate_names_and_empty_sections(self):
         payload = {
@@ -184,6 +205,9 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertIn("title", invalid.data)
 
     def test_webhook_secret_is_only_returned_when_endpoint_is_created(self):
+        self.auth_session.mfa_verified_at = timezone.now()
+        self.auth_session.auth_strength = "password_totp"
+        self.auth_session.save(update_fields=["mfa_verified_at", "auth_strength"])
         created = self.client.post(
             "/api/v2/webhook-endpoints/",
             {
@@ -209,7 +233,7 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(task.unit, self.marketing)
         self.assertEqual(link.project, self.ops_project)
         self.assertEqual(link.section, self.ops_section)
-        self.assertEqual(task.created_by_assignment, self.ana_assignment)
+        self.assertEqual(task.created_by_assignment, self.actor_assignment)
 
     def test_rejects_a_status_from_another_unit(self):
         payload = self.task_payload()
@@ -239,8 +263,8 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(task.assignee_assignment, self.david_assignment)
 
     def test_websocket_requires_single_use_ticket_and_matching_assignment(self):
-        valid_ticket = issue_ws_ticket(self.ana, self.auth_session, self.ana_assignment.id, self.operations.id)
-        invalid_ticket = issue_ws_ticket(self.ana, self.auth_session, self.david_assignment.id, self.operations.id)
+        valid_ticket = issue_ws_ticket(self.actor, self.auth_session, self.actor_assignment.id, self.operations.id)
+        invalid_ticket = issue_ws_ticket(self.actor, self.auth_session, self.david_assignment.id, self.operations.id)
         async def checks():
             valid = WebsocketCommunicator(
                 application,

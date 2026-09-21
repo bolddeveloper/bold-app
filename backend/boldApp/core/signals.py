@@ -1,7 +1,7 @@
 from functools import partial
 
 from django.db import transaction
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from .events import (
@@ -12,8 +12,36 @@ from .events import (
     POSITION_ASSIGNMENT_RELEASED,
     dispatch_core_event,
 )
-from .models import AccessGrant, PermissionAuditLog, PositionAssignment
+from .models import (
+    AccessGrant,
+    GrantAuthority,
+    GrantAuthorityPermission,
+    JobRolePermission,
+    OrganizationalUnit,
+    Permission,
+    PermissionAuditLog,
+    Position,
+    PositionAssignment,
+)
 from .serializers import AccessGrantSerializer, PermissionAuditLogSerializer, PositionAssignmentSerializer
+
+
+def dispatch_authorization_invalidation(assignment_id=None):
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    async_to_sync(layer.group_send)(
+        "permission_watch",
+        {"type": "permission.changed", "revision": None},
+    )
+    if assignment_id:
+        async_to_sync(layer.group_send)(
+            f"assignment_{assignment_id}",
+            {"type": "assignment.changed"},
+        )
 
 
 # Guarda el estado previo de is_active antes de guardar la asignacion, para
@@ -33,6 +61,7 @@ def capture_previous_assignment_state(sender, instance, **kwargs):
 @receiver(post_save, sender=PositionAssignment)
 def dispatch_position_assignment_events(sender, instance, created, **kwargs):
     payload = PositionAssignmentSerializer(instance).data
+    transaction.on_commit(partial(dispatch_authorization_invalidation, instance.id))
 
     if created and instance.is_active:
         transaction.on_commit(
@@ -64,6 +93,7 @@ def capture_previous_access_grant_state(sender, instance, **kwargs):
 @receiver(post_save, sender=AccessGrant)
 def dispatch_access_grant_events(sender, instance, created, **kwargs):
     payload = AccessGrantSerializer(instance).data
+    transaction.on_commit(partial(dispatch_authorization_invalidation, instance.grantee_assignment_id))
 
     if created:
         transaction.on_commit(
@@ -91,3 +121,16 @@ def dispatch_permission_audit_events(sender, instance, created, **kwargs):
     transaction.on_commit(
         partial(dispatch_core_event, PERMISSION_AUDIT_LOGGED, "permission_audit_log", instance.id, payload)
     )
+
+
+@receiver(post_save, sender=JobRolePermission)
+@receiver(post_delete, sender=JobRolePermission)
+@receiver(post_save, sender=GrantAuthority)
+@receiver(post_delete, sender=GrantAuthority)
+@receiver(post_save, sender=GrantAuthorityPermission)
+@receiver(post_delete, sender=GrantAuthorityPermission)
+@receiver(post_save, sender=Permission)
+@receiver(post_save, sender=Position)
+@receiver(post_save, sender=OrganizationalUnit)
+def invalidate_authorization_state(sender, instance, **kwargs):
+    transaction.on_commit(dispatch_authorization_invalidation)

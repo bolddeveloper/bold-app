@@ -26,6 +26,7 @@ class HasActiveAssignment(BasePermission):
             ).get(
                 id=assignment_id,
                 employee_id=request.user.employee_id,
+                employee__is_active=True,
                 is_active=True,
                 released_at__isnull=True,
             )

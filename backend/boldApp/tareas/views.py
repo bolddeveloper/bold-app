@@ -7,7 +7,12 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from boldApp.core.authorization import check_and_log, resolve_access
+from boldApp.core.authorization import (
+    build_authorization_context,
+    check_and_log,
+    request_has_recent_strong_mfa,
+    resolve_access,
+)
 from boldApp.core.models import OrganizationalUnit, Permission
 
 from .models import (
@@ -57,11 +62,11 @@ class AssignmentScopedViewSetMixin:
 
     def require_permission(self, code, unit, resource_id=None):
         result = check_and_log(
-            employee=self.request.assignment.employee,
             assignment=self.request.assignment,
             permission_code=code,
             target_unit=unit,
             resource_id=resource_id,
+            request=self.request,
         )
         if not result.allowed:
             raise PermissionDenied(result.reason)
@@ -71,36 +76,52 @@ class AssignmentScopedViewSetMixin:
             permission = Permission.objects.get(code=code)
         except Permission.DoesNotExist:
             return []
+        if permission.requires_step_up_mfa and not request_has_recent_strong_mfa(self.request):
+            return []
+        context = build_authorization_context(self.request.assignment, permission)
         return [
             unit.id
             for unit in OrganizationalUnit.objects.select_related("parent_unit")
-            if resolve_access(self.request.assignment, permission, unit).allowed
+            if resolve_access(self.request.assignment, permission, unit, context=context).allowed
         ]
 
+    def _visible_resource_ids(self, queryset, code, resource_type):
+        cache = getattr(self, "_permission_visible_ids", None)
+        if cache is None:
+            cache = self._permission_visible_ids = {}
+        key = (code, resource_type)
+        if key in cache:
+            return cache[key]
+        try:
+            permission = Permission.objects.get(code=code, is_active=True)
+        except Permission.DoesNotExist:
+            cache[key] = []
+            return []
+        if permission.requires_step_up_mfa and not request_has_recent_strong_mfa(self.request):
+            cache[key] = []
+            return []
+        context = build_authorization_context(self.request.assignment, permission)
+        rows = queryset.select_related("unit", "unit__parent_unit")
+        cache[key] = [
+            row.id
+            for row in rows
+            if resolve_access(
+                self.request.assignment,
+                permission,
+                row.unit,
+                resource_id=row.id,
+                context=context,
+            ).allowed
+        ]
+        return cache[key]
+
     def visible_tasks(self):
-        assignment = self.request.assignment
-        return Task.objects.filter(
-            Q(unit=assignment.position.unit)
-            | Q(created_by_assignment=assignment)
-            | Q(assignee_assignment=assignment)
-            | Q(
-                task_projects__project__members__assignment=assignment,
-                task_projects__project__members__status="active",
-                task_projects__project__members__removed_at__isnull=True,
-            )
-        ).distinct()
+        ids = self._visible_resource_ids(Task.objects.all(), "tasks.task.read", "task")
+        return Task.objects.filter(id__in=ids)
 
     def visible_projects(self):
-        assignment = self.request.assignment
-        return Project.objects.filter(
-            Q(unit=assignment.position.unit)
-            | Q(owner_assignment=assignment)
-            | Q(
-                members__assignment=assignment,
-                members__status="active",
-                members__removed_at__isnull=True,
-            )
-        ).distinct()
+        ids = self._visible_resource_ids(Project.objects.all(), "tasks.project.read", "project")
+        return Project.objects.filter(id__in=ids)
 
 
 class SoftDeleteViewSetMixin:
@@ -193,6 +214,9 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         unit_id = self.request.query_params.get("unit") or self.request.assignment.position.unit_id
+        allowed = {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}
+        if str(unit_id) not in allowed:
+            return TaskStatus.objects.none()
         return TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True))
 
     def perform_create(self, serializer):
@@ -517,6 +541,8 @@ class TagViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         unit_id = self.request.query_params.get("unit") or self.request.assignment.position.unit_id
+        if str(unit_id) not in {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}:
+            return Tag.objects.none()
         return Tag.objects.filter(unit_id=unit_id)
 
     def perform_create(self, serializer):
@@ -564,7 +590,10 @@ class NotificationViewSet(AssignmentScopedViewSetMixin, viewsets.ReadOnlyModelVi
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient_assignment=self.request.assignment)
+        return Notification.objects.filter(
+            Q(task__isnull=True) | Q(task__in=self.visible_tasks()),
+            recipient_assignment=self.request.assignment,
+        )
 
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):

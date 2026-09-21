@@ -22,8 +22,9 @@ export function createCoreApi(client = http) {
             try { await request("/api/v2/auth/logout/", { method: "POST" }); } finally { client.setSession(false); }
         },
         changePassword: (currentPassword, password) => request("/api/v2/auth/password/change/", { method: "POST", body: { current_password: currentPassword, password } }),
-        setupTotp: label => request("/api/v2/auth/mfa/totp/setup/", { method: "POST", body: { label } }),
-        confirmTotp: (methodId, code) => request("/api/v2/auth/mfa/totp/confirm/", { method: "POST", body: { method_id: methodId, code } }),
+        setupTotp: (label, currentPassword) => request("/api/v2/auth/mfa/totp/setup/", { method: "POST", body: { label, current_password: currentPassword } }),
+        confirmTotp: (methodId, code, currentPassword) => request("/api/v2/auth/mfa/totp/confirm/", { method: "POST", body: { method_id: methodId, code, current_password: currentPassword } }),
+        stepUpMfa: code => request("/api/v2/auth/mfa/step-up/", { method: "POST", body: { code } }),
         disableMfa: (currentPassword, code) => request("/api/v2/auth/mfa/disable/", { method: "POST", body: { current_password: currentPassword, code } }),
         websocketTicket: body => request("/api/v2/auth/websocket-ticket/", { method: "POST", body }),
         requestPasswordReset: email => request("/api/v2/auth/password/reset/request/", { method: "POST", body: { email }, anonymous: true }),
@@ -43,7 +44,8 @@ export function createCoreApi(client = http) {
         listAssignmentDirectory: () => list("core/position-assignments/directory"),
         getEmployee: id => id ? request(`/api/v2/core/employees/${id}/`) : Promise.resolve(null),
         listUnits: () => list("core/organizational-units"),
-        authorize: body => request("/api/v2/core/authorize/", { method: "POST", body })
+        authorize: body => request("/api/v2/core/authorize/", { method: "POST", body }),
+        getPermissionRevision: () => request("/api/v2/permissions/revision/")
     };
 }
 export const coreApi = createCoreApi();

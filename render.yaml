@@ -36,7 +36,7 @@ services:
     plan: free
     rootDir: backend
     buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput"
-    preDeployCommand: "python manage.py migrate && python manage.py seed_demo_data"
+    preDeployCommand: "python manage.py migrate"
     startCommand: "daphne -b 0.0.0.0 -p $PORT config.asgi:application"
     envVars:
       - key: SECRET_KEY

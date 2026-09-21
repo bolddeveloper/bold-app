@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "boldApp.core",
     "boldApp.autenticacion",
     "boldApp.administrativo",
+    "boldApp.permisos",
     "boldApp.tareas",
 ]
 
@@ -187,6 +188,7 @@ REST_FRAMEWORK = {
         "auth_login_ip": "20/15min",
         "auth_login_account": "5/15min",
         "auth_mfa": "5/5min",
+        "auth_mfa_enrollment": "10/5min",
         "auth_recovery_ip": "10/hour",
         "auth_recovery_account": "3/hour",
         "auth_websocket_ticket": "30/min",
@@ -206,6 +208,9 @@ AUTH_CHALLENGE_TTL_SECONDS = int(os.environ.get("AUTH_CHALLENGE_TTL_SECONDS", "3
 AUTH_INVITATION_TTL_SECONDS = int(os.environ.get("AUTH_INVITATION_TTL_SECONDS", "259200"))
 AUTH_WEBSOCKET_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_WEBSOCKET_TICKET_TTL_SECONDS", "45"))
 ADMIN_STEP_UP_MFA_SECONDS = int(os.environ.get("ADMIN_STEP_UP_MFA_SECONDS", "600"))
+PERMISSIONS_STEP_UP_MFA_SECONDS = int(os.environ.get("PERMISSIONS_STEP_UP_MFA_SECONDS", "600"))
+PERMISSIONS_AUTHORITY_MAX_SECONDS = int(os.environ.get("PERMISSIONS_AUTHORITY_MAX_SECONDS", "7776000"))
+SEED_DEMO_ACCOUNTS = os.environ.get("SEED_DEMO_ACCOUNTS", "true" if DEBUG else "false").lower() == "true"
 SEED_PRIVILEGED_DEMO_ACCOUNTS = os.environ.get("SEED_PRIVILEGED_DEMO_ACCOUNTS", "false").lower() == "true"
 AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

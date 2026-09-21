@@ -17,34 +17,50 @@ from .models import (
 )
 
 
+class ReadOnlySecurityAdminMixin:
+    """Evita que Django Admin eluda MFA, motivo, auditoría e invalidación."""
+
+    def get_readonly_fields(self, request, obj=None):
+        return [field.name for field in self.model._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 # Define la vista de administracion del nucleo organizacional.
 @admin.register(OrganizationalUnit)
-class OrganizationalUnitAdmin(admin.ModelAdmin):
+class OrganizationalUnitAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("name", "unit_type", "parent_unit", "sensitivity_level")
     search_fields = ("name",)
     list_filter = ("unit_type", "sensitivity_level")
 
 
 @admin.register(JobRole)
-class JobRoleAdmin(admin.ModelAdmin):
+class JobRoleAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("title", "level", "created_at")
     search_fields = ("title",)
 
 
 @admin.register(Position)
-class PositionAdmin(admin.ModelAdmin):
+class PositionAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("job_role", "unit", "reports_to_position", "is_open", "display_order")
     list_filter = ("is_open",)
 
 
 @admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
+class EmployeeAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("full_name", "is_active", "created_at")
     search_fields = ("full_name",)
 
 
 @admin.register(UserAccount)
-class UserAccountAdmin(BaseUserAdmin):
+class UserAccountAdmin(ReadOnlySecurityAdminMixin, BaseUserAdmin):
     list_display = ("email", "employee", "is_active", "is_staff", "created_at")
     search_fields = ("email", "employee__full_name")
     ordering = ("email",)
@@ -71,27 +87,27 @@ class UserAccountAdmin(BaseUserAdmin):
 
 
 @admin.register(PositionAssignment)
-class PositionAssignmentAdmin(admin.ModelAdmin):
+class PositionAssignmentAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("employee", "position", "is_active", "assigned_at", "released_at")
     list_filter = ("is_active",)
 
 
 # Define la vista de administracion de permisos base.
 @admin.register(Permission)
-class PermissionAdmin(admin.ModelAdmin):
+class PermissionAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("code", "resource", "action")
     search_fields = ("code", "resource", "action")
 
 
 @admin.register(JobRolePermission)
-class JobRolePermissionAdmin(admin.ModelAdmin):
+class JobRolePermissionAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("job_role", "permission", "scope_type", "effect", "target_unit")
     list_filter = ("scope_type", "effect")
 
 
 # Define la vista de administracion de accesos especiales, delegacion y auditoria.
 @admin.register(AccessGrant)
-class AccessGrantAdmin(admin.ModelAdmin):
+class AccessGrantAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = (
         "grantee_assignment",
         "permission",
@@ -104,7 +120,7 @@ class AccessGrantAdmin(admin.ModelAdmin):
 
 
 @admin.register(GrantAuthority)
-class GrantAuthorityAdmin(admin.ModelAdmin):
+class GrantAuthorityAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = (
         "assignment",
         "target_unit",
@@ -118,12 +134,12 @@ class GrantAuthorityAdmin(admin.ModelAdmin):
 
 
 @admin.register(GrantAuthorityPermission)
-class GrantAuthorityPermissionAdmin(admin.ModelAdmin):
+class GrantAuthorityPermissionAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("grant_authority", "permission")
 
 
 @admin.register(PermissionAuditLog)
-class PermissionAuditLogAdmin(admin.ModelAdmin):
+class PermissionAuditLogAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("employee", "permission", "target_unit", "decision", "created_at")
     list_filter = ("decision",)
     search_fields = ("employee__full_name",)

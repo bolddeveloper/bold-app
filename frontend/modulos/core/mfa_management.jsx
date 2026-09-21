@@ -12,14 +12,18 @@ export function MfaManagementDialog({ open, enabled, busy, error, setup, recover
                 <ul className="core_mfa_codes">{recoveryCodes.map(code => <li key={code}><code>{code}</code></li>)}</ul>
                 <button className="core_mfa_primary" type="button" onClick={onClose}>Ya guardé mis códigos</button>
             </div> : !enabled ? <div className="core_mfa_content">
-                {!setup ? <>
+                {!setup ? <form className="core_mfa_form" onSubmit={onStart}>
                     <p>Genera una clave y agrégala manualmente a Google Authenticator, Microsoft Authenticator u otra aplicación TOTP.</p>
-                    <button className="core_mfa_primary" type="button" onClick={onStart} disabled={busy}>{busy ? "Preparando…" : "Configurar MFA"}</button>
-                </> : <form className="core_mfa_form" onSubmit={onConfirm}>
+                    <label htmlFor="core_mfa_start_password">Contraseña actual</label>
+                    <input id="core_mfa_start_password" name="current_password" type="password" autoComplete="current-password" required disabled={busy} />
+                    <button className="core_mfa_primary" type="submit" disabled={busy}>{busy ? "Preparando…" : "Configurar MFA"}</button>
+                </form> : <form className="core_mfa_form" onSubmit={onConfirm}>
                     <p>Agrega esta clave a tu aplicación autenticadora:</p>
                     <code className="core_mfa_secret">{setup.secret}</code>
                     <label htmlFor="core_mfa_setup_code">Código de seis dígitos</label>
                     <input id="core_mfa_setup_code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus disabled={busy} />
+                    <label htmlFor="core_mfa_confirm_password">Contraseña actual</label>
+                    <input id="core_mfa_confirm_password" name="current_password" type="password" autoComplete="current-password" required disabled={busy} />
                     <button className="core_mfa_primary" type="submit" disabled={busy}>{busy ? "Verificando…" : "Activar MFA"}</button>
                 </form>}
             </div> : <div className="core_mfa_content">

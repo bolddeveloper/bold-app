@@ -20,6 +20,10 @@ class MFAVerifySerializer(serializers.Serializer):
     code = serializers.CharField(max_length=40)
 
 
+class MFAStepUpSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=10)
+
+
 class PasswordSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False, max_length=1024)
 
@@ -40,9 +44,15 @@ class RecoveryConfirmSerializer(PasswordSerializer):
     token = serializers.CharField(max_length=200)
 
 
+class TOTPSetupSerializer(serializers.Serializer):
+    current_password = serializers.CharField(trim_whitespace=False, max_length=1024)
+    label = serializers.CharField(max_length=80, required=False, allow_blank=True)
+
+
 class TOTPConfirmSerializer(serializers.Serializer):
     method_id = serializers.UUIDField()
     code = serializers.CharField(max_length=10)
+    current_password = serializers.CharField(trim_whitespace=False, max_length=1024)
 
 
 class MFADisableSerializer(serializers.Serializer):

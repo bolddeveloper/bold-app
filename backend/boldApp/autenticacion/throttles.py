@@ -32,6 +32,14 @@ class MFAThrottle(IPThrottle):
     scope = "auth_mfa"
 
 
+class MFAEnrollmentThrottle(IPThrottle):
+    scope = "auth_mfa_enrollment"
+
+    def get_cache_key(self, request, view):
+        ident = str(request.user.pk) if request.user and request.user.is_authenticated else self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
 class RecoveryIPThrottle(IPThrottle):
     scope = "auth_recovery_ip"
 

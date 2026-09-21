@@ -71,8 +71,15 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
                             <code>{totpSetup.secret}</code>
                             <label htmlFor="core_auth_enrollment_code">Código de verificación</label>
                             <input id="core_auth_enrollment_code" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus disabled={busy} />
+                            <label htmlFor="core_auth_enrollment_confirm_password">Contraseña actual</label>
+                            <input id="core_auth_enrollment_confirm_password" name="current_password" type="password" autoComplete="current-password" required disabled={busy} />
                             <button className="core_auth_submit" type="submit" disabled={busy}>{busy ? "Verificando…" : "Activar MFA"}</button>
-                        </form> : <button className="core_auth_submit" type="button" onClick={onStartMfaEnrollment} disabled={busy}>{busy ? "Preparando…" : "Configurar autenticador"}</button>}
+                        </form> : <form key="start-required-mfa" className="core_auth_form" onSubmit={onStartMfaEnrollment}>
+                            <p>Confirma tu identidad antes de generar una nueva clave MFA.</p>
+                            <label htmlFor="core_auth_enrollment_password">Contraseña actual</label>
+                            <input id="core_auth_enrollment_password" name="current_password" type="password" autoComplete="current-password" required disabled={busy} />
+                            <button className="core_auth_submit" type="submit" disabled={busy}>{busy ? "Preparando…" : "Configurar autenticador"}</button>
+                        </form>}
                     </div> : !account && (resetToken || invitationToken) ? <form key={invitationToken ? "account-invitation" : "password-reset"} className="core_auth_form" onSubmit={async event => { const completed = invitationToken ? await onInvitationConfirm(event, invitationToken) : await onRecoveryConfirm(event, resetToken); if (completed) { setResetToken(""); setInvitationToken(""); } }}>
                         <label htmlFor="core_auth_new_password">Contraseña nueva</label>
                         <input id="core_auth_new_password" name="password" type="password" autoComplete="new-password" required minLength="8" />

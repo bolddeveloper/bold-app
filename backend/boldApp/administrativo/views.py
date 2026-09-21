@@ -274,7 +274,10 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
                 for provider in administrative_modules.providers():
                     provider.transfer_offboarding(case, employee, mapping, data.get("default_target_assignment"), data["allow_unassigned"])
                 now = timezone.now()
-                _active_assignments(employee).update(is_active=False, released_at=now)
+                for assignment in _active_assignments(employee).select_for_update():
+                    assignment.is_active = False
+                    assignment.released_at = now
+                    assignment.save(update_fields=["is_active", "released_at"])
                 employee.is_active = False
                 employee.save(update_fields=["is_active", "updated_at"])
                 if account:

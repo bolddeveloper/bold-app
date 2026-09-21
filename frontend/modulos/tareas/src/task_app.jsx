@@ -4055,7 +4055,7 @@ function TaskAppContent({ externalModules = {} }) {
     useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
     const [search_query, set_search_query] = use_state("");
-    const [stored_tasks, set_tasks] = use_state(() => merge_saved_comments(starter_tasks));
+    const [stored_tasks, set_tasks] = use_state(() => real ? [] : merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);
     const [delete_target, set_delete_target] = use_state(null);
     const [edit_draft, set_edit_draft] = use_state(null);
@@ -4502,7 +4502,7 @@ function TaskAppContent({ externalModules = {} }) {
         ));
     }
 
-    const [notifications, set_notifications] = use_state(notification_items);
+    const [notifications, set_notifications] = use_state(real ? [] : notification_items);
 
     function select_workspace(id) {
         try { localStorage.setItem(activeWorkspaceStorageKey(workspace_unit_id), id); }
@@ -4598,20 +4598,46 @@ function TaskAppContent({ externalModules = {} }) {
             })().finally(() => { running = null; });
             return running;
         };
-        const report = error => { if (mounted && error.name !== "AbortError") set_api_error(error.message); };
-        refresh.current().then(async () => {
+        const report = error => {
+            if (!mounted || error.name === "AbortError") return;
+            set_api_error(error.message);
+            // El shell pertenece a Core: una caída de Tareas no debe impedir
+            // abrir módulos hermanos como Permisos o Administración.
+            set_data(current => current || {
+                directory: session.directory || [],
+                projects: [],
+                units: session.units || [],
+                sections: [],
+                statuses: [],
+                tasks: [],
+                links: [],
+                members: [],
+                followers: [],
+                notifications: [],
+            });
+        };
+        let streamGeneration = 0;
+        const syncRealtime = async () => {
+            const currentGeneration = ++streamGeneration;
+            disconnect_realtime_stream();
             const units = session.units;
             for (const unit of units) {
-                if (!mounted) return;
+                if (!mounted || currentGeneration !== streamGeneration) return;
                 const allowed = await session.permissions.can("tasks.task.read", unit.id);
-                if (mounted && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+                if (mounted && currentGeneration === streamGeneration && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
             }
-        }).catch(report);
+        };
+        refresh.current().then(syncRealtime).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.
         const reconcile = () => refresh.current().catch(report);
+        const reconcilePermissions = () => {
+            syncRealtime().catch(report);
+            reconcile();
+        };
         window.addEventListener("focus", reconcile);
+        window.addEventListener("bold:permissions-revision", reconcilePermissions);
         const timer = setInterval(reconcile, 30000);
-        return () => { mounted = false; clearInterval(timer); window.removeEventListener("focus", reconcile); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
     async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados") {
