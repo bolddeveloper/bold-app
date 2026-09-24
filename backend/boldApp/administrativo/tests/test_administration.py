@@ -148,3 +148,8 @@ class AdministrationApiTests(TestCase):
         self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.organizational_unit_created", target_id=unit.data["id"]).exists())
         self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.job_role_created", target_id=role.data["id"]).exists())
         self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.position_created", target_id=position.data["id"]).exists())
+
+        overview = self.client.get("/api/v2/administration/organization/")
+        created_position = next(row for row in overview.data["positions"] if str(row["id"]) == str(position.data["id"]))
+        self.assertEqual(created_position["display_order"], 1)
+        self.assertIsNone(created_position["occupant_name"])

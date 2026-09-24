@@ -19,6 +19,7 @@ const metricLabels = {
 };
 const metricLabel = value => metricLabels[value] || value.replaceAll("_", " ").replace(/^./, letter => letter.toUpperCase());
 const dateTime = value => value ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guatemala" }).format(new Date(value)) : "—";
+const positionLabel = row => `${row.role_title} · ${row.unit_name} · ${row.occupant_name || `Vacante ${row.display_order} (${String(row.id).slice(0, 4)})`}`;
 
 function AdminSelect({ defaultValue = "", label, name, onValueChange, options, required = false, value }) {
     const controlled = value !== undefined;
@@ -100,7 +101,7 @@ function CreateEmployee({ positions, onCreate, onCancel, busy }) {
         <h3>Crear empleado y enviar invitación</h3>
         <label>Nombre completo<input name="full_name" required maxLength="140" /></label>
         <label>Correo corporativo<input name="email" type="email" placeholder="nombre@bold.gt" required /></label>
-        <label>Plaza inicial<AdminSelect name="position" label="Plaza inicial" options={[{ value: "", label: "Sin plaza por ahora" }, ...positions.filter(item => !item.occupied && item.is_open).map(item => ({ value: item.id, label: `${item.role_title} · ${item.unit_name}` }))]} /></label>
+        <label>Plaza inicial<AdminSelect name="position" label="Plaza inicial" options={[{ value: "", label: "Sin plaza por ahora" }, ...positions.filter(item => !item.occupied && item.is_open).map(item => ({ value: item.id, label: positionLabel(item) }))]} /></label>
         <p>La cuenta se crea sin contraseña y recibirá un enlace de activación de un solo uso.</p>
         <footer><button type="button" onClick={onCancel}>Cancelar</button><button className="admin_primary" type="submit" disabled={busy}>{busy ? "Creando…" : "Crear e invitar"}</button></footer>
     </form>;
@@ -171,7 +172,11 @@ function Audit({ rows }) {
 function OrganizationManager({ data: initialData, setNotice = message => globalThis.alert?.(message) }) {
     const [data, setData] = useState(initialData);
     const [kind, setKind] = useState("unit");
+    const [reportUnit, setReportUnit] = useState("");
+    const [reportRole, setReportRole] = useState("");
     const [busy, setBusy] = useState(false);
+    const reportingRoles = [...new Map(data.positions.filter(row => String(row.unit) === String(reportUnit)).map(row => [String(row.job_role), { value: row.job_role, label: row.role_title }])).values()];
+    const reportingPositions = data.positions.filter(row => String(row.unit) === String(reportUnit) && String(row.job_role) === String(reportRole));
     async function submit(event) {
         event.preventDefault();
         const formElement = event.currentTarget;
@@ -183,14 +188,15 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
             if (kind === "role") await adminApi.createRole({ title: form.get("title"), level: form.get("level") || null, description: form.get("description") || null, reason });
             if (kind === "position") await adminApi.createPosition({ unit: form.get("unit"), job_role: form.get("job_role"), reports_to_position: form.get("reports_to_position") || null, display_order: Number(form.get("display_order") || 0), reason });
             formElement.reset();
+            setReportUnit(""); setReportRole("");
             setNotice("Registro organizacional creado y auditado.");
             setData(await adminApi.organization());
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
-    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={setKind} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
+    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={value => { setKind(value); setReportUnit(""); setReportRole(""); }} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
         {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<input name="unit_type" placeholder="department" required /></label><label>Sensibilidad<AdminSelect name="sensitivity_level" label="Sensibilidad" defaultValue="normal" options={[{ value: "normal", label: "Normal" }, { value: "high", label: "Alta" }, { value: "critical", label: "Crítica" }]} /></label><label>Unidad superior<AdminSelect name="parent_unit" label="Unidad superior" options={[{ value: "", label: "Ninguna" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label></>}
         {kind === "role" && <><label>Título<input name="title" required /></label><label>Nivel<input name="level" /></label><label>Descripción<textarea name="description" /></label></>}
-        {kind === "position" && <><label>Unidad<AdminSelect name="unit" label="Unidad" required options={[{ value: "", label: "Seleccionar" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label><label>Cargo<AdminSelect name="job_role" label="Cargo" required options={[{ value: "", label: "Seleccionar" }, ...data.roles.map(row => ({ value: row.id, label: row.title }))]} /></label><label>Reporta a<AdminSelect name="reports_to_position" label="Reporta a" options={[{ value: "", label: "Ninguna plaza" }, ...data.positions.map(row => ({ value: row.id, label: `${row.role_title} · ${row.unit_name}` }))]} /></label><label>Orden<input name="display_order" type="number" defaultValue="0" /></label></>}
+        {kind === "position" && <><label>Unidad<AdminSelect name="unit" label="Unidad" required options={[{ value: "", label: "Seleccionar" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label><label>Cargo<AdminSelect name="job_role" label="Cargo" required options={[{ value: "", label: "Seleccionar" }, ...data.roles.map(row => ({ value: row.id, label: row.title }))]} /></label><label>Departamento de jefatura<AdminSelect label="Departamento de jefatura" value={reportUnit} onValueChange={value => { setReportUnit(value); setReportRole(""); }} options={[{ value: "", label: "Ninguno" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label>{reportUnit && <label>Cargo de jefatura<AdminSelect name="reports_to_role" label="Cargo de jefatura" value={reportRole} required onValueChange={setReportRole} options={[{ value: "", label: "Seleccionar" }, ...reportingRoles]} /></label>}{reportRole && <label>Plaza de jefatura<AdminSelect name="reports_to_position" label="Plaza de jefatura" required options={[{ value: "", label: "Seleccionar" }, ...reportingPositions.map(row => ({ value: row.id, label: positionLabel(row) }))]} /></label>}<label>Orden<input name="display_order" type="number" defaultValue="0" /></label></>}
         <label>Motivo<textarea name="reason" minLength="8" required /></label><footer><span>Los catálogos conservan su historial; no hay borrado físico.</span><button className="admin_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Crear registro"}</button></footer>
     </form><OrganizationCatalog data={data} /></>;
 }

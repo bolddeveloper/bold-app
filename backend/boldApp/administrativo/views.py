@@ -383,10 +383,20 @@ class OrganizationOverviewView(APIView):
     permission_classes = [IsCompanyOwner]
 
     def get(self, request):
+        positions = []
+        for row in Position.objects.select_related("unit", "job_role").prefetch_related("assignments__employee"):
+            active_assignment = next((assignment for assignment in row.assignments.all() if assignment.is_active and assignment.released_at is None), None)
+            positions.append({
+                "id": row.id, "unit": row.unit_id, "unit_name": row.unit.name,
+                "job_role": row.job_role_id, "role_title": row.job_role.title,
+                "display_order": row.display_order, "is_open": row.is_open,
+                "occupied": active_assignment is not None,
+                "occupant_name": active_assignment.employee.full_name if active_assignment else None,
+            })
         return Response({
             "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
             "roles": [{"id": row.id, "title": row.title, "level": row.level, "description": row.description} for row in JobRole.objects.all()],
-            "positions": [{"id": row.id, "unit": row.unit_id, "unit_name": row.unit.name, "job_role": row.job_role_id, "role_title": row.job_role.title, "is_open": row.is_open, "occupied": row.assignments.filter(is_active=True, released_at__isnull=True).exists()} for row in Position.objects.select_related("unit", "job_role").prefetch_related("assignments")],
+            "positions": positions,
         })
 
 
