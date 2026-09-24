@@ -174,14 +174,15 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
     const [busy, setBusy] = useState(false);
     async function submit(event) {
         event.preventDefault();
-        const form = new FormData(event.currentTarget);
+        const formElement = event.currentTarget;
+        const form = new FormData(formElement);
         setBusy(true);
         try {
             const reason = form.get("reason");
             if (kind === "unit") await adminApi.createUnit({ name: form.get("name"), unit_type: form.get("unit_type"), sensitivity_level: form.get("sensitivity_level"), parent_unit: form.get("parent_unit") || null, reason });
             if (kind === "role") await adminApi.createRole({ title: form.get("title"), level: form.get("level") || null, description: form.get("description") || null, reason });
             if (kind === "position") await adminApi.createPosition({ unit: form.get("unit"), job_role: form.get("job_role"), reports_to_position: form.get("reports_to_position") || null, display_order: Number(form.get("display_order") || 0), reason });
-            event.currentTarget.reset();
+            formElement.reset();
             setNotice("Registro organizacional creado y auditado.");
             setData(await adminApi.organization());
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
