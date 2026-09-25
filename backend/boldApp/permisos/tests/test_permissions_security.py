@@ -260,6 +260,58 @@ class PermissionControlPlaneSecurityTests(TestCase):
         )
         self.assertEqual(legacy_write.status_code, 405, getattr(legacy_write, "data", None))
 
+    def test_owner_always_has_access_and_cannot_be_a_permission_target(self):
+        AccessGrant.objects.create(
+            grantee_assignment=self.owner_assignment,
+            permission=self.read_permission,
+            effect=AccessGrant.EFFECT_DENY,
+            scope_type=AccessGrant.SCOPE_GLOBAL,
+            granted_by_assignment=self.staff_assignment,
+            valid_from=timezone.now() - timedelta(minutes=1),
+            valid_until=timezone.now() + timedelta(minutes=30),
+            reason="Denegación heredada que no debe afectar al propietario",
+            created_by_account=self.staff,
+        )
+        decision = resolve_access(self.owner_assignment, self.read_permission, self.operations)
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.reason_code, "owner_full_access")
+
+        client = self._client(self.owner, self.owner_assignment)
+        policies = client.get("/api/v2/permissions/role-policies/")
+        self.assertNotIn(str(self.owner_role.id), {row["id"] for row in policies.data["roles"]})
+        role_response = client.post(
+            "/api/v2/permissions/role-policies/",
+            {
+                "job_role": str(self.owner_role.id),
+                "permission": str(self.read_permission.id),
+                "rules": [{"effect": "deny", "scope_type": "global"}],
+                "reason": "Intento de modificar el cargo del propietario",
+            },
+            format="json",
+        )
+        grant_response = client.post(
+            "/api/v2/permissions/access-rules/",
+            self._access_payload(grantee=self.owner_assignment),
+            format="json",
+        )
+        authority_response = client.post(
+            "/api/v2/permissions/authorities/",
+            {
+                "assignment": str(self.owner_assignment.id),
+                "permissions": [str(self.read_permission.id)],
+                "scope_type": GrantAuthority.SCOPE_GLOBAL,
+                "target_unit": None,
+                "max_sensitivity_level": Permission.RISK_LOW,
+                "valid_until": (timezone.now() + timedelta(hours=1)).isoformat(),
+                "can_grant_access": True,
+                "reason": "Intento de modificar permisos del propietario",
+            },
+            format="json",
+        )
+        self.assertEqual(role_response.status_code, 403, getattr(role_response, "data", None))
+        self.assertEqual(grant_response.status_code, 403, getattr(grant_response, "data", None))
+        self.assertEqual(authority_response.status_code, 403, getattr(authority_response, "data", None))
+
     def test_server_derives_issuer_and_ignores_spoofed_audit_fields(self):
         client = self._client(self.owner, self.owner_assignment)
         payload = self._access_payload()

@@ -93,6 +93,11 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         if (!assignment) return false;
         return permissionCache.current.can({ assignmentId: assignment, permissionCode, unitId, resourceId });
     }
+    async function refreshDirectory() {
+        const directory = (await coreApi.listAssignmentDirectory()).map(normalizeAssignment);
+        updateCore({ directory });
+        return directory;
+    }
     useEffect(() => {
         if (!real) { updateCore({ ...mockIdentity, sessionStatus: "ready" }); return () => clearCore(); }
         let mounted = true;
@@ -266,7 +271,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

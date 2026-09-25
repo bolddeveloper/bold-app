@@ -25,6 +25,10 @@
 .permissions_form input, .permissions_form select, .permissions_form textarea, .permissions_step_up input { width: 100%; box-sizing: border-box; border: 1px solid #d0d5dd; border-radius: 8px; background: white; color: inherit; padding: 9px 10px; font: inherit; }
 .permissions_form textarea { min-height: 72px; resize: vertical; }
 .permissions_reason, .permissions_form_actions { grid-column: 1 / -1; }
+.permissions_permission_picker { align-content: start; }
+.permissions_chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 4px; }
+.permissions_chip { display: inline-flex; align-items: center; gap: 5px; width: fit-content; max-width: 100%; padding: 5px 7px 5px 10px; border: 1px solid #b9c5ff; border-radius: 999px; background: #eef2ff; color: #253ea7; font-size: 12px; }
+.permissions_form .permissions_chip button { display: grid; place-items: center; padding: 1px; border: 0; border-radius: 50%; background: transparent; color: inherit; }
 .permissions_form_actions { display: flex; gap: 8px; }
 .permissions_form button, .permissions_step_up button { border: 0; border-radius: 8px; padding: 9px 14px; background: #375dfb; color: white; font-weight: 700; cursor: pointer; }
 .permissions_form button:disabled, .permissions_step_up button:disabled, .permissions_text_button:disabled { cursor: wait; opacity: .55; }
@@ -58,4 +62,5 @@
 [data-bold-theme="dark"] .permissions_panel, [data-bold-theme="dark"] .permissions_header > button, [data-bold-theme="dark"] .permissions_tabs button { background: #182132; border-color: #344054; color: #e5e7eb; }
 [data-bold-theme="dark"] .permissions_form { background: #111827; }
 [data-bold-theme="dark"] .permissions_form input, [data-bold-theme="dark"] .permissions_form select, [data-bold-theme="dark"] .permissions_form textarea { background: #182132; border-color: #475467; }
+[data-bold-theme="dark"] .permissions_chip { background: #1e2a52; border-color: #5269c9; color: #dce3ff; }
 [data-bold-theme="dark"] .permissions_unit_picker select { background: #182132; border-color: #475467; }

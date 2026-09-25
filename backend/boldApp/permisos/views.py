@@ -74,7 +74,9 @@ class RolePolicyView(APIView):
     def get(self, request):
         assignment = get_request_assignment(request)
         if request.user.is_superuser:
-            roles = JobRole.objects.all()
+            roles = JobRole.objects.exclude(
+                positions__assignments__employee__user_account__is_superuser=True
+            ).distinct()
             rules = JobRolePermission.objects.select_related(
                 "job_role", "permission", "target_unit", "created_by_account"
             ).filter(permission__is_active=True)

@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models.deletion import ProtectedError
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -15,7 +16,7 @@ from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthSession
 from boldApp.autenticacion.services import create_challenge, revoke_all_sessions, revoke_session, send_account_invitation, send_password_reset
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, PermissionAuditLog, Position, PositionAssignment, UserAccount
 
-from .models import AdministrativeAction, OffboardingCase, SystemAuditEvent
+from .models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, SystemAuditEvent
 from .permissions import HasRecentOwnerMFA, IsCompanyOwner
 from .registry import administrative_modules
 from .serializers import (
@@ -29,7 +30,9 @@ from .serializers import (
     OffboardingCaseSerializer,
     OffboardingExecuteSerializer,
     JobRoleAdminSerializer,
+    LevelDeleteSerializer,
     OrganizationalUnitAdminSerializer,
+    OrganizationCatalogOptionSerializer,
     PositionAdminSerializer,
     SystemAuditEventSerializer,
 )
@@ -383,6 +386,10 @@ class OrganizationOverviewView(APIView):
     permission_classes = [IsCompanyOwner]
 
     def get(self, request):
+        for value in OrganizationalUnit.objects.values_list("unit_type", flat=True).distinct():
+            OrganizationCatalogOption.objects.get_or_create(kind=OrganizationCatalogOption.UNIT_TYPE, value=value)
+        for value in OrganizationalUnit.objects.values_list("sensitivity_level", flat=True).distinct():
+            OrganizationCatalogOption.objects.get_or_create(kind=OrganizationCatalogOption.SENSITIVITY, value=value)
         positions = []
         for row in Position.objects.select_related("unit", "job_role").prefetch_related("assignments__employee"):
             active_assignment = next((assignment for assignment in row.assignments.all() if assignment.is_active and assignment.released_at is None), None)
@@ -397,6 +404,8 @@ class OrganizationOverviewView(APIView):
             "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
             "roles": [{"id": row.id, "title": row.title, "level": row.level, "description": row.description} for row in JobRole.objects.all()],
             "positions": positions,
+            "unit_types": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE), many=True).data,
+            "sensitivity_levels": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.SENSITIVITY), many=True).data,
         })
 
 
@@ -435,16 +444,79 @@ class OrganizationCatalogViewSet(
         )
 
 
-class OrganizationalUnitAdminViewSet(OrganizationCatalogViewSet):
+class OrganizationalUnitAdminViewSet(mixins.DestroyModelMixin, OrganizationCatalogViewSet):
     serializer_class = OrganizationalUnitAdminSerializer
     queryset = OrganizationalUnit.objects.select_related("parent_unit")
     audit_target_type = "organizational_unit"
 
+    def get_permissions(self):
+        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update", "destroy"} else IsCompanyOwner
+        return [permission()]
 
-class JobRoleAdminViewSet(OrganizationCatalogViewSet):
+    def destroy(self, request, *args, **kwargs):
+        reason_serializer = AdministrativeReasonSerializer(data=request.data)
+        reason_serializer.is_valid(raise_exception=True)
+        unit = self.get_object()
+        name, unit_id = unit.name, unit.id
+        try:
+            unit.delete()
+        except ProtectedError:
+            return Response({"detail": "No se puede eliminar la unidad porque tiene plazas, subunidades u otros datos asociados."}, status=status.HTTP_400_BAD_REQUEST)
+        record_system_event("administration.organizational_unit_deleted", request, target_type="organizational_unit", target_id=unit_id, metadata={"name": name, "reason": reason_serializer.validated_data["reason"]})
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OrganizationCatalogOptionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsCompanyOwner]
+    serializer_class = OrganizationCatalogOptionSerializer
+    queryset = OrganizationCatalogOption.objects.all()
+
+    def perform_update(self, serializer):
+        old, option = serializer.instance.value, serializer.save()
+        field = "unit_type" if option.kind == OrganizationCatalogOption.UNIT_TYPE else "sensitivity_level"
+        OrganizationalUnit.objects.filter(**{field: old}).update(**{field: option.value})
+
+    def destroy(self, request, *args, **kwargs):
+        option = self.get_object()
+        field = "unit_type" if option.kind == OrganizationCatalogOption.UNIT_TYPE else "sensitivity_level"
+        if OrganizationalUnit.objects.filter(**{field: option.value}).exists():
+            return Response({"detail": "No se puede eliminar porque hay unidades que usan esta opción."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+
+class JobRoleAdminViewSet(mixins.DestroyModelMixin, OrganizationCatalogViewSet):
     serializer_class = JobRoleAdminSerializer
     queryset = JobRole.objects.all()
     audit_target_type = "job_role"
+
+    def get_permissions(self):
+        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update", "destroy", "delete_level"} else IsCompanyOwner
+        return [permission()]
+
+    def destroy(self, request, *args, **kwargs):
+        reason_serializer = AdministrativeReasonSerializer(data=request.data)
+        reason_serializer.is_valid(raise_exception=True)
+        role = self.get_object()
+        title, role_id = role.title, role.id
+        try:
+            role.delete()
+        except ProtectedError:
+            return Response({"detail": "No se puede eliminar el cargo porque tiene plazas o permisos asociados."}, status=status.HTTP_400_BAD_REQUEST)
+        record_system_event("administration.job_role_deleted", request, target_type="job_role", target_id=role_id, metadata={"title": title, "reason": reason_serializer.validated_data["reason"]})
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["post"], url_path="delete-level")
+    def delete_level(self, request):
+        serializer = LevelDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        level = serializer.validated_data["level"]
+        updated = JobRole.objects.filter(level=level).update(level=None)
+        record_system_event(
+            "administration.job_role_level_deleted", request,
+            target_type="job_role_level",
+            metadata={"level": level, "roles_updated": updated},
+        )
+        return Response({"level": level, "roles_updated": updated})
 
 
 class PositionAdminViewSet(OrganizationCatalogViewSet):

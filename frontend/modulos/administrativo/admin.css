@@ -92,6 +92,18 @@
 .admin_select_menu button:hover, .admin_select_menu button:focus-visible { background: #f5f7fa !important; }
 .admin_select_menu button.is_selected { background: #fff0f1 !important; color: #c91f2b !important; }
 .admin_select_menu button svg { color: var(--bold_red, #ef1f2d); }
+.admin_select_actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding-top: 5px; border-top: 1px solid #e2e7ee; }
+.admin_select_actions button:last-child { color: #b42332 !important; }
+.admin_modal_backdrop { position: fixed; inset: 0; z-index: 2200; display: grid; place-items: center; padding: 20px; background: #080b10b8; backdrop-filter: blur(3px); }
+.admin_delete_level { display: grid; width: min(100%, 480px); gap: 16px; padding: 22px; border: 1px solid #dce2ea; border-radius: 16px; background: #fff; box-shadow: 0 24px 80px #0006; }
+.admin_delete_level h3, .admin_delete_level p { margin: 0; }
+.admin_delete_level > input { min-height: 44px; border: 1px solid #ccd4df; border-radius: 9px; padding: 10px 12px; font: inherit; }
+.admin_delete_level > input::placeholder { color: #94a3b8; }
+.admin_confirm_check { display: flex; align-items: center; gap: 9px; }
+.admin_confirm_check input { width: 18px; height: 18px; }
+.admin_delete_level footer { display: flex; justify-content: flex-end; gap: 8px; }
+.admin_delete_level button { min-height: 40px; border: 1px solid #dce2ea; border-radius: 9px; padding: 9px 12px; background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.admin_delete_level button:disabled { cursor: not-allowed; opacity: .5; }
 .admin_notice { padding: 11px 14px; border-radius: 9px; background: #daf7e8; animation: admin_notice_enter 260ms cubic-bezier(.2, .8, .2, 1) backwards; }
 .admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied { background: #fee7e9; color: #9b1c2b; }
 .admin_audit_table { overflow-x: auto; }
@@ -100,6 +112,10 @@
 .admin_audit_row.is_header { color: #64748b; font-size: 12px; font-weight: 700; }
 .admin_organization { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .admin_organization article span { color: #64748b; font-size: 12px; }
+.admin_catalog_actions { flex: 0 0 auto !important; display: flex !important; gap: 6px !important; }
+.admin_catalog_actions button { min-height: 34px; border: 1px solid #dce2ea; border-radius: 8px; padding: 6px 9px; background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.admin_catalog_actions button:last-child { border-color: #efbcc2; color: #a51d2d; }
+.admin_unlock_roles { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid #dce2ea; border-radius: 9px; background: #fff; color: #475467; cursor: pointer; }
 .admin_state { display: grid; place-items: center; align-content: center; gap: 12px; min-height: 45vh; color: #657084; animation: admin_view_enter 280ms ease backwards; }
 
 :is(.administration_module, .admin_state) button:focus-visible,
@@ -236,6 +252,8 @@
     color: var(--bold_text);
     box-shadow: 0 20px 46px rgb(0 0 0 / 35%);
 }
+.theme_dark .admin_delete_level { border-color: var(--bold_line); background: var(--bold_elevated); color: var(--bold_text); }
+.theme_dark .admin_delete_level > input { border-color: var(--bold_line); background: var(--bold_surface_soft); color: var(--bold_text); }
 .theme_dark .admin_select_menu button:hover,
 .theme_dark .admin_select_menu button:focus-visible {
     background: var(--bold_hover) !important;

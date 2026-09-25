@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import AdministrativeActionViewSet, AdminEmployeeViewSet, AdminSessionViewSet, AuditEventListView, DashboardView, JobRoleAdminViewSet, OffboardingCaseViewSet, OrganizationalUnitAdminViewSet, OrganizationOverviewView, PositionAdminViewSet
+from .views import AdministrativeActionViewSet, AdminEmployeeViewSet, AdminSessionViewSet, AuditEventListView, DashboardView, JobRoleAdminViewSet, OffboardingCaseViewSet, OrganizationCatalogOptionViewSet, OrganizationalUnitAdminViewSet, OrganizationOverviewView, PositionAdminViewSet
 
 
 router = DefaultRouter()
@@ -12,6 +12,7 @@ router.register(r"offboarding-cases", OffboardingCaseViewSet, basename="administ
 router.register(r"units", OrganizationalUnitAdminViewSet, basename="administration-unit")
 router.register(r"roles", JobRoleAdminViewSet, basename="administration-role")
 router.register(r"positions", PositionAdminViewSet, basename="administration-position")
+router.register(r"organization-options", OrganizationCatalogOptionViewSet, basename="administration-organization-option")
 
 urlpatterns = [
     path("dashboard/", DashboardView.as_view(), name="administration-dashboard"),

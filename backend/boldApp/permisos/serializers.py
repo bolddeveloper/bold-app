@@ -75,7 +75,8 @@ class JobRolePermissionDetailSerializer(serializers.ModelSerializer):
 class AccessRuleCreateSerializer(serializers.Serializer):
     grantee_assignment = serializers.PrimaryKeyRelatedField(
         queryset=PositionAssignment.objects.filter(
-            is_active=True, released_at__isnull=True, employee__is_active=True, employee__user_account__is_active=True
+            is_active=True, released_at__isnull=True, employee__is_active=True,
+            employee__user_account__is_active=True,
         )
     )
     permission = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all())
@@ -124,7 +125,8 @@ class AccessGrantDetailSerializer(serializers.ModelSerializer):
 class GrantAuthorityCreateSerializer(serializers.Serializer):
     assignment = serializers.PrimaryKeyRelatedField(
         queryset=PositionAssignment.objects.filter(
-            is_active=True, released_at__isnull=True, employee__is_active=True, employee__user_account__is_active=True
+            is_active=True, released_at__isnull=True, employee__is_active=True,
+            employee__user_account__is_active=True,
         )
     )
     permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)

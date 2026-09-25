@@ -136,3 +136,18 @@ class SystemAuditEvent(models.Model):
             models.Index(fields=["actor_account", "occurred_at"], name="idx_sysaudit_actor_time"),
         ]
 
+
+class OrganizationCatalogOption(models.Model):
+    UNIT_TYPE = "unit_type"
+    SENSITIVITY = "sensitivity"
+    KIND_CHOICES = [(UNIT_TYPE, "Tipo de unidad"), (SENSITIVITY, "Sensibilidad")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    value = models.CharField(max_length=30)
+
+    class Meta:
+        db_table = "organization_catalog_options"
+        ordering = ["kind", "value"]
+        constraints = [models.UniqueConstraint(fields=["kind", "value"], name="unique_organization_catalog_option")]
+

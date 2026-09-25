@@ -314,6 +314,14 @@ def resolve_access(assignment, permission, target_unit, resource_id=None, at=Non
             "system",
             policy_version=context.policy_version,
         )
+    if assignment.employee.user_account.is_superuser:
+        return _decision(
+            True,
+            "El propietario tiene acceso total por definición.",
+            "owner_full_access",
+            "system",
+            policy_version=context.policy_version,
+        )
     if not permission.is_active:
         return _decision(
             False,

@@ -1,10 +1,15 @@
+from difflib import SequenceMatcher
+import re
+import unicodedata
+
+from django.db.models import Max
 from rest_framework import serializers
 
 from boldApp.autenticacion.models import AuthSession
 from boldApp.autenticacion.services import normalize_email
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position, PositionAssignment, UserAccount
 
-from .models import AdministrativeAction, OffboardingCase, ResponsibilityTransfer, SystemAuditEvent
+from .models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, ResponsibilityTransfer, SystemAuditEvent
 
 
 class AdminAccountSummarySerializer(serializers.ModelSerializer):
@@ -114,6 +119,22 @@ class OrganizationalUnitAdminSerializer(serializers.ModelSerializer):
             ancestor = ancestor.parent_unit
         return parent
 
+    def validate_unit_type(self, value):
+        if not OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE, value=value).exists():
+            raise serializers.ValidationError("Selecciona un tipo registrado.")
+        return value
+
+    def validate_sensitivity_level(self, value):
+        if not OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.SENSITIVITY, value=value).exists():
+            raise serializers.ValidationError("Selecciona una sensibilidad registrada.")
+        return value
+
+
+class OrganizationCatalogOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationCatalogOption
+        fields = ["id", "kind", "value"]
+
 
 class JobRoleAdminSerializer(serializers.ModelSerializer):
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
@@ -132,10 +153,30 @@ class JobRoleAdminSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"reason": "El motivo es obligatorio."})
         return attrs
 
+    def validate_title(self, value):
+        title = value.strip()
+        normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode().lower()).split())
+        queryset = JobRole.objects.exclude(id=self.instance.id) if self.instance else JobRole.objects.all()
+        for role in queryset.only("title"):
+            existing = " ".join(re.sub(r"[^a-z0-9]+", " ", unicodedata.normalize("NFKD", role.title).encode("ascii", "ignore").decode().lower()).split())
+            if normalized == existing or SequenceMatcher(None, normalized, existing).ratio() >= 0.85:
+                raise serializers.ValidationError(f'El cargo es igual o muy parecido a "{role.title}".')
+        return title
+
     def update(self, instance, validated_data):
         validated_data.pop("reason")
         return super().update(instance, validated_data)
 
+
+class LevelDeleteSerializer(serializers.Serializer):
+    level = serializers.CharField(max_length=30)
+    confirmation = serializers.CharField(max_length=30)
+    confirmed = serializers.BooleanField()
+
+    def validate(self, attrs):
+        if not attrs["confirmed"] or attrs["confirmation"] != attrs["level"]:
+            raise serializers.ValidationError("Escribe exactamente el nivel y confirma la eliminación.")
+        return attrs
 
 class PositionAdminSerializer(serializers.ModelSerializer):
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
@@ -146,10 +187,11 @@ class PositionAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Position
         fields = ["id", "unit", "unit_name", "job_role", "role_title", "reports_to_position", "display_order", "is_open", "created_at", "occupied", "reason"]
-        read_only_fields = ["id", "created_at", "occupied"]
+        read_only_fields = ["id", "display_order", "created_at", "occupied"]
 
     def create(self, validated_data):
         validated_data.pop("reason")
+        validated_data["display_order"] = (Position.objects.filter(unit=validated_data["unit"]).aggregate(Max("display_order"))["display_order__max"] or 0) + 1
         return super().create(validated_data)
 
     def validate(self, attrs):

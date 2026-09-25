@@ -201,6 +201,10 @@ def replace_role_policy(request, *, role, permission, rules, reason, expected_re
     if not request.user.is_superuser:
         raise PermissionDenied("Solo el dueño puede modificar políticas base por cargo.")
     require_recent_strong_mfa(request)
+    if role.positions.filter(
+        assignments__employee__user_account__is_superuser=True
+    ).exists():
+        raise PermissionDenied("Las políticas del cargo del propietario no se pueden modificar.")
     if not permission.is_active:
         raise ValidationError({"permission": "El permiso está desactivado."})
     state = _lock_state(expected_revision)
@@ -365,8 +369,8 @@ def create_access_rule(
     if actor_assignment.employee_id == grantee_assignment.employee_id:
         raise PermissionDenied("No puedes modificar permisos de ninguna de tus propias asignaciones.")
     grantee_account = getattr(grantee_assignment.employee, "user_account", None)
-    if grantee_account and grantee_account.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("Una autoridad delegada no puede modificar los accesos del dueño.")
+    if grantee_account and grantee_account.is_superuser:
+        raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
     if (
         not grantee_assignment.is_active
         or grantee_assignment.released_at is not None
@@ -502,8 +506,8 @@ def revoke_access_rule(request, *, grant, reason, expected_revision=None):
     if actor_assignment.employee_id == grant.grantee_assignment.employee_id:
         raise PermissionDenied("No puedes revocar reglas de ninguna de tus propias asignaciones.")
     grantee_account = getattr(grant.grantee_assignment.employee, "user_account", None)
-    if grantee_account and grantee_account.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("Una autoridad delegada no puede modificar los accesos del dueño.")
+    if grantee_account and grantee_account.is_superuser:
+        raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
     if not request.user.is_superuser:
         capability = (
             GRANT_CAPABILITY_GRANT
@@ -771,8 +775,8 @@ def revoke_grant_authority(request, *, authority, reason, expected_revision=None
     if actor_assignment.employee_id == authority.assignment.employee_id:
         raise PermissionDenied("No puedes revocar autoridades de ninguna de tus propias asignaciones.")
     authority_account = getattr(authority.assignment.employee, "user_account", None)
-    if authority_account and authority_account.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("Una autoridad delegada no puede modificar la autoridad del dueño.")
+    if authority_account and authority_account.is_superuser:
+        raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
     if not request.user.is_superuser:
         now = timezone.now()
         actor_authorities = GrantAuthority.objects.filter(

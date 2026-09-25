@@ -39,6 +39,9 @@ class AdministrationApiTests(TestCase):
         samuel = ordinary.employee
         response = weak_client.post(f"/api/v2/administration/employees/{samuel.id}/revoke-sessions/", {"reason": "Prueba sin MFA reciente"}, format="json")
         self.assertEqual(response.status_code, 403)
+        role = JobRole.objects.first()
+        response = weak_client.patch(f"/api/v2/administration/roles/{role.id}/", {"title": role.title, "reason": "Edición sin MFA reciente"}, format="json")
+        self.assertEqual(response.status_code, 403)
 
     def test_create_employee_sends_single_use_invitation_and_records_audit(self):
         marketing = OrganizationalUnit.objects.get(name="Marketing")
@@ -140,8 +143,13 @@ class AdministrationApiTests(TestCase):
             "reason": "Creación del catálogo de Finanzas",
         }, format="json")
         self.assertEqual(role.status_code, 201, role.data)
+        duplicate = self.client.post("/api/v2/administration/roles/", {
+            "title": "analista  finánciero", "level": "senior",
+            "reason": "Intento de duplicación del catálogo",
+        }, format="json")
+        self.assertEqual(duplicate.status_code, 400)
         position = self.client.post("/api/v2/administration/positions/", {
-            "unit": unit.data["id"], "job_role": role.data["id"], "display_order": 1,
+            "unit": unit.data["id"], "job_role": role.data["id"], "display_order": 99,
             "reason": "Apertura de la primera plaza financiera",
         }, format="json")
         self.assertEqual(position.status_code, 201, position.data)
@@ -153,3 +161,26 @@ class AdministrationApiTests(TestCase):
         created_position = next(row for row in overview.data["positions"] if str(row["id"]) == str(position.data["id"]))
         self.assertEqual(created_position["display_order"], 1)
         self.assertIsNone(created_position["occupant_name"])
+
+        rejected = self.client.post("/api/v2/administration/roles/delete-level/", {
+            "level": "senior", "confirmation": "Senior", "confirmed": True,
+        }, format="json")
+        self.assertEqual(rejected.status_code, 400)
+        deleted = self.client.post("/api/v2/administration/roles/delete-level/", {
+            "level": "senior", "confirmation": "senior", "confirmed": True,
+        }, format="json")
+        self.assertEqual(deleted.status_code, 200, deleted.data)
+        self.assertEqual(deleted.data["roles_updated"], 1)
+        self.assertIsNone(JobRole.objects.get(id=role.data["id"]).level)
+
+        editable = self.client.post("/api/v2/administration/roles/", {
+            "title": "Auditor interno", "reason": "Creación temporal para edición",
+        }, format="json")
+        edited = self.client.patch(f'/api/v2/administration/roles/{editable.data["id"]}/', {
+            "title": "Auditor corporativo", "reason": "Actualización del nombre del cargo",
+        }, format="json")
+        self.assertEqual(edited.status_code, 200, edited.data)
+        removed = self.client.delete(f'/api/v2/administration/roles/{editable.data["id"]}/', {
+            "reason": "Eliminación del cargo temporal",
+        }, format="json")
+        self.assertEqual(removed.status_code, 204, removed.data)

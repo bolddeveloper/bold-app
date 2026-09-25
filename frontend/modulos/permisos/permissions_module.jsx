@@ -94,7 +94,8 @@ function MyAccess({ rows, unitName, units, unitId, onUnitChange }) {
 }
 
 function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) {
-    const [role, setRole] = useState(data.roles[0]?.id || "");
+    const roles = data.roles.filter(item => item.level?.toLowerCase() !== "owner");
+    const [role, setRole] = useState(roles[0]?.id || "");
     const [permission, setPermission] = useState(catalog[0]?.id || "");
     const [scope, setScope] = useState("own_unit");
     const [effect, setEffect] = useState("allow");
@@ -139,7 +140,7 @@ function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) 
     return <section className="permissions_panel">
         <header><div><h2>Políticas por cargo</h2><p>Cada guardado reemplaza atómicamente las reglas del permiso seleccionado.</p></div></header>
         {canMutate ? <form className="permissions_form" onSubmit={submit}>
-            <label>Cargo<select value={role} onChange={event => setRole(event.target.value)} required>{data.roles.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
+            <label>Cargo<select value={role} onChange={event => setRole(event.target.value)} required>{roles.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
             <label>Permiso<select value={permission} onChange={event => setPermission(event.target.value)} required>{catalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select></label>
             <label>Efecto<select value={effect} onChange={event => setEffect(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></select></label>
             <label>Alcance<select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
@@ -155,22 +156,38 @@ function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) 
 function AccessRules({ rows, catalog, directory, units, revision, onChanged, canGrant, canRevoke, activeAssignmentId, actorEmail, isOwner }) {
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
-    const [permissionId, setPermissionId] = useState(catalog.find(item => item.is_delegable)?.id || "");
-    const selectedPermission = catalog.find(item => item.id === permissionId);
-    const maximumHours = maximumGrantHours(selectedPermission);
+    const [permissionIds, setPermissionIds] = useState([]);
+    const delegableCatalog = catalog.filter(item => item.is_delegable);
+    const selectedPermissions = permissionIds.map(id => catalog.find(item => item.id === id)).filter(Boolean);
+    const maximumHours = selectedPermissions.length ? Math.min(...selectedPermissions.map(maximumGrantHours)) : 24;
+    function addPermission(permissionId) {
+        if (permissionId) setPermissionIds(current => current.includes(permissionId) ? current : [...current, permissionId]);
+    }
     async function submit(event) {
-        event.preventDefault(); setBusy(true); setError("");
+        event.preventDefault();
+        if (!permissionIds.length) { setError("Selecciona al menos un permiso."); return; }
+        setBusy(true); setError("");
         const formElement = event.currentTarget;
         const form = new FormData(formElement);
+        const createdIds = [];
+        let currentRevision = revision;
         try {
-            const result = await permissionsApi.createGrant({
-                grantee_assignment: form.get("assignment"), permission: form.get("permission"),
-                effect: form.get("effect"), scope_type: "specific_unit", target_unit: form.get("unit"),
-                valid_until: isoFromLocal(form.get("valid_until")), reason: form.get("reason"),
-                expected_revision: revision,
-            });
-            formElement.reset(); await onChanged(result.revision);
-        } catch (failure) { setError(failure.message); }
+            for (const permissionId of permissionIds) {
+                const result = await permissionsApi.createGrant({
+                    grantee_assignment: form.get("assignment"), permission: permissionId,
+                    effect: form.get("effect"), scope_type: "specific_unit", target_unit: form.get("unit"),
+                    valid_until: isoFromLocal(form.get("valid_until")), reason: form.get("reason"),
+                    expected_revision: currentRevision,
+                });
+                createdIds.push(permissionId);
+                currentRevision = result.revision;
+            }
+            formElement.reset(); setPermissionIds([]); await onChanged(currentRevision);
+        } catch (failure) {
+            setPermissionIds(current => current.filter(id => !createdIds.includes(id)));
+            if (createdIds.length) await onChanged(currentRevision);
+            setError(failure.message);
+        }
         finally { setBusy(false); }
     }
     async function revoke(row) {
@@ -185,12 +202,12 @@ function AccessRules({ rows, catalog, directory, units, revision, onChanged, can
         <header><div><h2>Excepciones y accesos temporales</h2><p>El otorgante se deriva de tu sesión; nunca se acepta desde el navegador.</p></div></header>
         {canGrant || canRevoke ? <form className="permissions_form" onSubmit={submit}>
             <label>Empleado<select name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.unit_name}</option>)}</select></label>
-            <label>Permiso<select name="permission" value={permissionId} onChange={event => setPermissionId(event.target.value)} required>{catalog.filter(item => item.is_delegable).map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select></label>
+            <label className="permissions_permission_picker">Permisos<select value="" onChange={event => addPermission(event.target.value)}><option value="">Agregar permiso…</option>{delegableCatalog.filter(item => !permissionIds.includes(item.id)).map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select><span className="permissions_chips">{selectedPermissions.map(item => <span className="permissions_chip" key={item.id}>{item.code}<button type="button" aria-label={`Quitar ${item.code}`} onClick={() => setPermissionIds(current => current.filter(id => id !== item.id))}><X size={14} /></button></span>)}</span></label>
             <label>Efecto<select name="effect">{canGrant ? <option value="allow">Acceso temporal</option> : null}{canRevoke ? <option value="deny">Denegación individual</option> : null}</select></label>
             <label>Unidad<select name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-            <label>Vence<input key={permissionId} name="valid_until" type="datetime-local" defaultValue={defaultExpiry(maximumHours)} required /><small>Máximo sugerido por riesgo: {maximumHours} h.</small></label>
+            <label>Vence<input key={maximumHours} name="valid_until" type="datetime-local" defaultValue={defaultExpiry(maximumHours)} required /><small>Máximo permitido para la selección: {maximumHours} h.</small></label>
             <label className="permissions_reason">Motivo<textarea name="reason" minLength="8" required /></label>
-            <div className="permissions_form_actions"><button type="submit" disabled={busy}>Crear regla</button></div>
+            <div className="permissions_form_actions"><button type="submit" disabled={busy || !permissionIds.length}>Crear {permissionIds.length || ""} {permissionIds.length === 1 ? "regla" : "reglas"}</button></div>
         </form> : null}
         {error ? <p className="permissions_error" role="alert">{error}</p> : null}
         <div className="permissions_table_wrap"><table><caption className="permissions_visually_hidden">Reglas individuales de acceso</caption><thead><tr><th>Empleado</th><th>Permiso</th><th>Regla</th><th>Vigencia</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{rows.map(row => { const hasCapability = row.effect === "deny" ? canGrant : canRevoke; const belongsToActor = isOwner ? row.grantee_email !== actorEmail : row.granted_by_assignment === activeAssignmentId; const mayRevoke = hasCapability && belongsToActor && row.status === "active" && !row.revoked_at; return <tr key={row.id}><td>{row.grantee_name}<small>{row.grantee_email}</small></td><td>{row.permission_code}</td><td>{row.effect} · {scopeLabels[row.scope_type]}</td><td>{row.valid_until ? new Date(row.valid_until).toLocaleString() : "Sin vencimiento"}</td><td>{accessRuleState(row)}</td><td>{mayRevoke ? <button type="button" disabled={busy} className="permissions_text_button" aria-label={`Revocar regla de ${row.grantee_name}`} onClick={() => revoke(row)}>Revocar</button> : null}</td></tr>; })}</tbody></table>{rows.length ? null : <Empty>No hay reglas individuales.</Empty>}</div>
@@ -315,7 +332,7 @@ export default function PermissionsModule() {
     const access = state.access || {};
     const eligibleDirectory = directory.filter(item => (
         item.personId !== core.activeAssignment?.personId
-        && (access.is_owner || !item.account_is_superuser)
+        && !item.account_is_superuser
     ));
     const mfaReady = Boolean(access.mfa_recent);
     const tabs = [
