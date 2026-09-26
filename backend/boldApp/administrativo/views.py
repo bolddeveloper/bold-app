@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -406,6 +407,7 @@ class OrganizationOverviewView(APIView):
             "positions": positions,
             "unit_types": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE), many=True).data,
             "sensitivity_levels": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.SENSITIVITY), many=True).data,
+            "role_levels": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.ROLE_LEVEL), many=True).data,
         })
 
 
@@ -471,17 +473,37 @@ class OrganizationCatalogOptionViewSet(viewsets.ModelViewSet):
     serializer_class = OrganizationCatalogOptionSerializer
     queryset = OrganizationCatalogOption.objects.all()
 
+    def get_permissions(self):
+        if IsCompanyOwner().has_permission(self.request, self) and self.action in {"update", "partial_update", "destroy"}:
+            option = get_object_or_404(self.queryset, pk=self.kwargs["pk"])
+            if option.kind == OrganizationCatalogOption.ROLE_LEVEL:
+                return [HasRecentOwnerMFA()]
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        option = serializer.save()
+        record_system_event("administration.catalog_option_created", self.request, target_type="organization_catalog_option", target_id=option.id, metadata={"kind": option.kind, "value": option.value})
+
     def perform_update(self, serializer):
         old, option = serializer.instance.value, serializer.save()
-        field = "unit_type" if option.kind == OrganizationCatalogOption.UNIT_TYPE else "sensitivity_level"
-        OrganizationalUnit.objects.filter(**{field: old}).update(**{field: option.value})
+        if option.kind == OrganizationCatalogOption.ROLE_LEVEL:
+            JobRole.objects.filter(level=old).update(level=option.value)
+        else:
+            field = "unit_type" if option.kind == OrganizationCatalogOption.UNIT_TYPE else "sensitivity_level"
+            OrganizationalUnit.objects.filter(**{field: old}).update(**{field: option.value})
+        record_system_event("administration.catalog_option_updated", self.request, target_type="organization_catalog_option", target_id=option.id, changes={"before": {"value": old}, "after": {"value": option.value}}, metadata={"kind": option.kind})
 
     def destroy(self, request, *args, **kwargs):
         option = self.get_object()
+        if option.kind == OrganizationCatalogOption.ROLE_LEVEL:
+            return Response({"detail": "Elimina el nivel mediante la confirmación del catálogo de cargos."}, status=status.HTTP_400_BAD_REQUEST)
         field = "unit_type" if option.kind == OrganizationCatalogOption.UNIT_TYPE else "sensitivity_level"
         if OrganizationalUnit.objects.filter(**{field: option.value}).exists():
             return Response({"detail": "No se puede eliminar porque hay unidades que usan esta opción."}, status=status.HTTP_400_BAD_REQUEST)
-        return super().destroy(request, *args, **kwargs)
+        option_id, kind, value = option.id, option.kind, option.value
+        response = super().destroy(request, *args, **kwargs)
+        record_system_event("administration.catalog_option_deleted", request, target_type="organization_catalog_option", target_id=option_id, metadata={"kind": kind, "value": value})
+        return response
 
 
 class JobRoleAdminViewSet(mixins.DestroyModelMixin, OrganizationCatalogViewSet):
@@ -511,6 +533,7 @@ class JobRoleAdminViewSet(mixins.DestroyModelMixin, OrganizationCatalogViewSet):
         serializer.is_valid(raise_exception=True)
         level = serializer.validated_data["level"]
         updated = JobRole.objects.filter(level=level).update(level=None)
+        OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.ROLE_LEVEL, value=level).delete()
         record_system_event(
             "administration.job_role_level_deleted", request,
             target_type="job_role_level",

@@ -10,11 +10,28 @@ from boldApp.autenticacion.services import create_session, encrypt_secret, gener
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position, PositionAssignment, UserAccount
 from boldApp.tareas.models import ActivityLog, Project, Task, TaskStatus
 
-from ..models import AdministrativeAction, OffboardingCase, ResponsibilityTransfer, SystemAuditEvent
+from ..models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, ResponsibilityTransfer, SystemAuditEvent
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend", SECURE_SSL_REDIRECT=False, DEBUG=True, AUTH_ENCRYPTION_KEY="")
 class AdministrationApiTests(TestCase):
+    def test_role_levels_persist_reject_duplicates_and_preserve_audit(self):
+        endpoint = "/api/v2/administration/organization-options/"
+        created = self.client.post(endpoint, {"kind": "role_level", "value": " Especialista "}, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        overview = self.client.get("/api/v2/administration/organization/")
+        self.assertIn("Especialista", [row["value"] for row in overview.data["role_levels"]])
+        duplicate = self.client.post(endpoint, {"kind": "role_level", "value": "especialista"}, format="json")
+        self.assertEqual(duplicate.status_code, 400)
+        inherited = JobRole.objects.exclude(level__isnull=True).exclude(level="").first()
+        duplicate_existing = self.client.post(endpoint, {"kind": "role_level", "value": inherited.level.upper()}, format="json")
+        self.assertEqual(duplicate_existing.status_code, 400)
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.catalog_option_created", target_id=created.data["id"]).exists())
+        deleted = self.client.post("/api/v2/administration/roles/delete-level/", {"level": "Especialista", "confirmation": "Especialista", "confirmed": True}, format="json")
+        self.assertEqual(deleted.status_code, 200, deleted.data)
+        self.assertFalse(OrganizationCatalogOption.objects.filter(pk=created.data["id"]).exists())
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.job_role_level_deleted").exists())
+
     def setUp(self):
         call_command("seed_demo_data", verbosity=0)
         self.owner = UserAccount.objects.get(email="ana@bold.gt")
@@ -42,6 +59,12 @@ class AdministrationApiTests(TestCase):
         role = JobRole.objects.first()
         response = weak_client.patch(f"/api/v2/administration/roles/{role.id}/", {"title": role.title, "reason": "Edición sin MFA reciente"}, format="json")
         self.assertEqual(response.status_code, 403)
+        level = OrganizationCatalogOption.objects.create(kind="role_level", value="Especialista")
+        level_url = f"/api/v2/administration/organization-options/{level.id}/"
+        self.assertEqual(weak_client.patch(level_url, {"value": "Experto"}, format="json").status_code, 403)
+        self.assertEqual(ordinary_client.patch(level_url, {"value": "Experto"}, format="json").status_code, 403)
+        self.assertEqual(ordinary_client.patch("/api/v2/administration/organization-options/00000000-0000-0000-0000-000000000000/", {"value": "Experto"}, format="json").status_code, 403)
+        self.assertEqual(self.client.patch(level_url, {"value": "Experto"}, format="json").status_code, 200)
 
     def test_create_employee_sends_single_use_invitation_and_records_audit(self):
         marketing = OrganizationalUnit.objects.get(name="Marketing")

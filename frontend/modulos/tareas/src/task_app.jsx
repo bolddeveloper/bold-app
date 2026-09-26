@@ -718,9 +718,9 @@ function get_split_content_width(split_element) {
 
 
 // Renders the task workspace content nested below Tareas.
-function WorkspaceSelector({ onManage, onTotal }) {
+export function WorkspaceSelector({ onManage, onTotal }) {
     return <details className="workspace_selector_wrap">
-        <summary className="workspace_selector">
+        <summary className="workspace_selector" onClick={onManage}>
             <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
             <span>Work Space</span>
             {render_icon(chevron_down_icon, 16)}
@@ -1417,23 +1417,61 @@ function QuickStatusPopover({ current_status, on_close, on_select, status_option
 
 
 // Custom calendar date picker popover (Images 2 & 4 of design reference).
-function CalendarDateField({ name, value, defaultValue = "", onChange }) {
+export function CalendarDateField({ name, value, defaultValue = "", onChange, withTime = false, required = false }) {
+    const root_ref = use_ref(null);
     const [local_value, set_local_value] = use_state(defaultValue);
     const [open, set_open] = use_state(false);
+    use_effect(() => {
+        if (value !== undefined) return undefined;
+        const form = root_ref.current?.closest("form");
+        const reset = () => {
+            set_local_value(defaultValue);
+            set_open(false);
+        };
+        form?.addEventListener("reset", reset);
+        return () => form?.removeEventListener("reset", reset);
+    }, [defaultValue, value]);
     const selected = value === undefined ? local_value : value;
+    const dateValue = (selected || "").slice(0, 10);
+    const timeValue = selected?.includes("T") ? selected.slice(11, 16) : "00:00";
     const change = next => { set_local_value(next); onChange?.(next); set_open(false); };
-    return <div className="calendar_date_field">
+    return <div className="calendar_date_field" ref={root_ref}>
         {name && <input type="hidden" name={name} value={selected || ""} />}
         <button type="button" className="bold_date_trigger_btn" aria-label="Elegir fecha" aria-expanded={open} onClick={() => set_open(!open)}>
             {render_icon(calendar_days_icon, 15)}
-            {dateFromISO(selected)?.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) || "Seleccionar fecha"}
+            {dateFromISO(dateValue)?.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) || "Seleccionar fecha"}
         </button>
-        {open && <CustomDatePicker current_date={selected} on_close={() => set_open(false)} on_clear={() => change("")} on_apply={(day, month, year) => change(toISODate(year, month, day))} />}
+        {withTime && <input type="time" aria-label="Hora de vencimiento" value={timeValue} required={required} onChange={event => change(`${dateValue}T${event.target.value}`)} />}
+        {required && !dateValue && <input className="calendar_required" aria-label="Fecha requerida" required value="" onChange={() => {}} onInvalid={() => set_open(true)} />}
+        {open && <CustomDatePicker current_date={dateValue} on_close={() => set_open(false)} on_clear={required ? undefined : () => change("")} on_apply={(day, month, year) => change(`${toISODate(year, month, day)}${withTime ? `T${timeValue}` : ""}`)} />}
     </div>;
 }
 
 function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_close }) {
     const root_ref = use_ref(null);
+    use_effect(() => {
+        const panel = root_ref.current;
+        const anchor = panel.parentElement;
+        const trigger = anchor.querySelector("button");
+        panel.showPopover?.();
+        const position = () => {
+            const rect = anchor.getBoundingClientRect();
+            const height = panel.offsetHeight;
+            panel.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 12))}px`;
+            panel.style.top = `${Math.max(12, Math.min(rect.bottom + 8, window.innerHeight - height - 12))}px`;
+        };
+        position();
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(position);
+        observer?.observe(panel);
+        window.addEventListener("resize", position);
+        window.addEventListener("scroll", position, true);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener("resize", position);
+            window.removeEventListener("scroll", position, true);
+            trigger?.focus({ preventScroll: true });
+        };
+    }, []);
     const initial_date = dateFromISO(current_date) || new Date();
     const [view_month, set_view_month] = use_state(initial_date.getMonth());
     const [view_year, set_view_year] = use_state(initial_date.getFullYear());
@@ -1469,7 +1507,7 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_cl
     }
 
     return (
-        <div ref={root_ref} className="custom_datepicker_popover" role="group" aria-label="Calendario" onClick={(e) => e.stopPropagation()}>
+        <div ref={root_ref} className="custom_datepicker_popover" popover="manual" role="group" aria-label="Calendario" onClick={(e) => e.stopPropagation()}>
             <div className="custom_datepicker_nav">
                 <button type="button" aria-label="Mes anterior" onClick={go_prev}>{render_icon(chevron_left_icon, 16)}</button>
                 <TaskSelect aria_label="Mes" class_name="task_select_compact" value={view_month} options={month_names_es.map((label, value) => ({ value, label }))} on_change={set_view_month} />
@@ -1496,7 +1534,7 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_cl
                 ))}
             </div>
             <div className="custom_datepicker_actions">
-                <button type="button" className="dp_clear_btn" onClick={() => { set_picked_date(""); on_clear?.(); }}>
+                <button disabled={!on_clear} type="button" className="dp_clear_btn" onClick={() => { set_picked_date(""); on_clear?.(); }}>
                     Quitar fecha
                 </button>
                 <button

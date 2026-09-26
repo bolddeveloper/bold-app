@@ -76,3 +76,24 @@
 .folder_module .workspace_table { box-shadow: 0 8px 24px #20242b0b; }
 .folder_module .workspace_table_head { position: sticky; top: 0; z-index: 3; background: var(--bold_surface, #fff); }
 @media (max-width: 760px) { .folder_module:has(.workspace_ops) { padding: 14px 10px; } }
+
+.folder_dialog input[type="color"] {
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 3px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+}
+.folder_dialog input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.folder_dialog input[type="color"]::-webkit-color-swatch {
+    border: 0;
+    border-radius: 50%;
+}
+.folder_dialog input[type="color"]::-moz-color-swatch {
+    border: 0;
+    border-radius: 50%;
+}

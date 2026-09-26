@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { BoldSelect } from "../core/shared/bold_select.jsx";
+import { CalendarDateField } from "../tareas/src/task_app.jsx";
+import { Children, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, KeyRound, RefreshCw, ShieldCheck, X } from "lucide-react";
+import Swal from "sweetalert2";
 
 import { coreApi } from "../core/core_api.js";
 import { useCore } from "../core/core_provider.jsx";
@@ -8,6 +11,29 @@ import { permissionsApi } from "./permissions_api.js";
 import { fetchConsistentPermissionSnapshot } from "./permissions_state.js";
 import "./permissions.css";
 
+
+function PermissionSelect({ children, onChange, ...props }) {
+    const options = Children.toArray(children).map(child => ({ value: child.props.value, label: child.props.children }));
+    return <BoldSelect {...props} options={options} onValueChange={value => onChange?.({ target: { value } })} />;
+}
+
+const permissionDialog = options => Swal.fire({
+    confirmButtonColor: "#ef1f2d",
+    cancelButtonText: "Cancelar",
+    customClass: { popup: "permissions_swal" },
+    showCancelButton: true,
+    ...options,
+});
+
+async function askRevocationReason() {
+    const result = await permissionDialog({
+        title: "Motivo de la revocación",
+        input: "text",
+        inputValidator: value => value.trim().length < 8 ? "Escribe al menos 8 caracteres." : undefined,
+        confirmButtonText: "Revocar",
+    });
+    return result.isConfirmed ? result.value.trim() : null;
+}
 
 const scopeLabels = {
     global: "Global",
@@ -81,7 +107,7 @@ function MyAccess({ rows, unitName, units, unitId, onUnitChange }) {
     const allowed = rows.filter(row => row.allowed);
     const denied = rows.filter(row => !row.allowed);
     return <section className="permissions_panel">
-        <header><div><h2>Mis accesos efectivos</h2><p>Decisiones actuales para {unitName || "la unidad seleccionada"}.</p></div>{units.length > 1 ? <label className="permissions_unit_picker">Unidad<select value={unitId} onChange={event => onUnitChange(event.target.value)}>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label> : null}</header>
+        <header><div><h2>Mis accesos efectivos</h2><p>Decisiones actuales para {unitName || "la unidad seleccionada"}.</p></div>{units.length > 1 ? <label className="permissions_unit_picker">Unidad<PermissionSelect value={unitId} onChange={event => onUnitChange(event.target.value)}>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label> : null}</header>
         <div className="permissions_summary"><strong>{allowed.length}</strong><span>permitidos</span><strong>{denied.length}</strong><span>denegados</span></div>
         {rows.length ? <div className="permissions_cards">
             {rows.map(row => <article className={`permission_card ${row.allowed ? "permission_allowed" : "permission_denied"}`} key={row.code}>
@@ -129,7 +155,12 @@ function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) 
     }
     async function remove() {
         if (!role || !permission || reason.trim().length < 8) { setError("Escribe un motivo de al menos 8 caracteres."); return; }
-        if (!window.confirm("¿Quitar todas las reglas de este permiso para el cargo seleccionado?")) return;
+        if (!(await permissionDialog({
+            title: "¿Quitar todas las reglas?",
+            text: "Se quitarán las reglas de este permiso para el cargo seleccionado.",
+            icon: "warning",
+            confirmButtonText: "Quitar reglas",
+        })).isConfirmed) return;
         setBusy(true); setError("");
         try {
             const result = await permissionsApi.replaceRolePolicy({ job_role: role, permission, rules: [], reason, expected_revision: revision });
@@ -140,11 +171,11 @@ function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) 
     return <section className="permissions_panel">
         <header><div><h2>Políticas por cargo</h2><p>Cada guardado reemplaza atómicamente las reglas del permiso seleccionado.</p></div></header>
         {canMutate ? <form className="permissions_form" onSubmit={submit}>
-            <label>Cargo<select value={role} onChange={event => setRole(event.target.value)} required>{roles.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
-            <label>Permiso<select value={permission} onChange={event => setPermission(event.target.value)} required>{catalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select></label>
-            <label>Efecto<select value={effect} onChange={event => setEffect(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></select></label>
-            <label>Alcance<select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-            {needsUnit ? <label>Unidad<select value={unit} onChange={event => setUnit(event.target.value)} required><option value="">Seleccionar…</option>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label> : null}
+            <label>Cargo<PermissionSelect value={role} onChange={event => setRole(event.target.value)} required>{roles.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</PermissionSelect></label>
+            <label>Permiso<PermissionSelect value={permission} onChange={event => setPermission(event.target.value)} required>{catalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect></label>
+            <label>Efecto<PermissionSelect value={effect} onChange={event => setEffect(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></PermissionSelect></label>
+            <label>Alcance<PermissionSelect value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</PermissionSelect></label>
+            {needsUnit ? <label>Unidad<PermissionSelect value={unit} onChange={event => setUnit(event.target.value)} required><option value="">Seleccionar…</option>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label> : null}
             <label className="permissions_reason">Motivo<textarea value={reason} onChange={event => setReason(event.target.value)} minLength="8" required /></label>
             <div className="permissions_form_actions"><button type="submit" disabled={busy}>Guardar regla</button><button type="button" className="permissions_danger" onClick={remove} disabled={busy}>Quitar todas</button></div>
         </form> : <p className="permissions_read_only">Confirma tu MFA para modificar estas políticas.</p>}
@@ -191,7 +222,7 @@ function AccessRules({ rows, catalog, directory, units, revision, onChanged, can
         finally { setBusy(false); }
     }
     async function revoke(row) {
-        const reason = window.prompt("Motivo de la revocación (mínimo 8 caracteres):");
+        const reason = await askRevocationReason();
         if (!reason) return;
         setBusy(true);
         try { const result = await permissionsApi.revokeGrant(row.id, { reason, expected_revision: revision }); await onChanged(result.revision); }
@@ -201,11 +232,11 @@ function AccessRules({ rows, catalog, directory, units, revision, onChanged, can
     return <section className="permissions_panel">
         <header><div><h2>Excepciones y accesos temporales</h2><p>El otorgante se deriva de tu sesión; nunca se acepta desde el navegador.</p></div></header>
         {canGrant || canRevoke ? <form className="permissions_form" onSubmit={submit}>
-            <label>Empleado<select name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.unit_name}</option>)}</select></label>
-            <label className="permissions_permission_picker">Permisos<select value="" onChange={event => addPermission(event.target.value)}><option value="">Agregar permiso…</option>{delegableCatalog.filter(item => !permissionIds.includes(item.id)).map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select><span className="permissions_chips">{selectedPermissions.map(item => <span className="permissions_chip" key={item.id}>{item.code}<button type="button" aria-label={`Quitar ${item.code}`} onClick={() => setPermissionIds(current => current.filter(id => id !== item.id))}><X size={14} /></button></span>)}</span></label>
-            <label>Efecto<select name="effect">{canGrant ? <option value="allow">Acceso temporal</option> : null}{canRevoke ? <option value="deny">Denegación individual</option> : null}</select></label>
-            <label>Unidad<select name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-            <label>Vence<input key={maximumHours} name="valid_until" type="datetime-local" defaultValue={defaultExpiry(maximumHours)} required /><small>Máximo permitido para la selección: {maximumHours} h.</small></label>
+            <label>Empleado<PermissionSelect name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.unit_name}</option>)}</PermissionSelect></label>
+            <label className="permissions_permission_picker">Permisos<PermissionSelect value="" onChange={event => addPermission(event.target.value)}><option value="">Agregar permiso…</option>{delegableCatalog.filter(item => !permissionIds.includes(item.id)).map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect><span className="permissions_chips">{selectedPermissions.map(item => <span className="permissions_chip" key={item.id}>{item.code}<button type="button" aria-label={`Quitar ${item.code}`} onClick={() => setPermissionIds(current => current.filter(id => id !== item.id))}><X size={14} /></button></span>)}</span></label>
+            <label>Efecto<PermissionSelect name="effect">{canGrant ? <option value="allow">Acceso temporal</option> : null}{canRevoke ? <option value="deny">Denegación individual</option> : null}</PermissionSelect></label>
+            <label>Unidad<PermissionSelect name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label>
+            <label>Vence<CalendarDateField key={maximumHours} name="valid_until" withTime defaultValue={defaultExpiry(maximumHours)} required /><small>Máximo permitido para la selección: {maximumHours} h.</small></label>
             <label className="permissions_reason">Motivo<textarea name="reason" minLength="8" required /></label>
             <div className="permissions_form_actions"><button type="submit" disabled={busy || !permissionIds.length}>Crear {permissionIds.length || ""} {permissionIds.length === 1 ? "regla" : "reglas"}</button></div>
         </form> : null}
@@ -247,7 +278,7 @@ function Authorities({ rows, catalog, directory, units, revision, onChanged, can
         finally { setBusy(false); }
     }
     async function revoke(row) {
-        const reason = window.prompt("Motivo de la revocación (mínimo 8 caracteres):");
+        const reason = await askRevocationReason();
         if (!reason) return;
         setBusy(true);
         try { const result = await permissionsApi.revokeAuthority(row.id, { reason, expected_revision: revision }); await onChanged(result.revision); }
@@ -257,11 +288,11 @@ function Authorities({ rows, catalog, directory, units, revision, onChanged, can
     return <section className="permissions_panel">
         <header><div><h2>Autoridades delegadas</h2><p>Una autoridad solo puede entregar un subconjunto de su alcance y permisos.</p></div></header>
         {canCreate ? <form className="permissions_form" onSubmit={submit}>
-            <label>Responsable<select name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.job_role_title}</option>)}</select></label>
-            <label>Permiso permitido<select name="permission" value={permissionId} onChange={event => { const next = catalog.find(item => item.id === event.target.value); setPermissionId(event.target.value); setSensitivity(next?.risk_level || "low"); }} required>{delegableCatalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</select></label>
-            <label>Raíz del subárbol<select name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-            <label>Sensibilidad máxima<select name="sensitivity" value={sensitivity} onChange={event => setSensitivity(event.target.value)}>{Object.entries(riskLabels).filter(([risk]) => ["low", "medium", "high", "critical"].indexOf(risk) >= ["low", "medium", "high", "critical"].indexOf(selectedPermission?.risk_level || "low")).map(([risk, label]) => <option value={risk} key={risk}>{label}</option>)}</select></label>
-            <label>Vence<input name="valid_until" type="datetime-local" defaultValue={defaultExpiry(isOwner ? 24 * 30 : 24 * 7, delegationValidUntil)} required /></label>
+            <label>Responsable<PermissionSelect name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.job_role_title}</option>)}</PermissionSelect></label>
+            <label>Permiso permitido<PermissionSelect name="permission" value={permissionId} onChange={event => { const next = catalog.find(item => item.id === event.target.value); setPermissionId(event.target.value); setSensitivity(next?.risk_level || "low"); }} required>{delegableCatalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect></label>
+            <label>Raíz del subárbol<PermissionSelect name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label>
+            <label>Sensibilidad máxima<PermissionSelect name="sensitivity" value={sensitivity} onChange={event => setSensitivity(event.target.value)}>{Object.entries(riskLabels).filter(([risk]) => ["low", "medium", "high", "critical"].indexOf(risk) >= ["low", "medium", "high", "critical"].indexOf(selectedPermission?.risk_level || "low")).map(([risk, label]) => <option value={risk} key={risk}>{label}</option>)}</PermissionSelect></label>
+            <label>Vence<CalendarDateField name="valid_until" withTime defaultValue={defaultExpiry(isOwner ? 24 * 30 : 24 * 7, delegationValidUntil)} required /></label>
             <fieldset className="permissions_capabilities"><legend>Capacidades delegadas</legend><label><input name="can_grant_access" type="checkbox" /> Otorgar accesos</label><label><input name="can_revoke_access" type="checkbox" /> Revocar o denegar</label>{canPassDelegation ? <label><input name="can_delegate_authority" type="checkbox" /> Permitir una subdelegación adicional</label> : null}</fieldset>
             <label className="permissions_reason">Motivo<textarea name="reason" minLength="8" required /></label>
             <div className="permissions_form_actions"><button type="submit" disabled={busy}>Delegar autoridad</button></div>

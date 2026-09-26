@@ -1,6 +1,7 @@
 import { Children, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import Swal from "sweetalert2";
 import { useDialog } from "../../core/shared/use_dialog.js";
 import { dateFromISO } from "./services/task_models.js";
 import { emptyWorkspaceFilters, filterWorkspaceTasks, groupWorkspaceTasks, sortWorkspaceTasks, workspaceProjectIds, workspaceSectionIds } from "./services/workspace_operations.js";
@@ -12,6 +13,20 @@ const DATE_OPTIONS = [["", "Cualquier fecha"], ["today", "Hoy"], ["tomorrow", "M
 const PRIORITIES = [["Alta", "Alta"], ["Media", "Media"], ["Baja", "Baja"]];
 const SORT_OPTIONS = [["due", "Fecha límite"], ["priority", "Prioridad"], ["status", "Estado"], ["assignee", "Responsable"], ["project", "Proyecto"], ["created", "Fecha de creación"], ["title", "Nombre"], ["completed", "Completadas"], ["incomplete", "Sin completar"]];
 const GROUP_OPTIONS = [["", "Sin agrupar"], ["status", "Estado"], ["project", "Proyecto"], ["section", "Sección"], ["assignee", "Responsable"], ["priority", "Prioridad"], ["due", "Mes de vencimiento"]];
+
+async function confirmWorkspace(title, text, confirmButtonText) {
+    const result = await Swal.fire({
+        title,
+        text,
+        icon: "warning",
+        showCancelButton: true,
+        cancelButtonText: "Cancelar",
+        confirmButtonText,
+        confirmButtonColor: "#ef1f2d",
+        customClass: { popup: "workspace_swal" },
+    });
+    return result.isConfirmed;
+}
 
 function MultiFilter({ label, values, options, onChange }) {
     return <fieldset><legend>{label}</legend><div className="workspace_filter_options">{options.map(([id, name]) => <label key={id}><input type="checkbox" checked={values.includes(String(id))} onChange={() => onChange(String(id))} />{name}</label>)}</div></fieldset>;
@@ -126,14 +141,18 @@ export default function WorkspaceOperations({ TaskSelect, CalendarDateField, tas
     const bulkUpdate = (field, value) => { if (value === "") return; if (field === "project" || field === "section") { const projectsInSelection = [...new Set(selectedIds.map(id => workspaceProjectIds(allById.get(id))[0]).filter(Boolean))]; if (field === "section" && projectsInSelection.length !== 1) { setError("Selecciona tareas de un mismo proyecto para cambiar su sección."); return; } const project = field === "project" ? value : projectsInSelection[0]; if (!project) { setError("Selecciona primero un proyecto."); return; } run("link", selectedIds, { project, ...(field === "section" ? { section: value } : {}) }); } else run("update", selectedIds, { [field]: value }); };
     const changeCompletion = done => { const unitIds = [...new Set(selectedIds.map(id => allById.get(id)?.unitId || activeUnitId))]; if (unitIds.length !== 1) { setError("Selecciona tareas de una misma unidad para cambiar su finalización juntas."); return; } const status = statuses.find(item => (item.unitId || item.unit || activeUnitId) === unitIds[0] && !!item.isFinal === done); if (!status) { setError("No hay un estado compatible para estas tareas."); return; } bulkUpdate("status", status.id); };
     const toggleCompletion = task => { const status = statuses.find(item => (item.unitId || item.unit || activeUnitId) === (task.unitId || activeUnitId) && !!item.isFinal !== !!task.completed); if (status) run("update", [String(task.id)], { status: status.id }); else setError("No hay un estado compatible para esta tarea."); };
-    const deleteSelected = () => { if (window.confirm(`¿Eliminar ${selectedIds.length} tareas? También afectará a las subtareas seleccionadas.`)) run("delete", selectedIds, {}); };
+    const deleteSelected = async () => {
+        if (await confirmWorkspace("¿Eliminar tareas?", `Se eliminarán ${selectedIds.length} tareas y las subtareas seleccionadas.`, "Eliminar")) {
+            await run("delete", selectedIds, {});
+        }
+    };
     const duplicateSelected = () => run("create", [], { items: selectedIds.map(id => { const task = allById.get(id); return { title: `${task.title} (copia)`, unitId: task.unitId || activeUnitId, project_id: workspaceProjectIds(task)[0] || "", assignee_id: task.assignee_id || "", priority: task.priority, due_date: task.due_date || null }; }) });
     const submitSubtasks = async event => {
         event.preventDefault();
         const titles = batchText.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
         const count = titles.length * selectedIds.length;
         if (!count || count > 100) { setError("El lote debe contener entre 1 y 100 subtareas."); return; }
-        if (!window.confirm(`Se crearán ${count} subtareas en ${selectedIds.length} tareas. ¿Continuar?`)) return;
+        if (!await confirmWorkspace("¿Crear subtareas?", `Se crearán ${count} subtareas en ${selectedIds.length} tareas.`, "Crear subtareas")) return;
         const items = selectedIds.flatMap(id => titles.map(title => ({ title, parentTaskId: id, unitId: allById.get(id).unitId || activeUnitId, priority: batchPriority })));
         if (await run("create", [], { items })) setBatchText("");
     };
@@ -185,7 +204,7 @@ export default function WorkspaceOperations({ TaskSelect, CalendarDateField, tas
     return <section className="workspace_ops" aria-label="Gestión de tareas de BOLD Workspace">
         <header className="workspace_ops_heading"><div><h1>BOLD Workspace</h1><p>Gestiona y organiza el trabajo de tu equipo desde un solo lugar.</p></div>{allowed.create && <button type="button" className="primary_button" onClick={onOpenCreate}><Plus size={17} /> Agregar tarea</button>}</header>
         {pending && <div className="workspace_progress" role="status">Guardando cambios en Workspace…</div>}
-        <div className="workspace_toolbar"><label className="workspace_search"><Search size={17} /><input type="search" placeholder="Buscar tareas, descripción o etiquetas" value={query} onChange={event => setQuery(event.target.value)} /></label><details ref={filtersRef}><summary><SlidersHorizontal size={17} /> Filtros {activeChips.length ? `(${activeChips.length})` : ""}</summary><div className="workspace_filter_panel"><button type="button" className="workspace_filters_close" onClick={event => { event.currentTarget.closest("details").open = false; }}>Cerrar filtros</button>
+        <div className="workspace_toolbar"><label className="workspace_search"><Search size={17} /><input type="search" placeholder="Buscar tareas, descripción o etiquetas" value={query} onChange={event => setQuery(event.target.value)} /></label><details ref={filtersRef}><summary><SlidersHorizontal size={17} /> Filtros {activeChips.length ? `(${activeChips.length})` : ""}</summary><div className="workspace_filter_panel"><header className="workspace_filter_heading"><h2>Filtrar tareas</h2><button type="button" className="workspace_filters_close" onClick={event => { event.currentTarget.closest("details").open = false; }}>Cerrar filtros</button></header>
             <MultiFilter label="Proyecto" values={filters.projects} options={projects.map(item => [String(item.id), item.label || item.name])} onChange={value => toggleFilter("projects", value)} />
             <MultiFilter label="Sección" values={filters.sections} options={sections.map(item => [String(item.id), item.label || item.name])} onChange={value => toggleFilter("sections", value)} />
             <MultiFilter label="Responsable" values={filters.assignees} options={members.map(item => [String(item.id), item.name])} onChange={value => toggleFilter("assignees", value)} />

@@ -1,9 +1,30 @@
+import { BoldSelect as AdminSelect } from "../core/shared/bold_select.jsx";
+import Swal from "sweetalert2";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Building2, Check, ChevronDown, LayoutDashboard, Pencil, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Activity, Building2, ChevronDown, LayoutDashboard, Pencil, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 
 import { useCore } from "../core/core_provider.jsx";
 import { coreApi } from "../core/core_api.js";
 import { adminApi } from "./admin_api.js";
+import { useDialog } from "../core/shared/use_dialog.js";
+
+const adminDialog = options => Swal.fire({
+    confirmButtonColor: "#ef1f2d",
+    cancelButtonText: "Cancelar",
+    confirmButtonText: "Continuar",
+    customClass: { popup: "admin_swal" },
+    ...options,
+});
+async function askText(title, value = "", minimum = 1) {
+    const result = await adminDialog({
+        title, input: "text", inputValue: value, showCancelButton: true,
+        inputValidator: value => value.trim().length < minimum ? `Ingresa al menos ${minimum} caracteres.` : undefined,
+    });
+    return result.isConfirmed ? result.value.trim() : null;
+}
+async function confirmOrganization(title) {
+    return (await adminDialog({ title, text: "El cambio quedará registrado en el historial.", icon: "question", showCancelButton: true })).isConfirmed;
+}
 
 const tabs = [
     ["dashboard", "Resumen", LayoutDashboard],
@@ -22,59 +43,6 @@ const metricLabel = value => metricLabels[value] || value.replaceAll("_", " ").r
 const dateTime = value => value ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guatemala" }).format(new Date(value)) : "—";
 const positionLabel = row => `${row.role_title} · ${row.unit_name} · ${row.occupant_name || `Vacante ${row.display_order} (${String(row.id).slice(0, 4)})`}`;
 
-function AdminSelect({ defaultValue = "", label, menuFooter, name, onValueChange, options, required = false, value }) {
-    const controlled = value !== undefined;
-    const [internalValue, setInternalValue] = useState(defaultValue);
-    const [open, setOpen] = useState(false);
-    const rootRef = useRef(null);
-    const triggerRef = useRef(null);
-    const currentValue = controlled ? value : internalValue;
-    const selected = options.find(option => String(option.value) === String(currentValue)) || options[0];
-
-    useEffect(() => {
-        if (!open) return undefined;
-        const closeOutside = event => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
-        const closeEscape = event => { if (event.key === "Escape") { setOpen(false); triggerRef.current?.focus(); } };
-        document.addEventListener("pointerdown", closeOutside);
-        document.addEventListener("keydown", closeEscape);
-        return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape); };
-    }, [open]);
-
-    useEffect(() => {
-        if (controlled) return undefined;
-        const form = rootRef.current?.closest("form");
-        const reset = () => { setInternalValue(defaultValue); setOpen(false); };
-        form?.addEventListener("reset", reset);
-        return () => form?.removeEventListener("reset", reset);
-    }, [controlled, defaultValue]);
-
-    function select(nextValue) {
-        if (!controlled) setInternalValue(nextValue);
-        onValueChange?.(nextValue);
-        setOpen(false);
-        triggerRef.current?.focus();
-    }
-
-    function moveSelection(direction) {
-        const currentIndex = Math.max(0, options.findIndex(option => String(option.value) === String(currentValue)));
-        select(options[(currentIndex + direction + options.length) % options.length].value);
-    }
-
-    return <div className={`admin_select ${open ? "is_open" : ""}`} ref={rootRef}>
-        {name && <select className="admin_select_native" name={name} value={currentValue} required={required} tabIndex={-1} aria-hidden="true" onChange={() => {}} onInvalid={event => { event.preventDefault(); triggerRef.current?.focus(); }}>
-            {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>}
-        <button ref={triggerRef} className="admin_select_trigger" type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(current => !current)} onKeyDown={event => {
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); open ? moveSelection(event.key === "ArrowDown" ? 1 : -1) : setOpen(true); }
-        }}>
-            <span>{selected?.label || "Seleccionar"}</span><ChevronDown size={16} />
-        </button>
-        {open && <div className="admin_select_menu" role="listbox" aria-label={label}>
-            {options.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
-            {menuFooter}
-        </div>}
-    </div>;
-}
 
 function Loading({ error, onRetry }) {
     return <div className="admin_state"><p>{error || "Cargando información administrativa…"}</p>{error && <button type="button" onClick={onRetry}>Reintentar</button>}</div>;
@@ -146,13 +114,13 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice }) 
     async function runAction(kind, label) {
         if (!employee) return;
         if (kind === "resend") { try { await adminApi.resendInvitation(employee.id); setNotice("Invitación reenviada."); } catch (error) { setNotice(error.message, true); } return; }
-        const code = globalThis.prompt?.(`${label}. Ingresa primero tu código MFA:`)?.trim();
+        const code = await askText(`${label}. Código MFA`, "", 6);
         if (!code) return;
         setBusy(true);
         try { await coreApi.stepUpMfa(code); }
         catch (error) { setNotice(error.message, true); setBusy(false); return; }
         setBusy(false);
-        const reason = globalThis.prompt?.(`${label}. Escribe el motivo (mínimo 8 caracteres):`)?.trim();
+        const reason = await askText(`${label}. Motivo`, "", 8);
         if (!reason) return;
         setBusy(true);
         try {
@@ -165,19 +133,150 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice }) 
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     async function preview() { try { setOffboarding(await adminApi.offboardingPreview(employee.id)); } catch (error) { setNotice(error.message, true); } }
-    async function executeOffboarding(event) { event.preventDefault(); if (!globalThis.confirm?.("Esta operación desactivará al empleado, transferirá responsabilidades y cerrará sus sesiones. ¿Continuar?")) return; const form = new FormData(event.currentTarget); setBusy(true); try { await adminApi.offboard(employee.id, { reason: form.get("reason"), default_target_assignment: form.get("default_target_assignment"), allow_unassigned: false }); setOffboarding(null); setNotice("Baja completada y responsabilidades transferidas."); await reload(); } catch (error) { setNotice(error.message, true); } finally { setBusy(false); } }
+    async function executeOffboarding(event) {
+        event.preventDefault();
+        const confirmed = await adminDialog({
+            title: "¿Confirmar baja del empleado?",
+            text: "Se desactivará al empleado, se transferirán sus responsabilidades y se cerrarán sus sesiones.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Confirmar baja",
+        });
+        if (!confirmed.isConfirmed) return;
+        const form = new FormData(event.currentTarget);
+        setBusy(true);
+        try {
+            await adminApi.offboard(employee.id, {
+                reason: form.get("reason"),
+                default_target_assignment: form.get("default_target_assignment"),
+                allow_unassigned: false,
+            });
+            setOffboarding(null);
+            setNotice("Baja completada y responsabilidades transferidas.");
+            await reload();
+        } catch (error) {
+            setNotice(error.message, true);
+        } finally {
+            setBusy(false);
+        }
+    }
 
     return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} sessions={sessions} onRefresh={reload} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
 }
 
-function Audit({ rows }) {
+export function Audit({ rows }) {
     const [query, setQuery] = useState("");
     const [module, setModule] = useState("");
     const filtered = rows.filter(row => (!module || row.module_code === module) && `${row.event_type} ${row.actor_email || ""} ${row.target_type || ""}`.toLowerCase().includes(query.toLowerCase()));
-    return <section className="admin_panel"><header className="admin_audit_header"><div><span className="admin_eyebrow">TRAZABILIDAD</span><h2>Auditoría del sistema</h2></div><div><input placeholder="Buscar evento o actor" value={query} onChange={event => setQuery(event.target.value)} /><AdminSelect label="Filtrar por módulo" value={module} onValueChange={setModule} options={[{ value: "", label: "Todos los módulos" }, { value: "administration", label: "Administrativo" }, { value: "authentication", label: "Autenticación" }, { value: "permissions", label: "Permisos" }]} /></div></header><div className="admin_audit_table"><div className="admin_audit_row is_header"><span>Fecha</span><span>Módulo</span><span>Evento</span><span>Actor</span><span>Resultado</span></div>{filtered.map(row => <div className="admin_audit_row" key={`${row.module_code}:${row.id}`}><time>{dateTime(row.occurred_at)}</time><span>{row.module_code}</span><strong>{row.event_type}</strong><span>{row.actor_email || "Sistema"}</span><span className={`admin_outcome is_${row.outcome}`}>{row.outcome}</span></div>)}</div></section>;
+    const modules = { administration: "Administración", authentication: "Autenticación", permissions: "Permisos" };
+    const outcomes = { success: "Correcto", failure: "Fallido", denied: "Denegado", error: "Error" };
+    return <section className="admin_panel admin_audit_panel">
+        <header className="admin_audit_header">
+            <div><span className="admin_eyebrow">TRAZABILIDAD</span><h2>Eventos del sistema</h2><p>{filtered.length} de {rows.length} eventos</p></div>
+            <div className="admin_audit_filters">
+                <label className="admin_search"><Search size={16} /><input aria-label="Buscar evento o actor" placeholder="Buscar evento o actor" value={query} onChange={event => setQuery(event.target.value)} /></label>
+                <AdminSelect label="Filtrar por módulo" value={module} onValueChange={setModule} options={[{ value: "", label: "Todos los módulos" }, ...Object.entries(modules).map(([value, label]) => ({ value, label }))]} />
+            </div>
+        </header>
+        <div className="admin_audit_table">
+            <table>
+                <thead><tr><th scope="col">Fecha</th><th scope="col">Evento</th><th scope="col">Actor</th><th scope="col">Resultado</th></tr></thead>
+                <tbody>{filtered.map(row => <tr key={`${row.module_code}:${row.id}`}>
+                    <td><time dateTime={row.occurred_at}>{dateTime(row.occurred_at)}</time></td>
+                    <td><span className="admin_event_module">{modules[row.module_code] || row.module_code}</span><strong className="admin_event_name">{row.event_type}</strong>
+                        {(row.target_type || row.target_id || row.correlation_id) && <details className="admin_event_details"><summary>Ver referencia</summary><dl>
+                            {row.target_type && <><dt>Tipo</dt><dd>{row.target_type}</dd></>}
+                            {row.target_id && <><dt>Registro</dt><dd>{row.target_id}</dd></>}
+                            {row.correlation_id && <><dt>Correlación</dt><dd>{row.correlation_id}</dd></>}
+                        </dl></details>}
+                    </td>
+                    <td>{row.actor_email || "Sistema"}{row.unit_name && <small className="admin_event_unit">{row.unit_name}</small>}</td>
+                    <td><span className={`admin_outcome is_${row.outcome}`} title={row.outcome}>{outcomes[row.outcome] || row.outcome}</span></td>
+                </tr>)}</tbody>
+            </table>
+        </div>
+        {!filtered.length && <p className="admin_empty">No hay eventos que coincidan con la búsqueda.</p>}
+    </section>;
 }
 
-function OrganizationManager({ data: initialData, setNotice = message => globalThis.alert?.(message) }) {
+function RoleEditor({ role, levels, onSave, onClose }) {
+    const [submitting, setSubmitting] = useState(false);
+    useDialog(!submitting, ".admin_role_editor", onClose);
+    async function save(event) {
+        event.preventDefault();
+        const values = Object.fromEntries(new FormData(event.currentTarget));
+        setSubmitting(true);
+        if (!await onSave(role, values)) setSubmitting(false);
+    }
+    return <div className="admin_modal_backdrop">
+        <form className="admin_form admin_role_editor" role="dialog" aria-modal="true" aria-labelledby="role_editor_title" onSubmit={save}>
+            <header><div><span className="admin_eyebrow">CATÁLOGO DE CARGOS</span><h2 id="role_editor_title">Editar cargo</h2></div></header>
+            <label>Nombre<input name="title" defaultValue={role.title} required maxLength={120} /></label>
+            <label>Nivel<AdminSelect name="level" label="Nivel del cargo" defaultValue={role.level || ""} options={[{ value: "", label: "Sin nivel" }, ...levels.map(level => ({ value: level, label: level }))]} /></label>
+            <label>Descripción<textarea name="description" defaultValue={role.description || ""} /></label>
+            <label>Motivo de la edición<textarea name="reason" minLength={8} maxLength={1000} required /></label>
+            <footer><button type="button" disabled={submitting} onClick={onClose}>Cancelar</button><button className="admin_primary" type="submit" disabled={submitting}>{submitting ? "Guardando…" : "Guardar cambios"}</button></footer>
+        </form>
+    </div>;
+}
+
+function ReportingPosition({ units, positions }) {
+    const rootRef = useRef(null);
+    const [unit, setUnit] = useState("");
+    const [role, setRole] = useState("");
+    const [position, setPosition] = useState("");
+
+    useEffect(() => {
+        const form = rootRef.current?.closest("form");
+        const reset = () => {
+            setUnit("");
+            setRole("");
+            setPosition("");
+            if (rootRef.current) rootRef.current.open = false;
+        };
+        form?.addEventListener("reset", reset);
+        return () => form?.removeEventListener("reset", reset);
+    }, []);
+
+    useEffect(() => {
+        const closeOutside = event => {
+            if (rootRef.current?.open && !rootRef.current.contains(event.target)) rootRef.current.open = false;
+        };
+        const closeEscape = event => {
+            if (event.key === "Escape" && rootRef.current?.open) {
+                rootRef.current.open = false;
+                rootRef.current.querySelector("summary")?.focus();
+            }
+        };
+        document.addEventListener("pointerdown", closeOutside);
+        document.addEventListener("keydown", closeEscape);
+        return () => {
+            document.removeEventListener("pointerdown", closeOutside);
+            document.removeEventListener("keydown", closeEscape);
+        };
+    }, []);
+
+    const availableRoles = [...new Map(positions.filter(row => String(row.unit) === String(unit)).map(row => [String(row.job_role), { value: row.job_role, label: row.role_title }])).values()];
+    const availablePositions = positions.filter(row => String(row.unit) === String(unit) && String(row.job_role) === String(role));
+    const selected = positions.find(row => String(row.id) === String(position));
+    return <details className="admin_reporting" ref={rootRef}>
+        <summary className="admin_select_trigger" aria-label="Reportar a"><span>{selected ? positionLabel(selected) : "Sin jefatura"}</span><ChevronDown size={16} /></summary>
+        <div className="admin_reporting_menu">
+            <button type="button" className="admin_reporting_none" onClick={event => {
+                setUnit(""); setRole(""); setPosition(""); event.currentTarget.closest("details").open = false;
+            }}>Sin jefatura</button>
+            <label>Departamento de jefatura<AdminSelect label="Departamento de jefatura" value={unit} onValueChange={value => { setUnit(value); setRole(""); setPosition(""); }} options={[{ value: "", label: "Seleccionar" }, ...units.map(row => ({ value: row.id, label: row.name }))]} /></label>
+            {unit && <label>Cargo de jefatura<AdminSelect label="Cargo de jefatura" value={role} onValueChange={value => { setRole(value); setPosition(""); }} options={[{ value: "", label: "Seleccionar" }, ...availableRoles]} /></label>}
+            {role && <label>Plaza de jefatura<AdminSelect label="Plaza de jefatura" value={position} onValueChange={value => setPosition(value)} options={[{ value: "", label: "Seleccionar" }, ...availablePositions.map(row => ({ value: row.id, label: positionLabel(row) }))]} /></label>}
+            {selected && <button type="button" className="admin_reporting_done" onClick={event => { event.currentTarget.closest("details").open = false; }}>Listo</button>}
+        </div>
+        <input type="hidden" name="reports_to_position" value={position} />
+    </details>;
+}
+
+export function OrganizationManager({ data: initialData }) {
+    const setNotice = (message, isError = false) => adminDialog({ title: isError ? "No se pudo guardar" : "Cambio guardado", text: message, icon: isError ? "error" : "success" });
+    const [editingRole, setEditingRole] = useState(null);
     const [data, setData] = useState(initialData);
     const [kind, setKind] = useState("unit");
     const [unitType, setUnitType] = useState("department");
@@ -198,18 +297,15 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
     const [optionDeleteConfirmation, setOptionDeleteConfirmation] = useState("");
     const [optionDeleteConfirmed, setOptionDeleteConfirmed] = useState(false);
     const [positionUnit, setPositionUnit] = useState("");
-    const [reportUnit, setReportUnit] = useState("");
-    const [reportRole, setReportRole] = useState("");
     const [busy, setBusy] = useState(false);
-    const reportingRoles = [...new Map(data.positions.filter(row => String(row.unit) === String(reportUnit)).map(row => [String(row.job_role), { value: row.job_role, label: row.role_title }])).values()];
-    const reportingPositions = data.positions.filter(row => String(row.unit) === String(reportUnit) && String(row.job_role) === String(reportRole));
-    const levels = [...new Set(data.roles.map(row => row.level?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+    const levels = [...new Set([...(data.role_levels || []).map(row => row.value), ...data.roles.map(row => row.level?.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "es"));
     const levelOptions = roleLevel && !levels.includes(roleLevel) ? [roleLevel, ...levels] : levels;
     const nextOrder = Math.max(0, ...data.positions.filter(row => String(row.unit) === String(positionUnit)).map(row => Number(row.display_order) || 0)) + 1;
     async function submit(event) {
         event.preventDefault();
         const formElement = event.currentTarget;
         const form = new FormData(formElement);
+        if (!await confirmOrganization("¿Crear registro?")) return;
         setBusy(true);
         try {
             const reason = form.get("reason");
@@ -217,12 +313,13 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
             if (kind === "role") await adminApi.createRole({ title: form.get("title"), level: form.get("level") || null, description: form.get("description") || null, reason });
             if (kind === "position") await adminApi.createPosition({ unit: form.get("unit"), job_role: form.get("job_role"), reports_to_position: form.get("reports_to_position") || null, reason });
             formElement.reset();
-            setUnitType("department"); setSensitivity("normal"); setRoleLevel(""); setPositionUnit(""); setReportUnit(""); setReportRole("");
+            setUnitType("department"); setSensitivity("normal"); setRoleLevel(""); setPositionUnit("");
             setNotice("Registro organizacional creado y auditado.");
             setData(await adminApi.organization());
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     async function removeLevel() {
+        if (!await confirmOrganization("¿Eliminar nivel?")) return;
         setBusy(true);
         try {
             await adminApi.deleteRoleLevel({ level: deleteLevel, confirmation: deleteConfirmation, confirmed: deleteConfirmed });
@@ -230,32 +327,38 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
             setNotice("Nivel eliminado de los cargos asociados.");
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
-    async function editRole(role) {
-        const title = globalThis.prompt?.("Título del cargo:", role.title)?.trim(); if (!title) return;
-        const level = globalThis.prompt?.("Nivel del cargo (vacío para ninguno):", role.level || ""); if (level === null) return;
-        const description = globalThis.prompt?.("Descripción:", role.description || ""); if (description === null) return;
-        const reason = globalThis.prompt?.("Motivo de la edición (mínimo 8 caracteres):")?.trim(); if (!reason) return;
+    async function editRole(role, values) {
+        if (!await confirmOrganization("¿Actualizar cargo?")) return false;
         setBusy(true);
-        try { await adminApi.updateRole(role.id, { title, level: level.trim() || null, description: description.trim() || null, reason }); setData(await adminApi.organization()); setNotice("Cargo actualizado."); }
-        catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
+        try {
+            await adminApi.updateRole(role.id, { title: values.title.trim(), level: values.level || null, description: values.description.trim() || null, reason: values.reason.trim() });
+            setData(await adminApi.organization());
+            setEditingRole(null);
+            await setNotice("Cargo actualizado.");
+            return true;
+        } catch (error) { await setNotice(error.message, true); return false; }
+        finally { setBusy(false); }
     }
     async function removeRole() {
+        if (!await confirmOrganization("¿Eliminar cargo?")) return;
         const role = deleteRoleTarget;
-        const reason = globalThis.prompt?.("Motivo de la eliminación (mínimo 8 caracteres):")?.trim(); if (!reason) return;
+        const reason = await askText("Motivo de la eliminación", "", 8); if (!reason) return;
         setBusy(true);
         try { await adminApi.deleteRole(role.id, reason); setData(await adminApi.organization()); setDeleteRoleTarget(null); setRoleDeleteConfirmation(""); setRoleDeleteConfirmed(false); setNotice("Cargo eliminado."); }
         catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     async function editUnit(unit) {
-        const name = globalThis.prompt?.("Nombre de la unidad:", unit.name)?.trim(); if (!name) return;
-        const reason = globalThis.prompt?.("Motivo de la edición (mínimo 8 caracteres):")?.trim(); if (!reason) return;
+        const name = await askText("Nombre de la unidad", unit.name); if (!name) return;
+        const reason = await askText("Motivo de la edición", "", 8); if (!reason) return;
+        if (!await confirmOrganization("¿Actualizar unidad?")) return;
         setBusy(true);
         try { await adminApi.updateUnit(unit.id, { name, reason }); setData(await adminApi.organization()); setNotice("Unidad actualizada."); }
         catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     async function removeUnit() {
+        if (!await confirmOrganization("¿Eliminar unidad?")) return;
         const unit = deleteUnitTarget;
-        const reason = globalThis.prompt?.("Motivo de la eliminación (mínimo 8 caracteres):")?.trim(); if (!reason) return;
+        const reason = await askText("Motivo de la eliminación", "", 8); if (!reason) return;
         setBusy(true);
         try { await adminApi.deleteUnit(unit.id, reason); setData(await adminApi.organization()); setDeleteUnitTarget(null); setUnitDeleteConfirmation(""); setUnitDeleteConfirmed(false); setNotice("Unidad eliminada."); }
         catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
@@ -270,8 +373,8 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
         const option = options.find(row => row.value === current);
         if (action !== "add" && !option) return;
         if (action === "delete") { setDeleteOptionTarget({ option, setCurrent }); setOptionDeleteConfirmation(""); setOptionDeleteConfirmed(false); return; }
-        const value = globalThis.prompt?.(action === "add" ? "Nombre de la nueva opción:" : "Nuevo nombre:", action === "edit" ? current : "")?.trim();
-        if (!value) return;
+        const value = await askText(action === "add" ? "Nombre de la nueva opción" : "Nuevo nombre", action === "edit" ? current : "");
+        if (!value || !await confirmOrganization("¿Actualizar catálogo?")) return;
         setBusy(true);
         try {
             if (action === "add") await adminApi.createOrganizationOption({ kind: kindName, value });
@@ -280,6 +383,7 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     async function removeOption() {
+        if (!await confirmOrganization("¿Eliminar opción?")) return;
         setBusy(true);
         try {
             await adminApi.deleteOrganizationOption(deleteOptionTarget.option.id); deleteOptionTarget.setCurrent(""); setData(await adminApi.organization());
@@ -287,13 +391,53 @@ function OrganizationManager({ data: initialData, setNotice = message => globalT
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
     }
     const optionActions = (kindName, current, setter) => <div className="admin_select_actions"><button type="button" onClick={() => manageOption("add", kindName, current, setter)}>+ Agregar</button><button type="button" disabled={!current} onClick={() => manageOption("edit", kindName, current, setter)}>Editar</button><button type="button" disabled={!current} onClick={() => manageOption("delete", kindName, current, setter)}>Eliminar</button></div>;
-    const levelActions = <div className="admin_select_actions"><button type="button" onClick={() => { const level = globalThis.prompt?.("Nombre del nuevo nivel:")?.trim(); if (level) setRoleLevel(level); }}>+ Agregar nivel</button><button type="button" disabled={!roleLevel} onClick={() => { setDeleteLevel(roleLevel); setDeleteConfirmation(""); setDeleteConfirmed(false); }}>Eliminar nivel</button></div>;
-    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={value => { setKind(value); setRoleLevel(""); setPositionUnit(""); setReportUnit(""); setReportRole(""); }} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
+    const levelActions = <div className="admin_select_actions"><button type="button" onClick={async () => {
+        const result = await adminDialog({
+            title: "Agregar nivel", input: "text", showCancelButton: true,
+            inputValidator: value => !value.trim() ? "Ingresa un nombre." : levels.some(level => level.normalize("NFKC").toLocaleLowerCase("es") === value.trim().normalize("NFKC").toLocaleLowerCase("es")) ? "Ya existe un nivel con ese nombre." : undefined,
+        });
+        if (result.isConfirmed) {
+            const level = result.value.trim();
+            setBusy(true);
+            try {
+                await adminApi.createOrganizationOption({ kind: "role_level", value: level });
+                setData(await adminApi.organization());
+                setRoleLevel(level);
+                setNotice("Nivel agregado al catálogo.");
+            } catch (error) { setNotice(error.message, true); }
+            finally { setBusy(false); }
+        }
+    }}>+ Agregar nivel</button><button type="button" disabled={!roleLevel} onClick={() => { setDeleteLevel(roleLevel); setDeleteConfirmation(""); setDeleteConfirmed(false); }}>Eliminar nivel</button></div>;
+    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={value => { setKind(value); setRoleLevel(""); setPositionUnit(""); }} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
         {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<AdminSelect name="unit_type" label="Tipo" value={unitType} required onValueChange={setUnitType} options={data.unit_types.map(row => ({ value: row.value, label: row.value }))} menuFooter={optionActions("unit_type", unitType, setUnitType)} /></label><label>Sensibilidad<AdminSelect name="sensitivity_level" label="Sensibilidad" value={sensitivity} required onValueChange={setSensitivity} options={data.sensitivity_levels.map(row => ({ value: row.value, label: row.value }))} menuFooter={optionActions("sensitivity", sensitivity, setSensitivity)} /></label><label>Unidad superior<AdminSelect name="parent_unit" label="Unidad superior" options={[{ value: "", label: "Ninguna" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label></>}
         {kind === "role" && <><label>Título<input name="title" required /></label><label>Nivel<AdminSelect name="level" label="Nivel" value={roleLevel} onValueChange={setRoleLevel} options={[{ value: "", label: "Sin nivel" }, ...levelOptions.map(level => ({ value: level, label: level }))]} menuFooter={levelActions} /></label><label>Descripción<textarea name="description" /></label></>}
-        {kind === "position" && <><label>Unidad<AdminSelect name="unit" label="Unidad" value={positionUnit} required onValueChange={setPositionUnit} options={[{ value: "", label: "Seleccionar" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label><label>Cargo<AdminSelect name="job_role" label="Cargo" required options={[{ value: "", label: "Seleccionar" }, ...data.roles.map(row => ({ value: row.id, label: row.title }))]} /></label><label>Departamento de jefatura<AdminSelect label="Departamento de jefatura" value={reportUnit} onValueChange={value => { setReportUnit(value); setReportRole(""); }} options={[{ value: "", label: "Ninguno" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label>{reportUnit && <label>Cargo de jefatura<AdminSelect name="reports_to_role" label="Cargo de jefatura" value={reportRole} required onValueChange={setReportRole} options={[{ value: "", label: "Seleccionar" }, ...reportingRoles]} /></label>}{reportRole && <label>Plaza de jefatura<AdminSelect name="reports_to_position" label="Plaza de jefatura" required options={[{ value: "", label: "Seleccionar" }, ...reportingPositions.map(row => ({ value: row.id, label: positionLabel(row) }))]} /></label>}<label>Orden<input type="number" value={positionUnit ? nextOrder : ""} readOnly /></label></>}
-        <label>Motivo<textarea name="reason" minLength="8" required /></label><footer><span>Los catálogos conservan su historial; no hay borrado físico.</span><button className="admin_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Crear registro"}</button></footer>
-    </form><OrganizationCatalog data={data} actionsUnlocked={roleActionsUnlocked} onUnlock={() => setShowRoleMfa(true)} onEditRole={editRole} onDeleteRole={role => { setDeleteRoleTarget(role); setRoleDeleteConfirmation(""); setRoleDeleteConfirmed(false); }} onEditUnit={editUnit} onDeleteUnit={unit => { setDeleteUnitTarget(unit); setUnitDeleteConfirmation(""); setUnitDeleteConfirmed(false); }} />{showRoleMfa && <div className="admin_modal_backdrop"><form className="admin_delete_level" role="dialog" aria-modal="true" onSubmit={unlockRoleActions}><h3>Verificación MFA</h3><p>Ingresa el código de tu aplicación autenticadora.</p><input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus /><footer><button type="button" onClick={() => setShowRoleMfa(false)} disabled={busy}>Cancelar</button><button className="admin_primary" disabled={busy} type="submit">Verificar</button></footer></form></div>}{deleteUnitTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar unidad</h3><p>Para eliminar, escribe la unidad seleccionada:</p><input value={unitDeleteConfirmation} onChange={event => setUnitDeleteConfirmation(event.target.value)} placeholder={deleteUnitTarget.name} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={unitDeleteConfirmed} onChange={event => setUnitDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteUnitTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || unitDeleteConfirmation !== deleteUnitTarget.name || !unitDeleteConfirmed} onClick={removeUnit}>Eliminar unidad</button></footer></section></div>}{deleteRoleTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar cargo</h3><p>Para eliminar, escribe el cargo seleccionado:</p><input value={roleDeleteConfirmation} onChange={event => setRoleDeleteConfirmation(event.target.value)} placeholder={deleteRoleTarget.title} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={roleDeleteConfirmed} onChange={event => setRoleDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteRoleTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || roleDeleteConfirmation !== deleteRoleTarget.title || !roleDeleteConfirmed} onClick={removeRole}>Eliminar cargo</button></footer></section></div>}{deleteOptionTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar opción</h3><p>Para eliminar, escribe la opción seleccionada:</p><input value={optionDeleteConfirmation} onChange={event => setOptionDeleteConfirmation(event.target.value)} placeholder={deleteOptionTarget.option.value} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={optionDeleteConfirmed} onChange={event => setOptionDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteOptionTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || optionDeleteConfirmation !== deleteOptionTarget.option.value || !optionDeleteConfirmed} onClick={removeOption}>Eliminar opción</button></footer></section></div>}{deleteLevel && <div className="admin_modal_backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDeleteLevel(""); }}><section className="admin_delete_level" role="dialog" aria-modal="true" aria-labelledby="delete_level_title"><h3 id="delete_level_title">Eliminar nivel</h3><p>Para eliminar, escribe el nivel seleccionado:</p><input value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} placeholder={deleteLevel} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={deleteConfirmed} onChange={event => setDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteLevel("")} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || deleteConfirmation !== deleteLevel || !deleteConfirmed} onClick={removeLevel}>Eliminar nivel</button></footer></section></div>}</>;
+        {kind === "position" && <>
+            <label>Unidad<AdminSelect
+                name="unit"
+                label="Unidad"
+                value={positionUnit}
+                required
+                onValueChange={setPositionUnit}
+                options={[{ value: "", label: "Seleccionar" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]}
+            /></label>
+            <label>Cargo<AdminSelect
+                name="job_role"
+                label="Cargo"
+                required
+                options={[{ value: "", label: "Seleccionar" }, ...data.roles.map(row => ({ value: row.id, label: row.title }))]}
+            /></label>
+            <div className="admin_reporting_field">
+                <span>Reportar a</span>
+                <ReportingPosition units={data.units} positions={data.positions} />
+            </div>
+            <label>Orden<input type="number" value={positionUnit ? nextOrder : ""} readOnly /></label>
+        </>}
+        <label>Motivo<textarea name="reason" minLength="8" required /></label>
+        <footer>
+            <span>Los cambios quedan registrados en auditoría.</span>
+            <button className="admin_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Crear registro"}</button>
+        </footer>
+    </form>{editingRole && <RoleEditor role={editingRole} levels={levels} onSave={editRole} onClose={() => setEditingRole(null)} />}<OrganizationCatalog data={data} actionsUnlocked={roleActionsUnlocked} onUnlock={() => setShowRoleMfa(true)} onEditRole={setEditingRole} onDeleteRole={role => { setDeleteRoleTarget(role); setRoleDeleteConfirmation(""); setRoleDeleteConfirmed(false); }} onEditUnit={editUnit} onDeleteUnit={unit => { setDeleteUnitTarget(unit); setUnitDeleteConfirmation(""); setUnitDeleteConfirmed(false); }} />{showRoleMfa && <div className="admin_modal_backdrop"><form className="admin_delete_level" role="dialog" aria-modal="true" onSubmit={unlockRoleActions}><h3>Verificación MFA</h3><p>Ingresa el código de tu aplicación autenticadora.</p><input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus /><footer><button type="button" onClick={() => setShowRoleMfa(false)} disabled={busy}>Cancelar</button><button className="admin_primary" disabled={busy} type="submit">Verificar</button></footer></form></div>}{deleteUnitTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar unidad</h3><p>Para eliminar, escribe la unidad seleccionada:</p><input value={unitDeleteConfirmation} onChange={event => setUnitDeleteConfirmation(event.target.value)} placeholder={deleteUnitTarget.name} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={unitDeleteConfirmed} onChange={event => setUnitDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteUnitTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || unitDeleteConfirmation !== deleteUnitTarget.name || !unitDeleteConfirmed} onClick={removeUnit}>Eliminar unidad</button></footer></section></div>}{deleteRoleTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar cargo</h3><p>Para eliminar, escribe el cargo seleccionado:</p><input value={roleDeleteConfirmation} onChange={event => setRoleDeleteConfirmation(event.target.value)} placeholder={deleteRoleTarget.title} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={roleDeleteConfirmed} onChange={event => setRoleDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteRoleTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || roleDeleteConfirmation !== deleteRoleTarget.title || !roleDeleteConfirmed} onClick={removeRole}>Eliminar cargo</button></footer></section></div>}{deleteOptionTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar opción</h3><p>Para eliminar, escribe la opción seleccionada:</p><input value={optionDeleteConfirmation} onChange={event => setOptionDeleteConfirmation(event.target.value)} placeholder={deleteOptionTarget.option.value} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={optionDeleteConfirmed} onChange={event => setOptionDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteOptionTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || optionDeleteConfirmation !== deleteOptionTarget.option.value || !optionDeleteConfirmed} onClick={removeOption}>Eliminar opción</button></footer></section></div>}{deleteLevel && <div className="admin_modal_backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDeleteLevel(""); }}><section className="admin_delete_level" role="dialog" aria-modal="true" aria-labelledby="delete_level_title"><h3 id="delete_level_title">Eliminar nivel</h3><p>Para eliminar, escribe el nivel seleccionado:</p><input value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} placeholder={deleteLevel} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={deleteConfirmed} onChange={event => setDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteLevel("")} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || deleteConfirmation !== deleteLevel || !deleteConfirmed} onClick={removeLevel}>Eliminar nivel</button></footer></section></div>}</>;
 }
 
 function OrganizationCatalog({ data, actionsUnlocked, onUnlock, onEditRole, onDeleteRole, onEditUnit, onDeleteUnit }) {
@@ -316,5 +460,5 @@ export default function AdministrationModule() {
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
     if (!data) return <Loading error={error} onRetry={load} />;
-    return <section className="administration_module"><header className="admin_module_header"><div><span className="admin_eyebrow">GOBIERNO DE LA APLICACIÓN</span><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} setNotice={setNotice} />}{active === "audit" && <Audit rows={data.audit} />}{active === "organization" && <Organization data={data.organization} />}</section>;
+    return <section className="administration_module"><header className="admin_module_header"><div><span className="admin_eyebrow">GOBIERNO DE LA APLICACIÓN</span><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} />}{active === "audit" && <Audit rows={data.audit} />}{active === "organization" && <Organization data={data.organization} />}</section>;
 }

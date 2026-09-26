@@ -9436,3 +9436,44 @@ button {
     .task_drawer_overlay > .task_drawer_panel,
     .task_drawer_overlay.task_drawer_closing > .task_drawer_panel { animation-duration: 1ms !important; }
 }
+
+/* Top-layer calendars stay within the desktop viewport and modal focus scope. */
+.custom_datepicker_popover[popover] {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    color: var(--bold_text, #252a34);
+}
+.calendar_required {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+.theme_dark .custom_datepicker_popover .day_cell:not(.day_cell_active):not(.day_cell_today),
+.theme_dark .custom_datepicker_popover .task_select_trigger,
+.theme_dark .edit_task_modal label,
+.theme_dark .project_modal label {
+    color: #edf0f5;
+}
+.theme_dark .custom_datepicker_popover .day_cell:not(.day_cell_active):hover {
+    background: #4b2b32;
+    color: #fff;
+}
+.theme_dark .bold_date_trigger_btn svg,
+.theme_dark .custom_datepicker_nav > button {
+    color: #c7ced9;
+}
+.custom_datepicker_popover .task_select_menu {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.theme_dark .project_create_step > span,
+.theme_dark .project_create_step > span > strong,
+.theme_dark .project_create_details label,
+.theme_dark .bold_field_label {
+    color: #edf0f5;
+}

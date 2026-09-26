@@ -131,6 +131,25 @@ class OrganizationalUnitAdminSerializer(serializers.ModelSerializer):
 
 
 class OrganizationCatalogOptionSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        kind = attrs.get("kind", getattr(self.instance, "kind", None))
+        if self.instance and kind != self.instance.kind:
+            raise serializers.ValidationError({"kind": "No se puede cambiar el tipo de catálogo."})
+        value = unicodedata.normalize("NFKC", attrs.get("value", getattr(self.instance, "value", ""))).strip()
+        if not value:
+            raise serializers.ValidationError({"value": "Ingresa un nombre."})
+        if kind == OrganizationCatalogOption.ROLE_LEVEL:
+            options = OrganizationCatalogOption.objects.filter(kind=kind)
+            if self.instance:
+                options = options.exclude(pk=self.instance.pk)
+            names = list(options.values_list("value", flat=True))
+            names.extend(JobRole.objects.exclude(level=getattr(self.instance, "value", None)).values_list("level", flat=True))
+            normalized = " ".join(value.casefold().split())
+            if any(" ".join(unicodedata.normalize("NFKC", name or "").casefold().split()) == normalized for name in names):
+                raise serializers.ValidationError({"value": "Ya existe un nivel con ese nombre."})
+        attrs["value"] = value
+        return attrs
+
     class Meta:
         model = OrganizationCatalogOption
         fields = ["id", "kind", "value"]

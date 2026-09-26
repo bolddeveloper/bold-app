@@ -54,6 +54,14 @@
 .workspace_filter_panel .bold_date_trigger_btn { min-height: 42px; padding: 9px 12px; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); font-size: 13px; font-weight: 600; }
 .workspace_filter_panel .bold_date_trigger_btn:hover, .workspace_filter_panel .bold_date_trigger_btn[aria-expanded="true"] { border-color: var(--bold_red, #ef1f2d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent); }
 .workspace_ops .custom_datepicker_popover { color: var(--bold_text, #252a34); text-transform: none; letter-spacing: normal; }
+.workspace_swal {
+    border: 1px solid var(--bold_line, #dce2ea);
+    border-radius: 14px;
+}
+.theme_dark .workspace_swal {
+    background: #22262e;
+    color: #edf0f5;
+}
 .workspace_ops .custom_datepicker_nav > button { min-height: 32px; padding: 4px; border: 0; }
 .workspace_ops .custom_datepicker_popover .day_cell { min-height: 30px; border: 0; }
 .workspace_ops .custom_datepicker_actions button { min-height: 34px; padding: 6px 9px; border: 0; }
@@ -128,3 +136,83 @@
     .workspace_bulk { position: static; }
 }
 @media (max-width: 400px) { .workspace_task_cell::before { flex-basis: 82px; } .workspace_ops_heading .primary_button { width: 100%; justify-content: center; } }
+
+.workspace_filter_panel {
+    gap: 16px;
+    padding-inline: 20px;
+    padding-bottom: 20px;
+    animation: workspace_filters_enter 160ms ease-out;
+}
+.workspace_filter_panel fieldset {
+    padding: 12px;
+}
+.workspace_ops input[type="checkbox"] {
+    accent-color: var(--bold_red, #ef1f2d);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.workspace_ops input[type="checkbox"]:active {
+    transform: scale(.88);
+}
+.workspace_ops input[type="checkbox"]:checked {
+    box-shadow: 0 0 0 3px rgb(239 31 45 / 12%);
+}
+@keyframes workspace_filters_enter {
+    from {
+        opacity: 0;
+        translate: 0 -6px;
+    }
+    to {
+        opacity: 1;
+        translate: 0 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .workspace_filter_panel {
+        animation: none;
+    }
+    .workspace_ops input[type="checkbox"] {
+        transition: none;
+    }
+}
+
+.workspace_filter_panel {
+    padding: 20px;
+    align-items: start;
+}
+.workspace_filter_heading {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: sticky;
+    top: -20px;
+    z-index: 4;
+    padding: 12px 0;
+    background: var(--bold_surface, #fff);
+    border-bottom: 1px solid var(--bold_line, #ddd);
+}
+.workspace_filter_heading h2 {
+    margin: 0;
+    font-size: 18px;
+}
+.workspace_filter_heading .workspace_filters_close {
+    position: static;
+}
+.workspace_filter_panel fieldset {
+    background: var(--bold_surface_soft, #f7f7f7);
+}
+.workspace_filter_panel .workspace_filter_options {
+    gap: 6px;
+    max-height: 120px;
+    padding-block: 4px;
+}
+.workspace_filter_panel .workspace_filter_options label {
+    min-height: 28px;
+    align-items: flex-start;
+    line-height: 1.5;
+}
+.workspace_filter_panel input[type="checkbox"] {
+    flex-shrink: 0;
+    margin-top: 3px;
+}

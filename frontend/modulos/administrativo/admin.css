@@ -105,7 +105,13 @@
 .admin_delete_level button { min-height: 40px; border: 1px solid #dce2ea; border-radius: 9px; padding: 9px 12px; background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .admin_delete_level button:disabled { cursor: not-allowed; opacity: .5; }
 .admin_notice { padding: 11px 14px; border-radius: 9px; background: #daf7e8; animation: admin_notice_enter 260ms cubic-bezier(.2, .8, .2, 1) backwards; }
-.admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied { background: #fee7e9; color: #9b1c2b; }
+.admin_notice.is_error,
+.admin_outcome.is_failure,
+.admin_outcome.is_denied,
+.admin_outcome.is_error {
+    background: #fee7e9;
+    color: #9b1c2b;
+}
 .admin_audit_table { overflow-x: auto; }
 .admin_audit_row { display: grid; grid-template-columns: 170px 130px minmax(210px, 1fr) minmax(180px, 1fr) 90px; gap: 12px; align-items: center; min-width: 780px; padding: 11px 8px; border-bottom: 1px solid #edf0f4; border-radius: 8px; transition: background-color 140ms ease; }
 .admin_audit_row:not(.is_header):hover { background: #f8fafc; }
@@ -233,7 +239,7 @@
     background: var(--bold_green_tint);
     color: #8bdeb0;
 }
-.theme_dark :is(.admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied) {
+.theme_dark :is(.admin_notice.is_error, .admin_outcome.is_failure, .admin_outcome.is_denied, .admin_outcome.is_error) {
     background: var(--bold_red_tint);
     color: #ff9aa1;
 }
@@ -294,4 +300,301 @@
     .administration_module *, .admin_state * { scroll-behavior: auto !important; }
     .admin_module_header, .admin_dashboard, .admin_directory, .admin_organization, .admin_catalog_form, .administration_module > .admin_panel, .admin_metric_card, .admin_module_card, .admin_activity_list article, .admin_person_avatar, .admin_notice, .admin_state, .admin_select_menu { animation: none !important; }
     .administration_module :is(button, article, div, input, select, textarea), .admin_module_header nav button::after { transition: none !important; }
+}
+
+/* Desktop catalog and audit readability, using the task surfaces. */
+.administration_module {
+    background: var(--bold_bg, #f7f8fa);
+    color: var(--bold_text, #252a34);
+}
+.admin_module_header h1 {
+    font-size: 28px;
+}
+.admin_audit_table {
+    overflow-x: auto;
+}
+.admin_audit_row {
+    grid-template-columns: 155px minmax(110px, .7fr) minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(100px, .6fr);
+    min-width: 850px;
+    gap: 16px;
+    padding: 14px 12px;
+    line-height: 1.5;
+}
+.admin_audit_row > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+.admin_outcome {
+    justify-self: start;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.admin_select_actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 6px 6px;
+    border-top: 1px solid var(--bold_line, #e2e7ee);
+}
+.admin_select_actions button {
+    flex: 1 1 auto;
+    min-height: 36px;
+    white-space: nowrap;
+    text-align: center;
+}
+.admin_organization article {
+    flex-wrap: wrap;
+}
+.admin_organization article > div,
+.admin_organization article > small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.admin_swal {
+    font: inherit;
+    border: 1px solid var(--bold_line, #dce2ea);
+    border-radius: 14px;
+}
+.theme_dark .admin_swal {
+    background: #22262e;
+    color: #edf0f5;
+}
+.theme_dark .admin_swal :is(input, select, textarea) {
+    background: #191d24;
+    color: #edf0f5;
+    border-color: #465060;
+}
+
+.swal2-container:has(.admin_swal) {
+    z-index: 2300;
+}
+.admin_select_actions button {
+    display: flex;
+    justify-content: center;
+    width: auto;
+}
+.admin_select_trigger {
+    font: inherit;
+    cursor: pointer;
+}
+.admin_reporting_field {
+    display: grid;
+    gap: 6px;
+}
+.admin_reporting {
+    position: relative;
+    min-width: 0;
+}
+.admin_reporting > summary {
+    list-style: none;
+}
+.admin_reporting > summary::-webkit-details-marker {
+    display: none;
+}
+.admin_reporting > summary:focus-visible {
+    outline: 2px solid var(--bold_red, #ef1f2d);
+    outline-offset: 2px;
+}
+.admin_reporting[open] > summary {
+    border-color: var(--bold_red, #ef1f2d) !important;
+    box-shadow: 0 0 0 3px rgb(239 31 45 / 12%) !important;
+}
+.admin_reporting[open] > summary svg {
+    transform: rotate(180deg);
+}
+.admin_reporting_menu {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: 0;
+    z-index: 70;
+    display: grid;
+    width: max(100%, 340px);
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--bold_line, #dce2ea);
+    border-radius: 11px;
+    background: var(--bold_elevated, #fff);
+    box-shadow: 0 18px 42px rgb(15 23 42 / 18%);
+    animation: admin_select_open 190ms cubic-bezier(.2, .8, .2, 1) backwards;
+}
+.admin_reporting_menu label {
+    min-width: 0;
+}
+.admin_reporting_menu .admin_select {
+    min-width: 0;
+}
+.admin_reporting_menu :is(.admin_reporting_none, .admin_reporting_done) {
+    width: 100%;
+    text-align: left;
+}
+.admin_reporting input[type="hidden"] {
+    display: none;
+}
+.theme_dark .admin_reporting_menu {
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+    box-shadow: 0 20px 46px rgb(0 0 0 / 35%);
+}
+@media (prefers-reduced-motion: reduce) {
+    .admin_reporting_menu {
+        animation: none;
+    }
+}
+.administration_module :is(.admin_panel, .admin_metric_card, .admin_module_card, .admin_employee_detail, .admin_form) {
+    background: var(--bold_surface, #fff);
+    border-color: var(--bold_line, #e2e7ee);
+    box-shadow: none;
+}
+.administration_module :is(.admin_metric_card, .admin_module_card):hover {
+    transform: none;
+}
+.admin_module_header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+.admin_module_header nav {
+    width: 100%;
+    padding-top: 8px;
+    gap: 8px;
+}
+.admin_module_header nav button {
+    min-height: 38px;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+.admin_module_header nav button::after,
+.admin_metric_card::before,
+.admin_module_card h3::before,
+.admin_module_card p::after {
+    display: none;
+}
+.admin_metric_card {
+    padding: 18px;
+}
+.admin_panel h2 {
+    font-size: 18px;
+}
+.admin_audit_header {
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.admin_audit_header p {
+    margin: 6px 0 0;
+    color: var(--bold_muted, #68717d);
+    font-size: 13px;
+}
+.admin_audit_filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.admin_search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--bold_line, #dce2ea);
+    border-radius: 9px;
+    background: var(--bold_surface_soft, #f7f7f7);
+}
+.admin_search input,
+.theme_dark .admin_search input {
+    width: 210px;
+    border: 0;
+    padding-inline: 0;
+    background: transparent;
+}
+.admin_audit_table table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.admin_audit_table th,
+.admin_audit_table td {
+    padding: 16px 12px;
+    border-bottom: 1px solid var(--bold_line, #e2e7ee);
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.admin_audit_table th {
+    background: var(--bold_surface_soft, #f7f7f7);
+    color: var(--bold_muted, #68717d);
+    font-size: 12px;
+    font-weight: 600;
+}
+.admin_audit_table th:first-child {
+    width: 17%;
+}
+.admin_audit_table th:nth-child(2) {
+    width: 40%;
+}
+.admin_audit_table th:last-child {
+    width: 14%;
+}
+.admin_audit_table tbody tr:hover {
+    background: var(--bold_hover, #f7f7f7);
+}
+.admin_event_name {
+    display: block;
+    margin-top: 8px;
+    font-weight: 600;
+}
+.admin_event_unit,
+.admin_event_details {
+    display: block;
+    margin-top: 6px;
+    color: var(--bold_muted, #68717d);
+    font-size: 12px;
+}
+.admin_event_details summary {
+    width: fit-content;
+    cursor: pointer;
+}
+.admin_event_details dl {
+    display: grid;
+    gap: 5px;
+}
+.admin_event_details dd {
+    margin: 0 0 8px;
+    color: var(--bold_text, #252a34);
+}
+.admin_empty {
+    padding: 24px;
+    color: var(--bold_muted, #68717d);
+    text-align: center;
+}
+.admin_role_editor {
+    width: min(600px, calc(100% - 48px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 24px;
+    color: var(--bold_text, #252a34);
+}
+.admin_role_editor h2 {
+    margin: 6px 0 10px;
+}
+.admin_role_editor textarea {
+    padding: 12px;
+    border: 1px solid var(--bold_line, #dce2ea);
+    border-radius: 9px;
+    background: var(--bold_surface_soft, #f7f7f7);
+    color: inherit;
+    font: inherit;
+}
+.admin_role_editor footer {
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid var(--bold_line, #dce2ea);
+}
+@media (prefers-reduced-motion: reduce) {
+    .admin_swal {
+        animation: none !important;
+    }
 }

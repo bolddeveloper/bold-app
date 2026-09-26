@@ -140,7 +140,8 @@ class SystemAuditEvent(models.Model):
 class OrganizationCatalogOption(models.Model):
     UNIT_TYPE = "unit_type"
     SENSITIVITY = "sensitivity"
-    KIND_CHOICES = [(UNIT_TYPE, "Tipo de unidad"), (SENSITIVITY, "Sensibilidad")]
+    ROLE_LEVEL = "role_level"
+    KIND_CHOICES = [(UNIT_TYPE, "Tipo de unidad"), (SENSITIVITY, "Sensibilidad"), (ROLE_LEVEL, "Nivel de cargo")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)
