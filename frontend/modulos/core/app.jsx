@@ -6,11 +6,11 @@ import PermissionsModule from "../permisos/permissions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 
 const baseNavigation = [
-    { id: "home", label: "Inicio", icon: "home" },
-    { id: "tasks", label: "Tareas", icon: "check", default: true, brand: true },
-    { id: "inbox", label: "Bandeja de entrada", icon: "inbox" },
-    { id: "reports", label: "Informes", icon: "reports" },
-    { id: "permissions", label: "Permisos", icon: "permissions" },
+    { id: "home", label: "Inicio", icon: "home", group: "work" },
+    { id: "tasks", label: "Tareas", icon: "check", default: true, brand: true, group: "work" },
+    { id: "inbox", label: "Bandeja de entrada", icon: "inbox", group: "work" },
+    { id: "reports", label: "Informes", icon: "reports", group: "management" },
+    { id: "permissions", label: "Permisos", icon: "permissions", group: "management" },
 ];
 
 const mockIdentity = { directory: team_members, assignments: team_members, activeAssignment: team_members[0] };
@@ -18,7 +18,7 @@ const mockIdentity = { directory: team_members, assignments: team_members, activ
 function ApplicationWorkspace() {
     const core = useCore();
     const navigation = core.account?.is_superuser
-        ? [...baseNavigation, { id: "administration", label: "Administración", icon: "administration" }]
+        ? [...baseNavigation, { id: "administration", label: "Administración", icon: "administration", group: "management" }]
         : baseNavigation;
     return <ShellProvider navigation={navigation}>
         <TasksModule externalModules={{

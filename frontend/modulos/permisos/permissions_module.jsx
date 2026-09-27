@@ -1,9 +1,9 @@
+import { Children, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Check, KeyRound, LockKeyhole, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import Swal from "sweetalert2";
 import { BoldSelect } from "../core/shared/bold_select.jsx";
 import { CalendarDateField } from "../tareas/src/task_app.jsx";
-import { Children, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, KeyRound, RefreshCw, ShieldCheck, X } from "lucide-react";
-import Swal from "sweetalert2";
-
 import { coreApi } from "../core/core_api.js";
 import { useCore } from "../core/core_provider.jsx";
 import { is_using_real_backend } from "../core/http_client.js";
@@ -11,378 +11,52 @@ import { permissionsApi } from "./permissions_api.js";
 import { fetchConsistentPermissionSnapshot } from "./permissions_state.js";
 import "./permissions.css";
 
+function Select({ children, onChange, ...props }) { const options = Children.toArray(children).map(x => ({ value: x.props.value, label: x.props.children })); return <BoldSelect {...props} options={options} onValueChange={value => onChange?.({ target: { value } })} />; }
+const dialog = options => Swal.fire({ confirmButtonColor: "#ef1f2d", cancelButtonText: "Cancelar", showCancelButton: true, customClass: { popup: "permissions_swal" }, ...options });
+const scopes = { global: "Global", own_unit: "Unidad propia", sub_tree: "Unidad y subárbol", specific_unit: "Unidad específica" };
+const risks = { low: "Bajo", medium: "Medio", high: "Alto", critical: "Crítico" };
+const nameOf = p => p?.description || p?.resource || p?.code || "Permiso";
+const iso = value => value ? new Date(value).toISOString() : null;
+function expiry(hours = 24, ceiling) { const d = new Date(Math.min(Date.now() + hours * 3600000, ceiling ? new Date(ceiling).getTime() : Infinity)); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function grantState(x) { if (x.status === "revoked") return "Revocada"; if (x.valid_from && new Date(x.valid_from) > new Date()) return "Programada"; if (x.valid_until && new Date(x.valid_until) <= new Date()) return "Expirada"; return x.effective ? "Vigente" : "Inactiva"; }
+function authorityState(x) { if (!x.is_active || x.revoked_at) return "Revocada"; if (x.valid_until && new Date(x.valid_until) <= new Date()) return "Expirada"; return x.effective ? "Vigente" : "Cadena inactiva"; }
+function Status({ children, good }) { const danger = /deneg|revoc|expir|inactiv/i.test(children); return <span className={`permissions_status ${good || (!danger && /vigente|permit|success/i.test(children)) ? "success" : danger ? "danger" : "neutral"}`}>{children}</span>; }
+const Empty = ({ children }) => <p className="permissions_empty">{children}</p>;
 
-function PermissionSelect({ children, onChange, ...props }) {
-    const options = Children.toArray(children).map(child => ({ value: child.props.value, label: child.props.children }));
-    return <BoldSelect {...props} options={options} onValueChange={value => onChange?.({ target: { value } })} />;
+function Drawer({ title, subtitle, close, children, wide }) {
+    const box = useRef(), previous = useRef(document.activeElement), dirty = useRef(false), closeRef = useRef(close); closeRef.current = close;
+    async function requestClose() { if (dirty.current && !(await dialog({ title: "¿Descartar cambios?", text: "Los datos sin guardar se perderán.", icon: "warning", confirmButtonText: "Descartar" })).isConfirmed) return; closeRef.current(); }
+    useEffect(() => { box.current?.focus(); const key = e => e.key === "Escape" && requestClose(); document.addEventListener("keydown", key); return () => { document.removeEventListener("keydown", key); previous.current?.focus?.(); }; }, []);
+    return createPortal(<div className="permissions_drawer_backdrop" onMouseDown={e => e.target === e.currentTarget && requestClose()}><aside className={`permissions_drawer ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" tabIndex={-1} ref={box} onInput={() => { dirty.current = true; }}><header><div><h2>{title}</h2><p>{subtitle}</p></div><button onClick={requestClose} aria-label="Cerrar"><X /></button></header><div className="permissions_drawer_body">{children}</div></aside></div>, document.body);
 }
+function Filters({ query, setQuery, children }) { return <div className="permissions_filters"><label className="permissions_search"><Search size={16} /><input aria-label="Buscar" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar…" /></label>{children}</div>; }
+function Unlock({ done }) { const [error, setError] = useState(""); const [busy, setBusy] = useState(false); async function submit(e) { e.preventDefault(); setBusy(true); try { await coreApi.stepUpMfa(new FormData(e.currentTarget).get("code")); await done(); } catch (x) { setError(x.message); } finally { setBusy(false); } } return <form className="permissions_drawer_form" onSubmit={submit}><div className="permissions_callout"><LockKeyhole /><p>Confirma tu identidad para habilitar acciones sensibles durante diez minutos.</p></div><label>Código TOTP<input name="code" inputMode="numeric" autoComplete="one-time-code" minLength="6" maxLength="8" autoFocus required /></label>{error && <p className="permissions_error">{error}</p>}<button disabled={busy}>{busy ? "Verificando…" : "Desbloquear edición"}</button></form>; }
 
-const permissionDialog = options => Swal.fire({
-    confirmButtonColor: "#ef1f2d",
-    cancelButtonText: "Cancelar",
-    customClass: { popup: "permissions_swal" },
-    showCancelButton: true,
-    ...options,
-});
+function Summary({ state, units, unit, setUnit, go }) { const allowed = state.effective.filter(x => x.allowed), denied = state.effective.filter(x => !x.allowed), groups = Object.entries(state.effective.reduce((a, x) => { (a[x.module_code || "General"] ||= []).push(x); return a; }, {})); return <div className="permissions_stack"><section className="permissions_metrics"><article><span>Permitidos</span><strong>{allowed.length}</strong><small>{unit?.name}</small></article><article><span>Denegados</span><strong>{denied.length}</strong><small>decisiones efectivas</small></article><article><span>Accesos activos</span><strong>{state.grants.filter(x => grantState(x) === "Vigente").length}</strong><button onClick={() => go("grants")}>Ver accesos</button></article><article><span>Autoridades vigentes</span><strong>{state.authorities.filter(x => authorityState(x) === "Vigente").length}</strong><button onClick={() => go("authorities")}>Ver autoridades</button></article></section><section className="permissions_panel"><header><div><h2>Mis accesos efectivos</h2><p>Qué puedes hacer y por qué.</p></div>{units.length > 1 && <label className="permissions_unit_picker">Unidad<Select value={unit?.id} onChange={e => setUnit(e.target.value)}>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}</header>{groups.map(([module, rows]) => <section className="permissions_group" key={module}><h3>{module}</h3><div className="permissions_cards">{rows.map(row => { const p = state.catalog.find(x => x.id === row.permission); return <article className="permission_card" key={row.code}><span className={row.allowed ? "allowed" : "denied"}>{row.allowed ? <Check /> : <X />}</span><div><strong>{nameOf(p)}</strong><code>{row.code}</code><small>{row.reason}</small></div><Status good={row.allowed}>{row.allowed ? "Permitido" : "Denegado"}</Status></article>; })}</div></section>)}</section></div>; }
 
-async function askRevocationReason() {
-    const result = await permissionDialog({
-        title: "Motivo de la revocación",
-        input: "text",
-        inputValidator: value => value.trim().length < 8 ? "Escribe al menos 8 caracteres." : undefined,
-        confirmButtonText: "Revocar",
-    });
-    return result.isConfirmed ? result.value.trim() : null;
+function Policies({ state, units, changed, unlocked, unlock }) {
+    const roles = state.policies.roles.filter(x => x.level?.toLowerCase() !== "owner"), [roleId, setRole] = useState(roles[0]?.id || ""), [query, setQuery] = useState(""), [risk, setRisk] = useState(""), [edit, setEdit] = useState(null); const role = roles.find(x => x.id === roleId) || roles[0]; const visible = state.catalog.filter(x => `${nameOf(x)} ${x.code} ${x.module_code}`.toLowerCase().includes(query.toLowerCase()) && (!risk || x.risk_level === risk)); const groups = Object.entries(visible.reduce((a, x) => { (a[x.module_code || "General"] ||= []).push(x); return a; }, {}));
+    return <section className="permissions_panel"><header><div><h2>Políticas por cargo</h2><p>Permisos base organizados por módulo.</p></div><label>Cargo<Select value={role?.id || ""} onChange={e => setRole(e.target.value)}>{roles.map(x => <option key={x.id} value={x.id}>{x.title}</option>)}</Select></label></header><Filters query={query} setQuery={setQuery}><Select value={risk} onChange={e => setRisk(e.target.value)}><option value="">Todos los riesgos</option>{Object.entries(risks).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Filters><div className="permissions_catalog">{groups.map(([module, items]) => <section key={module}><h3>{module}</h3>{items.map(p => { const rules = state.policies.rules.filter(x => x.job_role === role?.id && x.permission === p.id); return <button key={p.id} onClick={() => unlocked ? setEdit(p) : unlock()}><div><strong>{nameOf(p)}</strong><code>{p.code}</code></div><div>{rules.length ? rules.map(x => <Status key={x.id} good={x.effect === "allow"}>{x.effect === "allow" ? "Permitir" : "Denegar"} · {scopes[x.scope_type]}</Status>) : <Status>Sin regla</Status>}<Status>{risks[p.risk_level]}</Status></div></button>; })}</section>)}</div>{edit && <Drawer title="Configurar política" subtitle={role.title} close={() => setEdit(null)}><PolicyForm role={role} permission={edit} rules={state.policies.rules.filter(x => x.job_role === role.id && x.permission === edit.id)} units={units} revision={state.revision} changed={changed} close={() => setEdit(null)} /></Drawer>}</section>;
 }
+function PolicyForm({ role, permission, rules: current, units, revision, changed, close }) { const [scope, setScope] = useState("own_unit"), [effect, setEffect] = useState("allow"), [unit, setUnit] = useState(""), [reason, setReason] = useState(""), [error, setError] = useState(""); const needs = ["specific_unit", "sub_tree"].includes(scope); async function save(e) { e.preventDefault(); const target = needs ? unit : null, rules = current.filter(x => !(x.scope_type === scope && (x.target_unit || null) === target)).map(x => ({ effect: x.effect, scope_type: x.scope_type, ...(x.target_unit && { target_unit: x.target_unit }) })); try { const r = await permissionsApi.replaceRolePolicy({ job_role: role.id, permission: permission.id, rules: [...rules, { effect, scope_type: scope, ...(needs && { target_unit: unit }) }], reason, expected_revision: revision }); await changed(r.revision); close(); } catch (x) { setError(x.message); } } async function remove() { if (reason.trim().length < 8) return setError("Escribe un motivo de al menos 8 caracteres."); if (!(await dialog({ title: "¿Quitar todas las reglas?", icon: "warning", confirmButtonText: "Quitar" })).isConfirmed) return; try { const r = await permissionsApi.replaceRolePolicy({ job_role: role.id, permission: permission.id, rules: [], reason, expected_revision: revision }); await changed(r.revision); close(); } catch (x) { setError(x.message); } } return <form className="permissions_drawer_form" onSubmit={save}><div className="permissions_selection"><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div><label>Efecto<Select value={effect} onChange={e => setEffect(e.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></Select></label><label>Alcance<Select value={scope} onChange={e => setScope(e.target.value)}>{Object.entries(scopes).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></label>{needs && <label>Unidad<Select value={unit} onChange={e => setUnit(e.target.value)} required><option value="">Seleccionar…</option>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}<label>Motivo<textarea value={reason} onChange={e => setReason(e.target.value)} minLength="8" required /></label>{error && <p className="permissions_error">{error}</p>}<div className="permissions_form_actions"><button>Guardar regla</button>{current.length > 0 && <button type="button" className="permissions_danger" onClick={remove}>Quitar todas</button>}</div></form>; }
 
-const scopeLabels = {
-    global: "Global",
-    own_unit: "Unidad propia",
-    sub_tree: "Unidad y subárbol",
-    specific_unit: "Unidad específica",
-};
-const riskLabels = { low: "Bajo", medium: "Medio", high: "Alto", critical: "Crítico" };
-
-function isoFromLocal(value) {
-    return value ? new Date(value).toISOString() : null;
+function Records({ kind, state, core, units, changed, unlocked, unlock }) {
+    const authority = kind === "authorities", rows = authority ? state.authorities : state.grants, [open, setOpen] = useState(false), [query, setQuery] = useState(""), [filter, setFilter] = useState(""), [error, setError] = useState(""); const status = x => authority ? authorityState(x) : grantState(x); const visible = rows.filter(x => JSON.stringify(x).toLowerCase().includes(query.toLowerCase()) && (!filter || status(x) === filter));
+    async function revoke(row) { const answer = await dialog({ title: "Motivo de la revocación", input: "text", inputValidator: x => x.trim().length < 8 ? "Escribe al menos 8 caracteres." : undefined, confirmButtonText: "Revocar" }); if (!answer.isConfirmed) return; try { const r = authority ? await permissionsApi.revokeAuthority(row.id, { reason: answer.value.trim(), expected_revision: state.revision }) : await permissionsApi.revokeGrant(row.id, { reason: answer.value.trim(), expected_revision: state.revision }); await changed(r.revision); } catch (x) { setError(x.message); } }
+    function create() { unlocked ? setOpen(true) : unlock(); }
+    return <section className="permissions_panel"><header><div><h2>{authority ? "Autoridades delegadas" : "Accesos individuales"}</h2><p>{authority ? "Quién puede administrar accesos y dentro de qué alcance." : "Excepciones temporales y denegaciones por persona."}</p></div><button className="permissions_primary" onClick={create}><Plus />{authority ? "Nueva autoridad" : "Nuevo acceso"}</button></header><Filters query={query} setQuery={setQuery}><Select value={filter} onChange={e => setFilter(e.target.value)}><option value="">Todos los estados</option>{["Vigente", "Programada", "Expirada", "Revocada", "Inactiva", "Cadena inactiva"].map(x => <option key={x} value={x}>{x}</option>)}</Select></Filters>{error && <p className="permissions_error">{error}</p>}<div className="permissions_table_wrap"><table><thead><tr><th>{authority ? "Responsable" : "Empleado"}</th><th>{authority ? "Alcance" : "Permiso"}</th><th>{authority ? "Permisos" : "Regla"}</th><th>Vence</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{visible.map(x => <tr key={x.id}><td data-label="Persona"><strong>{authority ? x.assignment_name : x.grantee_name}</strong><small>{authority ? x.assignment_email : x.grantee_email}</small></td><td data-label="Detalle">{authority ? `${scopes[x.scope_type]} · ${x.target_unit_name || ""}` : x.permission_code}</td><td data-label="Permisos">{authority ? x.permission_codes.join(", ") : `${x.effect === "allow" ? "Permitir" : "Denegar"} · ${scopes[x.scope_type]}`}</td><td data-label="Vence">{x.valid_until ? new Date(x.valid_until).toLocaleString() : "—"}</td><td data-label="Estado"><Status>{status(x)}</Status></td><td data-label="Acción"><button className="permissions_text_button" onClick={() => revoke(x)}>Revocar</button></td></tr>)}</tbody></table>{visible.length === 0 && <Empty>No hay resultados.</Empty>}</div>{open && <Drawer title={authority ? "Nueva autoridad" : "Nuevo acceso"} subtitle="Completa solamente el alcance necesario" close={() => setOpen(false)}>{authority ? <AuthorityForm state={state} core={core} units={units} changed={changed} close={() => setOpen(false)} /> : <GrantForm state={state} core={core} units={units} changed={changed} close={() => setOpen(false)} />}</Drawer>}</section>;
 }
+function GrantForm({ state, core, units, changed, close }) { const [ids, setIds] = useState([]), [error, setError] = useState(""); const catalog = state.catalog.filter(x => x.is_delegable), selected = ids.map(id => state.catalog.find(x => x.id === id)); async function submit(e) { e.preventDefault(); if (!ids.length) return setError("Selecciona al menos un permiso."); const f = new FormData(e.currentTarget); let rev = state.revision; try { for (const permission of ids) { const r = await permissionsApi.createGrant({ grantee_assignment: f.get("assignment"), permission, effect: f.get("effect"), scope_type: "specific_unit", target_unit: f.get("unit"), valid_until: iso(f.get("valid_until")), reason: f.get("reason"), expected_revision: rev }); rev = r.revision; } await changed(rev); close(); } catch (x) { setError(x.message); } } return <form className="permissions_drawer_form" onSubmit={submit}><label>Empleado<Select name="assignment" required><option value="">Seleccionar…</option>{core.directory.map(x => <option key={x.id} value={x.id}>{x.name} · {x.unit_name}</option>)}</Select></label><label>Permisos<Select value="" onChange={e => e.target.value && setIds(a => a.includes(e.target.value) ? a : [...a, e.target.value])}><option value="">Agregar permiso…</option>{catalog.filter(x => !ids.includes(x.id)).map(x => <option key={x.id} value={x.id}>{nameOf(x)}</option>)}</Select></label><div className="permissions_chips">{selected.map(x => <span className="permissions_chip" key={x.id}>{nameOf(x)}<button type="button" onClick={() => setIds(a => a.filter(id => id !== x.id))}><X /></button></span>)}</div><label>Efecto<Select name="effect"><option value="allow">Acceso temporal</option><option value="deny">Denegación individual</option></Select></label><label>Unidad<Select name="unit">{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label><label>Vence<CalendarDateField name="valid_until" withTime defaultValue={expiry(selected.some(x => x.risk_level === "critical") ? 8 : 24)} required /></label><label>Motivo<textarea name="reason" minLength="8" required /></label>{error && <p className="permissions_error">{error}</p>}<button>Crear acceso</button></form>; }
+function AuthorityForm({ state, core, units, changed, close }) { const catalog = state.catalog.filter(x => x.is_delegable), [permission, setPermission] = useState(catalog[0]?.id || ""), [error, setError] = useState(""); async function submit(e) { e.preventDefault(); const f = new FormData(e.currentTarget); if (!["can_grant_access", "can_revoke_access", "can_delegate_authority"].some(x => f.has(x))) return setError("Selecciona al menos una capacidad."); try { const r = await permissionsApi.createAuthority({ assignment: f.get("assignment"), permissions: [permission], scope_type: "sub_tree", target_unit: f.get("unit"), max_sensitivity_level: f.get("risk"), valid_until: iso(f.get("valid_until")), max_grant_duration_seconds: 604800, delegation_depth_remaining: f.has("can_delegate_authority") ? 1 : 0, can_grant_access: f.has("can_grant_access"), can_revoke_access: f.has("can_revoke_access"), can_delegate_authority: f.has("can_delegate_authority"), reason: f.get("reason"), expected_revision: state.revision }); await changed(r.revision); close(); } catch (x) { setError(x.message); } } return <form className="permissions_drawer_form" onSubmit={submit}><label>Responsable<Select name="assignment"><option value="">Seleccionar…</option>{core.directory.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label><label>Permiso<Select value={permission} onChange={e => setPermission(e.target.value)}>{catalog.map(x => <option key={x.id} value={x.id}>{nameOf(x)}</option>)}</Select></label><label>Raíz del subárbol<Select name="unit">{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label><label>Sensibilidad<Select name="risk">{Object.entries(risks).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></label><label>Vence<CalendarDateField name="valid_until" withTime defaultValue={expiry(168, state.access.delegation_valid_until_ceiling)} required /></label><fieldset className="permissions_capabilities"><legend>Capacidades</legend><label><input name="can_grant_access" type="checkbox" /> Otorgar</label><label><input name="can_revoke_access" type="checkbox" /> Revocar</label><label><input name="can_delegate_authority" type="checkbox" /> Subdelegar</label></fieldset><label>Motivo<textarea name="reason" minLength="8" required /></label>{error && <p className="permissions_error">{error}</p>}<button>Delegar autoridad</button></form>; }
 
-function defaultExpiry(hours = 24, ceiling = null) {
-    const ceilingTime = ceiling ? new Date(ceiling).getTime() : Number.POSITIVE_INFINITY;
-    const date = new Date(Math.min(Date.now() + hours * 60 * 60 * 1000, ceilingTime));
-    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-    return date.toISOString().slice(0, 16);
-}
-
-function maximumGrantHours(permission) {
-    if (permission?.risk_level === "critical") return 8;
-    if (permission?.risk_level === "high") return 24;
-    return 24 * 7;
-}
-
-function accessRuleState(row) {
-    if (row.status === "revoked") return "Revocada";
-    if (row.valid_from && new Date(row.valid_from) > new Date()) return "Programada";
-    if (row.valid_until && new Date(row.valid_until) <= new Date()) return "Expirada";
-    return row.effective ? "Vigente" : "Inactiva";
-}
-
-function authorityState(row) {
-    if (!row.is_active || row.revoked_at) return "Revocada";
-    if (row.valid_until && new Date(row.valid_until) <= new Date()) return "Expirada";
-    return row.effective ? "Vigente" : "Cadena inactiva";
-}
-
-function Empty({ children }) {
-    return <p className="permissions_empty">{children}</p>;
-}
-
-function StepUp({ onVerified }) {
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState("");
-    async function submit(event) {
-        event.preventDefault();
-        const formElement = event.currentTarget;
-        setBusy(true); setError("");
-        try {
-            await coreApi.stepUpMfa(new FormData(formElement).get("code"));
-            formElement.reset();
-            await onVerified();
-        } catch (failure) {
-            setError(failure.message);
-        } finally {
-            setBusy(false);
-        }
-    }
-    return <form className="permissions_step_up" onSubmit={submit}>
-        <div><strong>Confirmación MFA requerida</strong><span>Ingresa un código TOTP reciente antes de modificar accesos.</span></div>
-        <label className="permissions_visually_hidden" htmlFor="permissions_step_up_code">Código TOTP</label>
-        <input id="permissions_step_up_code" name="code" inputMode="numeric" autoComplete="one-time-code" minLength="6" maxLength="8" placeholder="Código TOTP" required />
-        <button type="submit" disabled={busy}>{busy ? "Verificando…" : "Verificar"}</button>
-        {error ? <p role="alert">{error}</p> : null}
-    </form>;
-}
-
-function MyAccess({ rows, unitName, units, unitId, onUnitChange }) {
-    const allowed = rows.filter(row => row.allowed);
-    const denied = rows.filter(row => !row.allowed);
-    return <section className="permissions_panel">
-        <header><div><h2>Mis accesos efectivos</h2><p>Decisiones actuales para {unitName || "la unidad seleccionada"}.</p></div>{units.length > 1 ? <label className="permissions_unit_picker">Unidad<PermissionSelect value={unitId} onChange={event => onUnitChange(event.target.value)}>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label> : null}</header>
-        <div className="permissions_summary"><strong>{allowed.length}</strong><span>permitidos</span><strong>{denied.length}</strong><span>denegados</span></div>
-        {rows.length ? <div className="permissions_cards">
-            {rows.map(row => <article className={`permission_card ${row.allowed ? "permission_allowed" : "permission_denied"}`} key={row.code}>
-                <span>{row.allowed ? <Check size={16} /> : <X size={16} />}</span>
-                <div><strong>{row.code}</strong><small>{row.reason}</small></div>
-                <em>{riskLabels[row.risk_level] || row.risk_level}</em>
-            </article>)}
-        </div> : <Empty>No hay permisos activos registrados para esta unidad.</Empty>}
-    </section>;
-}
-
-function RolePolicies({ data, catalog, units, revision, onChanged, canMutate }) {
-    const roles = data.roles.filter(item => item.level?.toLowerCase() !== "owner");
-    const [role, setRole] = useState(roles[0]?.id || "");
-    const [permission, setPermission] = useState(catalog[0]?.id || "");
-    const [scope, setScope] = useState("own_unit");
-    const [effect, setEffect] = useState("allow");
-    const [unit, setUnit] = useState("");
-    const [reason, setReason] = useState("");
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState("");
-    const needsUnit = ["specific_unit", "sub_tree"].includes(scope);
-    const selectedRules = data.rules.filter(row => row.job_role === role && row.permission === permission);
-    async function submit(event) {
-        event.preventDefault(); setBusy(true); setError("");
-        try {
-            const targetUnit = needsUnit ? unit : null;
-            const preservedRules = selectedRules
-                .filter(row => !(row.scope_type === scope && (row.target_unit || null) === targetUnit))
-                .map(row => ({
-                    effect: row.effect,
-                    scope_type: row.scope_type,
-                    ...(row.target_unit ? { target_unit: row.target_unit } : {}),
-                }));
-            const result = await permissionsApi.replaceRolePolicy({
-                job_role: role,
-                permission,
-                rules: [...preservedRules, { effect, scope_type: scope, ...(needsUnit ? { target_unit: unit } : {}) }],
-                reason,
-                expected_revision: revision,
-            });
-            setReason(""); await onChanged(result.revision);
-        } catch (failure) { setError(failure.message); }
-        finally { setBusy(false); }
-    }
-    async function remove() {
-        if (!role || !permission || reason.trim().length < 8) { setError("Escribe un motivo de al menos 8 caracteres."); return; }
-        if (!(await permissionDialog({
-            title: "¿Quitar todas las reglas?",
-            text: "Se quitarán las reglas de este permiso para el cargo seleccionado.",
-            icon: "warning",
-            confirmButtonText: "Quitar reglas",
-        })).isConfirmed) return;
-        setBusy(true); setError("");
-        try {
-            const result = await permissionsApi.replaceRolePolicy({ job_role: role, permission, rules: [], reason, expected_revision: revision });
-            setReason(""); await onChanged(result.revision);
-        } catch (failure) { setError(failure.message); }
-        finally { setBusy(false); }
-    }
-    return <section className="permissions_panel">
-        <header><div><h2>Políticas por cargo</h2><p>Cada guardado reemplaza atómicamente las reglas del permiso seleccionado.</p></div></header>
-        {canMutate ? <form className="permissions_form" onSubmit={submit}>
-            <label>Cargo<PermissionSelect value={role} onChange={event => setRole(event.target.value)} required>{roles.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</PermissionSelect></label>
-            <label>Permiso<PermissionSelect value={permission} onChange={event => setPermission(event.target.value)} required>{catalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect></label>
-            <label>Efecto<PermissionSelect value={effect} onChange={event => setEffect(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></PermissionSelect></label>
-            <label>Alcance<PermissionSelect value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</PermissionSelect></label>
-            {needsUnit ? <label>Unidad<PermissionSelect value={unit} onChange={event => setUnit(event.target.value)} required><option value="">Seleccionar…</option>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label> : null}
-            <label className="permissions_reason">Motivo<textarea value={reason} onChange={event => setReason(event.target.value)} minLength="8" required /></label>
-            <div className="permissions_form_actions"><button type="submit" disabled={busy}>Guardar regla</button><button type="button" className="permissions_danger" onClick={remove} disabled={busy}>Quitar todas</button></div>
-        </form> : <p className="permissions_read_only">Confirma tu MFA para modificar estas políticas.</p>}
-        {error ? <p className="permissions_error" role="alert">{error}</p> : null}
-        <div className="permissions_rule_list">{selectedRules.length ? selectedRules.map(row => <span key={row.id}>{row.effect === "allow" ? "Permitir" : "Denegar"} · {scopeLabels[row.scope_type]}{row.target_unit_name ? ` · ${row.target_unit_name}` : ""}</span>) : <Empty>Este cargo no tiene una regla configurada para el permiso.</Empty>}</div>
-    </section>;
-}
-
-function AccessRules({ rows, catalog, directory, units, revision, onChanged, canGrant, canRevoke, activeAssignmentId, actorEmail, isOwner }) {
-    const [error, setError] = useState("");
-    const [busy, setBusy] = useState(false);
-    const [permissionIds, setPermissionIds] = useState([]);
-    const delegableCatalog = catalog.filter(item => item.is_delegable);
-    const selectedPermissions = permissionIds.map(id => catalog.find(item => item.id === id)).filter(Boolean);
-    const maximumHours = selectedPermissions.length ? Math.min(...selectedPermissions.map(maximumGrantHours)) : 24;
-    function addPermission(permissionId) {
-        if (permissionId) setPermissionIds(current => current.includes(permissionId) ? current : [...current, permissionId]);
-    }
-    async function submit(event) {
-        event.preventDefault();
-        if (!permissionIds.length) { setError("Selecciona al menos un permiso."); return; }
-        setBusy(true); setError("");
-        const formElement = event.currentTarget;
-        const form = new FormData(formElement);
-        const createdIds = [];
-        let currentRevision = revision;
-        try {
-            for (const permissionId of permissionIds) {
-                const result = await permissionsApi.createGrant({
-                    grantee_assignment: form.get("assignment"), permission: permissionId,
-                    effect: form.get("effect"), scope_type: "specific_unit", target_unit: form.get("unit"),
-                    valid_until: isoFromLocal(form.get("valid_until")), reason: form.get("reason"),
-                    expected_revision: currentRevision,
-                });
-                createdIds.push(permissionId);
-                currentRevision = result.revision;
-            }
-            formElement.reset(); setPermissionIds([]); await onChanged(currentRevision);
-        } catch (failure) {
-            setPermissionIds(current => current.filter(id => !createdIds.includes(id)));
-            if (createdIds.length) await onChanged(currentRevision);
-            setError(failure.message);
-        }
-        finally { setBusy(false); }
-    }
-    async function revoke(row) {
-        const reason = await askRevocationReason();
-        if (!reason) return;
-        setBusy(true);
-        try { const result = await permissionsApi.revokeGrant(row.id, { reason, expected_revision: revision }); await onChanged(result.revision); }
-        catch (failure) { setError(failure.message); }
-        finally { setBusy(false); }
-    }
-    return <section className="permissions_panel">
-        <header><div><h2>Excepciones y accesos temporales</h2><p>El otorgante se deriva de tu sesión; nunca se acepta desde el navegador.</p></div></header>
-        {canGrant || canRevoke ? <form className="permissions_form" onSubmit={submit}>
-            <label>Empleado<PermissionSelect name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.unit_name}</option>)}</PermissionSelect></label>
-            <label className="permissions_permission_picker">Permisos<PermissionSelect value="" onChange={event => addPermission(event.target.value)}><option value="">Agregar permiso…</option>{delegableCatalog.filter(item => !permissionIds.includes(item.id)).map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect><span className="permissions_chips">{selectedPermissions.map(item => <span className="permissions_chip" key={item.id}>{item.code}<button type="button" aria-label={`Quitar ${item.code}`} onClick={() => setPermissionIds(current => current.filter(id => id !== item.id))}><X size={14} /></button></span>)}</span></label>
-            <label>Efecto<PermissionSelect name="effect">{canGrant ? <option value="allow">Acceso temporal</option> : null}{canRevoke ? <option value="deny">Denegación individual</option> : null}</PermissionSelect></label>
-            <label>Unidad<PermissionSelect name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label>
-            <label>Vence<CalendarDateField key={maximumHours} name="valid_until" withTime defaultValue={defaultExpiry(maximumHours)} required /><small>Máximo permitido para la selección: {maximumHours} h.</small></label>
-            <label className="permissions_reason">Motivo<textarea name="reason" minLength="8" required /></label>
-            <div className="permissions_form_actions"><button type="submit" disabled={busy || !permissionIds.length}>Crear {permissionIds.length || ""} {permissionIds.length === 1 ? "regla" : "reglas"}</button></div>
-        </form> : null}
-        {error ? <p className="permissions_error" role="alert">{error}</p> : null}
-        <div className="permissions_table_wrap"><table><caption className="permissions_visually_hidden">Reglas individuales de acceso</caption><thead><tr><th>Empleado</th><th>Permiso</th><th>Regla</th><th>Vigencia</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{rows.map(row => { const hasCapability = row.effect === "deny" ? canGrant : canRevoke; const belongsToActor = isOwner ? row.grantee_email !== actorEmail : row.granted_by_assignment === activeAssignmentId; const mayRevoke = hasCapability && belongsToActor && row.status === "active" && !row.revoked_at; return <tr key={row.id}><td>{row.grantee_name}<small>{row.grantee_email}</small></td><td>{row.permission_code}</td><td>{row.effect} · {scopeLabels[row.scope_type]}</td><td>{row.valid_until ? new Date(row.valid_until).toLocaleString() : "Sin vencimiento"}</td><td>{accessRuleState(row)}</td><td>{mayRevoke ? <button type="button" disabled={busy} className="permissions_text_button" aria-label={`Revocar regla de ${row.grantee_name}`} onClick={() => revoke(row)}>Revocar</button> : null}</td></tr>; })}</tbody></table>{rows.length ? null : <Empty>No hay reglas individuales.</Empty>}</div>
-    </section>;
-}
-
-function Authorities({ rows, catalog, directory, units, revision, onChanged, canCreate, canPassDelegation, delegationValidUntil, activeAssignmentId, actorEmail, isOwner }) {
-    const [error, setError] = useState("");
-    const [busy, setBusy] = useState(false);
-    const delegableCatalog = catalog.filter(item => item.is_delegable);
-    const [permissionId, setPermissionId] = useState(delegableCatalog[0]?.id || "");
-    const selectedPermission = catalog.find(item => item.id === permissionId);
-    const [sensitivity, setSensitivity] = useState(selectedPermission?.risk_level || "low");
-    async function submit(event) {
-        event.preventDefault(); setError(""); const formElement = event.currentTarget; const form = new FormData(formElement);
-        const canGrant = form.has("can_grant_access");
-        const canRevoke = form.has("can_revoke_access");
-        const canDelegate = form.has("can_delegate_authority");
-        if (!canGrant && !canRevoke && !canDelegate) {
-            setError("Selecciona al menos una capacidad para la autoridad.");
-            return;
-        }
-        setBusy(true);
-        try {
-            const result = await permissionsApi.createAuthority({
-                assignment: form.get("assignment"), permissions: [permissionId],
-                scope_type: "sub_tree", target_unit: form.get("unit"), max_sensitivity_level: sensitivity,
-                valid_until: isoFromLocal(form.get("valid_until")), max_grant_duration_seconds: 604800,
-                delegation_depth_remaining: canDelegate ? 1 : 0,
-                can_grant_access: canGrant,
-                can_revoke_access: canRevoke,
-                can_delegate_authority: canDelegate,
-                reason: form.get("reason"), expected_revision: revision,
-            });
-            formElement.reset(); await onChanged(result.revision);
-        } catch (failure) { setError(failure.message); }
-        finally { setBusy(false); }
-    }
-    async function revoke(row) {
-        const reason = await askRevocationReason();
-        if (!reason) return;
-        setBusy(true);
-        try { const result = await permissionsApi.revokeAuthority(row.id, { reason, expected_revision: revision }); await onChanged(result.revision); }
-        catch (failure) { setError(failure.message); }
-        finally { setBusy(false); }
-    }
-    return <section className="permissions_panel">
-        <header><div><h2>Autoridades delegadas</h2><p>Una autoridad solo puede entregar un subconjunto de su alcance y permisos.</p></div></header>
-        {canCreate ? <form className="permissions_form" onSubmit={submit}>
-            <label>Responsable<PermissionSelect name="assignment" required><option value="">Seleccionar…</option>{directory.map(item => <option value={item.id} key={item.id}>{item.name} · {item.job_role_title}</option>)}</PermissionSelect></label>
-            <label>Permiso permitido<PermissionSelect name="permission" value={permissionId} onChange={event => { const next = catalog.find(item => item.id === event.target.value); setPermissionId(event.target.value); setSensitivity(next?.risk_level || "low"); }} required>{delegableCatalog.map(item => <option value={item.id} key={item.id}>{item.code}</option>)}</PermissionSelect></label>
-            <label>Raíz del subárbol<PermissionSelect name="unit" required>{units.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</PermissionSelect></label>
-            <label>Sensibilidad máxima<PermissionSelect name="sensitivity" value={sensitivity} onChange={event => setSensitivity(event.target.value)}>{Object.entries(riskLabels).filter(([risk]) => ["low", "medium", "high", "critical"].indexOf(risk) >= ["low", "medium", "high", "critical"].indexOf(selectedPermission?.risk_level || "low")).map(([risk, label]) => <option value={risk} key={risk}>{label}</option>)}</PermissionSelect></label>
-            <label>Vence<CalendarDateField name="valid_until" withTime defaultValue={defaultExpiry(isOwner ? 24 * 30 : 24 * 7, delegationValidUntil)} required /></label>
-            <fieldset className="permissions_capabilities"><legend>Capacidades delegadas</legend><label><input name="can_grant_access" type="checkbox" /> Otorgar accesos</label><label><input name="can_revoke_access" type="checkbox" /> Revocar o denegar</label>{canPassDelegation ? <label><input name="can_delegate_authority" type="checkbox" /> Permitir una subdelegación adicional</label> : null}</fieldset>
-            <label className="permissions_reason">Motivo<textarea name="reason" minLength="8" required /></label>
-            <div className="permissions_form_actions"><button type="submit" disabled={busy}>Delegar autoridad</button></div>
-        </form> : null}
-        {error ? <p className="permissions_error" role="alert">{error}</p> : null}
-        <div className="permissions_table_wrap"><table><caption className="permissions_visually_hidden">Autoridades delegadas</caption><thead><tr><th>Responsable</th><th>Alcance</th><th>Permisos</th><th>Vence</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{rows.map(row => { const belongsToActor = isOwner ? row.assignment_email !== actorEmail : row.granted_by_assignment === activeAssignmentId; const mayRevoke = canCreate && belongsToActor && row.is_active && !row.revoked_at; return <tr key={row.id}><td>{row.assignment_name}<small>{row.assignment_email}</small></td><td>{scopeLabels[row.scope_type]}{row.target_unit_name ? ` · ${row.target_unit_name}` : ""}</td><td>{row.permission_codes.join(", ")}</td><td>{row.valid_until ? new Date(row.valid_until).toLocaleString() : "—"}</td><td>{authorityState(row)}</td><td>{mayRevoke ? <button className="permissions_text_button" disabled={busy} type="button" aria-label={`Revocar autoridad de ${row.assignment_name}`} onClick={() => revoke(row)}>Revocar</button> : null}</td></tr>; })}</tbody></table>{rows.length ? null : <Empty>No hay autoridades delegadas.</Empty>}</div>
-    </section>;
-}
-
-function Audit({ rows }) {
-    return <section className="permissions_panel"><header><div><h2>Auditoría de permisos</h2><p>Historial inmutable con actor, motivo, resultado y revisión.</p></div></header><div className="permissions_table_wrap"><table><caption className="permissions_visually_hidden">Auditoría de cambios de permisos</caption><thead><tr><th>Fecha</th><th>Evento</th><th>Actor</th><th>Objetivo</th><th>Motivo</th><th>Rev.</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{new Date(row.occurred_at).toLocaleString()}</td><td>{row.event_type}<small>{row.outcome}</small></td><td>{row.actor_email || "Sistema"}</td><td>{row.target_type} · {row.target_id}</td><td>{row.reason}</td><td>{row.revision ?? "—"}</td></tr>)}</tbody></table>{rows.length ? null : <Empty>Aún no hay cambios registrados.</Empty>}</div></section>;
-}
+function Audit({ audit, load }) { const [query, setQuery] = useState(""), [selected, setSelected] = useState(null); const rows = audit.rows.filter(x => JSON.stringify(x).toLowerCase().includes(query.toLowerCase())); return <section className="permissions_panel"><header><div><h2>Auditoría</h2><p>Historial inmutable de cambios e intentos.</p></div><button onClick={load}><RefreshCw />Actualizar</button></header>{audit.loading && <div className="permissions_banner">Cargando auditoría…</div>}{audit.error && <p className="permissions_error">{audit.error}</p>}<Filters query={query} setQuery={setQuery} /><div className="permissions_table_wrap"><table><thead><tr><th>Fecha</th><th>Evento</th><th>Actor</th><th>Objetivo</th><th>Resultado</th><th></th></tr></thead><tbody>{rows.map(x => <tr key={x.id}><td data-label="Fecha">{new Date(x.occurred_at).toLocaleString()}</td><td data-label="Evento">{x.event_type}<small>{x.reason}</small></td><td data-label="Actor">{x.actor_email || "Sistema"}</td><td data-label="Objetivo">{x.target_type} · {x.target_id}</td><td data-label="Resultado"><Status good={x.outcome === "success"}>{x.outcome}</Status></td><td><button className="permissions_text_button" onClick={() => setSelected(x)}>Detalle</button></td></tr>)}</tbody></table></div>{selected && <Drawer title="Detalle del evento" subtitle={selected.event_type} close={() => setSelected(null)} wide><dl className="permissions_details">{[["Fecha", new Date(selected.occurred_at).toLocaleString()], ["Actor", selected.actor_email || "Sistema"], ["Objetivo", `${selected.target_type} · ${selected.target_id}`], ["Permiso", selected.permission_code || "—"], ["MFA", selected.mfa_verified ? "Sí" : "No"], ["Correlación", selected.correlation_id || "—"]].map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}{[["Antes", selected.before], ["Después", selected.after], ["Metadatos", selected.metadata]].map(([k, v]) => <div className="full" key={k}><dt>{k}</dt><dd><pre>{JSON.stringify(v || {}, null, 2)}</pre></dd></div>)}</dl></Drawer>}</section>; }
 
 export default function PermissionsModule() {
-    const core = useCore();
-    const real = is_using_real_backend();
-    const [tab, setTab] = useState("mine");
-    const [state, setState] = useState({ loading: true, error: "", access: null, catalog: [], policies: { roles: [], rules: [] }, grants: [], authorities: [], effective: [], audit: [], revision: 0 });
-    const loadGeneration = useRef(0);
-    const [selectedUnitId, setSelectedUnitId] = useState(core.activeUnit?.id || core.units?.[0]?.id || "");
-    const unit = core.units?.find(item => item.id === selectedUnitId) || core.activeUnit || core.units?.[0];
-    const unitName = unit?.name || unit?.label;
-    const directory = useMemo(() => core.directory || [], [core.directory]);
-
-    async function load() {
-        const generation = ++loadGeneration.current;
-        if (!real || !unit?.id) { setState(current => ({ ...current, loading: false })); return; }
-        const requestedUnitId = unit.id;
-        setState(current => ({ ...current, loading: true, error: "" }));
-        try {
-            const snapshot = await fetchConsistentPermissionSnapshot({
-                api: permissionsApi,
-                unitId: requestedUnitId,
-            });
-            if (generation !== loadGeneration.current) return;
-            setState({ loading: false, error: "", ...snapshot });
-        } catch (failure) {
-            if (generation !== loadGeneration.current) return;
-            setState(current => ({
-                ...current,
-                loading: false,
-                error: failure.message,
-                access: current.access ? {
-                    ...current.access,
-                    can_manage_role_policies: false,
-                    can_grant_access: false,
-                    can_revoke_access: false,
-                    can_delegate_authority: false,
-                    can_read_audit: false,
-                    mfa_recent: false,
-                } : null,
-            }));
-        }
-    }
-    useEffect(() => { setSelectedUnitId(core.activeUnit?.id || core.units?.[0]?.id || ""); }, [core.activeAssignment?.id]);
-    useEffect(() => { load(); }, [core.activeAssignment?.id, unit?.id]);
-    useEffect(() => {
-        if (!state.access?.mfa_recent || !state.access?.mfa_valid_until) return undefined;
-        const delay = new Date(state.access.mfa_valid_until).getTime() - Date.now() + 100;
-        const timer = window.setTimeout(load, Math.max(delay, 100));
-        return () => window.clearTimeout(timer);
-    }, [state.access?.mfa_recent, state.access?.mfa_valid_until]);
-    async function changed(revision) {
-        globalThis.dispatchEvent?.(new CustomEvent("bold:permissions-changed", { detail: { revision } }));
-        await load();
-    }
-    if (!real) return <div className="permissions_module"><section className="permissions_panel"><h1>Permisos</h1><p>Activa el backend real para probar las políticas y autoridades.</p></section></div>;
-    const access = state.access || {};
-    const eligibleDirectory = directory.filter(item => (
-        item.personId !== core.activeAssignment?.personId
-        && !item.account_is_superuser
-    ));
-    const mfaReady = Boolean(access.mfa_recent);
-    const tabs = [
-        ["mine", "Mis accesos"],
-        ...(access.can_manage_role_policies ? [["policies", "Políticas por cargo"]] : []),
-        ...(access.can_grant_access || access.can_revoke_access || state.grants.length ? [["grants", "Accesos individuales"]] : []),
-        ...(access.can_delegate_authority || state.authorities.length ? [["authorities", "Autoridades"]] : []),
-        ...(access.can_read_audit ? [["audit", "Auditoría"]] : []),
-    ];
-    return <div className="permissions_module">
-        <header className="permissions_header"><div><span><ShieldCheck size={19} /> Seguridad y acceso</span><h1>Permisos</h1><p>Políticas efectivas, excepciones y delegación con trazabilidad.</p></div><button type="button" onClick={load} aria-label="Actualizar"><RefreshCw size={18} /></button></header>
-        {state.error ? <div className="permissions_banner permissions_banner_error" role="alert"><AlertTriangle size={18} /><span>{state.error}</span></div> : null}
-        {state.loading ? <div className="permissions_banner" role="status"><RefreshCw size={18} /><span>Cargando políticas…</span></div> : null}
-        {!state.loading && (access.can_manage_role_policies || access.can_grant_access || access.can_revoke_access || access.can_delegate_authority) && !access.mfa_recent ? <StepUp onVerified={load} /> : null}
-        <nav className="permissions_tabs" aria-label="Secciones de permisos" role="tablist">{tabs.map(([id, label]) => <button type="button" role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)} key={id}>{id === "mine" ? <KeyRound size={15} /> : null}{label}</button>)}</nav>
-        {!state.loading && tab === "mine" ? <MyAccess rows={state.effective} unitName={unitName} units={core.units || []} unitId={unit?.id || ""} onUnitChange={setSelectedUnitId} /> : null}
-        {!state.loading && tab === "policies" ? <RolePolicies data={state.policies} catalog={state.catalog} units={core.units || []} revision={state.revision} onChanged={changed} canMutate={Boolean(access.can_manage_role_policies && mfaReady)} /> : null}
-        {!state.loading && tab === "grants" ? <AccessRules rows={state.grants} catalog={state.catalog} directory={eligibleDirectory} units={core.units || []} revision={state.revision} onChanged={changed} canGrant={Boolean(access.can_grant_access && mfaReady)} canRevoke={Boolean(access.can_revoke_access && mfaReady)} activeAssignmentId={core.activeAssignment?.id} actorEmail={core.account?.email} isOwner={Boolean(access.is_owner)} /> : null}
-        {!state.loading && tab === "authorities" ? <Authorities rows={state.authorities} catalog={state.catalog} directory={eligibleDirectory} units={core.units || []} revision={state.revision} onChanged={changed} canCreate={Boolean(access.can_delegate_authority && mfaReady)} canPassDelegation={Boolean(access.is_owner || Number(access.max_delegation_depth_remaining) > 1)} delegationValidUntil={access.delegation_valid_until_ceiling} activeAssignmentId={core.activeAssignment?.id} actorEmail={core.account?.email} isOwner={Boolean(access.is_owner)} /> : null}
-        {!state.loading && tab === "audit" ? <Audit rows={state.audit} /> : null}
-    </div>;
+    const core = useCore(), real = is_using_real_backend(), [tab, setTab] = useState("summary"), [unlock, setUnlock] = useState(false), [unitId, setUnit] = useState(core.activeUnit?.id || core.units?.[0]?.id || ""), unit = core.units?.find(x => x.id === unitId) || core.activeUnit || core.units?.[0], generation = useRef(0); const [state, setState] = useState({ loading: true, error: "", access: null, catalog: [], policies: { roles: [], rules: [] }, grants: [], authorities: [], effective: [], revision: 0 }), [audit, setAudit] = useState({ loading: false, loaded: false, error: "", rows: [] });
+    async function load() { const gen = ++generation.current; if (!real || !unit?.id) return; setState(s => ({ ...s, loading: true, error: "" })); try { const data = await fetchConsistentPermissionSnapshot({ api: permissionsApi, unitId: unit.id }); if (gen === generation.current) setState({ loading: false, error: "", ...data }); } catch (x) { setState(s => ({ ...s, loading: false, error: x.message })); } }
+    async function loadAudit() { setAudit(a => ({ ...a, loading: true, error: "" })); try { setAudit({ loading: false, loaded: true, error: "", rows: await permissionsApi.audit({ limit: 100 }) }); } catch (x) { setAudit(a => ({ ...a, loading: false, loaded: true, error: x.message })); } }
+    useEffect(() => { load(); }, [core.activeAssignment?.id, unit?.id]); useEffect(() => { if (tab === "audit" && !audit.loaded && state.access?.mfa_recent) loadAudit(); }, [tab, audit.loaded, state.access?.mfa_recent]); async function changed() { setAudit(a => ({ ...a, loaded: false })); await load(); }
+    if (!real) return <div className="permissions_module"><section className="permissions_panel"><h1>Permisos</h1><p>Activa el backend real para usar este módulo.</p></section></div>;
+    const access = state.access || {}, canManage = access.can_manage_role_policies || access.can_grant_access || access.can_revoke_access || access.can_delegate_authority, tabs = [["summary", "Resumen"], ...(access.can_manage_role_policies ? [["policies", "Políticas"]] : []), ...(access.can_grant_access || access.can_revoke_access || state.grants.length ? [["grants", "Accesos individuales"]] : []), ...(access.can_delegate_authority || state.authorities.length ? [["authorities", "Autoridades"]] : []), ...(access.can_read_audit ? [["audit", "Auditoría"]] : [])];
+    return <div className="permissions_module"><header className="permissions_header"><div><span><ShieldCheck />Seguridad y acceso</span><h1>Permisos</h1><p>Consulta, asigna y audita el acceso de tu organización.</p></div><div className="permissions_header_actions">{canManage && <button className={access.mfa_recent ? "permissions_unlocked" : ""} onClick={() => !access.mfa_recent && setUnlock(true)}><LockKeyhole />{access.mfa_recent ? "Edición desbloqueada" : "Desbloquear edición"}</button>}<button aria-label="Actualizar" onClick={load}><RefreshCw /></button></div></header>{state.error && <div className="permissions_banner permissions_banner_error"><AlertTriangle />{state.error}</div>}{state.loading && <div className="permissions_banner">Cargando permisos…</div>}<nav className="permissions_tabs" role="tablist">{tabs.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{id === "summary" && <KeyRound />}{label}</button>)}</nav>{!state.loading && tab === "summary" && <Summary state={state} units={core.units || []} unit={unit} setUnit={setUnit} go={setTab} />}{!state.loading && tab === "policies" && <Policies state={state} units={core.units || []} changed={changed} unlocked={access.mfa_recent} unlock={() => setUnlock(true)} />}{!state.loading && tab === "grants" && <Records kind="grants" state={state} core={core} units={core.units || []} changed={changed} unlocked={access.mfa_recent && (access.can_grant_access || access.can_revoke_access)} unlock={() => setUnlock(true)} />}{!state.loading && tab === "authorities" && <Records kind="authorities" state={state} core={core} units={core.units || []} changed={changed} unlocked={access.mfa_recent && access.can_delegate_authority} unlock={() => setUnlock(true)} />}{!state.loading && tab === "audit" && <Audit audit={audit} load={loadAudit} />}{unlock && <Drawer title="Desbloquear edición" subtitle="Verificación MFA" close={() => setUnlock(false)}><Unlock done={async () => { setUnlock(false); await load(); }} /></Drawer>}</div>;
 }

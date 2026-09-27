@@ -421,6 +421,7 @@ class AuditEventListView(APIView):
             if event_type: queryset = queryset.filter(permission__code__icontains=event_type)
             events.extend({
                 "id": str(row.id), "module_code": "permissions", "event_type": "permission.checked",
+                "permission_name": row.permission.description or row.permission.resource or row.permission.code,
                 "actor_email": getattr(getattr(row.employee, "user_account", None), "email", ""),
                 "target_type": row.permission.code, "target_id": str(row.resource_id) if row.resource_id else None,
                 "outcome": "success" if row.decision == "allow" else "denied", "changes": {},

@@ -13,7 +13,7 @@ function responseSet(revision) {
     };
 }
 
-test("permission snapshots retry mixed revisions instead of pairing stale data with a new revision", async () => {
+test("permission snapshots retry mixed revisions without loading audit eagerly", async () => {
     let round = 0;
     const calls = { audit: 0 };
     const api = {
@@ -30,7 +30,7 @@ test("permission snapshots retry mixed revisions instead of pairing stale data w
 
     assert.equal(round, 2);
     assert.equal(snapshot.revision, 2);
-    assert.equal(calls.audit, 2);
+    assert.equal(calls.audit, 0);
 });
 
 test("permission snapshots fail closed after repeated revision races and hide audit without recent MFA", async () => {

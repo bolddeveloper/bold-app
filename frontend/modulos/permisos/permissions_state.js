@@ -1,15 +1,12 @@
 export async function fetchConsistentPermissionSnapshot({ api, unitId, attempts = 2 }) {
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         const access = await api.access();
-        const [catalog, policies, grants, authorities, effective, audit] = await Promise.all([
+        const [catalog, policies, grants, authorities, effective] = await Promise.all([
             api.catalog(),
             api.rolePolicies(),
             api.grants(),
             api.authorities(),
             api.effective(unitId),
-            access.can_read_audit && access.mfa_recent
-                ? api.audit({ limit: 100 })
-                : Promise.resolve([]),
         ]);
         const revisions = [
             access.policy_revision,
@@ -26,7 +23,6 @@ export async function fetchConsistentPermissionSnapshot({ api, unitId, attempts 
                 grants: grants.results,
                 authorities: authorities.results,
                 effective: effective.results,
-                audit,
                 revision: revisions[0],
             };
         }

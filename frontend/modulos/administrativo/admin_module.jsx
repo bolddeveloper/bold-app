@@ -253,9 +253,25 @@ export function Audit({ page, onPage }) {
     const rows = page.results;
     const [query, setQuery] = useState("");
     const [module, setModule] = useState("");
-    const filtered = rows.filter(row => (!module || row.module_code === module) && `${row.event_type} ${row.actor_email || ""} ${row.target_type || ""}`.toLowerCase().includes(query.toLowerCase()));
+    const filtered = rows.filter(row => (!module || row.module_code === module) && `${row.permission_name || ""} ${row.event_type} ${row.actor_email || ""} ${row.target_type || ""}`.toLowerCase().includes(query.toLowerCase()));
     const modules = { administration: "Administración", authentication: "Autenticación", permissions: "Permisos" };
     const outcomes = { success: "Correcto", failure: "Fallido", denied: "Denegado", error: "Error" };
+    const eventNames = {
+        "permission.checked": "Comprobación de permiso", "websocket.ticket_issued": "Conexión en tiempo real autorizada",
+        "login.succeeded": "Inicio de sesión correcto", "login.password_failed": "Contraseña de inicio de sesión incorrecta",
+        "login.mfa_failed": "Código MFA incorrecto", "login.mfa_challenge_rejected": "Verificación MFA rechazada",
+        "password.changed": "Contraseña cambiada", "password.reset_requested": "Recuperación de contraseña solicitada",
+        "password.reset_completed": "Contraseña restablecida", "mfa.step_up_succeeded": "Verificación MFA completada",
+        "mfa.step_up_failed": "Verificación MFA fallida", "mfa.enrollment_started": "Configuración MFA iniciada",
+        "mfa.enrolled": "MFA configurado", "mfa.disabled": "MFA desactivado", "mfa.recovery_code_used": "Código de recuperación utilizado",
+        "administration.employee_created": "Empleado creado", "administration.organizational_unit_created": "Unidad organizacional creada",
+        "administration.organizational_unit_updated": "Unidad organizacional actualizada", "administration.organizational_unit_deleted": "Unidad organizacional eliminada",
+        "administration.job_role_created": "Cargo creado", "administration.job_role_updated": "Cargo actualizado", "administration.job_role_deleted": "Cargo eliminado",
+        "administration.position_created": "Plaza creada", "administration.position_updated": "Plaza actualizada",
+        "administration.catalog_option_created": "Opción de catálogo creada", "administration.catalog_option_updated": "Opción de catálogo actualizada",
+        "administration.catalog_option_deleted": "Opción de catálogo eliminada", "administration.session_revoked": "Sesión revocada",
+    };
+    const eventName = row => row.permission_name || eventNames[row.event_type] || row.event_type.replaceAll(".", " · ").replaceAll("_", " ");
     return <section className="admin_panel admin_audit_panel">
         <header className="admin_audit_header">
             <div><span className="admin_eyebrow">TRAZABILIDAD</span><h2>Eventos del sistema</h2><p>{filtered.length} de {rows.length} eventos</p></div>
@@ -269,12 +285,14 @@ export function Audit({ page, onPage }) {
                 <thead><tr><th scope="col">Fecha</th><th scope="col">Evento</th><th scope="col">Actor</th><th scope="col">Resultado</th></tr></thead>
                 <tbody>{filtered.map(row => <tr key={`${row.module_code}:${row.id}`}>
                     <td><time dateTime={row.occurred_at}>{dateTime(row.occurred_at)}</time></td>
-                    <td><span className="admin_event_module">{modules[row.module_code] || row.module_code}</span><strong className="admin_event_name">{row.event_type}</strong>
-                        {(row.target_type || row.target_id || row.correlation_id) && <details className="admin_event_details"><summary>Ver referencia</summary><dl>
+                    <td><span className="admin_event_module">{modules[row.module_code] || row.module_code}</span><strong className="admin_event_name">{eventName(row)}</strong>
+                        <details className="admin_event_details"><summary>Ver detalles</summary><dl>
+                            <dt>Código del evento</dt><dd>{row.event_type}</dd>
+                            {row.permission_name && <><dt>Permiso</dt><dd>{row.permission_name}</dd></>}
                             {row.target_type && <><dt>Tipo</dt><dd>{row.target_type}</dd></>}
                             {row.target_id && <><dt>Registro</dt><dd>{row.target_id}</dd></>}
                             {row.correlation_id && <><dt>Correlación</dt><dd>{row.correlation_id}</dd></>}
-                        </dl></details>}
+                        </dl></details>
                     </td>
                     <td>{row.actor_email || "Sistema"}{row.unit_name && <small className="admin_event_unit">{row.unit_name}</small>}</td>
                     <td><span className={`admin_outcome is_${row.outcome}`} title={row.outcome}>{outcomes[row.outcome] || row.outcome}</span></td>

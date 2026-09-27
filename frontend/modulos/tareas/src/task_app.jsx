@@ -740,6 +740,7 @@ export function WorkspaceSelector({ onManage, onTotal }) {
             document.removeEventListener("pointerdown", closeMenu);
         };
     }, [isOpen]);
+    use_effect(() => { const close = event => event.detail !== "workspace" && setIsOpen(false); globalThis.addEventListener?.("bold:sidebar-popover", close); return () => globalThis.removeEventListener?.("bold:sidebar-popover", close); }, []);
 
     const navigate = action => {
         setIsOpen(false);
@@ -752,7 +753,7 @@ export function WorkspaceSelector({ onManage, onTotal }) {
                 <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
                 <span>Work Space</span>
             </button>
-            <button className="workspace_selector_toggle" type="button" aria-label="Opciones de Workspace" aria-controls={menuId} aria-expanded={isOpen} onClick={() => setIsOpen(open => !open)}>
+            <button className="workspace_selector_toggle" type="button" aria-label="Opciones de Workspace" aria-controls={menuId} aria-expanded={isOpen} onClick={() => setIsOpen(open => { const next = !open; if (next) globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", { detail: "workspace" })); return next; })}>
                 {render_icon(chevron_down_icon, 16)}
             </button>
         </div>
@@ -4125,7 +4126,9 @@ function TaskAppContent({ externalModules = {} }) {
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
-    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(true);
+    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(() => {
+        try { return localStorage.getItem("bold_sidebar_tasks_open") !== "false"; } catch { return true; }
+    });
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => real ? [] : merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);
@@ -4418,7 +4421,11 @@ function TaskAppContent({ externalModules = {} }) {
             return;
         }
 
-        set_active_project_menu_id((current_id) => current_id === project_id ? null : project_id);
+        set_active_project_menu_id((current_id) => {
+            const next = current_id === project_id ? null : project_id;
+            if (next) globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", { detail: `project:${project_id}` }));
+            return next;
+        });
     }
 
     function handle_share_project(project_id) {
@@ -4816,6 +4823,7 @@ function TaskAppContent({ externalModules = {} }) {
         document.addEventListener("keydown", escape);
         return () => document.removeEventListener("keydown", escape);
     }, []);
+    use_effect(() => { const close = event => { if (!String(event.detail || "").startsWith("project:")) set_active_project_menu_id(null); }; globalThis.addEventListener?.("bold:sidebar-popover", close); return () => globalThis.removeEventListener?.("bold:sidebar-popover", close); }, []);
 
     // Opens/closes one of the Ordenar/Filtrar/Personalizar dropdown panels,
     // closing the others if one is already open.
@@ -4961,7 +4969,11 @@ function TaskAppContent({ externalModules = {} }) {
         set_active_section("tasks");
         set_selected_task_id(null);
         set_active_modal(null);
-        set_is_tasks_menu_open((current_value) => !current_value);
+        set_is_tasks_menu_open((current_value) => {
+            const next = !current_value;
+            try { localStorage.setItem("bold_sidebar_tasks_open", String(next)); } catch {}
+            return next;
+        });
     }
 
     function handle_my_tasks_select() {

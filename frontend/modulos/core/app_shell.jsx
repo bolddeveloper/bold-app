@@ -1,7 +1,7 @@
 import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
-import { createContext, useContext, useEffect, useState, createElement } from "react";
+import { createContext, useContext, useEffect, useRef, useState, createElement } from "react";
 import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { is_using_real_backend } from "./http_client.js";
@@ -31,7 +31,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment };
     return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
-        {render_sidebar({ ...sidebarProps, ...shell, ...identity, compact, onLogout: core.logout, onManageMfa: core.mfa.open, mfaEnabled: core.mfa.enabled })}
+        <Sidebar {...sidebarProps} {...shell} {...identity} compact={compact} onLogout={core.logout} onManageMfa={core.mfa.open} mfaEnabled={core.mfa.enabled} />
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
@@ -84,9 +84,22 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 }
 
 
-function render_sidebar(props) {
+function Sidebar(props) {
     const { active_module, handle_module_change, is_sidebar_open, set_is_sidebar_open, navigation_items, current_user, navigationSlots = {} } = props;
-    const primary_navigation_items = navigation_items;
+    const [profileOpen, setProfileOpen] = useState(false);
+    const profileRef = useRef(null);
+    useEffect(() => {
+        if (!profileOpen) return undefined;
+        const close = event => {
+            if (event.type === "keydown" && event.key === "Escape") { setProfileOpen(false); profileRef.current?.querySelector(".profile_menu_button")?.focus(); }
+            if (event.type === "pointerdown" && !profileRef.current?.contains(event.target)) setProfileOpen(false);
+        };
+        document.addEventListener("keydown", close); document.addEventListener("pointerdown", close);
+        return () => { document.removeEventListener("keydown", close); document.removeEventListener("pointerdown", close); };
+    }, [profileOpen]);
+    useEffect(() => setProfileOpen(false), [active_module, is_sidebar_open]);
+    useEffect(() => { const close = event => event.detail !== "profile" && setProfileOpen(false); globalThis.addEventListener?.("bold:sidebar-popover", close); return () => globalThis.removeEventListener?.("bold:sidebar-popover", close); }, []);
+    const groups = [{ id: "work", label: "Trabajo" }, { id: "management", label: "Gestión" }];
 
     return (
         <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
@@ -103,10 +116,13 @@ function render_sidebar(props) {
             </div>
 
             <div className="sidebar_scroll_area">
-                <div className="sidebar_section">
-                    <p className="sidebar_label" title="Departamento actual">{current_user?.unit_name || "NAVEGACION"}</p>
+                {groups.map(group => {
+                    const items = navigation_items.filter(item => (item.group || "work") === group.id);
+                    if (!items.length) return null;
+                    return <div className="sidebar_section" key={group.id}>
+                    <p className="sidebar_label">{group.label}</p>
                     <nav className="navigation_list" aria-label="Principal">
-                        {primary_navigation_items.map((item) => {
+                        {items.map((item) => {
                             const slot = navigationSlots[item.id];
                             if (!slot) return render_navigation_item(item, active_module, handle_module_change);
                             return <div className={`tasks_navigation_group ${slot.open ? "tasks_navigation_group_open" : "tasks_navigation_group_closed"}`} key={item.id}>
@@ -115,7 +131,7 @@ function render_sidebar(props) {
                             </div>;
                         })}
                     </nav>
-                </div>
+                </div>; })}
             </div>
 
             <div className="sidebar_footer">
@@ -124,13 +140,13 @@ function render_sidebar(props) {
                     <strong>{current_user.name}</strong>
                     <span>{current_user?.job_role_title || "Administrador"}</span>
                 </div>
-                {is_using_real_backend() && <details className="profile_session_menu" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary").focus(); } }}>
-                    <summary className="profile_menu_button" aria-label="Opciones del perfil">{render_icon(more_horizontal_icon, 18)}</summary>
-                    <div className="profile_session_popover">
-                        <button className="profile_security_action" type="button" onClick={props.onManageMfa}>{props.mfaEnabled ? "Administrar MFA" : "Configurar MFA"}</button>
+                {is_using_real_backend() && <div className={`profile_session_menu ${profileOpen ? "is_open" : ""}`} ref={profileRef}>
+                    <button className="profile_menu_button" type="button" aria-label="Opciones del perfil" aria-expanded={profileOpen} onClick={() => setProfileOpen(open => { const next = !open; if (next) globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", { detail: "profile" })); return next; })}>{render_icon(more_horizontal_icon, 18)}</button>
+                    {profileOpen && <div className="profile_session_popover">
+                        <button className="profile_security_action" type="button" onClick={() => { setProfileOpen(false); props.onManageMfa(); }}>{props.mfaEnabled ? "Administrar MFA" : "Configurar MFA"}</button>
                         <button type="button" onClick={props.onLogout}>Cerrar sesión</button>
-                    </div>
-                </details>}
+                    </div>}
+                </div>}
             </div>
         </aside>
     );
