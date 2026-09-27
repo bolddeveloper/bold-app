@@ -2,6 +2,7 @@ import { http } from "../core/http_client.js";
 
 export const adminApi = {
     dashboard: () => http.request("/api/v2/administration/dashboard/"),
+    saveDashboard: widgets => http.request("/api/v2/administration/dashboard/", { method: "PUT", body: { widgets } }),
     employees: params => http.list("administration/employees", params),
     employee: id => http.request(`/api/v2/administration/employees/${id}/`),
     createEmployee: body => http.request("/api/v2/administration/employees/", { method: "POST", body }),
@@ -16,7 +17,7 @@ export const adminApi = {
     reactivateAccount: (id, reason) => http.request(`/api/v2/administration/employees/${id}/reactivate-account/`, { method: "POST", body: { reason } }),
     offboardingPreview: id => http.request(`/api/v2/administration/employees/${id}/offboarding-preview/`),
     offboard: (id, body) => http.request(`/api/v2/administration/employees/${id}/offboard/`, { method: "POST", body }),
-    auditEvents: params => http.list("administration/audit-events", params),
+    auditEvents: (page = 1) => http.request(`/api/v2/administration/audit-events/?page=${page}`),
     organization: () => http.request("/api/v2/administration/organization/"),
     createUnit: body => http.request("/api/v2/administration/units/", { method: "POST", body }),
     updateUnit: (id, body) => http.request(`/api/v2/administration/units/${id}/`, { method: "PATCH", body }),

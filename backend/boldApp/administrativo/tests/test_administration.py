@@ -66,6 +66,33 @@ class AdministrationApiTests(TestCase):
         self.assertEqual(ordinary_client.patch("/api/v2/administration/organization-options/00000000-0000-0000-0000-000000000000/", {"value": "Experto"}, format="json").status_code, 403)
         self.assertEqual(self.client.patch(level_url, {"value": "Experto"}, format="json").status_code, 200)
 
+    def test_dashboard_layout_defaults_persists_per_user_and_validates(self):
+        endpoint = "/api/v2/administration/dashboard/"
+        initial = self.client.get(endpoint)
+        self.assertEqual(len(initial.data["layout"]), 6)
+        layout = [
+            {"type": "metric", "metrics": ["organization.employees_active", "security.active_sessions"], "visualization": "bar"},
+            {"type": "activity"},
+        ]
+        saved = self.client.put(endpoint, {"widgets": layout}, format="json")
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(self.client.get(endpoint).data["layout"], layout)
+
+        other = UserAccount.objects.get(email="samuel@bold.gt")
+        other.is_superuser = True
+        other.save(update_fields=["is_superuser", "updated_at"])
+        other_client = APIClient(); other_client.force_authenticate(other)
+        self.assertEqual(len(other_client.get(endpoint).data["layout"]), 6)
+
+        legacy = self.client.put(endpoint, {"widgets": [{"type": "metric", "metric": "organization.accounts_active", "visualization": "circle"}]}, format="json")
+        self.assertEqual(legacy.data["layout"][0]["metrics"], ["organization.accounts_active"])
+
+        invalid_layouts = [[], layout * 5, [layout[1], layout[1]], [{"type": "unknown"}], [
+            {"type": "metric", "metrics": ["organization.unknown"], "visualization": "circle"}
+        ], [{"type": "metric", "metrics": ["organization.employees_active", "organization.employees_active"], "visualization": "bar"}]]
+        for invalid in invalid_layouts:
+            self.assertEqual(self.client.put(endpoint, {"widgets": invalid}, format="json").status_code, 400)
+
     def test_create_employee_sends_single_use_invitation_and_records_audit(self):
         marketing = OrganizationalUnit.objects.get(name="Marketing")
         position = Position.objects.create(unit=marketing, job_role=self.owner.employee.position_assignments.first().position.job_role, display_order=99)
@@ -184,6 +211,7 @@ class AdministrationApiTests(TestCase):
         created_position = next(row for row in overview.data["positions"] if str(row["id"]) == str(position.data["id"]))
         self.assertEqual(created_position["display_order"], 1)
         self.assertIsNone(created_position["occupant_name"])
+        self.assertIn("reports_to_position", created_position)
 
         rejected = self.client.post("/api/v2/administration/roles/delete-level/", {
             "level": "senior", "confirmation": "Senior", "confirmed": True,

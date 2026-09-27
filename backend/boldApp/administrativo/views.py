@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -42,6 +43,56 @@ from .services import complete_administrative_action, create_administrative_acti
 
 SENSITIVE_EMPLOYEE_ACTIONS = {"revoke_sessions", "reset_mfa", "send_password_reset", "deactivate_account", "reactivate_account", "offboard"}
 
+DEFAULT_DASHBOARD_LAYOUT = [
+    {"type": "metric", "metrics": ["organization.employees_active"], "visualization": "circle"},
+    {"type": "metric", "metrics": ["organization.accounts_active"], "visualization": "bar"},
+    {"type": "metric", "metrics": ["security.active_sessions"], "visualization": "circle"},
+    {"type": "metric", "metrics": ["security.mfa_enabled_accounts"], "visualization": "bar"},
+    {"type": "modules", "visualization": "bar"},
+    {"type": "activity"},
+]
+
+
+def _dashboard_metric_ids(modules):
+    fixed = {
+        "organization.employees_total", "organization.employees_active", "organization.accounts_active",
+        "organization.accounts_inactive", "organization.accounts_pending_invitation", "organization.organizational_units",
+        "organization.active_assignments", "security.active_sessions", "security.mfa_enabled_accounts",
+        "security.failed_logins_24h", "security.password_resets_24h",
+    }
+    return fixed | {f"module.{module['code']}.{key}" for module in modules for key in module["metrics"]}
+
+
+def _validate_dashboard_layout(value, modules):
+    if not isinstance(value, list) or not 1 <= len(value) <= 8:
+        raise ValidationError({"widgets": "El tablero debe contener entre 1 y 8 widgets."})
+    allowed_metrics = _dashboard_metric_ids(modules)
+    normalized, special_types = [], set()
+    module_metrics = [f"module.{module['code']}.{key}" for module in modules for key in module["metrics"]]
+    for widget in value:
+        if not isinstance(widget, dict) or widget.get("type") not in {"metric", "modules", "activity"}:
+            raise ValidationError({"widgets": "El tablero contiene un tipo de widget desconocido."})
+        kind = widget["type"]
+        if kind in {"metric", "modules"}:
+            metrics = widget.get("metrics")
+            if metrics is None and widget.get("metric"):
+                metrics = [widget["metric"]]
+            if metrics is None and kind == "modules":
+                metrics = module_metrics
+            visualization = widget.get("visualization", "bar" if kind == "modules" else None)
+            permitted = allowed_metrics if kind == "metric" else set(module_metrics)
+            if not isinstance(metrics, list) or not metrics or len(metrics) != len(set(metrics)) or any(metric not in permitted for metric in metrics) or visualization not in {"circle", "bar"}:
+                raise ValidationError({"widgets": "La métrica o visualización seleccionada no es válida."})
+            clean = {"type": kind, "metrics": metrics, "visualization": visualization}
+        else:
+            clean = {"type": kind}
+        if kind in {"modules", "activity"} and kind in special_types:
+            raise ValidationError({"widgets": "No se permiten widgets duplicados."})
+        if kind in {"modules", "activity"}:
+            special_types.add(kind)
+        normalized.append(clean)
+    return normalized
+
 
 def _active_assignments(employee):
     return employee.position_assignments.filter(is_active=True, released_at__isnull=True).select_related("position__unit", "position__job_role")
@@ -64,17 +115,25 @@ def _responsibility_snapshot(employee):
 class DashboardView(APIView):
     permission_classes = [IsCompanyOwner]
 
+    def _modules(self, request):
+        return [provider.dashboard(request) for provider in administrative_modules.providers()]
+
     def get(self, request):
         now = timezone.now()
-        modules = []
+        modules = self._modules(request)
         activity = []
         for provider in administrative_modules.providers():
-            modules.append(provider.dashboard(request))
             activity.extend(provider.activity(request, limit=10))
         activity.sort(key=lambda item: item["occurred_at"], reverse=True)
         accounts = UserAccount.objects.all()
+        saved_layout = request.user.administration_dashboard_layout
+        try:
+            layout = _validate_dashboard_layout(saved_layout, modules) if saved_layout else DEFAULT_DASHBOARD_LAYOUT
+        except ValidationError:
+            layout = DEFAULT_DASHBOARD_LAYOUT
         return Response({
             "generated_at": now,
+            "layout": layout,
             "organization": {
                 "employees_total": Employee.objects.count(),
                 "employees_active": Employee.objects.filter(is_active=True).count(),
@@ -93,6 +152,13 @@ class DashboardView(APIView):
             "modules": modules,
             "recent_activity": activity[:20],
         })
+
+    def put(self, request):
+        modules = self._modules(request)
+        layout = _validate_dashboard_layout(request.data.get("widgets"), modules)
+        request.user.administration_dashboard_layout = layout
+        request.user.save(update_fields=["administration_dashboard_layout", "updated_at"])
+        return Response({"layout": layout})
 
 
 class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -322,6 +388,7 @@ class AuditEventListView(APIView):
     permission_classes = [IsCompanyOwner]
 
     def get(self, request):
+        source_limit = 100
         module = request.query_params.get("module", "").strip()
         event_type = request.query_params.get("event_type", "").strip()
         outcome = request.query_params.get("outcome", "").strip()
@@ -334,7 +401,7 @@ class AuditEventListView(APIView):
             queryset = SystemAuditEvent.objects.select_related("actor_account", "organizational_unit")
             if event_type: queryset = queryset.filter(event_type__icontains=event_type)
             if outcome: queryset = queryset.filter(outcome=outcome)
-            events.extend(SystemAuditEventSerializer(queryset[:500], many=True).data)
+            events.extend(SystemAuditEventSerializer(queryset[:source_limit], many=True).data)
 
         if not module or module == "authentication":
             queryset = AuthEvent.objects.select_related("actor_account", "user_account")
@@ -347,7 +414,7 @@ class AuditEventListView(APIView):
                 "target_type": "user_account", "target_id": str(row.user_account_id) if row.user_account_id else None,
                 "outcome": "success" if row.success else "failure", "changes": {}, "metadata": row.metadata,
                 "ip_address": row.ip_address, "correlation_id": str(row.correlation_id), "occurred_at": row.occurred_at,
-            } for row in queryset[:500])
+            } for row in queryset[:source_limit])
 
         if not module or module == "permissions":
             queryset = PermissionAuditLog.objects.select_related("employee", "permission", "target_unit")
@@ -359,11 +426,11 @@ class AuditEventListView(APIView):
                 "outcome": "success" if row.decision == "allow" else "denied", "changes": {},
                 "metadata": {"reason": row.reason, "unit": row.target_unit.name}, "ip_address": None,
                 "correlation_id": None, "occurred_at": row.created_at,
-            } for row in queryset[:500])
+            } for row in queryset[:source_limit])
 
         for provider in administrative_modules.providers():
             if (not module or module == provider.code) and hasattr(provider, "audit_events"):
-                events.extend(provider.audit_events(request, limit=500))
+                events.extend(provider.audit_events(request, limit=source_limit))
 
         if search:
             events = [item for item in events if search in " ".join(str(item.get(key) or "") for key in ("event_type", "actor_email", "target_type", "metadata")).lower()]
@@ -397,6 +464,7 @@ class OrganizationOverviewView(APIView):
             positions.append({
                 "id": row.id, "unit": row.unit_id, "unit_name": row.unit.name,
                 "job_role": row.job_role_id, "role_title": row.job_role.title,
+                "reports_to_position": row.reports_to_position_id,
                 "display_order": row.display_order, "is_open": row.is_open,
                 "occupied": active_assignment is not None,
                 "occupant_name": active_assignment.employee.full_name if active_assignment else None,

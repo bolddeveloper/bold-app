@@ -52,6 +52,7 @@ class UserAccount(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     password_changed_at = models.DateTimeField(null=True, blank=True)
     must_change_password = models.BooleanField(default=False)
     credentials_version = models.PositiveIntegerField(default=1)
+    administration_dashboard_layout = models.JSONField(default=list, blank=True)
     deactivated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -1,12 +1,13 @@
 import { BoldSelect as AdminSelect } from "../core/shared/bold_select.jsx";
 import Swal from "sweetalert2";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Building2, ChevronDown, LayoutDashboard, Pencil, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Activity, Building2, Check, ChevronDown, GripVertical, LayoutDashboard, MoreHorizontal, Pencil, Plus, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 
 import { useCore } from "../core/core_provider.jsx";
 import { coreApi } from "../core/core_api.js";
 import { adminApi } from "./admin_api.js";
 import { useDialog } from "../core/shared/use_dialog.js";
+import { useMediaQuery } from "../core/shared/use_media_query.js";
 
 const adminDialog = options => Swal.fire({
     confirmButtonColor: "#ef1f2d",
@@ -48,22 +49,106 @@ function Loading({ error, onRetry }) {
     return <div className="admin_state"><p>{error || "Cargando información administrativa…"}</p>{error && <button type="button" onClick={onRetry}>Reintentar</button>}</div>;
 }
 
-function Dashboard({ data }) {
-    const baseMetrics = [
-        ["Empleados activos", data.organization.employees_active],
-        ["Cuentas activas", data.organization.accounts_active],
-        ["Sesiones activas", data.security.active_sessions],
-        ["Cuentas con MFA", data.security.mfa_enabled_accounts],
+const organizationMetricLabels = {
+    employees_total: "Empleados totales", employees_active: "Empleados activos", accounts_active: "Cuentas activas",
+    accounts_inactive: "Cuentas inactivas", accounts_pending_invitation: "Invitaciones pendientes",
+    organizational_units: "Unidades organizativas", active_assignments: "Cargos activos",
+};
+const securityMetricLabels = {
+    active_sessions: "Sesiones activas", mfa_enabled_accounts: "Cuentas con MFA",
+    failed_logins_24h: "Accesos fallidos (24 h)", password_resets_24h: "Contraseñas restablecidas (24 h)",
+};
+
+function dashboardMetrics(data) {
+    const accountsTotal = data.organization.accounts_active + data.organization.accounts_inactive;
+    const metrics = [
+        ...Object.entries(data.organization).map(([key, value]) => ({ id: `organization.${key}`, label: organizationMetricLabels[key] || metricLabel(key), value,
+            total: key === "employees_active" ? data.organization.employees_total : ["accounts_active", "accounts_inactive", "accounts_pending_invitation"].includes(key) ? accountsTotal : null })),
+        ...Object.entries(data.security).map(([key, value]) => ({ id: `security.${key}`, label: securityMetricLabels[key] || metricLabel(key), value,
+            total: key === "mfa_enabled_accounts" ? data.organization.accounts_active : null })),
     ];
-    return <div className="admin_dashboard">
-        <section className="admin_metric_grid">{baseMetrics.map(([label, value]) => <article className="admin_metric_card" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
-        <section className="admin_panel"><header><div><span className="admin_eyebrow">PANORAMA MODULAR</span><h2>Actividad de la aplicación</h2></div></header>
-            <div className="admin_module_grid">{data.modules.map(module => <article className="admin_module_card" data-module={module.code} key={module.code}><h3>{module.title}</h3><div>{Object.entries(module.metrics).map(([key, value]) => <p data-metric={key} key={key}><span>{metricLabel(key)}</span><strong>{value}</strong></p>)}</div>{module.by_unit?.length > 0 && <small>{module.by_unit.length} departamentos con actividad</small>}</article>)}</div>
-        </section>
-        <section className="admin_panel"><header><div><span className="admin_eyebrow">ÚLTIMOS EVENTOS</span><h2>Actividad reciente</h2></div></header>
-            <div className="admin_activity_list">{data.recent_activity.length ? data.recent_activity.map(item => <article key={`${item.module_code}:${item.id}`}><span className="admin_event_module">{item.module_code}</span><div><strong>{item.label || item.event_type}</strong><p>{item.actor || "Sistema"} · {item.unit || "General"}</p></div><time>{dateTime(item.occurred_at)}</time></article>) : <p>Sin actividad reciente registrada.</p>}</div>
-        </section>
-    </div>;
+    for (const module of data.modules) for (const [key, value] of Object.entries(module.metrics)) metrics.push({
+        id: `module.${module.code}.${key}`, label: `${module.title} · ${metricLabel(key)}`, value,
+        total: ["tasks_completed", "tasks_overdue"].includes(key) ? module.metrics.tasks_total : null,
+    });
+    return metrics;
+}
+
+function WidgetMenu({ children, label = "Opciones del widget", add = false, onOpen }) {
+    const [open, setOpen] = useState(false), root = useRef(null), trigger = useRef(null);
+    function close(focus = false) { setOpen(false); if (focus) trigger.current?.focus(); }
+    useEffect(() => {
+        if (!open) return;
+        const outside = event => { if (!root.current?.contains(event.target)) close(); };
+        const escape = event => { if (event.key === "Escape") { event.stopPropagation(); close(true); } };
+        document.addEventListener("pointerdown", outside); document.addEventListener("keydown", escape);
+        return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
+    }, [open]);
+    return <div className={`admin_widget_menu${add ? " admin_add_widget" : ""}${open ? " is_open" : ""}`} ref={root}><button ref={trigger} className="admin_widget_trigger" type="button" aria-label={label} aria-expanded={open} onClick={() => { const next = !open; setOpen(next); if (next) onOpen?.(); }}>{add ? <><Plus size={16} /> Agregar widget</> : <MoreHorizontal size={19} />}</button>{open && <div className="admin_widget_popover">{typeof children === "function" ? children(() => close(true)) : children}</div>}</div>;
+}
+
+const metricGroup = id => id.startsWith("organization.") ? "Organización" : id.startsWith("security.") ? "Seguridad" : "Módulos";
+const metricPercent = metric => metric.total > 0 ? Math.min(100, Math.round(metric.value / metric.total * 100)) : null;
+
+function MetricList({ selected, metrics, visualization }) {
+    const rows = selected.map(id => metrics.find(metric => metric.id === id)).filter(Boolean);
+    if (visualization === "circle") return <div className="admin_metric_circles" style={{ "--metric-columns": Math.min(4, rows.length), "--metric-size": rows.length === 1 ? "112px" : rows.length <= 4 ? "96px" : "86px" }}>{rows.map(metric => { const percent = metricPercent(metric); return <div key={metric.id}><i style={percent === null ? {} : { "--metric-progress": `${percent}%` }}><strong>{metric.value}</strong>{percent !== null && <small>{percent}%</small>}</i><span>{metric.label}</span></div>; })}</div>;
+    const proportional = rows.filter(metric => metric.total > 0); const maximum = Math.max(1, ...rows.filter(metric => !metric.total).map(metric => metric.value));
+    return <div className="admin_metric_bars">{rows.map(metric => { const percent = metricPercent(metric); const width = percent ?? (proportional.length ? 0 : metric.value / maximum * 100); return <div key={metric.id}><span>{metric.label}</span><strong>{metric.value}</strong><i><b className={percent === null ? "is_count" : ""} style={{ width: `${width}%` }} /></i>{percent !== null && <small>{percent}% de {metric.total}</small>}</div>; })}</div>;
+}
+
+function MetricPicker({ widget, metrics, onApply, onRemove, close, busy }) {
+    const [selected, setSelected] = useState(widget.metrics), [visualization, setVisualization] = useState(widget.visualization);
+    const toggle = id => setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+    return <><div className="admin_metric_checks">{["Organización", "Seguridad", "Módulos"].map(group => { const options = metrics.filter(metric => metricGroup(metric.id) === group); return options.length > 0 && <fieldset key={group}><legend>{group}</legend>{options.map(metric => <label key={metric.id}><input type="checkbox" checked={selected.includes(metric.id)} onChange={() => toggle(metric.id)} /> <span>{metric.label}</span></label>)}</fieldset>; })}</div><strong>Visualización</strong><div className="admin_visual_options">{[["circle", "Circular"], ["bar", "Barra"]].map(([value, label]) => <button type="button" className={visualization === value ? "is_selected" : ""} key={value} onClick={() => setVisualization(value)}>{label}{visualization === value && <Check size={15} />}</button>)}</div><footer><button className="is_danger" type="button" disabled={busy} onClick={onRemove}>Quitar</button><button type="button" onClick={close}>Cancelar</button><button className="admin_primary" type="button" disabled={busy || !selected.length} onClick={() => { onApply({ ...widget, metrics: selected, visualization }); close(); }}>Aplicar</button></footer></>;
+}
+
+function WidgetHeader({ title, eyebrow, widget, metrics, onChange, onRemove, busy, drag }) {
+    return <header><div><span className="admin_eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="admin_widget_actions"><button className="admin_drag_handle" type="button" draggable aria-label="Mover widget. Usa las flechas para cambiar su posición." onDragStart={drag.onDragStart} onKeyDown={drag.onKeyDown}><GripVertical size={18} /></button>{metrics && <WidgetMenu>{close => <MetricPicker key={widget.metrics.join("|") + widget.visualization} widget={widget} metrics={metrics} onApply={onChange} onRemove={onRemove} close={close} busy={busy} />}</WidgetMenu>}{!metrics && <WidgetMenu>{close => <><button className="is_danger" type="button" disabled={busy} onClick={() => { onRemove(); close(); }}>Quitar widget</button></>}</WidgetMenu>}</div></header>;
+}
+
+function MetricWidget({ widget, metrics, onChange, onRemove, busy, drag }) {
+    const title = widget.metrics.length === 1 ? metrics.find(metric => metric.id === widget.metrics[0])?.label : `${widget.metrics.length} métricas`;
+    return <article className="admin_dashboard_widget"><WidgetHeader eyebrow="MÉTRICAS" title={title || "Métricas"} widget={widget} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={widget.metrics} metrics={metrics} visualization={widget.visualization} /></div></article>;
+}
+
+function ModulesWidget({ widget, metrics, onChange, onRemove, busy, drag }) {
+    return <section className="admin_dashboard_widget"><WidgetHeader eyebrow="PANORAMA MODULAR" title="Actividad de la aplicación" widget={widget} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={widget.metrics} metrics={metrics} visualization={widget.visualization} /></div></section>;
+}
+
+function ActivityWidget({ widget, data, onRemove, busy, drag }) {
+    return <section className="admin_dashboard_widget"><WidgetHeader eyebrow="ÚLTIMOS EVENTOS" title="Actividad reciente" widget={widget} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content admin_activity_list">{data.recent_activity.length ? data.recent_activity.slice(0, 8).map(item => <article key={`${item.module_code}:${item.id}`}><span className="admin_event_module">{item.module_code}</span><div><strong>{item.label || item.event_type}</strong><p>{item.actor || "Sistema"} · {item.unit || "General"}</p></div><time>{dateTime(item.occurred_at)}</time></article>) : <p>Sin actividad reciente registrada.</p>}</div></section>;
+}
+
+function packWidgetRows(layout, columns) {
+    const rows = []; let row = [], used = 0;
+    const finish = () => {
+        if (!row.length) return;
+        for (let spare = columns - used, index = 0; spare > 0; spare--, index = (index + 1) % row.length) row[index].width++;
+        rows.push(row); row = []; used = 0;
+    };
+    layout.forEach((widget, index) => {
+        const count = widget.type === "activity" ? 3 : widget.metrics.length;
+        const width = columns === 1 ? 1 : count > 2 || widget.type === "activity" ? Math.min(2, columns) : 1;
+        if (used + width > columns) finish();
+        row.push({ widget, index, width }); used += width;
+        if (used === columns) finish();
+    });
+    finish(); return rows;
+}
+
+function Dashboard({ data, setNotice }) {
+    const [layout, setLayout] = useState(data.layout), [busy, setBusy] = useState(false), [dragged, setDragged] = useState(null);
+    const metrics = dashboardMetrics(data), moduleMetrics = metrics.filter(metric => metric.id.startsWith("module."));
+    const usedTypes = new Set(layout.map(widget => widget.type));
+    const mobile = useMediaQuery("(max-width: 600px)"), tablet = useMediaQuery("(max-width: 1000px)");
+    const columns = mobile ? 1 : tablet ? 2 : 4, rows = packWidgetRows(layout, columns);
+    async function update(next) { const previous = layout; setLayout(next); setBusy(true); try { const saved = await adminApi.saveDashboard(next); setLayout(saved.layout); setNotice("Tablero actualizado."); } catch (error) { setLayout(previous); setNotice(error.message, true); } finally { setBusy(false); } }
+    const replace = (index, widget) => update(layout.map((item, position) => position === index ? widget : item));
+    const remove = index => { if (layout.length > 1) update(layout.filter((_, position) => position !== index)); };
+    const move = (from, to) => { if (!Number.isInteger(from) || from === to || to < 0 || to >= layout.length) return; const next = [...layout], [item] = next.splice(from, 1); next.splice(to, 0, item); update(next); };
+    return <div className="admin_dashboard"><div className="admin_dashboard_toolbar"><div><h2>Tu tablero</h2><p>Elige, mueve y combina la información que quieres ver.</p></div><WidgetMenu label="Agregar widget" add>{close => <><button type="button" disabled={busy || layout.length >= 8} onClick={() => { update([...layout, { type: "metric", metrics: [metrics[0].id], visualization: "circle" }]); close(); }}>Widget de métricas</button>{!usedTypes.has("modules") && <button type="button" disabled={busy || layout.length >= 8} onClick={() => { update([...layout, { type: "modules", metrics: moduleMetrics.map(metric => metric.id), visualization: "bar" }]); close(); }}>Panorama modular</button>}{!usedTypes.has("activity") && <button type="button" disabled={busy || layout.length >= 8} onClick={() => { update([...layout, { type: "activity" }]); close(); }}>Actividad reciente</button>}</>}</WidgetMenu></div>
+        <section className="admin_dashboard_grid">{rows.map((row, rowIndex) => <div className="admin_dashboard_row" style={{ "--dashboard-columns": columns }} key={rowIndex}>{row.map(({ widget, index, width }) => { const drag = { onDragStart: event => { setDragged(index); event.dataTransfer.effectAllowed = "move"; }, onKeyDown: event => { if (event.key === "ArrowLeft" || event.key === "ArrowUp") { event.preventDefault(); move(index, index - 1); } if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); move(index, index + 1); } } }; return <div className="admin_widget_slot" key={`${widget.type}:${index}`} style={{ "--widget-width": width }} onDragOver={event => event.preventDefault()} onDrop={() => { move(dragged, index); setDragged(null); }}>{widget.type === "metric" ? <MetricWidget widget={widget} metrics={metrics} busy={busy} onChange={value => replace(index, value)} onRemove={() => remove(index)} drag={drag} /> : widget.type === "modules" ? <ModulesWidget widget={widget} metrics={moduleMetrics} busy={busy} onChange={value => replace(index, value)} onRemove={() => remove(index)} drag={drag} /> : <ActivityWidget widget={widget} data={data} busy={busy} onRemove={() => remove(index)} drag={drag} />}</div>; })}</div>)}</section>{layout.length >= 8 && <p className="admin_dashboard_limit">Puedes mostrar hasta ocho widgets.</p>}</div>;
 }
 
 function CreateEmployee({ positions, onCreate, onCancel, busy }) {
@@ -164,7 +249,8 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice }) 
     return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} sessions={sessions} onRefresh={reload} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
 }
 
-export function Audit({ rows }) {
+export function Audit({ page, onPage }) {
+    const rows = page.results;
     const [query, setQuery] = useState("");
     const [module, setModule] = useState("");
     const filtered = rows.filter(row => (!module || row.module_code === module) && `${row.event_type} ${row.actor_email || ""} ${row.target_type || ""}`.toLowerCase().includes(query.toLowerCase()));
@@ -196,6 +282,7 @@ export function Audit({ rows }) {
             </table>
         </div>
         {!filtered.length && <p className="admin_empty">No hay eventos que coincidan con la búsqueda.</p>}
+        <footer className="admin_audit_pagination"><span>{page.count} eventos en total</span><div><button type="button" disabled={!page.previous} onClick={() => onPage(page.page - 1)}>Anterior</button><strong>Página {page.page}</strong><button type="button" disabled={!page.next} onClick={() => onPage(page.page + 1)}>Siguiente</button></div></footer>
     </section>;
 }
 
@@ -298,6 +385,10 @@ export function OrganizationManager({ data: initialData }) {
     const [optionDeleteConfirmed, setOptionDeleteConfirmed] = useState(false);
     const [positionUnit, setPositionUnit] = useState("");
     const [busy, setBusy] = useState(false);
+    const [section, setSection] = useState("structure");
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [parentUnit, setParentUnit] = useState("");
+    useDialog(drawerOpen, ".admin_organization_drawer", () => { if (!busy) setDrawerOpen(false); });
     const levels = [...new Set([...(data.role_levels || []).map(row => row.value), ...data.roles.map(row => row.level?.trim()).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "es"));
     const levelOptions = roleLevel && !levels.includes(roleLevel) ? [roleLevel, ...levels] : levels;
     const nextOrder = Math.max(0, ...data.positions.filter(row => String(row.unit) === String(positionUnit)).map(row => Number(row.display_order) || 0)) + 1;
@@ -314,6 +405,7 @@ export function OrganizationManager({ data: initialData }) {
             if (kind === "position") await adminApi.createPosition({ unit: form.get("unit"), job_role: form.get("job_role"), reports_to_position: form.get("reports_to_position") || null, reason });
             formElement.reset();
             setUnitType("department"); setSensitivity("normal"); setRoleLevel(""); setPositionUnit("");
+            setParentUnit(""); setDrawerOpen(false);
             setNotice("Registro organizacional creado y auditado.");
             setData(await adminApi.organization());
         } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
@@ -408,8 +500,9 @@ export function OrganizationManager({ data: initialData }) {
             finally { setBusy(false); }
         }
     }}>+ Agregar nivel</button><button type="button" disabled={!roleLevel} onClick={() => { setDeleteLevel(roleLevel); setDeleteConfirmation(""); setDeleteConfirmed(false); }}>Eliminar nivel</button></div>;
-    return <><form className="admin_form admin_catalog_form" onSubmit={submit}><header><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Agregar al catálogo</h2></div><AdminSelect label="Tipo de registro" value={kind} onValueChange={value => { setKind(value); setRoleLevel(""); setPositionUnit(""); }} options={[{ value: "unit", label: "Unidad o departamento" }, { value: "role", label: "Cargo" }, { value: "position", label: "Plaza" }]} /></header>
-        {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<AdminSelect name="unit_type" label="Tipo" value={unitType} required onValueChange={setUnitType} options={data.unit_types.map(row => ({ value: row.value, label: row.value }))} menuFooter={optionActions("unit_type", unitType, setUnitType)} /></label><label>Sensibilidad<AdminSelect name="sensitivity_level" label="Sensibilidad" value={sensitivity} required onValueChange={setSensitivity} options={data.sensitivity_levels.map(row => ({ value: row.value, label: row.value }))} menuFooter={optionActions("sensitivity", sensitivity, setSensitivity)} /></label><label>Unidad superior<AdminSelect name="parent_unit" label="Unidad superior" options={[{ value: "", label: "Ninguna" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label></>}
+    const openCreate = (type, context = "") => { setKind(type); setRoleLevel(""); setPositionUnit(type === "position" ? context : ""); setParentUnit(type === "unit" ? context : ""); setDrawerOpen(true); };
+    return <><div className="admin_organization_workspace"><header className="admin_organization_toolbar"><div><span className="admin_eyebrow">GESTIÓN ORGANIZACIONAL</span><h2>Estructura y catálogos</h2><p>Organiza unidades, cargos y plazas desde una sola vista.</p></div><div className="admin_organization_create"><button type="button" onClick={() => openCreate("unit")}><Plus size={16} /> Nueva unidad</button><button type="button" onClick={() => openCreate("role")}><Plus size={16} /> Nuevo cargo</button><button className="admin_primary" type="button" onClick={() => openCreate("position")}><Plus size={16} /> Nueva plaza</button></div></header><nav className="admin_organization_tabs" aria-label="Secciones de organización"><button className={section === "structure" ? "is_active" : ""} type="button" onClick={() => setSection("structure")}>Estructura</button><button className={section === "catalogs" ? "is_active" : ""} type="button" onClick={() => setSection("catalogs")}>Catálogos</button><button className="admin_unlock_editing" type="button" onClick={() => setShowRoleMfa(true)}><ShieldCheck size={16} /> {roleActionsUnlocked ? "Edición desbloqueada" : "Desbloquear edición"}</button></nav>{section === "structure" ? <OrganizationStructure data={data} actionsUnlocked={roleActionsUnlocked} onUnlock={() => setShowRoleMfa(true)} onCreate={openCreate} onEditUnit={editUnit} onDeleteUnit={unit => { setDeleteUnitTarget(unit); setUnitDeleteConfirmation(""); setUnitDeleteConfirmed(false); }} setData={setData} setNotice={setNotice} /> : <OrganizationCatalog data={data} actionsUnlocked={roleActionsUnlocked} onUnlock={() => setShowRoleMfa(true)} onCreate={openCreate} onEditRole={setEditingRole} onDeleteRole={role => { setDeleteRoleTarget(role); setRoleDeleteConfirmation(""); setRoleDeleteConfirmed(false); }} onManageOption={manageOption} />}</div>{drawerOpen && <div className="admin_organization_drawer_backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDrawerOpen(false); }}><form className="admin_form admin_catalog_form admin_organization_drawer" role="dialog" aria-modal="true" aria-labelledby="organization_drawer_title" onSubmit={submit}><header><div><span className="admin_eyebrow">NUEVO REGISTRO</span><h2 id="organization_drawer_title">{kind === "unit" ? "Nueva unidad" : kind === "role" ? "Nuevo cargo" : "Nueva plaza"}</h2></div><button type="button" aria-label="Cerrar" onClick={() => setDrawerOpen(false)}>×</button></header>
+        {kind === "unit" && <><label>Nombre<input name="name" required /></label><label>Tipo<AdminSelect name="unit_type" label="Tipo" value={unitType} required onValueChange={setUnitType} options={data.unit_types.map(row => ({ value: row.value, label: row.value }))} /></label><label>Sensibilidad<AdminSelect name="sensitivity_level" label="Sensibilidad" value={sensitivity} required onValueChange={setSensitivity} options={data.sensitivity_levels.map(row => ({ value: row.value, label: row.value }))} /></label><label>Unidad superior<AdminSelect name="parent_unit" label="Unidad superior" value={parentUnit} onValueChange={setParentUnit} options={[{ value: "", label: "Ninguna" }, ...data.units.map(row => ({ value: row.id, label: row.name }))]} /></label></>}
         {kind === "role" && <><label>Título<input name="title" required /></label><label>Nivel<AdminSelect name="level" label="Nivel" value={roleLevel} onValueChange={setRoleLevel} options={[{ value: "", label: "Sin nivel" }, ...levelOptions.map(level => ({ value: level, label: level }))]} menuFooter={levelActions} /></label><label>Descripción<textarea name="description" /></label></>}
         {kind === "position" && <>
             <label>Unidad<AdminSelect
@@ -437,11 +530,34 @@ export function OrganizationManager({ data: initialData }) {
             <span>Los cambios quedan registrados en auditoría.</span>
             <button className="admin_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Crear registro"}</button>
         </footer>
-    </form>{editingRole && <RoleEditor role={editingRole} levels={levels} onSave={editRole} onClose={() => setEditingRole(null)} />}<OrganizationCatalog data={data} actionsUnlocked={roleActionsUnlocked} onUnlock={() => setShowRoleMfa(true)} onEditRole={setEditingRole} onDeleteRole={role => { setDeleteRoleTarget(role); setRoleDeleteConfirmation(""); setRoleDeleteConfirmed(false); }} onEditUnit={editUnit} onDeleteUnit={unit => { setDeleteUnitTarget(unit); setUnitDeleteConfirmation(""); setUnitDeleteConfirmed(false); }} />{showRoleMfa && <div className="admin_modal_backdrop"><form className="admin_delete_level" role="dialog" aria-modal="true" onSubmit={unlockRoleActions}><h3>Verificación MFA</h3><p>Ingresa el código de tu aplicación autenticadora.</p><input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus /><footer><button type="button" onClick={() => setShowRoleMfa(false)} disabled={busy}>Cancelar</button><button className="admin_primary" disabled={busy} type="submit">Verificar</button></footer></form></div>}{deleteUnitTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar unidad</h3><p>Para eliminar, escribe la unidad seleccionada:</p><input value={unitDeleteConfirmation} onChange={event => setUnitDeleteConfirmation(event.target.value)} placeholder={deleteUnitTarget.name} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={unitDeleteConfirmed} onChange={event => setUnitDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteUnitTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || unitDeleteConfirmation !== deleteUnitTarget.name || !unitDeleteConfirmed} onClick={removeUnit}>Eliminar unidad</button></footer></section></div>}{deleteRoleTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar cargo</h3><p>Para eliminar, escribe el cargo seleccionado:</p><input value={roleDeleteConfirmation} onChange={event => setRoleDeleteConfirmation(event.target.value)} placeholder={deleteRoleTarget.title} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={roleDeleteConfirmed} onChange={event => setRoleDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteRoleTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || roleDeleteConfirmation !== deleteRoleTarget.title || !roleDeleteConfirmed} onClick={removeRole}>Eliminar cargo</button></footer></section></div>}{deleteOptionTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar opción</h3><p>Para eliminar, escribe la opción seleccionada:</p><input value={optionDeleteConfirmation} onChange={event => setOptionDeleteConfirmation(event.target.value)} placeholder={deleteOptionTarget.option.value} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={optionDeleteConfirmed} onChange={event => setOptionDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteOptionTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || optionDeleteConfirmation !== deleteOptionTarget.option.value || !optionDeleteConfirmed} onClick={removeOption}>Eliminar opción</button></footer></section></div>}{deleteLevel && <div className="admin_modal_backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDeleteLevel(""); }}><section className="admin_delete_level" role="dialog" aria-modal="true" aria-labelledby="delete_level_title"><h3 id="delete_level_title">Eliminar nivel</h3><p>Para eliminar, escribe el nivel seleccionado:</p><input value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} placeholder={deleteLevel} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={deleteConfirmed} onChange={event => setDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteLevel("")} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || deleteConfirmation !== deleteLevel || !deleteConfirmed} onClick={removeLevel}>Eliminar nivel</button></footer></section></div>}</>;
+    </form></div>}{editingRole && <RoleEditor role={editingRole} levels={levels} onSave={editRole} onClose={() => setEditingRole(null)} />}{showRoleMfa && <div className="admin_modal_backdrop"><form className="admin_delete_level" role="dialog" aria-modal="true" onSubmit={unlockRoleActions}><h3>Verificación MFA</h3><p>Ingresa el código de tu aplicación autenticadora.</p><input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" required autoFocus /><footer><button type="button" onClick={() => setShowRoleMfa(false)} disabled={busy}>Cancelar</button><button className="admin_primary" disabled={busy} type="submit">Verificar</button></footer></form></div>}{deleteUnitTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar unidad</h3><p>Para eliminar, escribe la unidad seleccionada:</p><input value={unitDeleteConfirmation} onChange={event => setUnitDeleteConfirmation(event.target.value)} placeholder={deleteUnitTarget.name} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={unitDeleteConfirmed} onChange={event => setUnitDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteUnitTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || unitDeleteConfirmation !== deleteUnitTarget.name || !unitDeleteConfirmed} onClick={removeUnit}>Eliminar unidad</button></footer></section></div>}{deleteRoleTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar cargo</h3><p>Para eliminar, escribe el cargo seleccionado:</p><input value={roleDeleteConfirmation} onChange={event => setRoleDeleteConfirmation(event.target.value)} placeholder={deleteRoleTarget.title} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={roleDeleteConfirmed} onChange={event => setRoleDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteRoleTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || roleDeleteConfirmation !== deleteRoleTarget.title || !roleDeleteConfirmed} onClick={removeRole}>Eliminar cargo</button></footer></section></div>}{deleteOptionTarget && <div className="admin_modal_backdrop"><section className="admin_delete_level" role="dialog" aria-modal="true"><h3>Eliminar opción</h3><p>Para eliminar, escribe la opción seleccionada:</p><input value={optionDeleteConfirmation} onChange={event => setOptionDeleteConfirmation(event.target.value)} placeholder={deleteOptionTarget.option.value} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={optionDeleteConfirmed} onChange={event => setOptionDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteOptionTarget(null)} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || optionDeleteConfirmation !== deleteOptionTarget.option.value || !optionDeleteConfirmed} onClick={removeOption}>Eliminar opción</button></footer></section></div>}{deleteLevel && <div className="admin_modal_backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDeleteLevel(""); }}><section className="admin_delete_level" role="dialog" aria-modal="true" aria-labelledby="delete_level_title"><h3 id="delete_level_title">Eliminar nivel</h3><p>Para eliminar, escribe el nivel seleccionado:</p><input value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} placeholder={deleteLevel} autoFocus /><label className="admin_confirm_check"><input type="checkbox" checked={deleteConfirmed} onChange={event => setDeleteConfirmed(event.target.checked)} /> ¿Estás seguro de la eliminación?</label><footer><button type="button" onClick={() => setDeleteLevel("")} disabled={busy}>Cancelar</button><button type="button" className="admin_danger_button" disabled={busy || deleteConfirmation !== deleteLevel || !deleteConfirmed} onClick={removeLevel}>Eliminar nivel</button></footer></section></div>}</>;
 }
 
-function OrganizationCatalog({ data, actionsUnlocked, onUnlock, onEditRole, onDeleteRole, onEditUnit, onDeleteUnit }) {
-    return <div className="admin_organization"><section className="admin_panel"><header><div><span className="admin_eyebrow">ESTRUCTURA</span><h2>Departamentos y unidades</h2></div><button className="admin_unlock_roles" type="button" aria-label="Desbloquear edición de unidades" onClick={onUnlock}><Pencil size={17} /></button></header>{data.units.map(unit => <article key={unit.id}><div><strong>{unit.name}</strong><span>{unit.unit_type}</span></div><small>{unit.positions} plazas · sensibilidad {unit.sensitivity_level}</small>{actionsUnlocked && <div className="admin_catalog_actions"><button type="button" onClick={() => onEditUnit(unit)}>Editar</button><button type="button" onClick={() => onDeleteUnit(unit)}>Eliminar</button></div>}</article>)}</section><section className="admin_panel"><header><div><span className="admin_eyebrow">CATÁLOGO</span><h2>Cargos</h2></div><button className="admin_unlock_roles" type="button" aria-label="Desbloquear edición de cargos" onClick={onUnlock}><Pencil size={17} /></button></header>{data.roles.map(role => <article key={role.id}><div><strong>{role.title}</strong><span>{role.level || "Sin nivel"}</span></div><small>{role.description || "Sin descripción"}</small>{actionsUnlocked && <div className="admin_catalog_actions"><button type="button" onClick={() => onEditRole(role)}>Editar</button><button type="button" onClick={() => onDeleteRole(role)}>Eliminar</button></div>}</article>)}</section></div>;
+function OrganizationStructure({ data, actionsUnlocked, onUnlock, onCreate, onEditUnit, onDeleteUnit, setData, setNotice }) {
+    const roots = data.units.filter(unit => !unit.parent_unit || !data.units.some(row => String(row.id) === String(unit.parent_unit)));
+    const [expanded, setExpanded] = useState(() => new Set(roots.map(unit => String(unit.id))));
+    const [query, setQuery] = useState(""), [status, setStatus] = useState("all"), [sensitivity, setSensitivityFilter] = useState("");
+    const normalized = query.trim().toLocaleLowerCase("es");
+    const positionsFor = unit => data.positions.filter(position => String(position.unit) === String(unit.id) && (status === "all" || status === "occupied" && position.occupied || status === "vacant" && !position.occupied));
+    const childrenFor = unit => data.units.filter(child => String(child.parent_unit) === String(unit.id));
+    const matches = unit => (!sensitivity || unit.sensitivity_level === sensitivity) && (!normalized || unit.name.toLocaleLowerCase("es").includes(normalized) || positionsFor(unit).some(position => `${position.role_title} ${position.occupant_name || "vacante"}`.toLocaleLowerCase("es").includes(normalized)) || childrenFor(unit).some(matches));
+    const togglePosition = async position => {
+        if (!actionsUnlocked) return onUnlock();
+        const reason = await askText(`Motivo para ${position.is_open ? "cerrar" : "abrir"} la plaza`, "", 8); if (!reason) return;
+        try { await adminApi.updatePosition(position.id, { is_open: !position.is_open, reason }); setData(await adminApi.organization()); setNotice("Disponibilidad de la plaza actualizada."); } catch (error) { setNotice(error.message, true); }
+    };
+    function UnitNode({ unit, depth = 0 }) {
+        if (!matches(unit)) return null;
+        const children = childrenFor(unit), positions = positionsFor(unit), open = expanded.has(String(unit.id)) || Boolean(normalized);
+        return <div className="admin_org_branch" style={{ "--tree-depth": depth }}><article className="admin_org_unit"><button className="admin_org_expand" type="button" aria-expanded={open} onClick={() => setExpanded(current => { const next = new Set(current); open ? next.delete(String(unit.id)) : next.add(String(unit.id)); return next; })}><ChevronDown size={17} /></button><Building2 size={19} /><div><strong>{unit.name}</strong><span>{unit.unit_type} · sensibilidad {unit.sensitivity_level}</span></div><span className="admin_org_count">{positions.length} plazas</span><WidgetMenu>{close => <><button type="button" onClick={() => { onCreate("unit", unit.id); close(); }}>Agregar subunidad</button><button type="button" onClick={() => { onCreate("position", unit.id); close(); }}>Agregar plaza</button><button type="button" onClick={() => { actionsUnlocked ? onEditUnit(unit) : onUnlock(); close(); }}>Editar unidad</button><button className="is_danger" type="button" onClick={() => { actionsUnlocked ? onDeleteUnit(unit) : onUnlock(); close(); }}>Eliminar unidad</button></>}</WidgetMenu></article>{open && <div className="admin_org_children">{positions.map(position => { const manager = data.positions.find(row => String(row.id) === String(position.reports_to_position)); return <article className="admin_org_position" key={position.id}><span className={`admin_position_state ${position.occupied ? "is_occupied" : ""}`} /><div><strong>{position.role_title}</strong><span>{position.occupant_name || "Plaza vacante"}{manager ? ` · reporta a ${manager.role_title}` : ""}</span></div><span className={`admin_status ${position.is_open ? "is_active" : ""}`}>{position.is_open ? "Abierta" : "Cerrada"}</span><WidgetMenu>{close => <><button type="button" onClick={() => { togglePosition(position); close(); }}>{position.is_open ? "Cerrar plaza" : "Abrir plaza"}</button></>}</WidgetMenu></article>; })}{children.map(child => <UnitNode unit={child} depth={depth + 1} key={child.id} />)}</div>}</div>;
+    }
+    return <section className="admin_org_structure"><div className="admin_org_filters"><label><Search size={17} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar unidad, cargo o empleado" /></label><AdminSelect label="Estado" value={status} onValueChange={setStatus} options={[{ value: "all", label: "Todas las plazas" }, { value: "occupied", label: "Ocupadas" }, { value: "vacant", label: "Vacantes" }]} /><AdminSelect label="Sensibilidad" value={sensitivity} onValueChange={setSensitivityFilter} options={[{ value: "", label: "Toda sensibilidad" }, ...data.sensitivity_levels.map(row => ({ value: row.value, label: row.value }))]} /></div><div className="admin_org_tree">{roots.map(unit => <UnitNode unit={unit} key={unit.id} />)}{!roots.some(matches) && <p className="admin_empty">No se encontraron resultados.</p>}</div></section>;
+}
+
+function OrganizationCatalog({ data, actionsUnlocked, onUnlock, onCreate, onEditRole, onDeleteRole, onManageOption }) {
+    const [query, setQuery] = useState(""); const filtered = data.roles.filter(role => `${role.title} ${role.level || ""}`.toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es")));
+    const optionPanel = (title, kind, options) => <section className="admin_catalog_card"><header><div><span className="admin_eyebrow">CATÁLOGO</span><h3>{title}</h3></div><button type="button" onClick={() => onManageOption("add", kind, "", () => {})}><Plus size={16} /> Agregar</button></header><div className="admin_catalog_chips">{options.map(option => <span key={option.id}>{option.value}{actionsUnlocked && <button type="button" aria-label={`Editar ${option.value}`} onClick={() => onManageOption("edit", kind, option.value, () => {})}><Pencil size={13} /></button>}</span>)}</div></section>;
+    return <div className="admin_catalog_workspace"><section className="admin_catalog_roles"><header><div><span className="admin_eyebrow">CARGOS</span><h2>Catálogo de cargos</h2></div><button className="admin_primary" type="button" onClick={() => onCreate("role")}><Plus size={16} /> Nuevo cargo</button></header><label className="admin_catalog_search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar cargo o nivel" /></label><div>{filtered.map(role => <article key={role.id}><div><strong>{role.title}</strong><span>{role.level || "Sin nivel"}</span><small>{role.description || "Sin descripción"}</small></div><WidgetMenu>{close => <><button type="button" onClick={() => { actionsUnlocked ? onEditRole(role) : onUnlock(); close(); }}>Editar</button><button className="is_danger" type="button" onClick={() => { actionsUnlocked ? onDeleteRole(role) : onUnlock(); close(); }}>Eliminar</button></>}</WidgetMenu></article>)}</div></section><div className="admin_catalog_side">{optionPanel("Tipos de unidad", "unit_type", data.unit_types)}{optionPanel("Sensibilidades", "sensitivity", data.sensitivity_levels)}<section className="admin_catalog_card"><header><div><span className="admin_eyebrow">CATÁLOGO</span><h3>Niveles de cargo</h3></div></header><div className="admin_catalog_chips">{data.role_levels.map(option => <span key={option.id}>{option.value}</span>)}</div></section></div></div>;
 }
 
 function Organization({ data }) {
@@ -454,11 +570,14 @@ export default function AdministrationModule() {
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     const [notice, setNoticeState] = useState(null);
+    const [auditLoading, setAuditLoading] = useState(false);
     const setNotice = (message, isError = false) => { setNoticeState({ message, isError }); setTimeout(() => setNoticeState(null), 6000); };
-    async function load() { setError(""); try { const [dashboard, employees, audit, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.auditEvents(), adminApi.organization()]); setData({ dashboard, employees, audit, organization }); } catch (loadError) { setError(loadError.message); } }
+    async function load() { setError(""); try { const [dashboard, employees, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.organization()]); setData({ dashboard, employees, audit: null, organization }); } catch (loadError) { setError(loadError.message); } }
+    async function loadAudit(page = 1) { setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); setData(current => ({ ...current, audit: { ...audit, page } })); } catch (loadError) { setNotice(loadError.message, true); } finally { setAuditLoading(false); } }
     useEffect(() => { load(); }, []);
+    useEffect(() => { if (active === "audit" && data && !data.audit && !auditLoading) loadAudit(); }, [active, data?.audit]);
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
     if (!data) return <Loading error={error} onRetry={load} />;
-    return <section className="administration_module"><header className="admin_module_header"><div><span className="admin_eyebrow">GOBIERNO DE LA APLICACIÓN</span><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} />}{active === "audit" && <Audit rows={data.audit} />}{active === "organization" && <Organization data={data.organization} />}</section>;
+    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}</section>;
 }
