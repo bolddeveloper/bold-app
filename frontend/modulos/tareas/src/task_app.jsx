@@ -543,15 +543,10 @@ function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_
         return Math.max(0, window.innerHeight - Math.max(0, toolbar?.getBoundingClientRect().bottom || 0));
     };
     const [max_height, set_max_height] = use_state(available_height);
-    const [height, set_height] = use_state(available_height);
-    const height_drag = use_ref(null);
-    const min_height = Math.min(280, max_height);
-    const resize_height = value => set_height(Math.max(min_height, Math.min(max_height, value)));
     use_effect(() => {
         const measure = () => {
             const maximum = available_height();
             set_max_height(maximum);
-            set_height(current => Math.min(maximum, current));
         };
         const observer = new ResizeObserver(measure);
         document.querySelectorAll(".top_bar, .mobile_header, .session_toolbar").forEach(element => observer.observe(element));
@@ -569,13 +564,8 @@ function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_
     use_effect(() => () => window.clearTimeout(close_timer.current), []);
 
     return createPortal(<div className={`task_drawer_overlay ${closing ? "task_drawer_closing" : ""}`} onPointerDown={event => { if (event.target === event.currentTarget) request_close(); }}>
-        <section className={`task_drawer_panel ${class_name}`} data-task-drawer="true" role="dialog" aria-modal="true" aria-label={label} style={{ "--task_drawer_width": `${width}px`, "--task_drawer_height": `${height}px`, "--task_drawer_max_height": `${max_height}px` }} onClickCapture={event => { if (event.target.closest("[data-drawer-close]")) { event.preventDefault(); event.stopPropagation(); request_close(); } }}>
+        <section className={`task_drawer_panel ${class_name}`} data-task-drawer="true" role="dialog" aria-modal="true" aria-label={label} style={{ "--task_drawer_width": `${width}px`, "--task_drawer_height": `${max_height}px`, "--task_drawer_max_height": `${max_height}px` }} onClickCapture={event => { if (event.target.closest("[data-drawer-close]")) { event.preventDefault(); event.stopPropagation(); request_close(); } }}>
             {children}
-            <div className="task_drawer_height_resizer" role="separator" aria-label="Cambiar altura del panel" aria-orientation="horizontal" aria-valuemin={min_height} aria-valuemax={max_height} aria-valuenow={Math.round(height)} tabIndex={0}
-                onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); event.currentTarget.setPointerCapture(event.pointerId); height_drag.current = { y: event.clientY, height }; }}
-                onPointerMove={event => { if (height_drag.current) resize_height(height_drag.current.height + height_drag.current.y - event.clientY); }}
-                onPointerUp={() => { height_drag.current = null; }} onPointerCancel={() => { height_drag.current = null; }} onLostPointerCapture={() => { height_drag.current = null; }}
-                onKeyDown={event => { if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return; event.preventDefault(); resize_height(event.key === "Home" ? min_height : event.key === "End" ? max_height : height + (event.key === "ArrowUp" ? 16 : -16)); }} />
             <div className="task_drawer_resizer" role="separator" aria-label="Cambiar ancho del panel" aria-orientation="vertical" aria-valuemin={360} aria-valuemax={Math.round(window.innerWidth * .7)} aria-valuenow={width} tabIndex={0} onKeyDown={on_resize_key_down} onPointerDown={on_resize_start} />
         </section>
     </div>, document.body);
@@ -1190,7 +1180,27 @@ function render_inbox_module(props) {
 }
 
 
-// Renders the "Filtrar" dropdown panel with assignee/state/priority checkboxes.
+function ResponsibleFilterOptions({ items, selected, on_toggle }) {
+    const [query, set_query] = use_state("");
+    const normalized = query.trim().toLocaleLowerCase("es");
+    const visible = items.filter(item => selected.includes(item.id) || !normalized || item.label.toLocaleLowerCase("es").includes(normalized));
+    return <>
+        <label className="responsible_filter_search">
+            {render_icon(search_icon, 15)}
+            <input type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar responsable…" aria-label="Buscar responsable" />
+            {query ? <button type="button" aria-label="Limpiar búsqueda" onClick={() => set_query("")}>{render_icon(x_icon, 13)}</button> : null}
+        </label>
+        <div className="responsible_filter_results">
+            {visible.map(item => <label className="filter_option filter_list_option" key={item.id}>
+                <input type="checkbox" checked={selected.includes(item.id)} onChange={() => on_toggle(item.id)} />
+                {item.label}
+            </label>)}
+            {!visible.length ? <p className="responsible_filter_empty">No se encontraron responsables.</p> : null}
+        </div>
+    </>;
+}
+
+// Renders the "Filtrar" dropdown panel with assignee/state/priority selectors.
 function render_filter_panel(props) {
     const {
         active_filters,
@@ -1227,7 +1237,7 @@ function render_filter_panel(props) {
                             <span>{active_filters[group_item.key].length || ""}</span>
                             {render_icon(chevron_down_icon, 14)}
                         </summary>
-                        {group_item.items.map((item) => (
+                        {group_item.key === "assignee_ids" ? <ResponsibleFilterOptions items={group_item.items} selected={active_filters.assignee_ids} on_toggle={value => handle_toggle_filter_value("assignee_ids", value)} /> : group_item.items.map((item) => (
                             <label className="filter_option filter_list_option" key={item.id}>
                                 <input
                                     type="checkbox"
@@ -1724,7 +1734,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
 
             {/* Apartado visual de colaboradores del proyecto en el detalle */}
             <div className="detail_collaborators_card">
-                <CollaboratorsSelector selected_ids={selected_task.collaborator_ids || []} on_change={ids => on_followers_change(selected_task.id, ids)} action_label="Modificar" />
+                <CollaboratorsSelector selected_ids={selected_task.collaborator_ids || []} on_change={ids => on_followers_change(selected_task.id, ids)} action_label="Modificar" collapsible />
             </div>
 
             {selected_task.description ? (
@@ -1765,7 +1775,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
 
             {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
-            {show_comments ? <>{comments.length ? (
+            {show_comments ? <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
                         <div className="detail_comment_item" key={comment_item.id}>
@@ -1832,8 +1842,9 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
 
 
 // Selector de colaboradores para los modales de Crear y Editar tarea
-function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Agregar colaborador", empty_text = "Selecciona personas para seguir esta tarea" }) {
+function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Agregar colaborador", empty_text = "Selecciona personas para seguir esta tarea", collapsible = false }) {
     const [is_picker_open, set_is_picker_open] = use_state(false);
+    const [is_expanded, set_is_expanded] = use_state(!collapsible);
     const [query, set_query] = use_state("");
 
     use_effect(() => {
@@ -1866,11 +1877,17 @@ function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colabora
     const visible_members = team_members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
 
     return (
-        <div className="bold_field_group collaborators_field_group">
+        <div className={`bold_field_group collaborators_field_group ${collapsible && !is_expanded ? "is_collapsed" : ""}`}>
             <div className="collaborators_field_header">
-                <label className="bold_field_label">
+                {collapsible ? <button
+                    type="button"
+                    className="collaborators_toggle is_collapsible"
+                    aria-expanded={is_expanded}
+                    onClick={() => set_is_expanded((value) => !value)}
+                >
                     {label} ({assigned_members.length})
-                </label>
+                    {render_icon(chevron_down_icon, 15)}
+                </button> : <label className="bold_field_label">{label} ({assigned_members.length})</label>}
                 <div className="collaborator_picker_anchor" style={{ position: "relative" }}>
                     <button
                         type="button"
@@ -1919,7 +1936,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colabora
                 </div>
             </div>
 
-            <div className="collaborators_chips_container">
+            {is_expanded ? <div className="collaborators_chips_container">
                 {assigned_members.length > 0 ? (
                     assigned_members.map((member) => (
                         <span key={member.id} className="collaborator_chip">
@@ -1944,7 +1961,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colabora
                         <span>{empty_text}</span>
                     </div>
                 )}
-            </div>
+            </div> : null}
         </div>
     );
 }
@@ -2397,6 +2414,7 @@ function render_tasks_module(props) {
         handle_start_edit_column,
         is_adding_column,
         quick_task_open,
+        quick_task_section,
         quick_task_text,
         new_column_name,
         selected_project,
@@ -2411,6 +2429,7 @@ function render_tasks_module(props) {
         set_editing_column_id,
         set_is_adding_column,
         set_quick_task_open,
+        set_quick_task_section,
         set_quick_task_text,
         set_editing_column_name,
         set_new_column_name,
@@ -2427,6 +2446,12 @@ function render_tasks_module(props) {
     const project_tasks = filtered_tasks;
     const completed_count = project_tasks.filter((task_item) => task_item.completed).length;
     const completion_percent = project_tasks.length ? Math.round((completed_count / project_tasks.length) * 100) : 0;
+    const filter_labels = {
+        assignee_ids: id => team_members.find(member => member.id === id)?.name || id,
+        sections: id => board_columns.find(section => section.id === id)?.label || id,
+        priorities: value => value
+    };
+    const active_filter_items = Object.entries(active_filters).flatMap(([group, values]) => values.map(value => ({ group, value, label: filter_labels[group]?.(value) || value })));
 
     return (
         <section className="tasks_module">
@@ -2479,7 +2504,7 @@ function render_tasks_module(props) {
                         type="button"
                         role="tab"
                         aria-selected={active_section === "tasks"}
-                        onClick={() => set_active_section("tasks")}
+                        onClick={() => { set_active_section("tasks"); handle_close_task_tool(); }}
                     >
                         Tareas
                     </button>
@@ -2488,7 +2513,7 @@ function render_tasks_module(props) {
                         type="button"
                         role="tab"
                         aria-selected={active_section === "timeline"}
-                        onClick={() => set_active_section("timeline")}
+                        onClick={() => { set_active_section("timeline"); handle_close_task_tool(); set_active_quick_popover(null); }}
                     >
                         Cronograma
                     </button>
@@ -2545,7 +2570,7 @@ function render_tasks_module(props) {
                         </div>
 
                         {/* Botón de visualización Lista ↔ Columnas al lado derecho de Personalizar */}
-                        {render_view_switch(active_view, set_active_view)}
+                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); set_active_quick_popover(null); })}
                     </div>
                 ) : null}
 
@@ -2553,6 +2578,13 @@ function render_tasks_module(props) {
                     {render_icon(plus_icon, 28)}
                 </button>
             </div>
+
+            {active_section === "tasks" && active_filter_items.length ? <div className="active_filter_chips" aria-label="Filtros activos">
+                {active_filter_items.map(item => <button key={`${item.group}:${item.value}`} type="button" onClick={() => handle_toggle_filter_value(item.group, item.value)}>
+                    <span>{item.label}</span>{render_icon(x_icon, 12)}
+                </button>)}
+                <button className="active_filter_clear" type="button" onClick={handle_clear_filters}>Limpiar filtros</button>
+            </div> : null}
 
             {/* Vista según el apartado activo */}
             {active_section === "tasks" ? (
@@ -2617,6 +2649,7 @@ function render_tasks_module(props) {
                             handle_drag_end,
                             handle_delete_column,
                             handle_drag_start,
+                            handle_quick_add_tasks,
                             handle_save_column_name,
                             handle_start_edit_column,
                             handle_open_edit_task,
@@ -2626,11 +2659,17 @@ function render_tasks_module(props) {
                             handle_toggle_task,
                             is_adding_column,
                             new_column_name,
+                            quick_task_open,
+                            quick_task_section,
+                            quick_task_text,
                             selected_task_id,
                             set_active_modal,
                             set_editing_column_id,
                             set_is_adding_column,
                             set_editing_column_name,
+                            set_quick_task_open,
+                            set_quick_task_section,
+                            set_quick_task_text,
                             set_new_column_name
                         }) : null}
                     </div>
@@ -3294,22 +3333,25 @@ function render_board_view(props) {
         handle_drag_end,
         handle_delete_column,
         handle_drag_start,
+        handle_quick_add_tasks,
         handle_save_column_name,
         handle_start_edit_column,
         handle_task_select,
         handle_toggle_task,
         is_adding_column,
         new_column_name,
+        quick_task_open,
+        quick_task_section,
+        quick_task_text,
         set_active_modal,
         set_editing_column_id,
         set_editing_column_name,
         set_is_adding_column,
+        set_quick_task_open,
+        set_quick_task_section,
+        set_quick_task_text,
         set_new_column_name
     } = props;
-
-    if (!filtered_tasks.length) {
-        return render_empty_tasks_state(set_active_modal);
-    }
 
     const columns_to_render = board_columns && board_columns.length ? board_columns : default_board_columns;
 
@@ -3367,6 +3409,11 @@ function render_board_view(props) {
                                 task_item
                             }))}
                         </div>
+                        {quick_task_open && quick_task_section === section_item.id ? <form className="board_quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(section_item.id); }}>
+                            <textarea autoFocus rows="2" aria-label={`Tareas nuevas en ${section_item.label}`} placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
+                            <button type="button" onClick={() => { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); }}>Cancelar</button>
+                            <button type="submit" disabled={!quick_task_text.trim()}>Agregar</button>
+                        </form> : <button className="board_quick_add_button" type="button" onClick={() => { set_quick_task_section(section_item.id); set_quick_task_open(true); }}>+ Agregar tarea</button>}
                     </section>
                 );
             })}
@@ -4195,6 +4242,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [new_column_name, set_new_column_name] = use_state("");
     const [quick_task_open, set_quick_task_open] = use_state(false);
     const [quick_task_text, set_quick_task_text] = use_state("");
+    const [quick_task_section, set_quick_task_section] = use_state(null);
     use_effect(() => {
         if (!quick_task_open) return;
         const close = event => {
@@ -4214,6 +4262,20 @@ function TaskAppContent({ externalModules = {} }) {
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
     const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? "" : "launch_q4"));
+    const loaded_view_project = use_ref(null);
+    use_effect(() => {
+        if (!selected_project_id) return;
+        try {
+            const saved = localStorage.getItem(`bold_task_view:${selected_project_id}`);
+            if (saved === "timeline") set_active_section("timeline");
+            else if (["list", "board"].includes(saved)) { set_active_section("tasks"); set_active_view(saved); }
+        } catch { /* La vista Lista sigue siendo el valor seguro. */ }
+    }, [selected_project_id]);
+    use_effect(() => {
+        if (!selected_project_id) return;
+        if (loaded_view_project.current !== selected_project_id) { loaded_view_project.current = selected_project_id; return; }
+        try { localStorage.setItem(`bold_task_view:${selected_project_id}`, active_section === "timeline" ? "timeline" : active_view); } catch { /* La navegación no depende del almacenamiento local. */ }
+    }, [active_section, active_view, selected_project_id]);
     const [task_scope, set_task_scope] = use_state("project");
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
     const all_workspace_tasks = use_memo(() => real ? (data?.tasks || []).map(task => projectTask(task, null)) : stored_tasks.flatMap(task => [task, ...(task.subtasks || []).map(child => ({ ...child, parentTaskId: task.id, project_id: child.project_id || task.project_id, unitId: child.unitId || task.unitId }))]), [real, data?.tasks, stored_tasks]);
@@ -4755,7 +4817,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_tasks(current => {
                 const next = [...current];
                 values.items.forEach(item => {
-                    const created = normalize_task({ ...item, id: crypto.randomUUID(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: "todo" });
+                    const created = normalize_task({ ...item, id: crypto.randomUUID(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: item.section || "unsectioned" });
                     const parentIndex = next.findIndex(task => String(task.id) === String(item.parentTaskId));
                     if (parentIndex >= 0) next[parentIndex] = { ...next[parentIndex], subtasks: [...(next[parentIndex].subtasks || []), created] };
                     else next.push(created);
@@ -4798,12 +4860,13 @@ function TaskAppContent({ externalModules = {} }) {
         return true;
     }
 
-    async function handle_quick_add_tasks() {
+    async function handle_quick_add_tasks(section_id = quick_task_section) {
         const titles = quick_task_text.split(/\r?\n/).map(title => title.trim()).filter(Boolean);
         if (!titles.length) return;
-        if (await handle_workspace_bulk("create", [], { items: titles.map(title => ({ title, unitId: session.activeUnit?.id, project_id: task_scope === "project" ? selected_project_id : "", assignee_id: task_scope === "mine" ? session.activeAssignment?.id : "", priority: "Media" })) })) {
+        if (await handle_workspace_bulk("create", [], { items: titles.map(title => ({ title, unitId: session.activeUnit?.id, project_id: task_scope === "project" ? selected_project_id : "", section: section_id && section_id !== "unsectioned" ? section_id : null, assignee_id: task_scope === "mine" ? session.activeAssignment?.id : "", priority: "Media" })) })) {
             set_quick_task_text("");
             set_quick_task_open(false);
+            set_quick_task_section(null);
         }
     }
 
@@ -4828,6 +4891,8 @@ function TaskAppContent({ externalModules = {} }) {
     // Opens/closes one of the Ordenar/Filtrar/Personalizar dropdown panels,
     // closing the others if one is already open.
     function handle_toggle_task_tool(tool_id) {
+        set_active_quick_popover(null);
+        set_active_project_menu_id(null);
         set_active_task_tool((current_tool) => (current_tool === tool_id ? null : tool_id));
     }
 
@@ -5052,6 +5117,8 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Toggles / closes a quick priority or status popover in the table row.
     function handle_toggle_quick_popover(task_id, popover_type) {
+        set_active_task_tool(null);
+        set_active_project_menu_id(null);
         if (!task_id) {
             set_active_quick_popover(null);
             return;
@@ -5567,6 +5634,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     handle_toggle_visible_field,
                     is_adding_column,
                     quick_task_open,
+                    quick_task_section,
                     quick_task_text,
                     new_column_name,
                     selected_project,
@@ -5582,6 +5650,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     set_editing_column_name,
                     set_is_adding_column,
                     set_quick_task_open,
+                    set_quick_task_section,
                     set_quick_task_text,
                     set_new_column_name,
                     set_search_query,

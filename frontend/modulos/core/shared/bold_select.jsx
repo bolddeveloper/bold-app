@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 
-export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChange, options, required = false, value }) {
+export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChange, options, required = false, searchable = false, searchPlaceholder = "Buscar…", value }) {
     const controlled = value !== undefined;
     const [internalValue, setInternalValue] = useState(defaultValue ?? options[0]?.value ?? "");
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
     const rootRef = useRef(null);
     const triggerRef = useRef(null);
     const currentValue = controlled ? value : internalValue;
@@ -31,13 +32,14 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
         if (!controlled) setInternalValue(nextValue);
         onValueChange?.(nextValue);
         setOpen(false);
+        setQuery("");
         triggerRef.current?.focus();
     }
 
     function moveSelection(direction) {
-        if (!options.length) return;
-        const currentIndex = Math.max(0, options.findIndex(option => String(option.value) === String(currentValue)));
-        select(options[(currentIndex + direction + options.length) % options.length].value);
+        if (!visibleOptions.length) return;
+        const currentIndex = Math.max(0, visibleOptions.findIndex(option => String(option.value) === String(currentValue)));
+        select(visibleOptions[(currentIndex + direction + visibleOptions.length) % visibleOptions.length].value);
     }
 
     return <div className={`admin_select ${open ? "is_open" : ""}`} ref={rootRef} onBlur={event => {
@@ -52,7 +54,10 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
             <span>{selected?.label || "Seleccionar"}</span><ChevronDown size={16} />
         </button>
         {open && <div className="admin_select_menu" role="listbox" aria-label={label}>
-            {options.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
+            {searchable && <label className="admin_select_search"><Search size={15} /><input autoFocus type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} />{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery("")}><X size={14} /></button>}</label>}
+            <div className="admin_select_options">{visibleOptions.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
+                {!visibleOptions.length && <p className="admin_select_empty">No se encontraron resultados.</p>}
+            </div>
             {menuFooter}
         </div>}
     </div>;
