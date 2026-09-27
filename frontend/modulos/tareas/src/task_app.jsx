@@ -719,14 +719,48 @@ function get_split_content_width(split_element) {
 
 // Renders the task workspace content nested below Tareas.
 export function WorkspaceSelector({ onManage, onTotal }) {
-    return <details className="workspace_selector_wrap">
-        <summary className="workspace_selector" onClick={onManage}>
-            <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
-            <span>Work Space</span>
-            {render_icon(chevron_down_icon, 16)}
-        </summary>
-        <div className="workspace_selector_menu"><button type="button" onClick={onManage}>BOLD</button><button type="button" onClick={onTotal}>Vista total</button></div>
-    </details>;
+    const [isOpen, setIsOpen] = use_state(false);
+    const menuId = use_id();
+    const selectorRef = use_ref(null);
+
+    use_effect(() => {
+        if (!isOpen) return;
+        const closeMenu = event => {
+            if (event.type === "keydown" && event.key === "Escape") {
+                setIsOpen(false);
+                selectorRef.current?.querySelector(".workspace_selector_toggle")?.focus();
+            } else if (event.type === "pointerdown" && !selectorRef.current?.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("keydown", closeMenu);
+        document.addEventListener("pointerdown", closeMenu);
+        return () => {
+            document.removeEventListener("keydown", closeMenu);
+            document.removeEventListener("pointerdown", closeMenu);
+        };
+    }, [isOpen]);
+
+    const navigate = action => {
+        setIsOpen(false);
+        action();
+    };
+
+    return <div className={`workspace_selector_wrap ${isOpen ? "workspace_selector_wrap_open" : ""}`} ref={selectorRef}>
+        <div className="workspace_selector">
+            <button className="workspace_selector_main" type="button" onClick={() => navigate(onManage)}>
+                <span className="workspace_badge">{render_icon(folder_icon, 18)}</span>
+                <span>Work Space</span>
+            </button>
+            <button className="workspace_selector_toggle" type="button" aria-label="Opciones de Workspace" aria-controls={menuId} aria-expanded={isOpen} onClick={() => setIsOpen(open => !open)}>
+                {render_icon(chevron_down_icon, 16)}
+            </button>
+        </div>
+        <nav className="workspace_selector_menu" id={menuId} aria-label="Vistas de Workspace" inert={!isOpen}>
+            <button type="button" onClick={() => navigate(onManage)}>BOLD</button>
+            <button type="button" onClick={() => navigate(onTotal)}>Vista total</button>
+        </nav>
+    </div>;
 }
 
 function WorkspaceAssignmentModal({ item, itemType, onClose, onToggle, workspaces }) {
