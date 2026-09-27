@@ -302,7 +302,14 @@ def build_authorization_context(assignment, permission, at=None):
 
 
 def resolve_access(assignment, permission, target_unit, resource_id=None, at=None, context=None):
-    """Aplica precedencia deny-first y vigencia semiabierta ``[from, until)``."""
+    """Resuelve acceso con deny-first y herencia implícita para el dueño.
+
+    Toda cuenta activa marcada ``is_superuser`` hereda cualquier permiso
+    activo, incluido uno registrado después de crear la cuenta. La concesión
+    es una invariante del motor, no una colección de reglas persistidas que
+    pueda quedar desactualizada. Las guardas estructurales y el MFA se siguen
+    aplicando también al dueño.
+    """
     context = context or build_authorization_context(assignment, permission, at=at)
     if context.assignment.id != assignment.id or context.permission.id != permission.id:
         raise ValueError("El contexto de autorización no corresponde a la asignación y permiso indicados.")
@@ -311,14 +318,6 @@ def resolve_access(assignment, permission, target_unit, resource_id=None, at=Non
             False,
             context.principal_reason,
             context.principal_reason_code,
-            "system",
-            policy_version=context.policy_version,
-        )
-    if assignment.employee.user_account.is_superuser:
-        return _decision(
-            True,
-            "El propietario tiene acceso total por definición.",
-            "owner_full_access",
             "system",
             policy_version=context.policy_version,
         )
@@ -343,6 +342,14 @@ def resolve_access(assignment, permission, target_unit, resource_id=None, at=Non
             False,
             "La jerarquía organizacional no es válida.",
             "unit_hierarchy_invalid",
+            "system",
+            policy_version=context.policy_version,
+        )
+    if assignment.employee.user_account.is_superuser:
+        return _decision(
+            True,
+            "El propietario hereda todos los permisos activos por definición.",
+            "owner_full_access",
             "system",
             policy_version=context.policy_version,
         )

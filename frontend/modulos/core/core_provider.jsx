@@ -32,6 +32,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [mfaManageCodes, setMfaManageCodes] = useState([]);
     const [mfaManageBusy, setMfaManageBusy] = useState(false);
     const [mfaManageError, setMfaManageError] = useState("");
+    const [mfaAssuranceRevision, setMfaAssuranceRevision] = useState(0);
     const real = is_using_real_backend();
     if (!permissionCache.current) {
         permissionCache.current = createPermissionCache({
@@ -57,6 +58,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         setMfaManageCodes([]);
         setMfaManageBusy(false);
         setMfaManageError("");
+        setMfaAssuranceRevision(0);
         http.setSession(false);
         permissionCache.current.clear();
         sessionStorage.removeItem("bold_v2_context");
@@ -249,6 +251,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             const form = new FormData(event.currentTarget);
             const result = await coreApi.confirmTotp(mfaManageSetup.method_id, form.get("code"), form.get("current_password"));
             setMfaEnabled(true); setMfaManageSetup(null); setMfaManageCodes(result.recovery_codes);
+            setMfaAssuranceRevision(current => current + 1);
         } catch (error) { setMfaManageError(error.message); }
         finally { setMfaManageBusy(false); }
     }
@@ -271,7 +274,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

@@ -70,6 +70,13 @@ class AdministrationApiTests(TestCase):
         endpoint = "/api/v2/administration/dashboard/"
         initial = self.client.get(endpoint)
         self.assertEqual(len(initial.data["layout"]), 6)
+        modules_widget = next(
+            widget for widget in initial.data["layout"] if widget["type"] == "modules"
+        )
+        self.assertTrue(modules_widget["metrics"])
+        self.assertTrue(
+            all(metric.startswith("module.") for metric in modules_widget["metrics"])
+        )
         layout = [
             {"type": "metric", "metrics": ["organization.employees_active", "security.active_sessions"], "visualization": "bar"},
             {"type": "activity"},

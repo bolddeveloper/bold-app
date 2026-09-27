@@ -261,9 +261,46 @@ class PermissionControlPlaneSecurityTests(TestCase):
         self.assertEqual(legacy_write.status_code, 405, getattr(legacy_write, "data", None))
 
     def test_owner_always_has_access_and_cannot_be_a_permission_target(self):
+        future_permission = Permission.objects.create(
+            code="future.reports.export",
+            module_code="future",
+            resource="reports",
+            action="export",
+            risk_level=Permission.RISK_HIGH,
+            is_delegable=False,
+        )
+
+        # El acceso del propietario es una invariante del motor: no depende de
+        # replicar reglas por cargo ni concesiones individuales al registrar un
+        # permiso actual o uno agregado posteriormente por cualquier módulo.
+        for permission in Permission.objects.filter(is_active=True):
+            decision = resolve_access(self.owner_assignment, permission, self.operations)
+            self.assertTrue(decision.allowed, permission.code)
+            self.assertEqual(decision.reason_code, "owner_full_access")
+        self.assertFalse(JobRolePermission.objects.filter(job_role=self.owner_role).exists())
+        self.assertFalse(
+            AccessGrant.objects.filter(grantee_assignment=self.owner_assignment).exists()
+        )
+
+        inactive_permission = Permission.objects.create(
+            code="future.reports.disabled",
+            module_code="future",
+            resource="reports",
+            action="disabled",
+            risk_level=Permission.RISK_LOW,
+            is_active=False,
+        )
+        inactive_decision = resolve_access(
+            self.owner_assignment,
+            inactive_permission,
+            self.operations,
+        )
+        self.assertFalse(inactive_decision.allowed)
+        self.assertEqual(inactive_decision.reason_code, "permission_inactive")
+
         AccessGrant.objects.create(
             grantee_assignment=self.owner_assignment,
-            permission=self.read_permission,
+            permission=future_permission,
             effect=AccessGrant.EFFECT_DENY,
             scope_type=AccessGrant.SCOPE_GLOBAL,
             granted_by_assignment=self.staff_assignment,
@@ -272,7 +309,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
             reason="Denegación heredada que no debe afectar al propietario",
             created_by_account=self.staff,
         )
-        decision = resolve_access(self.owner_assignment, self.read_permission, self.operations)
+        decision = resolve_access(self.owner_assignment, future_permission, self.operations)
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.reason_code, "owner_full_access")
 
@@ -311,6 +348,43 @@ class PermissionControlPlaneSecurityTests(TestCase):
         self.assertEqual(role_response.status_code, 403, getattr(role_response, "data", None))
         self.assertEqual(grant_response.status_code, 403, getattr(grant_response, "data", None))
         self.assertEqual(authority_response.status_code, 403, getattr(authority_response, "data", None))
+
+    def test_owner_future_critical_permission_still_requires_recent_strong_mfa(self):
+        critical = Permission.objects.create(
+            code="future.finance.approve",
+            module_code="future",
+            resource="finance",
+            action="approve",
+            risk_level=Permission.RISK_CRITICAL,
+            is_delegable=False,
+            requires_step_up_mfa=True,
+        )
+        body = {
+            "assignment": str(self.owner_assignment.id),
+            "permission_code": critical.code,
+            "target_unit": str(self.operations.id),
+        }
+
+        weak = self._client(self.owner, self.owner_assignment, mfa="weak").post(
+            "/api/v2/core/authorize/", body, format="json"
+        )
+        strong = self._client(self.owner, self.owner_assignment, mfa="recent").post(
+            "/api/v2/core/authorize/", body, format="json"
+        )
+
+        self.assertEqual(weak.status_code, 200, getattr(weak, "data", None))
+        self.assertFalse(weak.data["allowed"])
+        self.assertEqual(weak.data["reason_code"], "mfa_step_up_required")
+        self.assertEqual(strong.status_code, 200, getattr(strong, "data", None))
+        self.assertTrue(strong.data["allowed"])
+        self.assertEqual(strong.data["reason_code"], "owner_full_access")
+        self.assertFalse(JobRolePermission.objects.filter(permission=critical).exists())
+        self.assertFalse(
+            AccessGrant.objects.filter(
+                grantee_assignment=self.owner_assignment,
+                permission=critical,
+            ).exists()
+        )
 
     def test_server_derives_issuer_and_ignores_spoofed_audit_fields(self):
         client = self._client(self.owner, self.owner_assignment)

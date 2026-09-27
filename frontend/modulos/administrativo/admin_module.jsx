@@ -90,7 +90,7 @@ function WidgetMenu({ children, label = "Opciones del widget", add = false, onOp
 const metricGroup = id => id.startsWith("organization.") ? "Organización" : id.startsWith("security.") ? "Seguridad" : "Módulos";
 const metricPercent = metric => metric.total > 0 ? Math.min(100, Math.round(metric.value / metric.total * 100)) : null;
 
-function MetricList({ selected, metrics, visualization }) {
+function MetricList({ selected = [], metrics, visualization }) {
     const rows = selected.map(id => metrics.find(metric => metric.id === id)).filter(Boolean);
     if (visualization === "circle") return <div className="admin_metric_circles" style={{ "--metric-columns": Math.min(4, rows.length), "--metric-size": rows.length === 1 ? "112px" : rows.length <= 4 ? "96px" : "86px" }}>{rows.map(metric => { const percent = metricPercent(metric); return <div key={metric.id}><i style={percent === null ? {} : { "--metric-progress": `${percent}%` }}><strong>{metric.value}</strong>{percent !== null && <small>{percent}%</small>}</i><span>{metric.label}</span></div>; })}</div>;
     const proportional = rows.filter(metric => metric.total > 0); const maximum = Math.max(1, ...rows.filter(metric => !metric.total).map(metric => metric.value));
@@ -98,22 +98,24 @@ function MetricList({ selected, metrics, visualization }) {
 }
 
 function MetricPicker({ widget, metrics, onApply, onRemove, close, busy }) {
-    const [selected, setSelected] = useState(widget.metrics), [visualization, setVisualization] = useState(widget.visualization);
+    const [selected, setSelected] = useState(widget.metrics || []), [visualization, setVisualization] = useState(widget.visualization);
     const toggle = id => setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
     return <><div className="admin_metric_checks">{["Organización", "Seguridad", "Módulos"].map(group => { const options = metrics.filter(metric => metricGroup(metric.id) === group); return options.length > 0 && <fieldset key={group}><legend>{group}</legend>{options.map(metric => <label key={metric.id}><input type="checkbox" checked={selected.includes(metric.id)} onChange={() => toggle(metric.id)} /> <span>{metric.label}</span></label>)}</fieldset>; })}</div><strong>Visualización</strong><div className="admin_visual_options">{[["circle", "Circular"], ["bar", "Barra"]].map(([value, label]) => <button type="button" className={visualization === value ? "is_selected" : ""} key={value} onClick={() => setVisualization(value)}>{label}{visualization === value && <Check size={15} />}</button>)}</div><footer><button className="is_danger" type="button" disabled={busy} onClick={onRemove}>Quitar</button><button type="button" onClick={close}>Cancelar</button><button className="admin_primary" type="button" disabled={busy || !selected.length} onClick={() => { onApply({ ...widget, metrics: selected, visualization }); close(); }}>Aplicar</button></footer></>;
 }
 
 function WidgetHeader({ title, eyebrow, widget, metrics, onChange, onRemove, busy, drag }) {
-    return <header><div><span className="admin_eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="admin_widget_actions"><button className="admin_drag_handle" type="button" draggable aria-label="Mover widget. Usa las flechas para cambiar su posición." onDragStart={drag.onDragStart} onKeyDown={drag.onKeyDown}><GripVertical size={18} /></button>{metrics && <WidgetMenu>{close => <MetricPicker key={widget.metrics.join("|") + widget.visualization} widget={widget} metrics={metrics} onApply={onChange} onRemove={onRemove} close={close} busy={busy} />}</WidgetMenu>}{!metrics && <WidgetMenu>{close => <><button className="is_danger" type="button" disabled={busy} onClick={() => { onRemove(); close(); }}>Quitar widget</button></>}</WidgetMenu>}</div></header>;
+    return <header><div><span className="admin_eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="admin_widget_actions"><button className="admin_drag_handle" type="button" draggable aria-label="Mover widget. Usa las flechas para cambiar su posición." onDragStart={drag.onDragStart} onKeyDown={drag.onKeyDown}><GripVertical size={18} /></button>{metrics && <WidgetMenu>{close => <MetricPicker key={(widget.metrics || []).join("|") + widget.visualization} widget={widget} metrics={metrics} onApply={onChange} onRemove={onRemove} close={close} busy={busy} />}</WidgetMenu>}{!metrics && <WidgetMenu>{close => <><button className="is_danger" type="button" disabled={busy} onClick={() => { onRemove(); close(); }}>Quitar widget</button></>}</WidgetMenu>}</div></header>;
 }
 
 function MetricWidget({ widget, metrics, onChange, onRemove, busy, drag }) {
-    const title = widget.metrics.length === 1 ? metrics.find(metric => metric.id === widget.metrics[0])?.label : `${widget.metrics.length} métricas`;
-    return <article className="admin_dashboard_widget"><WidgetHeader eyebrow="MÉTRICAS" title={title || "Métricas"} widget={widget} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={widget.metrics} metrics={metrics} visualization={widget.visualization} /></div></article>;
+    const selected = widget.metrics || [];
+    const title = selected.length === 1 ? metrics.find(metric => metric.id === selected[0])?.label : `${selected.length} métricas`;
+    return <article className="admin_dashboard_widget"><WidgetHeader eyebrow="MÉTRICAS" title={title || "Métricas"} widget={widget} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={selected} metrics={metrics} visualization={widget.visualization} /></div></article>;
 }
 
 function ModulesWidget({ widget, metrics, onChange, onRemove, busy, drag }) {
-    return <section className="admin_dashboard_widget"><WidgetHeader eyebrow="PANORAMA MODULAR" title="Actividad de la aplicación" widget={widget} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={widget.metrics} metrics={metrics} visualization={widget.visualization} /></div></section>;
+    const selected = widget.metrics || metrics.map(metric => metric.id);
+    return <section className="admin_dashboard_widget"><WidgetHeader eyebrow="PANORAMA MODULAR" title="Actividad de la aplicación" widget={{ ...widget, metrics: selected }} metrics={metrics} onChange={onChange} onRemove={onRemove} busy={busy} drag={drag} /><div className="admin_widget_content"><MetricList selected={selected} metrics={metrics} visualization={widget.visualization} /></div></section>;
 }
 
 function ActivityWidget({ widget, data, onRemove, busy, drag }) {
@@ -128,7 +130,7 @@ function packWidgetRows(layout, columns) {
         rows.push(row); row = []; used = 0;
     };
     layout.forEach((widget, index) => {
-        const count = widget.type === "activity" ? 3 : widget.metrics.length;
+        const count = widget.type === "activity" ? 3 : (widget.metrics?.length ?? 0);
         const width = columns === 1 ? 1 : count > 2 || widget.type === "activity" ? Math.min(2, columns) : 1;
         if (used + width > columns) finish();
         row.push({ widget, index, width }); used += width;

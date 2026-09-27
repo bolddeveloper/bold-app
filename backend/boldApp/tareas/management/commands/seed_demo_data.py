@@ -90,6 +90,9 @@ ROLE_POLICIES = {
         "scope": JobRolePermission.SCOPE_GLOBAL,
         "permissions": {"tasks.task.read", "tasks.project.read", "tasks.catalog.read"},
     },
+    # El propietario no necesita filas que se desactualicen al crear nuevos
+    # permisos: ``resolve_access`` le concede implícitamente todos los permisos
+    # activos cuando su cuenta está marcada ``is_superuser``.
     "Propietario": {"scope": JobRolePermission.SCOPE_OWN_UNIT, "permissions": set()},
     "Desarrollador": {
         "scope": JobRolePermission.SCOPE_GLOBAL,

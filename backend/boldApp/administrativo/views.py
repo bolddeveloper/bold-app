@@ -121,6 +121,7 @@ class DashboardView(APIView):
     def get(self, request):
         now = timezone.now()
         modules = self._modules(request)
+        default_layout = _validate_dashboard_layout(DEFAULT_DASHBOARD_LAYOUT, modules)
         activity = []
         for provider in administrative_modules.providers():
             activity.extend(provider.activity(request, limit=10))
@@ -128,9 +129,9 @@ class DashboardView(APIView):
         accounts = UserAccount.objects.all()
         saved_layout = request.user.administration_dashboard_layout
         try:
-            layout = _validate_dashboard_layout(saved_layout, modules) if saved_layout else DEFAULT_DASHBOARD_LAYOUT
+            layout = _validate_dashboard_layout(saved_layout, modules) if saved_layout else default_layout
         except ValidationError:
-            layout = DEFAULT_DASHBOARD_LAYOUT
+            layout = default_layout
         return Response({
             "generated_at": now,
             "layout": layout,

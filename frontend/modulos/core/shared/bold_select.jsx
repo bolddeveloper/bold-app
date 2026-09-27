@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
+import { filterSelectOptions } from "./bold_select_options.js";
 
 export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChange, options, required = false, searchable = false, searchPlaceholder = "Buscar…", value }) {
     const controlled = value !== undefined;
@@ -10,6 +11,7 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
     const triggerRef = useRef(null);
     const currentValue = controlled ? value : internalValue;
     const selected = options.find(option => String(option.value) === String(currentValue)) || options[0];
+    const visibleOptions = filterSelectOptions(options, query, searchable);
 
     useEffect(() => {
         if (!open) return undefined;

@@ -27,10 +27,14 @@ El diseño sigue cuatro principios:
 | **Autenticación** | Sesiones cookie `HttpOnly`, MFA/TOTP, recuperación, expiración y tickets WebSocket de un solo uso. | Resolver permisos de negocio. |
 | **Módulos de contenido** | Declaran capacidades y llaman al motor de Core sobre el recurso y unidad reales. | Confiar en visibilidad del frontend o implementar un segundo motor de permisos. |
 
-El dueño (`is_superuser`) es la raíz de confianza inicial del plano de
-control. Esto no le da acceso silencioso a tareas u otros datos operativos:
-ese acceso debe existir en una política o regla explícita. Un usuario con
-`is_staff=True` y `is_superuser=False` no puede modificar políticas.
+El dueño (`is_superuser`) es la raíz de confianza del plano de control y
+hereda implícitamente todos los permisos operativos activos, actuales y
+futuros. Esta garantía vive en el motor central: no se materializan
+`JobRolePermission` ni `AccessGrant` para el dueño, por lo que un permiso
+nuevo queda cubierto en cuanto se registra en el catálogo. Un permiso
+desactivado sigue siendo un interruptor global y las acciones sensibles
+mantienen su requisito de MFA reciente. Un usuario con `is_staff=True` e
+`is_superuser=False` no obtiene autoridad empresarial.
 
 ## Modelo de autorización
 
@@ -81,15 +85,17 @@ El motor aplica este orden y se detiene en la primera coincidencia:
 
 1. Guardas estructurales: principal inactivo, permiso inactivo, unidad ausente
    o jerarquía inválida producen denegación.
-2. `deny` individual vigente (`AccessGrant`).
-3. `deny` del cargo (`JobRolePermission`).
-4. `allow` individual vigente.
-5. `allow` del cargo.
-6. Denegación por defecto.
+2. Si la cuenta es el dueño (`is_superuser`), concesión implícita del permiso
+   activo sobre cualquier unidad válida.
+3. `deny` individual vigente (`AccessGrant`).
+4. `deny` del cargo (`JobRolePermission`).
+5. `allow` individual vigente.
+6. `allow` del cargo.
+7. Denegación por defecto.
 
-Por tanto, un `allow` individual no puede superar un `deny` del cargo, y un
-`deny` individual prevalece sobre cualquier permiso base. Las reglas ligadas
-a `resource_id` solo aplican a ese recurso.
+Para las cuentas no propietarias, un `allow` individual no puede superar un
+`deny` del cargo y un `deny` individual prevalece sobre cualquier permiso
+base. Las reglas ligadas a `resource_id` solo aplican a ese recurso.
 
 ### Diagrama de datos
 
@@ -427,7 +433,7 @@ mantenerlos coherentes.
 
 | Cuenta | Contraseña inicial | Perfil relevante |
 | --- | --- | --- |
-| `luis@bold.gt` | `LuisBold2026!` | Dueño; administra el plano de control. |
+| `luis@bold.gt` | `LuisBold2026!` | Dueño; hereda todo permiso activo y administra el plano de control. |
 | `paulus@bold.gt` | `PaulusBold2026!` | Alta Gerencia; lectura global limitada, sin autoridad de dueño. |
 | `developer@bold.gt` | `DeveloperBold2026!` | Desarrollador local; permisos globales de Tareas, sin autoridad administrativa. |
 | `ana@bold.gt`, `carla@bold.gt`, `samuel@bold.gt` | `bolddemo123` | Colaboradores de Marketing. |
