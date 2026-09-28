@@ -1,18 +1,18 @@
 # Despliegue de Bold en Oracle Cloud Always Free
 
-Esta guia despliega el backend completo en una VM ARM64 de Oracle y mantiene el
-frontend en Cloudflare Pages.
+Esta guia despliega el backend completo en una VM ARM64 de Oracle y publica el
+frontend junto con un proxy de mismo origen en Cloudflare Workers.
 
 ## Arquitectura
 
 ```text
 Usuarios
    |
-   +-- https://app.bold.gt ---- Cloudflare Pages
-   |
-   +-- https/wss://api.bold.gt
+   +-- https://boldapp.<cuenta>.workers.dev
+              |  PWA + proxy /api, /ws y /health
+       Cloudflare Worker + VPC Service
               |
-       Cloudflare Tunnel
+       Cloudflare Tunnel (saliente)
               |
        VM ARM64 de Oracle
          +-- Django + Daphne
@@ -136,20 +136,23 @@ token personal dentro de la URL del remote.
 1. En Cloudflare abre **Networking > Tunnels**.
 2. Crea un tunnel administrado llamado `bold-oracle`.
 3. Selecciona Docker como entorno y copia solamente el token mostrado.
-4. En **Routes > Add route > Published application** configura:
+4. En **Workers VPC > Services > Create VPC Service** configura:
 
    ```text
-   Subdomain: api
-   Domain: bold.gt
-   Type: HTTP
-   URL: backend:8000
+   Service name: boldapp-backend
+   Tunnel: bold-oracle
+   Service type: HTTP
+   Host: backend
+   HTTP port: 8000
+   DNS resolver: Use tunnel as resolver
    ```
 
 5. No agregues una politica de Cloudflare Access delante de toda la API: el
    navegador y el WebSocket necesitan alcanzarla. La autenticacion sigue a
    cargo de Bold.
-6. Crea una Cache Rule para `Hostname equals api.bold.gt` con accion
-   **Bypass cache** y confirma que WebSockets esten habilitados en Cloudflare.
+6. Copia el Service ID generado a `frontend/modulos/core/wrangler.jsonc` como
+   `vpc_services[0].service_id`. El Worker solo obtiene acceso a ese host y
+   puerto; no se publica la red completa ni se abre un puerto en Oracle.
 
 No pegues el token en comandos, tickets o capturas. Se almacenara unicamente en
 el archivo de entorno protegido de la VM.
@@ -183,9 +186,9 @@ Edita el archivo con `nano .env.oracle` y asigna valores distintos a:
 Confirma también:
 
 ```text
-ALLOWED_HOSTS=api.bold.gt
-CORS_ALLOWED_ORIGINS=https://app.bold.gt
-FRONTEND_URL=https://app.bold.gt
+ALLOWED_HOSTS=backend,boldapp.<cuenta>.workers.dev
+CORS_ALLOWED_ORIGINS=https://boldapp.<cuenta>.workers.dev
+FRONTEND_URL=https://boldapp.<cuenta>.workers.dev
 TRUST_CLOUDFLARE_CONNECTING_IP=true
 SEED_DEMO_ACCOUNTS=false
 SEED_PRIVILEGED_DEMO_ACCOUNTS=false
@@ -296,7 +299,7 @@ docker compose --env-file .env.oracle -f compose.oracle.yaml logs \
 Prueba externa:
 
 ```bash
-curl -i https://api.bold.gt/health/
+curl -i https://boldapp.<cuenta>.workers.dev/health/
 ```
 
 Respuesta esperada:
@@ -305,39 +308,46 @@ Respuesta esperada:
 {"status":"ok","checks":{"database":true,"redis":true}}
 ```
 
-## 11. Cloudflare Pages
+## 11. Cloudflare Workers
 
-En **Workers & Pages > Create > Pages > Connect to Git**:
+El Worker sirve `dist` y envia `/api/*`, `/ws/*` y `/health*` al VPC Service.
+Esto mantiene las cookies, CSRF y WebSockets en un unico origen y no altera el
+DNS ni la pagina estatica de `bold.gt`.
 
-```text
-Production branch: Setup-CloudFlare-Oracle
-Root directory: frontend/modulos/core
-Build command: npm ci && npm run build
-Build output directory: dist
+Desde `frontend/modulos/core`:
+
+```bash
+npm ci
+npm test
+npm run test:worker
+npm run build
+npx wrangler deploy
 ```
 
-Variables de build:
+No definas `VITE_API_BASE_URL`: el cliente usa `location.origin`. La unica
+variable publica requerida es:
 
 ```text
 VITE_USE_REAL_BACKEND=true
-VITE_API_BASE_URL=https://api.bold.gt
 ```
 
-Agrega `app.bold.gt` en **Custom domains**. Después de fusionar y aprobar la
-migracion, cambia la rama de produccion de Pages a `Develop`.
+La primera publicacion asigna una direccion estable bajo `workers.dev`. Anotala
+y actualiza `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` en Oracle;
+despues recrea `backend` y `worker`. Si mas adelante se agrega un dominio
+propio, haz el cambio en una ventana de mantenimiento y conserva mismo origen.
 
-Los previews `*.pages.dev` no deben conectarse a la API productiva porque la
-cookie `SameSite=Lax` esta diseñada para `app.bold.gt` y `api.bold.gt`.
+El entorno de prueba configurado en esta guia usa actualmente
+`https://boldapp.samuel-93b.workers.dev`.
 
 ## 12. Lista de comprobacion funcional
 
 Desde una ventana privada:
 
-1. Abre `https://app.bold.gt`.
+1. Abre `https://boldapp.<cuenta>.workers.dev`.
 2. Inicia sesion y comprueba la cookie `bold_session`: `Secure`, `HttpOnly`,
    `SameSite=Lax`.
 3. Ejecuta una operacion POST o PATCH para comprobar CSRF/CORS.
-4. Confirma una conexion `wss://api.bold.gt/ws/...` con estado 101.
+4. Confirma una conexion `wss://boldapp.<cuenta>.workers.dev/ws/...` con estado 101.
 5. Prueba MFA, recuperacion de contrasena y cierre remoto de sesiones.
 6. Crea una tarea y confirma la actualizacion en otro navegador.
 7. Si usas webhooks, comprueba que Celery procese y reintente entregas.
