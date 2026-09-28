@@ -237,6 +237,13 @@ def noop_reverse(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # La normalizacion de permisos actualiza filas que participan en claves
+    # foraneas y, a continuacion, esta misma migracion crea indices y
+    # restricciones. PostgreSQL no permite ejecutar ese DDL mientras quedan
+    # eventos de triggers diferidos pendientes dentro de la misma transaccion.
+    # El modo no atomico confirma cada operacion antes de crear los indices.
+    atomic = False
+
     dependencies = [
         ('boldApp_core', '0002_useraccount_credentials_version_and_more'),
     ]

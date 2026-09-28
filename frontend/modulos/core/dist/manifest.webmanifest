@@ -1,7 +1,7 @@
 {
     "name": "Bold",
     "short_name": "Bold",
-    "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    "description": "Plataforma interna de organización y colaboración de Bold.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#f7f7f7",
