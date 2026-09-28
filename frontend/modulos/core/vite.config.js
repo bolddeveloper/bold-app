@@ -20,7 +20,8 @@ export default define_config({
     },
     preview: {
         allowedHosts: [
-            ".onrender.com"
+            ".pages.dev",
+            ".bold.gt"
         ]
     },
     plugins: [

@@ -135,7 +135,7 @@ POST /api/v2/webhook-endpoints/
 
 Cada entrega lleva `X-BoldApp-Event` y `X-BoldApp-Signature`. La firma es el HMAC-SHA256 hexadecimal del cuerpo JSON exacto usando `secret`. `POST /api/v2/webhook-endpoints/<id>/test/` encola una prueba. Las entregas se consultan con `/api/v2/webhook-deliveries/?endpoint=<id>`.
 
-En local, sin `REDIS_URL`, Channels usa memoria y Celery ejecuta las tareas inmediatamente. En Render, API, WebSocket y worker deben compartir Redis; además deben configurarse HTTPS, secretos, hosts/orígenes permitidos y una URL pública de webhook (el receptor `127.0.0.1` solo sirve localmente).
+En local, sin `REDIS_URL`, Channels usa memoria y Celery ejecuta las tareas inmediatamente. En Oracle, API, WebSocket y worker comparten Redis; además deben configurarse HTTPS, secretos, hosts/orígenes permitidos y una URL pública de webhook (el receptor `127.0.0.1` solo sirve localmente).
 
 ## Orden recomendado para el frontend
 
@@ -145,4 +145,4 @@ En local, sin `REDIS_URL`, Channels usa memoria y Celery ejecuta las tareas inme
 4. Adaptar escrituras, especialmente creación atómica y `move/`.
 5. Añadir el cliente WebSocket por unidad, deduplicación y resincronización REST.
 6. Integrar comentarios, adjuntos, seguidores, etiquetas y notificaciones.
-7. Probar webhooks y finalmente concurrencia multiinstancia en Render con Redis.
+7. Probar webhooks y finalmente concurrencia en Oracle con Redis compartido.

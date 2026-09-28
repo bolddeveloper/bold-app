@@ -2,6 +2,8 @@ import hashlib
 
 from rest_framework.throttling import SimpleRateThrottle
 
+from boldApp.core.request_metadata import request_ip
+
 
 class IPThrottle(SimpleRateThrottle):
     scope = "auth_login_ip"
@@ -14,7 +16,7 @@ class IPThrottle(SimpleRateThrottle):
         return SimpleRateThrottle.parse_rate(self, rate)
 
     def get_cache_key(self, request, view):
-        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+        return self.cache_format % {"scope": self.scope, "ident": request_ip(request) or "unknown"}
 
 
 class AccountThrottle(SimpleRateThrottle):
@@ -36,7 +38,7 @@ class MFAEnrollmentThrottle(IPThrottle):
     scope = "auth_mfa_enrollment"
 
     def get_cache_key(self, request, view):
-        ident = str(request.user.pk) if request.user and request.user.is_authenticated else self.get_ident(request)
+        ident = str(request.user.pk) if request.user and request.user.is_authenticated else request_ip(request) or "unknown"
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 

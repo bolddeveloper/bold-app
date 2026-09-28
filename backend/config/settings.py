@@ -3,7 +3,7 @@ Configuracion de Django para el proyecto boldApp.
 
 Este proyecto expone unicamente la capa de datos (modelos, migraciones,
 admin) y un esqueleto de Django REST Framework para el modulo de tareas.
-La configuracion esta preparada para desplegarse en Render usando
+La configuracion esta preparada para desplegarse en contenedores usando
 PostgreSQL, y hace fallback a SQLite en desarrollo local si no se define
 DATABASE_URL.
 """
@@ -35,7 +35,7 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-# Render termina TLS en su proxy y comunica el esquema original mediante
+# Cloudflare termina TLS y comunica el esquema original mediante
 # X-Forwarded-Proto. Estas opciones solo aplican al entorno de producción.
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -109,7 +109,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-# Define la base de datos usando DATABASE_URL (Render/Postgres) con fallback a SQLite.
+# Define la base de datos usando DATABASE_URL (PostgreSQL) con fallback a SQLite.
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{base_dir / 'db.sqlite3'}",
@@ -146,7 +146,7 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Define la configuracion de archivos estaticos para Render (whitenoise).
+# Define la configuracion de archivos estaticos servidos por WhiteNoise.
 STATIC_URL = "static/"
 STATIC_ROOT = base_dir / "staticfiles"
 STORAGES = {
@@ -182,7 +182,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
-    # Render agrega una capa proxy; en desarrollo no se confía en X-Forwarded-For.
+    # Los throttles de autenticacion usan request_ip() y no confian en
+    # cabeceras reenviadas salvo que el tunel privado se habilite abajo.
     "NUM_PROXIES": int(os.environ.get("AUTH_NUM_PROXIES", "0" if DEBUG else "1")),
     "DEFAULT_THROTTLE_RATES": {
         "auth_login_ip": "20/15min",
@@ -213,13 +214,23 @@ PERMISSIONS_AUTHORITY_MAX_SECONDS = int(os.environ.get("PERMISSIONS_AUTHORITY_MA
 SEED_DEMO_ACCOUNTS = os.environ.get("SEED_DEMO_ACCOUNTS", "true" if DEBUG else "false").lower() == "true"
 SEED_PRIVILEGED_DEMO_ACCOUNTS = os.environ.get("SEED_PRIVILEGED_DEMO_ACCOUNTS", "false").lower() == "true"
 AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
+TRUST_CLOUDFLARE_CONNECTING_IP = os.environ.get(
+    "TRUST_CLOUDFLARE_CONNECTING_IP", "false"
+).lower() == "true"
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@bold.gt")
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "false").lower() == "true"
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174")
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.
-# REDIS_URL lo provee Render al agregar el addon de Redis; si la variable no
+# REDIS_URL apunta al contenedor Redis en Oracle; si la variable no
 # existe, las tareas corren en modo "eager" (sincrono, dentro del mismo
 # proceso) para que la demo local funcione sin infraestructura.
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -238,7 +249,7 @@ CELERY_TASK_EAGER_PROPAGATES = False
 
 # Define la capa de canales de Django Channels (push en vivo por WebSocket).
 # En desarrollo sin REDIS_URL, la capa en memoria permite probar HTTP y
-# WebSockets con el proceso unico de runserver sin instalar Redis. Render y
+# WebSockets con el proceso unico de runserver sin instalar Redis. Produccion y
 # cualquier entorno que defina REDIS_URL siguen usando la capa compartida de
 # Redis, necesaria cuando hay mas de un proceso o instancia.
 if "REDIS_URL" not in os.environ:

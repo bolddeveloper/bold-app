@@ -3,11 +3,14 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from boldApp.core.health import health
+
 
 # Define las rutas raiz: admin de Django y la API de cada modulo de boldApp.
 # El nucleo (organigrama y seguridad) vive en api/core/; tareas mantiene su
 # prefijo api/ actual hasta que se reescriba para integrarse con el nucleo.
 urlpatterns = [
+    path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     path("api/v2/auth/", include("boldApp.autenticacion.urls")),
     path("api/v2/administration/", include("boldApp.administrativo.urls")),

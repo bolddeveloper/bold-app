@@ -29,7 +29,7 @@ websocket_urlpatterns = core_websocket_urlpatterns + tareas_websocket_urlpattern
 # Define el enrutador de protocolos: HTTP va a la app de Django de siempre,
 # WebSocket va a las rutas de boldApp. Se usa OriginValidator (no
 # AllowedHostsOriginValidator) porque el frontend vive en un origen distinto
-# al backend en Render, y la validacion debe mirar la misma lista de
+# al backend, y la validacion debe mirar la misma lista de
 # origenes que ya usa CORS, no ALLOWED_HOSTS (que describe al propio backend).
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),

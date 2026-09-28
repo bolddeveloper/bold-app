@@ -2,3 +2,5 @@ dump.rdb
 .venv*/
 backend/db*.sqlite3
 .tmp-pdf-reader/
+deploy/oracle/.env.oracle
+deploy/oracle/backups/

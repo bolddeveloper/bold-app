@@ -5,7 +5,7 @@ from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication
 
 from .models import AuthSession
-from .services import token_hash
+from .services import request_ip, token_hash
 
 
 class _CSRFCheck(CsrfViewMiddleware):
@@ -47,7 +47,7 @@ class CookieSessionAuthentication(BaseAuthentication):
         if reason:
             raise exceptions.PermissionDenied(f"CSRF: {reason}")
         session.last_used_at = now
-        session.last_ip = request.META.get("REMOTE_ADDR") or None
+        session.last_ip = request_ip(request)
         if settings.AUTH_SESSION_IDLE_SECONDS:
             session.idle_expires_at = min(session.expires_at, now + __import__("datetime").timedelta(seconds=settings.AUTH_SESSION_IDLE_SECONDS))
         session.save(update_fields=["last_used_at", "last_ip", "idle_expires_at"])

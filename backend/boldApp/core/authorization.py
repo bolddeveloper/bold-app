@@ -16,6 +16,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import AccessGrant, GrantAuthority, JobRolePermission, Permission, PermissionAuditLog
+from .request_metadata import request_ip
 
 
 SENSITIVITY_LEVELS = ["low", "medium", "high", "critical"]
@@ -477,7 +478,7 @@ def check_and_log(
         matched_rule_id=result.matched_rule_id or "",
         policy_version=result.policy_version,
         session_id=getattr(request_session, "id", None),
-        ip_address=request.META.get("REMOTE_ADDR") if request else None,
+        ip_address=request_ip(request),
         user_agent=(request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""),
     )
     result.audit_log_id = str(audit_log.id)

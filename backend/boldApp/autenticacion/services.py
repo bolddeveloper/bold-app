@@ -17,6 +17,8 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from boldApp.core.request_metadata import request_ip
+
 from .models import AuthChallenge, AuthEvent, AuthMFAMethod, AuthRecoveryCode, AuthSession
 
 
@@ -25,10 +27,6 @@ def normalize_email(value):
     if not email.endswith("@bold.gt"):
         raise ValueError("Se requiere un correo corporativo @bold.gt.")
     return email
-
-
-def request_ip(request):
-    return request.META.get("REMOTE_ADDR") or None
 
 
 def token_hash(raw):
