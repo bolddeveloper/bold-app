@@ -1,0 +1,30 @@
+- main [ref=f1e3]:
+  - generic [ref=f1e4]:
+    - region "Bold" [ref=f1e5]:
+      - generic [ref=f1e6]: bold.
+      - generic [ref=f1e7]:
+        - text: TU ESPACIO DE TRABAJO
+        - heading "Todo tu trabajo, en un solo lugar." [level=1] [ref=f1e8]
+        - paragraph [ref=f1e9]: Organiza lo que importa y mantén a tu equipo en movimiento.
+    - region [ref=f1e11]:
+      - button "Activar modo oscuro" [ref=f1e12] [cursor=pointer]
+      - generic [ref=f1e15]:
+        - paragraph [ref=f1e16]: Bold
+        - heading "Bienvenido de nuevo" [level=2] [ref=f1e17]
+        - paragraph [ref=f1e18]: Ingresa a tu cuenta para continuar.
+        - generic [ref=f1e19]:
+          - generic [ref=f1e20]: Correo electrónico
+          - textbox "Correo electrónico" [disabled] [ref=f1e21]:
+            - /placeholder: nombre@bold.gt
+          - generic [ref=f1e22]: Contraseña
+          - generic [ref=f1e23]:
+            - textbox "Contraseña" [disabled] [ref=f1e24]:
+              - /placeholder: Ingresa tu contraseña
+            - button "Mostrar contraseña" [ref=f1e25] [cursor=pointer]
+          - generic [ref=f1e29]:
+            - generic [ref=f1e30] [cursor=pointer]:
+              - checkbox "Recordar correo" [ref=f1e31]
+              - text: Recordar correo
+            - button "¿Olvidaste tu contraseña?" [ref=f1e32] [cursor=pointer]
+          - button "Iniciando sesión…" [disabled] [ref=f1e33]
+      - paragraph [ref=f1e35]: © 2026 BOLD

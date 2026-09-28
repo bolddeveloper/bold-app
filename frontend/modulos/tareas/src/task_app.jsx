@@ -46,6 +46,7 @@ import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, 
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
+import { insertUnsectioned, reorderSections } from "./section_order.js";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
@@ -642,7 +643,7 @@ function ProjectPreview({ project, anchor, onClose, onSave, onUpdate, pending })
 
 // Renders one navigation item in the sidebar.
 // Renders a project item in the sidebar workspace list.
-function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, onAssignWorkspace, pinned = false) {
+function render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, onAssignWorkspace, pinned = false) {
     const is_active = selected_project_id === project_item.id;
     const is_menu_open = active_project_menu_id === project_item.id;
 
@@ -666,17 +667,17 @@ function render_project_item(project_item, selected_project_id, handle_project_s
                 aria-expanded={is_menu_open}
                 onClick={(event) => {
                     event.stopPropagation();
-                    handle_project_menu_toggle(project_item.id);
+                    handle_project_menu_toggle(project_item.id, "toggle", event.currentTarget.getBoundingClientRect());
                 }}
             >
                 {render_icon(more_horizontal_icon, 18)}
             </button>
-                <div className={`sidebar_project_menu animated_overflow_menu ${is_menu_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_menu_open}>
+            {is_menu_open && createPortal(<div className="sidebar_project_menu sidebar_project_menu_floating" style={window.innerWidth > 1023 && project_menu_anchor ? { top: Math.max(8, Math.min(project_menu_anchor.bottom + 6, window.innerHeight - 190)), left: Math.max(8, Math.min(project_menu_anchor.right + 8, window.innerWidth - 218)) } : undefined}>
                     <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "pin")}>{pinned ? "Desanclar" : "Anclar al acceso rápido"}</button>
                     <button type="button" onClick={() => onAssignWorkspace(project_item)}>Asignar a Workspace</button>
                     <button type="button" onClick={() => handle_project_menu_toggle(project_item.id, "edit")}>Editar proyecto</button>
                     <button className="danger_menu_item" type="button" onClick={() => handle_project_menu_toggle(project_item.id, "delete")}>Eliminar proyecto</button>
-                </div>
+                </div>, document.body)}
         </div>
     );
 }
@@ -769,7 +770,7 @@ function WorkspaceAssignmentModal({ item, itemType, onClose, onToggle, workspace
 }
 
 
-function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_open, projects_active, workspaceProps) {
+function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_open, projects_active, workspaceProps) {
     return (
         <div className={`tasks_submenu ${is_open ? "tasks_submenu_open" : "tasks_submenu_closed"}`} id="tasks_workspace_menu" aria-hidden={!is_open}>
             <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
@@ -801,7 +802,7 @@ function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_ope
                 </div>
 
                 <div className="project_list">
-                    {projects.map((project_item) => render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, workspaceProps.onAssignProject, workspaceProps.pinnedIds.includes(project_item.id)))}
+                    {projects.map((project_item) => render_project_item(project_item, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, workspaceProps.onAssignProject, workspaceProps.pinnedIds.includes(project_item.id)))}
                 </div>
             </div>
         </div>
@@ -2201,6 +2202,7 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
         const col = board_columns.find((c) => c.id === section);
         const new_task = {
             id: `task_${Date.now()}`,
+            created_at: new Date().toISOString(),
             title: title.trim(),
             project_id,
             section,
@@ -2391,6 +2393,11 @@ function render_tasks_module(props) {
         handle_clear_filters,
         handle_close_task_tool,
         handle_column_drop,
+        handle_section_drag_end,
+        handle_section_drag_over,
+        handle_section_drag_start,
+        handle_section_drop,
+        handle_section_key_down,
         handle_delete_task,
         handle_delete_column,
         handle_detail_resize_key_down,
@@ -2413,6 +2420,8 @@ function render_tasks_module(props) {
         handle_save_column_name,
         handle_start_edit_column,
         is_adding_column,
+        dragged_section_id,
+        section_drop,
         quick_task_open,
         quick_task_section,
         quick_task_text,
@@ -2604,6 +2613,11 @@ function render_tasks_module(props) {
                             handle_add_column,
                             handle_add_quick_subtask,
                             handle_column_drop,
+                            handle_section_drag_end,
+                            handle_section_drag_over,
+                            handle_section_drag_start,
+                            handle_section_drop,
+                            handle_section_key_down,
                             handle_delete_column,
                             handle_delete_task,
                             handle_drag_end,
@@ -2619,6 +2633,8 @@ function render_tasks_module(props) {
                             handle_toggle_section,
                             handle_toggle_task,
                             is_adding_column,
+                            dragged_section_id,
+                            section_drop,
                             quick_task_open,
                             quick_task_text,
                             new_column_name,
@@ -2646,6 +2662,11 @@ function render_tasks_module(props) {
                             filtered_tasks,
                             handle_add_column,
                             handle_column_drop,
+                            handle_section_drag_end,
+                            handle_section_drag_over,
+                            handle_section_drag_start,
+                            handle_section_drop,
+                            handle_section_key_down,
                             handle_drag_end,
                             handle_delete_column,
                             handle_drag_start,
@@ -2658,6 +2679,8 @@ function render_tasks_module(props) {
                             handle_toggle_quick_popover,
                             handle_toggle_task,
                             is_adding_column,
+                            dragged_section_id,
+                            section_drop,
                             new_column_name,
                             quick_task_open,
                             quick_task_section,
@@ -2758,6 +2781,11 @@ function render_list_view(props) {
         handle_add_column,
         handle_add_quick_subtask,
         handle_column_drop,
+        handle_section_drag_end,
+        handle_section_drag_over,
+        handle_section_drag_start,
+        handle_section_drop,
+        handle_section_key_down,
         handle_delete_column,
         handle_delete_task,
         handle_drag_end,
@@ -2773,6 +2801,8 @@ function render_list_view(props) {
         handle_toggle_section,
         handle_toggle_task,
         is_adding_column,
+        dragged_section_id,
+        section_drop,
         quick_task_open,
         quick_task_text,
         new_column_name,
@@ -2791,10 +2821,6 @@ function render_list_view(props) {
     } = props;
     const field_items = optional_column_items;
 
-    if (!filtered_tasks.length) {
-        return render_empty_tasks_state(set_active_modal);
-    }
-
     return (
         <div className="list_view">
             <div className="mobile_only">
@@ -2811,6 +2837,7 @@ function render_list_view(props) {
                 </div>
 
                 {board_columns.map((section_item) => render_task_group({
+                    can_reorder_sections: board_columns.length > 1,
                     mobile_actions: props.mobile_actions,
                     active_quick_popover,
                     handle_add_quick_subtask,
@@ -2821,6 +2848,11 @@ function render_list_view(props) {
                     filtered_tasks,
                     dragged_task_id,
                     handle_column_drop,
+                    handle_section_drag_end,
+                    handle_section_drag_over,
+                    handle_section_drag_start,
+                    handle_section_drop,
+                    handle_section_key_down,
                     handle_delete_column,
                     handle_delete_task,
                     handle_drag_end,
@@ -2835,6 +2867,8 @@ function render_list_view(props) {
                     handle_toggle_section,
                     handle_toggle_task,
                     section_item,
+                    dragged_section_id,
+                    section_drop,
                     selected_task_id,
                     selected_task_ids,
                     set_editing_column_id,
@@ -2844,7 +2878,7 @@ function render_list_view(props) {
                 }))}
 
                 {quick_task_open ? <form className="quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(); }}>
-                    <textarea autoFocus rows="3" aria-label="Nombres de las nuevas tareas" placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
+                    <textarea autoFocus rows="1" aria-label="Nombres de las nuevas tareas" placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
                     <button type="submit" aria-label="Agregar tareas" disabled={!quick_task_text.trim()}>→</button>
                 </form> : <button className="add_row_button" type="button" onClick={() => set_quick_task_open(true)}>
                     + Agregar tarea
@@ -2911,6 +2945,7 @@ function render_list_view(props) {
 // Renders one grouped task section in the desktop table.
 function render_task_group(props) {
     const {
+        can_reorder_sections,
         active_quick_popover,
         handle_add_quick_subtask,
         collapsed_sections = [],
@@ -2920,6 +2955,11 @@ function render_task_group(props) {
         filtered_tasks,
         dragged_task_id,
         handle_column_drop,
+        handle_section_drag_end,
+        handle_section_drag_over,
+        handle_section_drag_start,
+        handle_section_drop,
+        handle_section_key_down,
         handle_delete_column,
         handle_delete_task,
         handle_drag_end,
@@ -2935,6 +2975,8 @@ function render_task_group(props) {
         handle_toggle_task,
         mobile_actions,
         section_item,
+        dragged_section_id,
+        section_drop,
         selected_task_id,
         selected_task_ids,
         set_editing_column_id,
@@ -2947,10 +2989,11 @@ function render_task_group(props) {
 
     return (
         <div
-            className={`task_group ${dragged_task_id ? "task_group_drop_ready" : ""}`}
+            className={`task_group ${dragged_task_id ? "task_group_drop_ready" : ""}${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
+            data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
             key={section_item.id}
-            onDragOver={handle_column_drop ? event => event.preventDefault() : undefined}
-            onDrop={handle_column_drop ? event => { event.preventDefault(); handle_column_drop(section_item.id); } : undefined}
+            onDragOver={event => dragged_section_id ? handle_section_drag_over(event, section_item.id, "list") : handle_column_drop && event.preventDefault()}
+            onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "list"); else handle_column_drop?.(section_item.id); }}
         >
             <div className="task_group_header" role="button" tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") handle_toggle_section(section_item.id);
@@ -2975,7 +3018,7 @@ function render_task_group(props) {
                         }}
                     />
                 ) : (
-                    <strong>{section_item.label.toUpperCase()}</strong>
+                    <strong className="section_drag_title" draggable={can_reorder_sections} tabIndex={can_reorder_sections ? 0 : undefined} title={can_reorder_sections ? "Arrastra para ordenar la sección; Alt + flechas para moverla" : undefined} onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "list")}>{section_item.label.toUpperCase()}</strong>
                 )}
                 <span>{section_tasks.length}</span>
                 {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
@@ -3330,6 +3373,11 @@ function render_board_view(props) {
         filtered_tasks,
         handle_add_column,
         handle_column_drop,
+        handle_section_drag_end,
+        handle_section_drag_over,
+        handle_section_drag_start,
+        handle_section_drop,
+        handle_section_key_down,
         handle_drag_end,
         handle_delete_column,
         handle_drag_start,
@@ -3339,6 +3387,8 @@ function render_board_view(props) {
         handle_task_select,
         handle_toggle_task,
         is_adding_column,
+        dragged_section_id,
+        section_drop,
         new_column_name,
         quick_task_open,
         quick_task_section,
@@ -3362,10 +3412,11 @@ function render_board_view(props) {
 
                 return (
                     <section
-                        className="board_column"
+                        className={`board_column${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
+                        data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
                         key={section_item.id}
-                        onDragOver={handle_column_drop ? (event) => event.preventDefault() : undefined}
-                        onDrop={handle_column_drop ? () => handle_column_drop(section_item.id) : undefined}
+                        onDragOver={event => dragged_section_id ? handle_section_drag_over(event, section_item.id, "board") : handle_column_drop && event.preventDefault()}
+                        onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else handle_column_drop?.(section_item.id); }}
                     >
                         <header>
                             {editing_column_id === section_item.id ? (
@@ -3384,7 +3435,7 @@ function render_board_view(props) {
                                     }}
                                 />
                             ) : (
-                                <h2>{section_item.label}</h2>
+                                <h2 className="section_drag_title" draggable={board_columns.length > 1} tabIndex={board_columns.length > 1 ? 0 : undefined} title={board_columns.length > 1 ? "Arrastra para ordenar la sección; Alt + flechas para moverla" : undefined} onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "board")}>{section_item.label}</h2>
                             )}
                             <span>{section_tasks.length}</span>
                             {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
@@ -3410,7 +3461,7 @@ function render_board_view(props) {
                             }))}
                         </div>
                         {quick_task_open && quick_task_section === section_item.id ? <form className="board_quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(section_item.id); }}>
-                            <textarea autoFocus rows="2" aria-label={`Tareas nuevas en ${section_item.label}`} placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
+                            <textarea autoFocus rows="1" aria-label={`Tareas nuevas en ${section_item.label}`} placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
                             <button type="button" onClick={() => { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); }}>Cancelar</button>
                             <button type="submit" disabled={!quick_task_text.trim()}>Agregar</button>
                         </form> : <button className="board_quick_add_button" type="button" onClick={() => { set_quick_task_section(section_item.id); set_quick_task_open(true); }}>+ Agregar tarea</button>}
@@ -4257,6 +4308,8 @@ function TaskAppContent({ externalModules = {} }) {
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
     const [dragged_task_id, set_dragged_task_id] = use_state(null);
     const [dragged_task_ids, set_dragged_task_ids] = use_state([]);
+    const [dragged_section_id, set_dragged_section_id] = use_state(null);
+    const [section_drop, set_section_drop] = use_state(null);
     const [selected_task_ids, set_selected_task_ids] = use_state([]);
     const [is_adding_column, set_is_adding_column] = use_state(false);
     const [new_column_name, set_new_column_name] = use_state("");
@@ -4278,6 +4331,13 @@ function TaskAppContent({ externalModules = {} }) {
     const [editing_column_id, set_editing_column_id] = use_state(null);
     const [editing_column_name, set_editing_column_name] = use_state("");
     const [unsectioned_by_project, set_unsectioned_by_project] = use_state({});
+    const unsectioned_order_key = `bold_unsectioned_order:${session.activeAssignment?.id || "demo"}`;
+    const [unsectioned_order_by_project, set_unsectioned_order_by_project] = use_state(() => {
+        try { return JSON.parse(localStorage.getItem(unsectioned_order_key)) || {}; } catch { return {}; }
+    });
+    use_effect(() => {
+        try { localStorage.setItem(unsectioned_order_key, JSON.stringify(unsectioned_order_by_project)); } catch { /* El orden sigue disponible durante esta sesión. */ }
+    }, [unsectioned_order_key, unsectioned_order_by_project]);
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
@@ -4302,16 +4362,19 @@ function TaskAppContent({ externalModules = {} }) {
     const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
     const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
-    const board_columns = real ? (task_scope !== "project"
+    const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id) : mock_sections_by_project[selected_project_id] || [];
+    const board_columns = task_scope !== "project" && real
         ? [{ id: "unsectioned", label: task_scope === "workspace" ? active_workspace?.name || "Workspace" : "Mis tareas" }]
-        : [...(data?.sections || []).filter(item => item.projectId === selected_project_id), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])])
-        : [...(mock_sections_by_project[selected_project_id] || []), ...(!unsectioned_config.hidden || has_unsectioned_tasks ? [unsectioned_column] : [])];
+        : !unsectioned_config.hidden || has_unsectioned_tasks
+            ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id])
+            : project_sections;
 
     const [task_detail_width, set_task_detail_width] = use_state(() => {
         const saved = Number(localStorage.getItem("bold_task_drawer_width"));
         return saved || Math.min(480, Math.round(window.innerWidth * .7));
     });
     const [active_project_menu_id, set_active_project_menu_id] = use_state(null);
+    const [project_menu_anchor, set_project_menu_anchor] = use_state(null);
     const [editing_project_id, set_editing_project_id] = use_state(null);
     const [inbox_tab, set_inbox_tab] = use_state("activity");
     const [selected_inbox_id, set_selected_inbox_id] = use_state(null);
@@ -4421,6 +4484,7 @@ function TaskAppContent({ externalModules = {} }) {
 
         const project_payload = {
             id: editing_project_id || `project_${Date.now()}`,
+            ...(!editing_project_id ? { created_at: new Date().toISOString() } : {}),
             label,
             description: (form_data.get("project_description") || "").toString(),
             avatar_data_url: project_avatar_data_url || null,
@@ -4481,7 +4545,7 @@ function TaskAppContent({ externalModules = {} }) {
         set_is_sidebar_open(false);
     }
 
-    function handle_project_menu_toggle(project_id, action = "toggle") {
+    function handle_project_menu_toggle(project_id, action = "toggle", anchor = null) {
         if (action === "pin") {
             const next = pinned_project_ids.includes(project_id) ? pinned_project_ids.filter(id => id !== project_id) : [...pinned_project_ids, project_id];
             try { localStorage.setItem(pinned_projects_key, JSON.stringify(next)); }
@@ -4511,6 +4575,7 @@ function TaskAppContent({ externalModules = {} }) {
             return;
         }
 
+        if (anchor) set_project_menu_anchor(anchor);
         set_active_project_menu_id((current_id) => {
             const next = current_id === project_id ? null : project_id;
             if (next) globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", { detail: `project:${project_id}` }));
@@ -4594,6 +4659,71 @@ function TaskAppContent({ externalModules = {} }) {
         set_dragged_task_id(null);
         set_dragged_task_ids([]);
         set_selected_task_ids([]);
+    }
+
+    function handle_section_drag_start(event, section_id) {
+        if (task_scope !== "project" || board_columns.length < 2) { event.preventDefault(); return; }
+        event.stopPropagation();
+        event.dataTransfer.setData("application/x-bold-section", section_id);
+        event.dataTransfer.effectAllowed = "move";
+        set_dragged_section_id(section_id);
+    }
+
+    function handle_section_drag_end() {
+        set_dragged_section_id(null);
+        set_section_drop(null);
+    }
+
+    function section_drop_side(event, section_id, view) {
+        const anchor = event.currentTarget.querySelector(view === "list" ? ".task_group_header" : "header");
+        const rect = anchor.getBoundingClientRect();
+        return (view === "list" ? event.clientY > rect.top + rect.height / 2 : event.clientX > rect.left + rect.width / 2) ? "after" : "before";
+    }
+
+    function handle_section_drag_over(event, section_id, view) {
+        if (!dragged_section_id || dragged_section_id === section_id) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const side = section_drop_side(event, section_id, view);
+        set_section_drop(current => current?.id === section_id && current.side === side ? current : { id: section_id, side });
+    }
+
+    function reorder_section(source_id, target_id, after) {
+        if (task_scope !== "project" || source_id === target_id || real && mutation_pending.current) return;
+        const next = reorderSections(board_columns, source_id, target_id, after);
+        if (next === board_columns) return;
+        const virtual_index = next.findIndex(section => section.id === "unsectioned");
+        if (virtual_index >= 0) set_unsectioned_order_by_project(current => ({ ...current, [selected_project_id]: virtual_index }));
+        const sections = board_columns.filter(section => section.id !== "unsectioned");
+        const real_next = next.filter(section => section.id !== "unsectioned");
+        if (real_next.every((section, index) => section.id === sections[index]?.id)) return;
+        if (real) {
+            const positions = new Map(real_next.map((section, index) => [section.id, (index + 1) * 1000]));
+            set_data(current => ({ ...current, sections: current.sections.map(section => positions.has(section.id) ? { ...section, position: String(positions.get(section.id)) } : section).sort((a, b) => Number(a.position) - Number(b.position)) }));
+            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado");
+        } else {
+            set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: real_next }));
+        }
+    }
+
+    function handle_section_drop(event, target_id, view) {
+        event.stopPropagation();
+        const source_id = event.dataTransfer.getData("application/x-bold-section") || dragged_section_id;
+        const after = section_drop_side(event, target_id, view) === "after";
+        handle_section_drag_end();
+        reorder_section(source_id, target_id, after);
+    }
+
+    function handle_section_key_down(event, section_id, view) {
+        const backward = view === "list" ? "ArrowUp" : "ArrowLeft";
+        const forward = view === "list" ? "ArrowDown" : "ArrowRight";
+        if (!event.altKey || ![backward, forward].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const sections = board_columns;
+        const index = sections.findIndex(section => section.id === section_id);
+        const direction = event.key === backward ? -1 : 1;
+        if (sections[index + direction]) reorder_section(section_id, sections[index + direction].id, direction > 0);
     }
 
     function handle_task_click(task_id, event) {
@@ -4730,7 +4860,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         function handle_pointer_down(event) {
-            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .project_menu_popover, .project_item_wrap")) {
+            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .project_menu_popover, .project_item_wrap, .sidebar_project_menu_floating")) {
                 return;
             }
 
@@ -4846,7 +4976,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_tasks(current => {
                 const next = [...current];
                 values.items.forEach(item => {
-                    const created = normalize_task({ ...item, id: crypto.randomUUID(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: item.section || "unsectioned" });
+                    const created = normalize_task({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: item.section || "unsectioned" });
                     const parentIndex = next.findIndex(task => String(task.id) === String(item.parentTaskId));
                     if (parentIndex >= 0) next[parentIndex] = { ...next[parentIndex], subtasks: [...(next[parentIndex].subtasks || []), created] };
                     else next.push(created);
@@ -5482,7 +5612,7 @@ function TaskAppContent({ externalModules = {} }) {
                         create_task_request(new_task)
                             .then((created_task) => {
                                 set_tasks((current_tasks) => current_tasks.map((t) =>
-                                    t.id === temporary_id ? normalize_task(created_task) : t
+                                    t.id === temporary_id ? normalize_task({ ...created_task, created_at: created_task.created_at || new_task.created_at }) : t
                                 ));
                             })
                             .catch((error) => {
@@ -5580,7 +5710,7 @@ function TaskAppContent({ externalModules = {} }) {
     // Returns the full shell with the focused tasks module.
     return (
         <ProjectPreviewContext.Provider value={set_project_preview}><AppShell
-sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
+sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
@@ -5592,6 +5722,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     notifications={notifications}
                     onCreateProject={() => set_active_modal("project")}
                     onCreateTask={() => set_active_modal("task")}
+                    onNavigate={handle_module_change}
                     onOpenProject={handle_project_select}
                     onOpenReports={() => handle_module_change("reports")}
                     onOpenTask={(task_id) => {
@@ -5643,6 +5774,8 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     board_columns,
                     collapsed_sections,
                     dragged_task_id,
+                    dragged_section_id,
+                    section_drop,
                     editing_column_id,
                     editing_column_name,
                     filtered_tasks,
@@ -5654,6 +5787,11 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     handle_clear_filters,
                     handle_close_task_tool,
                     handle_column_drop,
+                    handle_section_drag_end,
+                    handle_section_drag_over,
+                    handle_section_drag_start,
+                    handle_section_drop,
+                    handle_section_key_down,
                     handle_delete_column,
                     handle_delete_task: handle_request_delete_task,
                     handle_detail_resize_key_down,
