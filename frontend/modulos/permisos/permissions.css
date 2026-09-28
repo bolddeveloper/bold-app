@@ -95,6 +95,62 @@
 .permissions_module .admin_select_menu {
     animation: permissions_menu_enter 150ms ease-out;
 }
+.permissions_drawer_form .admin_select_menu:has(.admin_select_search) {
+    max-height: min(360px, calc(100dvh - 180px));
+    overflow: hidden;
+}
+.permissions_drawer_form .admin_select_search {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 2px 6px;
+    padding: 0 9px;
+    border: 1px solid #d7dee8;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+}
+.permissions_drawer_form .admin_select_search:focus-within {
+    border-color: #2684e5;
+    box-shadow: 0 0 0 3px rgb(38 132 229 / 12%);
+}
+.permissions_drawer_form .admin_select_search input {
+    min-width: 0;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #252a34;
+    font: inherit;
+}
+.permissions_drawer_form .admin_select_search > button {
+    display: grid;
+    width: 28px;
+    min-height: 28px;
+    padding: 0 !important;
+    place-items: center;
+}
+.permissions_drawer_form .admin_select_options {
+    display: grid;
+    gap: 3px;
+    max-height: 250px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.permissions_drawer_form .admin_select_empty {
+    margin: 14px 8px;
+    color: #778291;
+    font-size: 12px;
+    text-align: center;
+}
+.theme_dark .permissions_drawer_form .admin_select_search {
+    border-color: #465060;
+    background: #22262e;
+    color: #aeb7c5;
+}
+.theme_dark .permissions_drawer_form .admin_select_search input { color: #edf0f5; }
 .theme_dark .permissions_module {
     background: #171a20;
     color: #edf0f5;

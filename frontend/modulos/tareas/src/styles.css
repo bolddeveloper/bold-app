@@ -7805,6 +7805,23 @@ button {
     color: var(--bold_red);
 }
 
+.sidebar_project_menu_floating {
+    position: fixed;
+    z-index: 1600;
+    width: 210px;
+    max-height: min(70dvh, 430px);
+    overflow-y: auto;
+    margin: 0;
+}
+
+@media (max-width: 1023px) {
+    .sidebar_project_menu_floating {
+        position: fixed;
+        inset: auto 12px max(12px, env(safe-area-inset-bottom));
+        width: auto;
+    }
+}
+
 .project_dot {
     width: 11px;
     height: 11px;
@@ -9762,6 +9779,25 @@ button {
 .board_quick_task_form button { min-height: 32px; border: 1px solid var(--task-border); border-radius: 7px; background: transparent; color: inherit; font-weight: 750; }
 .board_quick_task_form button[type="submit"] { border-color: var(--bold_red); background: var(--bold_red); color: #fff; }
 .board_quick_task_form button:disabled { opacity: .45; }
+
+/* Section ordering and compact inline creation. */
+.section_drag_title[draggable="true"] { cursor: grab; user-select: none; }
+.section_drag_title[draggable="true"]:active { cursor: grabbing; }
+.section_drag_title:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; border-radius: 3px; }
+.section_dragging { opacity: .55; }
+.task_group[data-section-drop="before"] > .task_group_header { box-shadow: inset 0 3px var(--bold_red); }
+.task_group[data-section-drop="after"] { box-shadow: inset 0 -3px var(--bold_red); }
+.board_column[data-section-drop="before"] { box-shadow: -4px 0 var(--bold_red); }
+.board_column[data-section-drop="after"] { box-shadow: 4px 0 var(--bold_red); }
+.task_table_card > .add_row_button, .list_section_creator .add_row_button { width: fit-content; min-height: 36px; margin: 8px 14px; padding: 0 12px; }
+.list_section_creator { padding: 0 0 8px; }
+.list_section_creator .board_column_form { box-sizing: border-box; width: min(340px, calc(100% - 28px)); margin: 8px 14px; }
+.quick_task_form { box-sizing: border-box; width: min(540px, calc(100% - 28px)); margin: 8px 14px; }
+.quick_task_form textarea { box-sizing: border-box; min-height: 38px; height: 38px; padding: 8px 11px; }
+.quick_task_form button { flex: 0 0 38px; width: 38px; height: 38px; }
+.board_quick_add_button, .board_add_column_button { width: fit-content; min-height: 36px; padding: 0 12px; }
+.board_add_column_button { margin: 0 9px; }
+.board_quick_task_form textarea { min-height: 38px; }
 
 .timeline_view_card { overflow: auto; border-color: var(--task-border); border-radius: 14px; box-shadow: 0 8px 24px rgba(31, 36, 44, .06); scrollbar-width: thin; }
 .timeline_col_label { position: sticky; left: 0; z-index: 4; background: var(--task-panel); }

@@ -1,0 +1,46 @@
+{
+  "hash": "2f064b54",
+  "configHash": "fade89de",
+  "lockfileHash": "abe2c7ae",
+  "browserHash": "ad1bcb59",
+  "optimized": {
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "8166ab0a",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "6f469750",
+      "needsInterop": true
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "f9a323ea",
+      "needsInterop": false
+    },
+    "sweetalert2": {
+      "src": "../../../tareas/node_modules/sweetalert2/dist/sweetalert2.esm.all.js",
+      "file": "sweetalert2.js",
+      "fileHash": "0ad2fbda",
+      "needsInterop": false
+    },
+    "react-dom": {
+      "src": "../../../tareas/node_modules/react-dom/index.js",
+      "file": "react-dom.js",
+      "fileHash": "17d14c74",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "chunk-IGNIO7M7": {
+      "file": "chunk-IGNIO7M7.js"
+    },
+    "chunk-PX6F3LHL": {
+      "file": "chunk-PX6F3LHL.js"
+    }
+  }
+}

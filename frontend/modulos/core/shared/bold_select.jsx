@@ -21,6 +21,7 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
         document.addEventListener("keydown", closeEscape);
         return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape); };
     }, [open]);
+    useEffect(() => { if (!open && query) setQuery(""); }, [open]);
 
     useEffect(() => {
         if (controlled) return undefined;
@@ -55,9 +56,9 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
         }}>
             <span>{selected?.label || "Seleccionar"}</span><ChevronDown size={16} />
         </button>
-        {open && <div className="admin_select_menu" role="listbox" aria-label={label}>
+        {open && <div className="admin_select_menu">
             {searchable && <label className="admin_select_search"><Search size={15} /><input autoFocus type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} />{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery("")}><X size={14} /></button>}</label>}
-            <div className="admin_select_options">{visibleOptions.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
+            <div className="admin_select_options" role="listbox" aria-label={label}>{visibleOptions.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
                 {!visibleOptions.length && <p className="admin_select_empty">No se encontraron resultados.</p>}
             </div>
             {menuFooter}
