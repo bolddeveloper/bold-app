@@ -42,9 +42,9 @@ El login requiere CSRF incluso antes de autenticar. Recuperación responde igual
 
 ## Variables
 
-Consulta `.env.example`. En producción son imprescindibles HTTPS, `SECRET_KEY`, `AUTH_ENCRYPTION_KEY`, Redis y orígenes CORS/CSRF exactos. `AUTH_NUM_PROXIES=1` corresponde al proxy de Render y evita confiar ciegamente en `X-Forwarded-For` para el throttling.
+Consulta `.env.example`. En producción son imprescindibles HTTPS, `SECRET_KEY`, `AUTH_ENCRYPTION_KEY`, Redis y orígenes CORS/CSRF exactos. En Oracle, Daphne solo es accesible desde Cloudflare Tunnel y `TRUST_CLOUDFLARE_CONNECTING_IP=true` habilita la IP validada de Cloudflare para auditoría y throttling.
 
-Mientras frontend y backend de Render sean sitios distintos se usa `AUTH_SESSION_COOKIE_SAMESITE=None`. Algunos navegadores bloquean cookies de terceros aun con esa opción, por lo que el despliegue final fiable debe usar dominios propios del mismo sitio (por ejemplo `app.bold.gt` y `api.bold.gt`) y volver a `Lax`.
+El despliegue usa dominios propios del mismo sitio (`app.bold.gt` y `api.bold.gt`) y mantiene `AUTH_SESSION_COOKIE_SAMESITE=Lax`; no depende de cookies de terceros.
 
 Para introducir MFA en cuentas existentes, primero se despliega con `AUTH_MFA_REQUIRED=false`, se valida el flujo y después se activa la variable. Las cuentas sin método configurado recibirán el asistente de enrolamiento antes de acceder a los módulos.
 

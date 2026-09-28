@@ -42,6 +42,6 @@ Finalmente ejecuta `03 - Verificación`. Deben verse:
 
 La carpeta `99 - Limpieza opcional` elimina ambos endpoints y sus entregas por cascada.
 
-En desarrollo, sin `REDIS_URL`, Django usa un canal en memoria y Celery entrega de forma inmediata. Esto valida la lógica en un proceso. La prueba real con varios clientes/instancias debe hacerse en Render, con Redis compartido por el servidor ASGI y el worker Celery.
+En desarrollo, sin `REDIS_URL`, Django usa un canal en memoria y Celery entrega de forma inmediata. Esto valida la lógica en un proceso. La prueba real con varios clientes debe hacerse en Oracle, con Redis compartido por el servidor ASGI y el worker Celery.
 
 El contrato completo para el frontend está en `backend/docs/tasks_v2_api.md`.

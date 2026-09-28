@@ -1,4 +1,4 @@
-"""Configuracion WSGI del proyecto boldApp, usada por gunicorn en Render."""
+"""Configuracion WSGI del proyecto boldApp para herramientas compatibles."""
 
 import os
 
