@@ -124,6 +124,10 @@ services:
     <<: [*backend-image, *backend-security]
     restart: unless-stopped
     init: true
+    # La imagen compartida comprueba el endpoint HTTP de Daphne. Celery no
+    # publica HTTP, por lo que ese healthcheck produciria un falso negativo.
+    healthcheck:
+      disable: true
     environment: *backend-environment
     command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
     depends_on:
