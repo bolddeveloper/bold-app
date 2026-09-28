@@ -61,14 +61,17 @@ x-default-logging: &default-logging
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB requerido}"
       POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER requerido}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PostgreSQL 18 usa un directorio versionado bajo /var/lib/postgresql.
+      # Montar el padre conserva los datos y permite futuras actualizaciones
+      # controladas con pg_upgrade.
+      - postgres_data:/var/lib/postgresql
     shm_size: 256mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]

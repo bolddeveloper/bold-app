@@ -17,7 +17,7 @@ Usuarios
        VM ARM64 de Oracle
          +-- Django + Daphne
          +-- Celery
-         +-- PostgreSQL 16
+         +-- PostgreSQL 18
          +-- Redis 7
 ```
 
@@ -30,7 +30,8 @@ conexion saliente y alcanza a Daphne por la red privada de Docker.
 - Zona DNS `bold.gt` administrada por Cloudflare.
 - Repositorio Git accesible desde la VM.
 - Una llave SSH guardada en un lugar seguro.
-- Si se migraran datos: URL externa de PostgreSQL de Render y `pg_dump` 16.
+- Si se migraran datos: URL externa de PostgreSQL de Render y una version de
+  `pg_dump` igual o posterior a la version del origen.
 
 No uses las contrasenas conocidas de la seed en un servidor accesible desde
 Internet. La configuracion de Oracle deshabilita toda seed por defecto.
@@ -242,7 +243,7 @@ esa cuenta ya puedes crear el resto de empleados con el modulo administrativo.
 
 Antes del corte, evita cambios de usuarios o pon la aplicacion anterior en
 mantenimiento. Confirma primero la version principal de PostgreSQL de origen;
-si es posterior a 16, ajusta la imagen `postgres` del Compose a esa version.
+el Compose usa PostgreSQL 18 para coincidir con la base actual de Render.
 Desde una maquina con una version de `pg_dump` igual o posterior al origen crea
 el dump:
 
