@@ -1,18 +1,17 @@
-# Blueprint de Render para desplegar boldApp completo: backend (API REST +
-# WebSocket), worker de Celery (webhooks salientes), Redis (channel layer +
-# cola de Celery), Postgres, y el frontend como Static Site.
+# Blueprint de Render para la infraestructura dinamica de boldApp: backend
+# (API REST + WebSocket), worker de Celery (webhooks salientes), Redis
+# (channel layer + cola de Celery) y Postgres. El frontend se publica desde
+# Cloudflare Pages siguiendo CLOUDFLARE_DEPLOYMENT.md.
 #
 # Uso: en el dashboard de Render, "New" > "Blueprint", conectar este repo.
-# Render lee este archivo y crea los 5 recursos de abajo.
+# Render lee este archivo y crea los 4 recursos de abajo.
 #
 # IMPORTANTE: Render asigna el subdominio *.onrender.com segun el "name" de
 # cada servicio, siempre que no este ya tomado por otra cuenta. No existe en
 # el spec de blueprints una forma de referenciar la URL publica con esquema
-# (https://...) de un servicio desde otro, asi que ALLOWED_HOSTS,
-# CORS_ALLOWED_ORIGINS y VITE_API_BASE_URL de abajo estan escritos a mano
-# asumiendo los nombres "bold-app-backend"/"bold-app-frontend". Si Render le
-# agrega un sufijo a algun nombre (por colision), hay que actualizar esos
-# tres valores a mano desde el dashboard despues del primer deploy.
+# (https://...) de un servicio desde otro. Los valores asumen los dominios
+# recomendados app.bold.gt y api.bold.gt. Cambialos si el despliegue utiliza
+# otros subdominios y conserva siempre origenes exactos (sin comodines).
 #
 # Los "plan" de abajo son el nivel gratuito/mas chico disponible al momento
 # de escribir esto; ajustalos segun lo que tengas habilitado en tu cuenta.
@@ -43,18 +42,18 @@ services:
         generateValue: true
       - key: AUTH_ENCRYPTION_KEY
         generateValue: true
-      - key: DEBUG
+      - key: DJANGO_DEBUG
         value: "false"
       - key: PYTHON_VERSION
         value: "3.11.15"
       - key: ALLOWED_HOSTS
-        value: "bold-app-backend.onrender.com"
+        value: "api.bold.gt,bold-app-backend.onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://bold-app-frontend.onrender.com"
+        value: "https://app.bold.gt"
       - key: FRONTEND_URL
-        value: "https://bold-app-frontend.onrender.com"
+        value: "https://app.bold.gt"
       - key: AUTH_SESSION_COOKIE_SAMESITE
-        value: "None"
+        value: "Lax"
       # Activar después de validar el enrolamiento de las cuentas existentes.
       - key: AUTH_MFA_REQUIRED
         value: "false"
@@ -69,11 +68,11 @@ services:
           type: keyvalue
           name: bold-app-redis
           property: connectionString
-
   - type: worker
     name: bold-app-worker
     runtime: python
-    plan: free
+    # Render no ofrece workers gratuitos. Este es su plan de entrada actual.
+    plan: 0.5c-512mb
     rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "celery -A config worker --loglevel=info"
@@ -83,7 +82,12 @@ services:
           type: web
           name: bold-app-backend
           envVarKey: SECRET_KEY
-      - key: DEBUG
+      - key: AUTH_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: bold-app-backend
+          envVarKey: AUTH_ENCRYPTION_KEY
+      - key: DJANGO_DEBUG
         value: "false"
       - key: PYTHON_VERSION
         value: "3.11.15"
@@ -96,19 +100,4 @@ services:
           type: keyvalue
           name: bold-app-redis
           property: connectionString
-
-  - type: web
-    name: bold-app-frontend
-    runtime: static
-    rootDir: frontend/modulos/core
-    buildCommand: "npm install && npm run build"
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_USE_REAL_BACKEND
-        value: "true"
-      - key: VITE_API_BASE_URL
-        value: "https://bold-app-backend.onrender.com"
-      - key: VITE_DEMO_WORKSPACE_NAME
-        value: "Bold Demo"
-      - key: VITE_DEMO_USER_EMAIL
-        value: "ana@bold.gt"
+# El frontend se compila y publica de forma independiente en Cloudflare Pages.
