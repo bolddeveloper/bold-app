@@ -1,7 +1,7 @@
 import { normalizeAssignment, selectAssignment } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isMyTask } from "./task_models.js";
+import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./task_models.js";
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");
@@ -38,6 +38,21 @@ test("project drafts validate ranges and duplicate names get bounded suffixes", 
 });
 test("recent projects are ordered, bounded and limited to accessible projects", () => {
     assert.deepEqual(recentProjectIds(["p2", "deleted", "p2", "p1"], ["p1", "p2", "p3", "p4", "p5"], "p3"), ["p3", "p2", "p1", "p4"]);
+});
+test("owner project view keeps current projects grouped and ordered by department", () => {
+    const projects = [
+        { id: "p1", unitId: "ops", status: "Activo" },
+        { id: "p2", unitId: "marketing", status: "Pendiente" },
+        { id: "p3", unitId: "ops", status: "Inactivo" },
+        { id: "p4", unitId: "marketing", status: "Activo", is_archived: true },
+    ];
+    const current = projects.filter(isActiveProject);
+    assert.deepEqual(current.map(project => project.id), ["p1", "p2"]);
+    assert.deepEqual(
+        groupProjectsByUnit(current, [{ id: "ops", name: "Operaciones" }, { id: "marketing", name: "Marketing" }])
+            .map(group => [group.name, group.projects.map(project => project.id)]),
+        [["Marketing", ["p2"]], ["Operaciones", ["p1"]]],
+    );
 });
 test("my tasks include responsible and follower assignments without duplicating rows", () => {
     const tasks = [

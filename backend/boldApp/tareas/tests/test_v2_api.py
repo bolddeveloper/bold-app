@@ -83,6 +83,45 @@ class TasksV2ApiTests(TransactionTestCase):
         luis.refresh_from_db()
         self.assertTrue(luis.check_password("Contraseña de dueño modificada 2026!"))
 
+    def test_owner_can_list_and_manage_projects_across_departments(self):
+        owner = UserAccount.objects.get(email="luis@bold.gt")
+        owner_assignment = PositionAssignment.objects.get(
+            employee=owner.employee,
+            is_active=True,
+            released_at__isnull=True,
+        )
+        _, owner_session = create_session(
+            owner,
+            RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"),
+        )
+        client = APIClient()
+        client.force_authenticate(owner, owner_session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(owner_assignment.id))
+
+        listed = client.get("/api/v2/projects/")
+        self.assertEqual(listed.status_code, 200, listed.data)
+        listed_units = {str(row["unit"]) for row in listed.data["results"]}
+        self.assertIn(str(self.marketing.id), listed_units)
+        self.assertIn(str(self.operations.id), listed_units)
+
+        created = client.post(
+            "/api/v2/projects/",
+            {
+                "unit": str(self.marketing.id),
+                "owner_assignment": str(self.ana_assignment.id),
+                "name": "Proyecto global del propietario",
+                "status": "Activo",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        edited = client.patch(
+            f"/api/v2/projects/{self.ops_project.id}/",
+            {"description": "Seguimiento actualizado por Dirección"},
+            format="json",
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+
     def test_bulk_create_update_delete_and_atomic_validation(self):
         payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}
         created = self.client.post("/api/v2/tasks/bulk/", {"operation": "create", "items": [{**payload, "title": "Uno"}, {**payload, "title": "Dos"}]}, format="json")

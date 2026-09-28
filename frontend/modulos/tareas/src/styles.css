@@ -9210,6 +9210,11 @@ button {
 .projects_module_header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .projects_module_header h1 { margin: 4px 0; font-size: 30px; }
 .projects_module_header p { margin: 0; color: var(--bold_muted); }
+.projects_department_groups { display: grid; gap: 28px; }
+.projects_department_group { display: grid; gap: 12px; }
+.projects_department_group > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding-bottom: 9px; border-bottom: 1px solid var(--bold_line); }
+.projects_department_group > header h2 { margin: 0; font-size: 20px; }
+.projects_department_group > header p { margin: 3px 0 0; color: var(--bold_muted); font-size: 13px; }
 .projects_grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; gap: 16px; }
 .project_summary_card { display: grid; align-content: start; gap: 6px; padding: 12px 18px; border: 1px solid var(--bold_line); border-radius: 16px; background: var(--bold_surface); }
 .project_summary_title { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }

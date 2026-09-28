@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -96,6 +96,14 @@ def _validate_dashboard_layout(value, modules):
 
 def _active_assignments(employee):
     return employee.position_assignments.filter(is_active=True, released_at__isnull=True).select_related("position__unit", "position__job_role")
+
+
+def _position_is_owner_protected(position):
+    return position.assignments.filter(
+        is_active=True,
+        released_at__isnull=True,
+        employee__user_account__is_superuser=True,
+    ).exists()
 
 
 def _responsibility_snapshot(employee):
@@ -461,8 +469,14 @@ class OrganizationOverviewView(APIView):
         for value in OrganizationalUnit.objects.values_list("sensitivity_level", flat=True).distinct():
             OrganizationCatalogOption.objects.get_or_create(kind=OrganizationCatalogOption.SENSITIVITY, value=value)
         positions = []
-        for row in Position.objects.select_related("unit", "job_role").prefetch_related("assignments__employee"):
-            active_assignment = next((assignment for assignment in row.assignments.all() if assignment.is_active and assignment.released_at is None), None)
+        for row in Position.objects.select_related("unit", "job_role").prefetch_related("assignments__employee__user_account"):
+            active_assignments = [assignment for assignment in row.assignments.all() if assignment.is_active and assignment.released_at is None]
+            active_assignment = active_assignments[0] if active_assignments else None
+            is_protected = any(
+                getattr(assignment.employee, "user_account", None)
+                and assignment.employee.user_account.is_superuser
+                for assignment in active_assignments
+            )
             positions.append({
                 "id": row.id, "unit": row.unit_id, "unit_name": row.unit.name,
                 "job_role": row.job_role_id, "role_title": row.job_role.title,
@@ -470,6 +484,7 @@ class OrganizationOverviewView(APIView):
                 "display_order": row.display_order, "is_open": row.is_open,
                 "occupied": active_assignment is not None,
                 "occupant_name": active_assignment.employee.full_name if active_assignment else None,
+                "is_protected": is_protected,
             })
         return Response({
             "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
@@ -616,6 +631,15 @@ class PositionAdminViewSet(OrganizationCatalogViewSet):
     serializer_class = PositionAdminSerializer
     queryset = Position.objects.select_related("unit", "job_role", "reports_to_position").prefetch_related("assignments")
     audit_target_type = "position"
+
+    def get_permissions(self):
+        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update"} else IsCompanyOwner
+        return [permission()]
+
+    def perform_update(self, serializer):
+        if _position_is_owner_protected(serializer.instance):
+            raise PermissionDenied("La plaza del propietario está protegida y no admite modificaciones.")
+        super().perform_update(serializer)
 
 
 class AdministrativeActionViewSet(viewsets.ReadOnlyModelViewSet):

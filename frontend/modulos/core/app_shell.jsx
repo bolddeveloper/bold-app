@@ -99,7 +99,7 @@ function Sidebar(props) {
     }, [profileOpen]);
     useEffect(() => setProfileOpen(false), [active_module, is_sidebar_open]);
     useEffect(() => { const close = event => event.detail !== "profile" && setProfileOpen(false); globalThis.addEventListener?.("bold:sidebar-popover", close); return () => globalThis.removeEventListener?.("bold:sidebar-popover", close); }, []);
-    const groups = [{ id: "work", label: "Trabajo" }, { id: "management", label: "Gestión" }];
+    const groups = [{ id: "work", label: current_user?.unit_name || "Trabajo" }, { id: "management", label: "Gestión" }];
 
     return (
         <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">

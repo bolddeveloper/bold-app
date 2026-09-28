@@ -29,6 +29,25 @@ export function recentProjectIds(historyIds, projectIds, openedId = null, limit 
     const available = new Set(projectIds);
     return [...new Set([openedId, ...historyIds, ...projectIds].filter(id => id && available.has(id)))].slice(0, limit);
 }
+export function isActiveProject(project) {
+    const status = String(project?.status || "").trim().toLocaleLowerCase("es");
+    return !project?.is_archived && !["inactive", "inactivo", "archived", "archivado"].includes(status);
+}
+export function groupProjectsByUnit(projects, units) {
+    const unitNames = new Map(units.map(unit => [String(unit.id), unit.name]));
+    const groups = new Map();
+    for (const project of projects) {
+        const unitId = String(project.unitId || project.unit || "");
+        const group = groups.get(unitId) || {
+            id: unitId || "unassigned",
+            name: unitNames.get(unitId) || "Sin departamento",
+            projects: [],
+        };
+        group.projects.push(project);
+        groups.set(unitId, group);
+    }
+    return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name, "es"));
+}
 export const isMyTask = (task, assignmentId) => task.assignee_id === assignmentId || task.collaborator_ids?.includes(assignmentId);
 export const normalizeProject = dto => ({ ...dto, label: dto.name, color: dto.color_hex || "#ef1f2d", unitId: dto.unit });
 

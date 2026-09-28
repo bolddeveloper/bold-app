@@ -41,7 +41,7 @@ import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
-import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isMyTask } from "./services/task_models.js";
+import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
@@ -3876,15 +3876,16 @@ function ShareProjectModal({ project, onClose, onSave, onError, pending }) {
     </section></div>;
 }
 
-function render_projects_module({ projects, selected_project_id, tasks, search_query, onCreate, onOpen, onPreview, onEdit, onShare, onDelete, onWorkspace }) {
+function render_projects_module({ projects, units = [], group_by_unit = false, selected_project_id, tasks, search_query, onCreate, onOpen, onPreview, onEdit, onShare, onDelete, onWorkspace }) {
     const query = search_query.trim().toLowerCase();
     const priority_order = { Alta: 0, Media: 1, Baja: 2 };
     const visible = projects.filter(project => project.label.toLowerCase().includes(query)).sort((a, b) =>
         Number(["inactivo", "inactive"].includes(a.status?.toLowerCase())) - Number(["inactivo", "inactive"].includes(b.status?.toLowerCase()))
         || (priority_order[a.priority] ?? 1) - (priority_order[b.priority] ?? 1));
+    const groups = group_by_unit ? groupProjectsByUnit(visible, units) : [{ id: "all", name: "", projects: visible }];
     return <section className="projects_module">
-        <header className="projects_module_header"><div><p className="breadcrumb_text">PROYECTOS</p><h1>Proyectos</h1><p>Gestiona el trabajo del departamento en un solo lugar.</p></div><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
-        <div className="projects_grid">{visible.map(project => {
+        <header className="projects_module_header"><div><p className="breadcrumb_text">PROYECTOS</p><h1>Proyectos</h1><p>{group_by_unit ? "Supervisa los proyectos activos de cada departamento." : "Gestiona el trabajo del departamento en un solo lugar."}</p></div><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
+        <div className="projects_department_groups">{groups.map(group => <section className="projects_department_group" key={group.id}>{group_by_unit && <header><div><h2>{group.name}</h2><p>{group.projects.length} proyecto{group.projects.length === 1 ? "" : "s"} activo{group.projects.length === 1 ? "" : "s"}</p></div></header>}<div className="projects_grid">{group.projects.map(project => {
             const projectTasks = tasks.filter(task => task.project_id === project.id || task.taskProjects?.some(link => link.projectId === project.id));
             const done = projectTasks.filter(task => task.completed).length;
             const progress = projectTasks.length ? Math.round(done / projectTasks.length * 100) : 0;
@@ -3901,7 +3902,7 @@ function render_projects_module({ projects, selected_project_id, tasks, search_q
                     <button className="project_action_danger" type="button" onClick={() => onDelete(project.id)}>{render_icon(trash_icon, 15)} Eliminar</button>
                 </footer></details>
             </article>;
-        })}</div>
+        })}</div></section>)}</div>
         {!visible.length && <div className="placeholder_card"><h2>No hay proyectos</h2><p>Prueba otro nombre o crea un proyecto.</p></div>}
     </section>;
 }
@@ -3945,8 +3946,13 @@ function render_project_modal(props) {
         set_active_modal,
         set_project_avatar_data_url,
         set_project_color,
-        set_project_people_ids
+        set_project_people_ids,
+        project_unit_id,
+        set_project_unit_id,
+        project_owner_assignment_id,
+        set_project_owner_assignment_id
     } = props;
+    const unit_people = (props.directory || []).filter(person => String(person.unitId) === String(project_unit_id));
 
     return (
         <TaskDrawer class_name="project_create_modal" label={editing_project ? "Editar proyecto" : "Crear proyecto"} on_close={() => set_active_modal(null)} {...drawer}>
@@ -3967,6 +3973,18 @@ function render_project_modal(props) {
                         <span><strong>2</strong> Descripcion</span>
                         <textarea name="project_description" rows="4" placeholder="Describe brevemente el objetivo y alcance del proyecto..." defaultValue={editing_project?.description || ""}></textarea>
                     </label>
+
+                    {props.is_owner && <section className="project_create_step">
+                        <span>Departamento responsable</span>
+                        <div className="project_create_grid_3">
+                            <label>Departamento<TaskSelect aria_label="Departamento responsable" name="project_unit" value={project_unit_id} on_change={value => {
+                                set_project_unit_id(value);
+                                set_project_owner_assignment_id((props.directory || []).find(person => String(person.unitId) === String(value))?.id || "");
+                            }} options={(props.units || []).map(unit => ({ value: unit.id, label: unit.name }))} /></label>
+                            <label>Responsable<TaskSelect aria_label="Responsable del proyecto" name="project_owner_assignment" value={project_owner_assignment_id} on_change={set_project_owner_assignment_id} options={unit_people.map(person => ({ value: person.id, label: person.name, description: person.job_role_title }))} /></label>
+                        </div>
+                        {!unit_people.length && <p>No hay una plaza activa en este departamento para responsabilizarse del proyecto.</p>}
+                    </section>}
 
                     <section className="project_create_step">
                         <span><strong>3</strong> Color del proyecto</span>
@@ -4234,6 +4252,8 @@ function TaskAppContent({ externalModules = {} }) {
     const [project_priority, set_project_priority] = use_state("Media");
     const [project_color, set_project_color] = use_state(project_color_options[0]);
     const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
+    const [project_unit_id, set_project_unit_id] = use_state(session.activeUnit?.id || "");
+    const [project_owner_assignment_id, set_project_owner_assignment_id] = use_state(session.activeAssignment?.id || "");
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
     const [dragged_task_id, set_dragged_task_id] = use_state(null);
     const [dragged_task_ids, set_dragged_task_ids] = use_state([]);
@@ -4375,11 +4395,14 @@ function TaskAppContent({ externalModules = {} }) {
     use_effect(() => {
         if (active_modal === "project") {
             const project = projects.find(project => project.id === editing_project_id);
+            const unitId = project?.unitId || project?.unit || session.activeUnit?.id || "";
             set_project_avatar_data_url(project?.avatar_data_url || "");
             set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
             set_project_priority(project?.priority || "Media");
+            set_project_unit_id(unitId);
+            set_project_owner_assignment_id(project?.owner_assignment || (String(session.activeAssignment?.unitId) === String(unitId) ? session.activeAssignment?.id : session.directory?.find(person => String(person.unitId) === String(unitId))?.id) || "");
         }
-    }, [active_modal, editing_project_id]);
+    }, [active_modal, editing_project_id, projects, session.activeAssignment?.id, session.activeUnit?.id]);
 
     function handle_create_project(event) {
         event.preventDefault();
@@ -4390,6 +4413,10 @@ function TaskAppContent({ externalModules = {} }) {
 
         const validation_error = validateProjectDraft(base_label, start_date, end_date);
         if (validation_error) return set_api_error(validation_error);
+        const owner_context = session.account?.is_superuser
+            ? { unit: form_data.get("project_unit"), owner_assignment: form_data.get("project_owner_assignment") }
+            : { unit: session.activeAssignment?.unitId, owner_assignment: session.activeAssignment?.id };
+        if (real && (!owner_context.unit || !owner_context.owner_assignment)) return set_api_error("Selecciona un departamento y una plaza responsable activos.");
         const label = editing_project_id ? base_label : uniqueProjectName(base_label, projects.map(project => project.label));
 
         const project_payload = {
@@ -4408,9 +4435,10 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             let created_project_id = editing_project_id;
             mutate(async () => {
-                const assignment = session.activeAssignment;
                 const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, priority: project_payload.priority, start_date: start_date || null, end_date: end_date || null };
-                const project = editing_project_id ? await api.update("projects", editing_project_id, payload) : await api.create("projects", { ...payload, unit: assignment.unitId, owner_assignment: assignment.id });
+                const project = editing_project_id
+                    ? await api.update("projects", editing_project_id, session.account?.is_superuser ? { ...payload, ...owner_context } : payload)
+                    : await api.create("projects", { ...payload, ...owner_context });
                 created_project_id = project.id;
                 const members = data.members.filter(item => item.project === project.id);
                 for (const member of members) if (!project_people_ids.includes(member.assignment)) await api.remove("project-members", member.id);
@@ -4657,6 +4685,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     const workspace_projects = active_workspace ? projects.filter(project => active_workspace.projectIds.includes(String(project.id))) : projects;
+    const owner_department_view = real && Boolean(session.account?.is_superuser) && active_module === "department_projects";
     const workspace_tasks = tasksInWorkspace(active_workspace, tasks);
 
     const filtered_tasks = use_memo(() => {
@@ -5504,6 +5533,13 @@ function TaskAppContent({ externalModules = {} }) {
                 project_avatar_data_url,
                 project_color,
                 project_people_ids,
+                project_unit_id,
+                set_project_unit_id,
+                project_owner_assignment_id,
+                set_project_owner_assignment_id,
+                is_owner: Boolean(session.account?.is_superuser),
+                units: data?.units || session.units || [],
+                directory: session.directory || [],
                 set_api_error,
                 set_active_modal: (modal_id) => {
                     if (modal_id === null) set_editing_project_id(null);
@@ -5573,7 +5609,11 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     <WorkspacesModule TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
                     <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={(task_id, ids) => real ? mutate(() => saveFollowers(task_id, ids, data)) : set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task))} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
-                    projects: active_module === "department_projects" ? projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id) : workspace_projects,
+                    projects: active_module === "department_projects"
+                        ? owner_department_view ? projects.filter(isActiveProject) : projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id)
+                        : workspace_projects,
+                    units: data?.units || session.units || [],
+                    group_by_unit: owner_department_view,
                     selected_project_id,
                     tasks: stored_tasks,
                     search_query,

@@ -653,6 +653,65 @@ class PermissionControlPlaneSecurityTests(TestCase):
         rule = JobRolePermission.objects.get()
         self.assertEqual(rule.created_by_account, self.owner)
 
+    def test_owner_can_remove_one_role_rule_without_removing_the_others(self):
+        client = self._client(self.owner, self.owner_assignment, mfa="recent")
+        created = client.post(
+            "/api/v2/permissions/role-policies/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permission": str(self.read_permission.id),
+                "rules": [
+                    {"effect": "allow", "scope_type": "own_unit"},
+                    {
+                        "effect": "deny",
+                        "scope_type": "specific_unit",
+                        "target_unit": str(self.operations.id),
+                    },
+                ],
+                "reason": "Configuración inicial de reglas por alcance",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 200, created.data)
+
+        updated = client.post(
+            "/api/v2/permissions/role-policies/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permission": str(self.read_permission.id),
+                "rules": [{"effect": "allow", "scope_type": "own_unit"}],
+                "reason": "Retiro exclusivo de la excepción departamental",
+                "expected_revision": created.data["revision"],
+            },
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200, updated.data)
+        remaining = JobRolePermission.objects.get(
+            job_role=self.manager_role,
+            permission=self.read_permission,
+        )
+        self.assertEqual(remaining.scope_type, JobRolePermission.SCOPE_OWN_UNIT)
+
+        cleared = client.post(
+            "/api/v2/permissions/role-policies/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permission": str(self.read_permission.id),
+                "rules": [],
+                "reason": "Retiro de la última regla para volver al estado sin política",
+                "expected_revision": updated.data["revision"],
+            },
+            format="json",
+        )
+        self.assertEqual(cleared.status_code, 200, cleared.data)
+        self.assertEqual(cleared.data["rules"], [])
+        self.assertFalse(
+            JobRolePermission.objects.filter(
+                job_role=self.manager_role,
+                permission=self.read_permission,
+            ).exists()
+        )
+
     def test_delegated_authority_enforces_permission_allowlist_and_unit_scope(self):
         self._delegated_authority(permissions=[self.read_permission])
         client = self._client(self.staff, self.staff_assignment)
