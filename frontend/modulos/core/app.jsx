@@ -6,8 +6,8 @@ import PermissionsModule from "../permisos/permissions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 
 const baseNavigation = [
-    { id: "home", label: "Inicio", icon: "home", group: "work" },
-    { id: "tasks", label: "Tareas", icon: "check", default: true, brand: true, group: "work" },
+    { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
+    { id: "tasks", label: "Tareas", icon: "check", brand: true, group: "work" },
     { id: "inbox", label: "Bandeja de entrada", icon: "inbox", group: "work" },
     { id: "reports", label: "Informes", icon: "reports", group: "management" },
     { id: "permissions", label: "Permisos", icon: "permissions", group: "management" },
