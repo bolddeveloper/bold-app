@@ -242,3 +242,32 @@ class AdministrationApiTests(TestCase):
             "reason": "Eliminación del cargo temporal",
         }, format="json")
         self.assertEqual(removed.status_code, 204, removed.data)
+
+    def test_owner_position_is_visible_but_cannot_be_modified_even_with_recent_mfa(self):
+        owner_position = self.owner.employee.position_assignments.get(
+            is_active=True,
+            released_at__isnull=True,
+        ).position
+        overview = self.client.get("/api/v2/administration/organization/")
+        row = next(item for item in overview.data["positions"] if str(item["id"]) == str(owner_position.id))
+        self.assertTrue(row["is_protected"])
+
+        response = self.client.patch(
+            f"/api/v2/administration/positions/{owner_position.id}/",
+            {
+                "is_open": not owner_position.is_open,
+                "reason": "Intento de modificar la plaza protegida",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403, response.data)
+        owner_position.refresh_from_db()
+        self.assertEqual(owner_position.is_open, row["is_open"])
+
+        deleted = self.client.delete(
+            f"/api/v2/administration/positions/{owner_position.id}/",
+            {"reason": "Intento de eliminar la plaza protegida"},
+            format="json",
+        )
+        self.assertEqual(deleted.status_code, 405, getattr(deleted, "data", None))
+        self.assertTrue(type(owner_position).objects.filter(pk=owner_position.id).exists())

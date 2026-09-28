@@ -202,11 +202,12 @@ class PositionAdminSerializer(serializers.ModelSerializer):
     unit_name = serializers.CharField(source="unit.name", read_only=True)
     role_title = serializers.CharField(source="job_role.title", read_only=True)
     occupied = serializers.SerializerMethodField()
+    is_protected = serializers.SerializerMethodField()
 
     class Meta:
         model = Position
-        fields = ["id", "unit", "unit_name", "job_role", "role_title", "reports_to_position", "display_order", "is_open", "created_at", "occupied", "reason"]
-        read_only_fields = ["id", "display_order", "created_at", "occupied"]
+        fields = ["id", "unit", "unit_name", "job_role", "role_title", "reports_to_position", "display_order", "is_open", "created_at", "occupied", "is_protected", "reason"]
+        read_only_fields = ["id", "display_order", "created_at", "occupied", "is_protected"]
 
     def create(self, validated_data):
         validated_data.pop("reason")
@@ -224,6 +225,13 @@ class PositionAdminSerializer(serializers.ModelSerializer):
 
     def get_occupied(self, position):
         return position.assignments.filter(is_active=True, released_at__isnull=True).exists()
+
+    def get_is_protected(self, position):
+        return position.assignments.filter(
+            is_active=True,
+            released_at__isnull=True,
+            employee__user_account__is_superuser=True,
+        ).exists()
 
     def validate_reports_to_position(self, reports_to):
         if self.instance and reports_to and reports_to.id == self.instance.id:
