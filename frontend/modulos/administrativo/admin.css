@@ -69,6 +69,14 @@
 .admin_detail_grid dt { color: #64748b; font-size: 12px; }
 .admin_detail_grid dd { margin: 5px 0 0; font-weight: 700; }
 .admin_action_grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin_section_heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.admin_section_heading h3 { margin-bottom: 0; }
+.admin_section_heading button, .admin_assignment_form button { min-height: 40px; border: 1px solid #dce2ea; border-radius: 9px; padding: 9px 12px; background: #fff; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.admin_section_heading button:disabled { cursor: not-allowed; opacity: .5; }
+.admin_employee_positions > small { display: block; margin-top: 8px; color: #64748b; }
+.admin_assignment_form { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.4fr) auto; align-items: end; gap: 12px; margin-top: 14px; padding: 14px; border: 1px solid var(--bold_line, #dce2ea); border-radius: 11px; background: var(--bold_surface_soft, #f8fafc); }
+.admin_assignment_form label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.admin_assignment_form textarea { min-height: 44px; max-height: 110px; border: 1px solid var(--bold_line, #ccd4df); border-radius: 8px; padding: 10px; background: var(--bold_surface, #fff); color: inherit; font: inherit; resize: vertical; }
 .admin_action_grid .is_danger, .admin_danger_button { color: #a51d2d; border-color: #efbcc2; }
 .admin_security_note { display: flex; align-items: center; gap: 7px; color: #64748b; font-size: 13px; }
 .admin_danger_zone { margin-top: 20px; padding: 16px; border: 1px solid #f0c3c7; border-radius: 12px; background: #fff9f9; }
@@ -290,6 +298,8 @@
 @media (max-width: 1000px) {
     .admin_metric_grid { grid-template-columns: repeat(2, 1fr); }
     .admin_detail_grid { grid-template-columns: repeat(2, 1fr); }
+    .admin_assignment_form { grid-template-columns: 1fr; align-items: stretch; }
+    .admin_assignment_form button { justify-self: start; }
 }
 @media (max-width: 720px) {
     .administration_module { padding: 14px; }

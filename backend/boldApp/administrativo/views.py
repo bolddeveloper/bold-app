@@ -42,7 +42,7 @@ from .serializers import (
 from .services import complete_administrative_action, create_administrative_action, fail_administrative_action, record_system_event
 
 
-SENSITIVE_EMPLOYEE_ACTIONS = {"revoke_sessions", "reset_mfa", "send_password_reset", "set_temporary_password", "deactivate_account", "reactivate_account", "offboard"}
+SENSITIVE_EMPLOYEE_ACTIONS = {"assign_position", "revoke_sessions", "reset_mfa", "send_password_reset", "set_temporary_password", "deactivate_account", "reactivate_account", "offboard"}
 
 DEFAULT_DASHBOARD_LAYOUT = [
     {"type": "metric", "metrics": ["organization.employees_active"], "visualization": "circle"},
@@ -265,11 +265,19 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="assign-position")
     def assign_position(self, request, pk=None):
         employee = self.get_object()
+        if not employee.is_active:
+            return Response({"detail": "No se puede asignar una plaza a un empleado inactivo."}, status=status.HTTP_400_BAD_REQUEST)
         serializer = AssignmentCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        assignment = PositionAssignment.objects.create(employee=employee, position=serializer.validated_data["position"])
-        admin_action = create_administrative_action(request, "position_assigned", serializer.validated_data["reason"], employee, getattr(employee, "user_account", None), {"assignment_id": str(assignment.id)})
-        complete_administrative_action(admin_action, request, metadata={"assignment_id": str(assignment.id)})
+        with transaction.atomic():
+            position = Position.objects.select_for_update().get(pk=serializer.validated_data["position"].pk)
+            if not position.is_open:
+                raise ValidationError({"position": "La plaza seleccionada está cerrada."})
+            if PositionAssignment.objects.filter(position=position, is_active=True, released_at__isnull=True).exists():
+                raise ValidationError({"position": "La plaza seleccionada ya está ocupada."})
+            assignment = PositionAssignment.objects.create(employee=employee, position=position)
+            admin_action = create_administrative_action(request, "position_assigned", serializer.validated_data["reason"], employee, getattr(employee, "user_account", None), {"assignment_id": str(assignment.id), "position_id": str(position.id)})
+            complete_administrative_action(admin_action, request, metadata={"assignment_id": str(assignment.id), "position_id": str(position.id)})
         return Response(AdminEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path="sessions")

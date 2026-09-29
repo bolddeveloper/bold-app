@@ -89,6 +89,8 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
         return email
 
     def validate_position(self, position):
+        if position and not position.is_open:
+            raise serializers.ValidationError("La plaza seleccionada está cerrada.")
         if position and PositionAssignment.objects.filter(position=position, is_active=True, released_at__isnull=True).exists():
             raise serializers.ValidationError("La plaza seleccionada ya está ocupada.")
         return position
@@ -290,6 +292,8 @@ class AssignmentCreateSerializer(serializers.Serializer):
     reason = serializers.CharField(min_length=8, max_length=1000)
 
     def validate_position(self, position):
+        if not position.is_open:
+            raise serializers.ValidationError("La plaza seleccionada está cerrada.")
         if PositionAssignment.objects.filter(position=position, is_active=True, released_at__isnull=True).exists():
             raise serializers.ValidationError("La plaza seleccionada ya está ocupada.")
         return position

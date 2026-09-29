@@ -220,6 +220,54 @@ class AdministrationApiTests(TestCase):
         self.assertFalse(AuthSession.objects.filter(user_account=target, revoked_at__isnull=True).exists())
         self.assertTrue(AdministrativeAction.objects.filter(action_type="mfa_reset", target_account=target).exists())
 
+    def test_owner_can_assign_an_open_vacant_position_to_existing_employee(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        direction = OrganizationalUnit.objects.get(is_control_plane=True)
+        position = Position.objects.create(
+            unit=direction,
+            job_role=JobRole.objects.first(),
+            display_order=91,
+            is_open=True,
+        )
+        response = self.client.post(
+            f"/api/v2/administration/employees/{target.employee_id}/assign-position/",
+            {"position": str(position.id), "reason": "Nueva responsabilidad en Dirección"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        assignment = PositionAssignment.objects.get(position=position, employee=target.employee, is_active=True)
+        self.assertTrue(AdministrativeAction.objects.filter(action_type="position_assigned", target_employee=target.employee, metadata__assignment_id=str(assignment.id)).exists())
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.position_assigned", target_id=target.employee_id).exists())
+
+    def test_position_assignment_requires_recent_mfa_and_an_open_vacancy(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        direction = OrganizationalUnit.objects.get(is_control_plane=True)
+        role = JobRole.objects.first()
+        vacancy = Position.objects.create(unit=direction, job_role=role, display_order=92, is_open=True)
+        payload = {"position": str(vacancy.id), "reason": "Asignación administrativa de prueba"}
+        weak_session = AuthSession.objects.create(
+            user_account=self.owner,
+            token_hash="4" * 64,
+            expires_at=self.owner_session.expires_at,
+            auth_strength="password",
+            credentials_version=self.owner.credentials_version,
+        )
+        weak_client = APIClient(); weak_client.force_authenticate(self.owner, weak_session)
+        weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
+        self.assertEqual(weak_client.post(f"/api/v2/administration/employees/{target.employee_id}/assign-position/", payload, format="json").status_code, 403)
+        self.assertFalse(PositionAssignment.objects.filter(position=vacancy).exists())
+
+        vacancy.is_open = False; vacancy.save(update_fields=["is_open"])
+        closed = self.client.post(f"/api/v2/administration/employees/{target.employee_id}/assign-position/", payload, format="json")
+        self.assertEqual(closed.status_code, 400)
+        occupied = self.owner_assignment.position
+        occupied_response = self.client.post(
+            f"/api/v2/administration/employees/{target.employee_id}/assign-position/",
+            {"position": str(occupied.id), "reason": "Intento sobre plaza ya ocupada"},
+            format="json",
+        )
+        self.assertEqual(occupied_response.status_code, 400)
+
     def test_offboarding_transfers_tasks_and_project_ownership_then_deactivates_employee(self):
         samuel = UserAccount.objects.get(email="samuel@bold.gt")
         source = PositionAssignment.objects.get(employee=samuel.employee, is_active=True)
