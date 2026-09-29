@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="es" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="assets/music/audio-data.js"></script>
+    <style>
+      :root {
+        --paper: #f4f3f1;
+        --white: #ffffff;
+        --ink: #2c3038;
+        --charcoal: #3f3f41;
+        --muted: #686d76;
+        --line: #dedbd6;
+        --red: #e73535;
+        --red-dark: #c9232b;
+        --mint: #bde9cf;
+        --audio: 0;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        isolation: isolate;
+        background: var(--paper);
+      }
+      .scene { position: absolute; inset: 0; overflow: hidden; }
+      .scene-inner { position: absolute; inset: 0; overflow: hidden; }
+      .dark { color: var(--paper); background: var(--charcoal); }
+      .eyebrow {
+        color: var(--red);
+        font-size: 24px;
+        line-height: 1;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+      }
+      .headline {
+        margin: 0;
+        font-size: 108px;
+        line-height: .96;
+        font-weight: 780;
+        letter-spacing: -.065em;
+      }
+      .subhead {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.25;
+        font-weight: 520;
+        letter-spacing: -.025em;
+        color: var(--muted);
+      }
+      .brand-word {
+        font-size: 124px;
+        line-height: .78;
+        font-weight: 850;
+        letter-spacing: -.075em;
+      }
+      .brand-dot {
+        display: inline-block;
+        width: 25px;
+        height: 25px;
+        margin-left: 10px;
+        border-radius: 50%;
+        background: var(--red);
+        vertical-align: top;
+        transform: scale(calc(1 + var(--audio) * .12));
+        box-shadow: 0 0 calc(22px + var(--audio) * 24px) rgba(231,53,53,.46);
+      }
+      .soft-grid {
+        position: absolute;
+        inset: 0;
+        opacity: .11;
+        background-image:
+          linear-gradient(rgba(255,255,255,.18) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,.18) 1px, transparent 1px);
+        background-size: 90px 90px;
+      }
+      .red-orbit {
+        position: absolute;
+        width: 620px;
+        height: 620px;
+        right: -180px;
+        top: -220px;
+        border: 2px solid rgba(231,53,53,.58);
+        border-radius: 50%;
+      }
+      .red-orbit::after {
+        content: "";
+        position: absolute;
+        inset: 105px;
+        border: 2px solid rgba(231,53,53,.28);
+        border-radius: 50%;
+      }
+
+      /* Scene 1 */
+      #scene-1 .copy { position: absolute; left: 142px; top: 162px; width: 1160px; }
+      #scene-1 .eyebrow { color: #eb5656; }
+      #scene-1 .headline { max-width: 1200px; color: var(--paper); }
+      #scene-1 .line { display: block; overflow: hidden; padding-bottom: 12px; }
+      #scene-1 .line > span { display: block; }
+      #scene-1 .underline {
+        position: absolute;
+        left: 144px;
+        top: 694px;
+        width: 365px;
+        height: 8px;
+        border-radius: 9px;
+        background: var(--red);
+        transform-origin: left center;
+      }
+      #scene-1 .mini-brand { position: absolute; left: 145px; bottom: 90px; display: flex; align-items: center; gap: 22px; }
+      #scene-1 .mini-brand .brand-word { font-size: 55px; }
+      #scene-1 .mini-brand p { margin: 2px 0 0; color: #b9b7b2; font-size: 24px; }
+      .float-chip {
+        position: absolute;
+        right: 126px;
+        min-width: 300px;
+        padding: 22px 28px;
+        border-radius: 18px;
+        color: var(--ink);
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 20px 60px rgba(0,0,0,.2);
+        font-size: 25px;
+        font-weight: 700;
+      }
+      .float-chip::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 14px; border-radius: 50%; background: var(--red); }
+      #chip-1 { top: 230px; }
+      #chip-2 { top: 350px; right: 225px; }
+      #chip-3 { top: 470px; right: 105px; }
+
+      /* Shared application shell */
+      .app-shell {
+        position: absolute;
+        overflow: hidden;
+        border: 1px solid #dedbd6;
+        border-radius: 28px;
+        background: var(--white);
+        box-shadow: 0 40px 90px rgba(47,42,38,.17);
+      }
+      .sidebar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 235px;
+        padding: 34px 26px;
+        background: var(--charcoal);
+        color: #e9e7e3;
+      }
+      .sidebar-logo { margin-bottom: 48px; font-size: 44px; font-weight: 850; letter-spacing: -.06em; }
+      .sidebar-logo i { display: inline-block; width: 10px; height: 10px; margin-left: 4px; border-radius: 50%; background: var(--red); vertical-align: top; }
+      .nav-item { display: flex; align-items: center; gap: 14px; height: 49px; margin-bottom: 9px; padding: 0 16px; border-radius: 12px; color: #bbb9b5; font-size: 18px; font-weight: 620; }
+      .nav-item.active { color: #fff; background: rgba(255,255,255,.11); }
+      .nav-icon { width: 11px; height: 11px; border-radius: 3px; border: 2px solid currentColor; }
+      .app-main { position: absolute; inset: 0 0 0 235px; padding: 40px 46px; }
+      .app-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 34px; }
+      .app-top h2 { margin: 0; font-size: 36px; line-height: 1; letter-spacing: -.04em; }
+      .avatar { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: #f4d6d6; color: #bd2128; font-weight: 800; }
+      .card {
+        border: 1px solid #e3e0dc;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 9px 25px rgba(44,48,56,.06);
+      }
+
+      /* Scene 2 */
+      #scene-2 { background: var(--paper); }
+      #scene-2 .intro { position: absolute; left: 110px; top: 70px; width: 520px; }
+      #scene-2 .intro h2 { margin: 14px 0 0; font-size: 64px; line-height: .96; letter-spacing: -.055em; }
+      #dashboard { left: 530px; top: 76px; width: 1290px; height: 918px; }
+      .dashboard-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 20px; }
+      .today-card { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; height: 126px; padding: 28px 34px; background: #fff6f4; border-color: #f0d1cd; }
+      .today-card strong { display: block; font-size: 25px; letter-spacing: -.03em; }
+      .today-card span { color: var(--muted); font-size: 18px; }
+      .today-number { font-size: 55px; font-weight: 820; color: var(--red); }
+      .metric-card { height: 194px; padding: 28px; }
+      .metric-label { color: var(--muted); font-size: 17px; font-weight: 700; }
+      .metric-value { margin-top: 24px; font-size: 57px; line-height: 1; font-weight: 820; letter-spacing: -.05em; }
+      .metric-value small { font-size: 20px; color: var(--muted); font-weight: 650; letter-spacing: 0; }
+      .bar { height: 9px; margin-top: 25px; border-radius: 10px; background: #ece9e5; overflow: hidden; }
+      .bar > i { display: block; width: 74%; height: 100%; border-radius: inherit; background: var(--red); transform-origin: left center; }
+      .tasks-card { height: 214px; padding: 28px; }
+      .task-row { display: flex; align-items: center; gap: 13px; margin-top: 18px; font-size: 18px; font-weight: 620; }
+      .check { width: 23px; height: 23px; border: 2px solid #cbc7c2; border-radius: 7px; }
+      .status-pill { margin-left: auto; padding: 7px 11px; border-radius: 999px; background: #fff0d3; color: #8f5f0b; font-size: 13px; }
+      .donut { position: relative; width: 122px; height: 122px; border-radius: 50%; background: conic-gradient(var(--red) 0 47%, #f0b54d 47% 77%, #d9d6d1 77% 100%); }
+      .donut::after { content: ""; position: absolute; inset: 20px; border-radius: 50%; background: #fff; }
+      .status-card { display: flex; align-items: center; justify-content: space-between; height: 214px; padding: 28px; }
+      .status-card strong { display: block; margin-top: 10px; font-size: 32px; }
+      #scene-2 .callout { position: absolute; left: 108px; bottom: 112px; width: 330px; font-size: 27px; line-height: 1.27; color: var(--muted); }
+      #scene-2 .callout b { color: var(--ink); }
+
+      /* Scene 3 */
+      #scene-3 { background: #efede9; }
+      #scene-3 .top-copy { position: absolute; left: 110px; top: 67px; z-index: 3; }
+      #scene-3 .top-copy h2 { margin: 11px 0 0; font-size: 57px; line-height: .98; letter-spacing: -.055em; }
+      #workflow { left: 110px; top: 238px; width: 1700px; height: 765px; }
+      #workflow .app-main { padding: 35px 42px; }
+      .project-head { display: flex; align-items: end; justify-content: space-between; margin-bottom: 26px; }
+      .project-head h2 { margin: 0 0 8px; font-size: 31px; letter-spacing: -.035em; }
+      .project-head p { margin: 0; color: var(--muted); font-size: 16px; }
+      .new-task-btn { padding: 15px 21px; border-radius: 12px; background: var(--red-dark); color: #fff; font-size: 17px; font-weight: 750; box-shadow: 0 10px 24px rgba(231,53,53,.25); }
+      .board { position: relative; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; height: 455px; }
+      .column { padding: 18px; border-radius: 16px; background: #f5f3f0; }
+      .column-head { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 16px; font-weight: 780; }
+      .column-head span { color: var(--muted); }
+      .column:nth-child(2) > .task-card { margin-top: 125px; }
+      .task-card { min-height: 105px; margin-bottom: 13px; padding: 18px; border-radius: 14px; background: #fff; border: 1px solid #e4e1dd; box-shadow: 0 5px 13px rgba(44,48,56,.06); }
+      .task-card strong { display: block; font-size: 17px; line-height: 1.25; }
+      .task-card small { display: block; margin-top: 17px; color: var(--muted); }
+      #moving-task { position: absolute; left: 18px; top: 54px; width: 420px; z-index: 6; border-color: rgba(231,53,53,.32); box-shadow: 0 16px 38px rgba(44,48,56,.18); }
+      #moving-task .tag { display: inline-block; margin-top: 14px; padding: 5px 9px; border-radius: 7px; background: #fde3e1; color: var(--red-dark); font-size: 12px; font-weight: 750; }
+      .placeholder { opacity: .6; }
+      .project-progress { display: flex; align-items: center; gap: 18px; height: 57px; margin-top: 19px; }
+      .project-progress strong { font-size: 18px; }
+      .progress-track { flex: 1; height: 11px; border-radius: 20px; background: #e6e2dd; overflow: hidden; }
+      #progress-fill { width: 68%; height: 100%; border-radius: inherit; background: var(--red); transform-origin: left center; }
+      #progress-number { min-width: 54px; color: var(--red); font-size: 25px; font-weight: 820; }
+      #cursor {
+        position: absolute;
+        z-index: 20;
+        left: 1540px;
+        top: 88px;
+        width: 58px;
+        height: 76px;
+        filter: drop-shadow(0 8px 8px rgba(0,0,0,.25));
+      }
+      #cursor svg { display: block; width: 100%; height: 100%; }
+      .click-ring { position: absolute; z-index: 19; left: 0; top: 0; width: 55px; height: 55px; border: 4px solid var(--red); border-radius: 50%; opacity: 0; }
+      #task-created {
+        position: absolute;
+        left: 140px;
+        top: 155px;
+        z-index: 25;
+        padding: 14px 20px;
+        border-radius: 999px;
+        background: var(--charcoal);
+        color: #fff;
+        font-size: 17px;
+        font-weight: 700;
+        box-shadow: 0 12px 28px rgba(0,0,0,.18);
+      }
+
+      /* Scene 4 */
+      #scene-4 .closing-copy { position: absolute; left: 118px; top: 86px; }
+      #scene-4 .closing-copy h2 { margin: 14px 0 0; color: var(--paper); font-size: 67px; line-height: .98; letter-spacing: -.055em; }
+      .signal-row { position: absolute; left: 116px; top: 300px; display: flex; gap: 26px; }
+      .signal-card { width: 340px; height: 270px; padding: 32px; border-radius: 22px; color: var(--ink); background: var(--paper); box-shadow: 0 24px 50px rgba(0,0,0,.18); }
+      .signal-card:nth-child(2) { width: 390px; }
+      .signal-card:nth-child(3) { width: 420px; }
+      .signal-card .label { color: var(--muted); font-size: 18px; font-weight: 700; }
+      .signal-card .big { margin-top: 28px; font-size: 72px; line-height: .95; font-weight: 850; letter-spacing: -.055em; }
+      .signal-card .desc { margin-top: 20px; color: var(--muted); font-size: 18px; }
+      .security-lock { width: 80px; height: 65px; margin-top: 31px; border: 8px solid var(--red); border-radius: 14px; position: relative; }
+      .security-lock::before { content: ""; position: absolute; width: 42px; height: 39px; left: 11px; top: -38px; border: 8px solid var(--red); border-bottom: 0; border-radius: 24px 24px 0 0; }
+      #final-lockup { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      #final-lockup .brand-word { font-size: 190px; color: var(--paper); }
+      #final-lockup .brand-dot { width: 36px; height: 36px; margin-left: 15px; }
+      #final-lockup p { margin: 48px 0 0; color: #cfcdc8; font-size: 37px; font-weight: 520; letter-spacing: -.025em; }
+      #final-lockup .cta { margin-top: 42px; padding: 17px 28px; border-radius: 999px; background: var(--red); color: #fff; font-size: 20px; font-weight: 780; }
+      #red-wipe { position: absolute; z-index: 100; inset: 0; background: var(--red); transform: scaleX(0); transform-origin: left center; pointer-events: none; }
+      #ambient-dot { position: absolute; z-index: 95; right: 42px; bottom: 38px; width: 12px; height: 12px; border-radius: 50%; background: var(--red); transform: scale(calc(1 + var(--audio) * 1.5)); opacity: .7; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="21" data-width="1920" data-height="1080" data-fps="30">
+      <section id="scene-1" class="clip scene dark" data-start="0" data-duration="3.7" data-track-index="0">
+        <div class="scene-inner" id="scene-1-inner">
+          <div class="soft-grid"></div><div class="red-orbit" data-layout-allow-overflow></div>
+          <div class="copy">
+            <div class="eyebrow">Tu equipo ya tiene suficiente ruido</div>
+            <h1 class="headline">
+              <span class="line"><span id="s1-line-1">Todo tu trabajo.</span></span>
+              <span class="line"><span id="s1-line-2">Un solo lugar.</span></span>
+            </h1>
+          </div>
+          <div class="underline" id="s1-underline"></div>
+          <div class="mini-brand"><div class="brand-word">bold<span class="brand-dot"></span></div><p>El trabajo, con claridad.</p></div>
+          <div id="chip-1" class="float-chip">Prioridades</div>
+          <div id="chip-2" class="float-chip">Proyectos</div>
+          <div id="chip-3" class="float-chip">Resultados</div>
+        </div>
+      </section>
+
+      <section id="scene-2" class="clip scene" data-start="3.7" data-duration="4.7" data-track-index="0">
+        <div class="scene-inner" id="scene-2-inner">
+          <div class="intro"><div class="eyebrow">Hoy, en foco</div><h2>Esto es lo más importante para hoy.</h2></div>
+          <p class="callout"><b>Una vista.</b><br />Las señales que tu equipo necesita para avanzar.</p>
+          <div id="dashboard" class="app-shell">
+            <aside class="sidebar">
+              <div class="sidebar-logo">bold<i></i></div>
+              <div class="nav-item active"><i class="nav-icon"></i> Inicio</div>
+              <div class="nav-item"><i class="nav-icon"></i> Proyectos</div>
+              <div class="nav-item"><i class="nav-icon"></i> Tareas</div>
+              <div class="nav-item"><i class="nav-icon"></i> Reportes</div>
+            </aside>
+            <main class="app-main">
+              <header class="app-top"><h2>Buenos días</h2><div class="avatar">BA</div></header>
+              <div class="dashboard-grid">
+                <div class="card today-card widget"><div><strong>Esto es lo más importante para hoy</strong><span>3 prioridades activas</span></div><div class="today-number">03</div></div>
+                <div class="card metric-card widget"><div class="metric-label">Indicadores · Lanzamiento Q4</div><div class="metric-value">74<small>% completado</small></div><div class="bar"><i id="dash-bar"></i></div></div>
+                <div class="card metric-card widget"><div class="metric-label">Mis tareas</div><div class="metric-value">18 <small>completadas</small></div><div class="bar"><i style="width:82%;background:#3f3f41"></i></div></div>
+                <div class="card tasks-card widget"><div class="metric-label">Proyectos</div><div class="task-row"><i class="check"></i> Lanzamiento Q4 <span class="status-pill">En curso</span></div><div class="task-row"><i class="check"></i> Portal de clientes <span class="status-pill">Revisión</span></div></div>
+                <div class="card status-card widget"><div><div class="metric-label">Tareas por estado</div><strong>47% en curso</strong></div><div class="donut"></div></div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="clip scene" data-start="8.4" data-duration="7.4" data-track-index="0">
+        <div class="scene-inner" id="scene-3-inner">
+          <div class="top-copy"><div class="eyebrow">Del plan al movimiento</div><h2>El trabajo avanza.<br />Todos lo ven.</h2></div>
+          <div id="workflow" class="app-shell">
+            <aside class="sidebar">
+              <div class="sidebar-logo">bold<i></i></div>
+              <div class="nav-item"><i class="nav-icon"></i> Inicio</div>
+              <div class="nav-item active"><i class="nav-icon"></i> Proyectos</div>
+              <div class="nav-item"><i class="nav-icon"></i> Tareas</div>
+              <div class="nav-item"><i class="nav-icon"></i> Reportes</div>
+            </aside>
+            <main class="app-main">
+              <div class="project-head"><div><h2>Lanzamiento Q4</h2><p>12 tareas · 3 personas</p></div><div class="new-task-btn">+ Nueva tarea</div></div>
+              <div class="board">
+                <div class="column"><div class="column-head">Por hacer <span>4</span></div><div class="task-card placeholder" data-layout-allow-occlusion><strong>Ajustar mensaje principal</strong><small>Esta semana</small></div></div>
+                <div class="column"><div class="column-head">En curso <span id="in-progress-count">3</span></div><div class="task-card"><strong>Validar métricas del trimestre</strong><small>Hoy</small></div></div>
+                <div class="column"><div class="column-head">Completado <span>5</span></div><div class="task-card"><strong>Definir alcance</strong><small>Completada</small></div></div>
+                <div id="moving-task" class="task-card" data-layout-allow-occlusion><strong>Preparar presentación de clientes</strong><span class="tag">Prioridad alta</span></div>
+              </div>
+              <div class="project-progress"><strong>Progreso del proyecto</strong><div class="progress-track"><div id="progress-fill"></div></div><div id="progress-number">68%</div></div>
+            </main>
+            <div id="cursor">
+              <svg viewBox="0 0 58 76" aria-hidden="true"><path d="M5 4 L50 45 L31 48 L43 68 L31 74 L20 53 L6 66 Z" fill="#fff" stroke="#2c3038" stroke-width="5" stroke-linejoin="round" /></svg>
+            </div>
+            <div id="click-ring" class="click-ring"></div>
+            <div id="task-created">Tarea creada ✓</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="clip scene dark" data-start="15.8" data-duration="5.2" data-track-index="0">
+        <div class="scene-inner" id="scene-4-inner">
+          <div class="soft-grid"></div>
+          <div class="closing-copy"><div class="eyebrow">Claridad en cada nivel</div><h2>Decidir mejor.<br />Avanzar juntos.</h2></div>
+          <div class="signal-row">
+            <div class="signal-card"><div class="label">Proyecto</div><div class="big">74%</div><div class="desc">Lanzamiento Q4 en curso</div></div>
+            <div class="signal-card"><div class="label">Tareas</div><div class="big">18</div><div class="desc">Completadas esta semana</div></div>
+            <div class="signal-card"><div class="label">Seguridad y acceso</div><div class="security-lock"></div><div class="desc">Cada persona, en el lugar correcto</div></div>
+          </div>
+          <div id="final-lockup">
+            <div class="brand-word">bold<span class="brand-dot"></span></div>
+            <p>Todo tu trabajo, en un solo lugar.</p>
+            <div class="cta">Descubre una forma más clara de avanzar</div>
+          </div>
+        </div>
+      </section>
+
+      <div id="red-wipe"></div>
+      <div id="ambient-dot"></div>
+
+      <audio id="music" data-start="0" data-duration="21" data-track-index="1" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-volume="1" data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.12},{"t":0.45,"v":0.28},{"t":19.8,"v":0.28},{"t":21,"v":0}]}]}'></audio>
+      <audio id="sfx-click" data-start="8.44" data-track-index="2" src="assets/sfx/interface/click_003.ogg" data-volume="0.48"></audio>
+      <audio id="sfx-impact" data-start="12.65" data-track-index="3" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-volume="0.42"></audio>
+      <audio id="sfx-logo" data-start="17.91" data-track-index="4" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-volume="0.32"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+
+      // Poster-safe first frame: the first message is intentionally fully composed at t=0.
+      gsap.set("#scene-1-inner", { opacity: 1 });
+      gsap.set(["#scene-2-inner", "#scene-3-inner", "#scene-4-inner"], { opacity: 0 });
+      gsap.set("#final-lockup", { opacity: 0, scale: 0.92 });
+      gsap.set("#task-created", { opacity: 0, y: 12 });
+      gsap.set("#click-ring", { opacity: 0, x: 0, y: 0, scale: 1 });
+
+      tl.fromTo("#s1-line-1", { y: 110, opacity: 0 }, { y: 0, opacity: 1, duration: .72 }, .05)
+        .fromTo("#s1-line-2", { y: 110, opacity: 0 }, { y: 0, opacity: 1, duration: .72 }, .22)
+        .fromTo("#s1-underline", { scaleX: 0 }, { scaleX: 1, duration: .55, ease: "expo.out" }, .76)
+        .fromTo(".mini-brand", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: .55 }, .92)
+        .fromTo("#chip-1", { x: 110 }, { x: 0, duration: .5 }, 1.15)
+        .fromTo("#chip-2", { x: 110 }, { x: 0, duration: .5 }, 1.34)
+        .fromTo("#chip-3", { x: 110 }, { x: 0, duration: .5 }, 1.53)
+        .to(".float-chip", { y: -12, duration: 1.6, ease: "sine.inOut", stagger: .08 }, 1.9)
+        .to("#scene-1-inner", { opacity: 0, scale: .985, duration: .34, ease: "power2.in" }, 3.36);
+
+      // beat-locked: dashboard reveal lands on the 3.70s downbeat.
+      tl.fromTo("#scene-2-inner", { opacity: 0 }, { opacity: 1, duration: .2 }, 3.70)
+        .fromTo("#scene-2 .intro", { opacity: 0, x: -45 }, { opacity: 1, x: 0, duration: .58 }, 3.76)
+        .fromTo("#dashboard", { opacity: 0, x: 115, scale: .96 }, { opacity: 1, x: 0, scale: 1, duration: .72, ease: "expo.out" }, 3.74)
+        .fromTo("#dashboard .widget", { opacity: 0, y: 38, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: .48, stagger: .105 }, 4.19)
+        .fromTo("#dash-bar", { scaleX: 0 }, { scaleX: 1, duration: .8, ease: "expo.out" }, 4.75)
+        .fromTo("#scene-2 .callout", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: .5 }, 5.26)
+        .to("#dashboard", { y: -12, duration: 2.25, ease: "sine.inOut" }, 5.75)
+        .to("#scene-2-inner", { opacity: 0, scale: .99, duration: .34, ease: "power2.in" }, 8.06);
+
+      // beat-locked: interaction begins at 8.44s; the cursor uses an oversized guided path.
+      tl.fromTo("#scene-3-inner", { opacity: 0 }, { opacity: 1, duration: .18 }, 8.40)
+        .fromTo("#scene-3 .top-copy", { opacity: 0, y: -25 }, { opacity: 1, y: 0, duration: .48 }, 8.43)
+        .fromTo("#workflow", { opacity: 0, y: 70, scale: .975 }, { opacity: 1, y: 0, scale: 1, duration: .66, ease: "expo.out" }, 8.44)
+        .fromTo("#cursor", { opacity: 0, x: 90, y: -30 }, { opacity: 1, x: 0, y: 0, duration: .42 }, 9.05)
+        .to("#cursor", { x: -13, y: 9, scale: .86, duration: .24, ease: "power2.in" }, 9.55)
+        .fromTo("#click-ring", { opacity: .9, scale: .35, x: 1540, y: 88 }, { opacity: 0, scale: 1.35, duration: .38, ease: "power2.out", immediateRender: false }, 9.72)
+        .fromTo("#task-created", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .36 }, 9.82)
+        .to("#task-created", { opacity: 0, y: -12, duration: .3 }, 10.55)
+        .to("#cursor", { x: -1240, y: 300, scale: 1, duration: .92, ease: "power2.inOut" }, 10.25)
+        .to("#moving-task", { y: -6, scale: 1.035, duration: .22, ease: "power2.out" }, 11.12)
+        .to("#cursor", { x: -725, y: 318, duration: .75, ease: "power2.inOut" }, 11.34)
+        .to("#moving-task", { x: 474, y: 0, scale: 1, duration: .78, ease: "power2.inOut" }, 11.38)
+        // beat-locked: task drop and progress update land on the 12.65s strong cue.
+        .fromTo("#click-ring", { opacity: .9, scale: .35, x: 815, y: 406 }, { opacity: 0, scale: 1.4, duration: .4, immediateRender: false }, 12.60)
+        .to("#progress-fill", { width: "74%", duration: .68, ease: "expo.out" }, 12.65)
+        .call(() => { document.getElementById("progress-number").textContent = "74%"; document.getElementById("in-progress-count").textContent = "4"; }, [], 12.65)
+        .fromTo("#progress-number", { scale: .75 }, { scale: 1.12, duration: .25, yoyo: true, repeat: 1 }, 12.65)
+        .to("#cursor", { opacity: 0, y: 360, duration: .45 }, 13.40)
+        .to("#workflow", { scale: 1.012, duration: 1.2, ease: "sine.inOut" }, 13.75)
+        .to("#scene-3-inner", { opacity: 0, duration: .34, ease: "power2.in" }, 15.46);
+
+      // beat-locked: closing signals arrive on the 15.81s beat.
+      tl.fromTo("#scene-4-inner", { opacity: 0 }, { opacity: 1, duration: .18 }, 15.80)
+        .fromTo("#scene-4 .closing-copy", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: .52 }, 15.83)
+        .fromTo(".signal-card", { opacity: 0, y: 70, rotate: 2 }, { opacity: 1, y: 0, rotate: 0, duration: .52, stagger: .15 }, 16.15)
+        .to(".signal-card", { y: -10, duration: .8, stagger: .05, ease: "sine.inOut" }, 17.02)
+        .to(["#scene-4 .closing-copy", ".signal-row"], { opacity: 0, y: -28, duration: .38, ease: "power2.in" }, 17.50)
+        // beat-locked: final Bold lockup lands on the 17.91s bell cue.
+        .fromTo("#final-lockup", { opacity: 0, scale: .92 }, { opacity: 1, scale: 1, duration: .62, ease: "expo.out" }, 17.91)
+        .fromTo("#final-lockup p", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: .48 }, 18.38)
+        .fromTo("#final-lockup .cta", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .45 }, 18.76);
+
+      // beat-grid: subtle red wipes bridge 3.70s, 8.40s, and 15.80s scene boundaries.
+      [[3.50, 3.70], [8.20, 8.40], [15.60, 15.80]].forEach(([start, end]) => {
+        tl.fromTo("#red-wipe", { scaleX: 0, transformOrigin: "left center" }, { scaleX: 1, duration: .16, ease: "power2.in" }, start)
+          .to("#red-wipe", { scaleX: 0, transformOrigin: "right center", duration: .18, ease: "power2.out" }, end);
+      });
+
+      // Pre-extracted audio data drives a restrained, seek-safe brand pulse at 30fps.
+      const audioFrames = (window.BOLD_AUDIO_DATA && window.BOLD_AUDIO_DATA.frames) || [];
+      audioFrames.slice(0, 630).forEach((frame, index) => {
+        tl.call(() => document.documentElement.style.setProperty("--audio", String(frame.rms || 0)), [], index / 30);
+      });
+
+      window.__timelines.main = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

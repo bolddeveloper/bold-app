@@ -1,0 +1,14 @@
+{
+  "duration": 21,
+  "maxStaticSec": 2.2,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#s1-line-1", "bySec": 0.8 },
+    { "kind": "before", "a": "#s1-line-1", "b": "#dashboard" },
+    { "kind": "before", "a": "#dashboard", "b": "#workflow" },
+    { "kind": "before", "a": "#workflow", "b": "#final-lockup" },
+    { "kind": "staysInFrame", "selector": "#dashboard" },
+    { "kind": "staysInFrame", "selector": "#workflow" },
+    { "kind": "staysInFrame", "selector": "#final-lockup" },
+    { "kind": "keepsMoving", "withinSelector": "#root" }
+  ]
+}
