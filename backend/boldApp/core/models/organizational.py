@@ -19,6 +19,9 @@ class OrganizationalUnit(UUIDPrimaryKeyModel):
     )
     sensitivity_level = models.CharField(max_length=20)
     color_hex = models.CharField(max_length=7, null=True, blank=True)
+    # Solo esta unidad puede operar los planos de control de Administración y
+    # Permisos. Es una marca estable: el nombre visible puede cambiar.
+    is_control_plane = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -29,6 +32,11 @@ class OrganizationalUnit(UUIDPrimaryKeyModel):
             models.CheckConstraint(
                 check=~models.Q(id=models.F("parent_unit")),
                 name="organizational_unit_cannot_be_its_own_parent",
+            ),
+            models.UniqueConstraint(
+                fields=["is_control_plane"],
+                condition=models.Q(is_control_plane=True),
+                name="unique_control_plane_unit",
             ),
         ]
 

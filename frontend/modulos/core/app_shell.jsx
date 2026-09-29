@@ -21,6 +21,11 @@ export function ShellProvider({ children, navigation }) {
         document.documentElement.dataset.boldTheme = is_dark_mode ? "dark" : "light";
         document.documentElement.classList.toggle("theme_dark", is_dark_mode);
     }, [is_dark_mode]);
+    useEffect(() => {
+        if (!navigation.some(item => item.id === active_module)) {
+            set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
+        }
+    }, [active_module, navigation]);
     return <ShellContext.Provider value={{ active_module, set_active_module, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, children }) {

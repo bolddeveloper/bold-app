@@ -39,21 +39,37 @@ class AdministrationApiTests(TestCase):
         self.owner.is_superuser = True
         self.owner.is_staff = True
         self.owner.save(update_fields=["is_superuser", "is_staff", "updated_at"])
+        direction = OrganizationalUnit.objects.get(is_control_plane=True)
+        direction_position = Position.objects.create(
+            unit=direction,
+            job_role=self.owner.employee.position_assignments.first().position.job_role,
+            display_order=40,
+        )
+        self.owner_assignment = PositionAssignment.objects.create(
+            employee=self.owner.employee,
+            position=direction_position,
+        )
         request = APIRequestFactory().get("/", REMOTE_ADDR="127.0.0.1")
         _, self.owner_session = create_session(self.owner, request, auth_strength="password_totp", mfa_verified=True)
         self.client = APIClient()
         self.client.force_authenticate(self.owner, self.owner_session)
+        self.client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
 
     def test_only_superuser_can_open_administration_and_sensitive_actions_require_recent_mfa(self):
         self.assertEqual(self.client.get("/api/v2/administration/dashboard/").status_code, 200)
         ordinary = UserAccount.objects.get(email="samuel@bold.gt")
         ordinary_client = APIClient(); ordinary_client.force_authenticate(ordinary)
+        ordinary_client.credentials(HTTP_X_ASSIGNMENT_ID=str(ordinary.employee.position_assignments.get(is_active=True, released_at__isnull=True).id))
+        self.assertEqual(ordinary_client.get("/api/v2/administration/dashboard/").status_code, 403)
+        ordinary.is_superuser = True
+        ordinary.save(update_fields=["is_superuser", "updated_at"])
         self.assertEqual(ordinary_client.get("/api/v2/administration/dashboard/").status_code, 403)
 
         weak_client = APIClient(); weak_client.force_authenticate(self.owner, AuthSession.objects.create(
             user_account=self.owner, token_hash="1" * 64, expires_at=self.owner_session.expires_at,
             auth_strength="password", credentials_version=self.owner.credentials_version,
         ))
+        weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
         samuel = ordinary.employee
         response = weak_client.post(f"/api/v2/administration/employees/{samuel.id}/revoke-sessions/", {"reason": "Prueba sin MFA reciente"}, format="json")
         self.assertEqual(response.status_code, 403)
@@ -89,7 +105,15 @@ class AdministrationApiTests(TestCase):
         other = UserAccount.objects.get(email="samuel@bold.gt")
         other.is_superuser = True
         other.save(update_fields=["is_superuser", "updated_at"])
+        direction = OrganizationalUnit.objects.get(is_control_plane=True)
+        other_position = Position.objects.create(
+            unit=direction,
+            job_role=JobRole.objects.create(title="Asistente de Dirección", level="executive"),
+            display_order=50,
+        )
+        other_assignment = PositionAssignment.objects.create(employee=other.employee, position=other_position)
         other_client = APIClient(); other_client.force_authenticate(other)
+        other_client.credentials(HTTP_X_ASSIGNMENT_ID=str(other_assignment.id))
         self.assertEqual(len(other_client.get(endpoint).data["layout"]), 6)
 
         legacy = self.client.put(endpoint, {"widgets": [{"type": "metric", "metric": "organization.accounts_active", "visualization": "circle"}]}, format="json")
@@ -166,6 +190,7 @@ class AdministrationApiTests(TestCase):
         )
         weak_client = APIClient()
         weak_client.force_authenticate(self.owner, weak_session)
+        weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
         response = weak_client.post("/api/v2/administration/employees/", {
             "full_name": "Sin MFA",
             "email": "sin.mfa@bold.gt",
@@ -307,10 +332,7 @@ class AdministrationApiTests(TestCase):
         self.assertEqual(removed.status_code, 204, removed.data)
 
     def test_owner_position_is_visible_but_cannot_be_modified_even_with_recent_mfa(self):
-        owner_position = self.owner.employee.position_assignments.get(
-            is_active=True,
-            released_at__isnull=True,
-        ).position
+        owner_position = self.owner_assignment.position
         overview = self.client.get("/api/v2/administration/organization/")
         row = next(item for item in overview.data["positions"] if str(item["id"]) == str(owner_position.id))
         self.assertTrue(row["is_protected"])

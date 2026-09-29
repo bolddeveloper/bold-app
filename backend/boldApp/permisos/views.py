@@ -13,6 +13,7 @@ from boldApp.core.models import (
     JobRolePermission,
     Permission,
 )
+from boldApp.core.permissions import IsControlPlaneMember
 
 from .models import PermissionPolicyEvent, PermissionPolicyState
 from .serializers import (
@@ -53,7 +54,11 @@ def _denied_audit(request, event_type, error, *, target_type="security", target_
         )
 
 
-class ControlPlaneAccessView(APIView):
+class DirectionControlPlaneView(APIView):
+    permission_classes = [IsControlPlaneMember]
+
+
+class ControlPlaneAccessView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
         return Response(control_plane_access(request, assignment))
@@ -64,13 +69,13 @@ class PolicyRevisionView(APIView):
         return Response({"revision": PermissionPolicyState.current_revision()})
 
 
-class PermissionCatalogView(APIView):
+class PermissionCatalogView(DirectionControlPlaneView):
     def get(self, request):
         rows = Permission.objects.filter(is_active=True).order_by("module_code", "resource", "action")
         return Response(PermissionCatalogSerializer(rows, many=True).data)
 
 
-class RolePolicyView(APIView):
+class RolePolicyView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
         if request.user.is_superuser:
@@ -116,7 +121,7 @@ class RolePolicyView(APIView):
         )
 
 
-class AccessRuleListCreateView(APIView):
+class AccessRuleListCreateView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
         queryset = AccessGrant.objects.select_related(
@@ -165,7 +170,7 @@ class AccessRuleListCreateView(APIView):
         )
 
 
-class AccessRuleRevokeView(APIView):
+class AccessRuleRevokeView(DirectionControlPlaneView):
     def post(self, request, grant_id):
         serializer = RevokeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -180,7 +185,7 @@ class AccessRuleRevokeView(APIView):
         return Response({"revision": revision, "grant": AccessGrantDetailSerializer(grant).data})
 
 
-class GrantAuthorityListCreateView(APIView):
+class GrantAuthorityListCreateView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
         queryset = GrantAuthority.objects.select_related(
@@ -219,7 +224,7 @@ class GrantAuthorityListCreateView(APIView):
         )
 
 
-class GrantAuthorityRevokeView(APIView):
+class GrantAuthorityRevokeView(DirectionControlPlaneView):
     def post(self, request, authority_id):
         serializer = RevokeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -236,7 +241,7 @@ class GrantAuthorityRevokeView(APIView):
         return Response({"revision": revision, "authority": GrantAuthorityDetailSerializer(authority).data})
 
 
-class EffectiveAccessView(APIView):
+class EffectiveAccessView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
         query = EffectiveAccessQuerySerializer(data=request.query_params)
@@ -265,7 +270,7 @@ class EffectiveAccessView(APIView):
         })
 
 
-class PolicyAuditView(APIView):
+class PolicyAuditView(DirectionControlPlaneView):
     def get(self, request):
         try:
             get_request_assignment(request)

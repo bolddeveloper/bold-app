@@ -39,6 +39,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
             name="Direccion",
             unit_type="division",
             sensitivity_level=Permission.RISK_HIGH,
+            is_control_plane=True,
         )
         self.marketing = OrganizationalUnit.objects.create(
             name="Marketing",
@@ -78,6 +79,14 @@ class PermissionControlPlaneSecurityTests(TestCase):
             self.manager_role,
             self.marketing,
             is_staff=True,
+        )
+        self.staff_control_assignment = PositionAssignment.objects.create(
+            employee=self.staff.employee,
+            position=Position.objects.create(
+                unit=self.root_unit,
+                job_role=self.manager_role,
+                display_order=90,
+            ),
         )
         self.target, self.target_assignment = self._principal(
             "target@bold.gt",
@@ -132,7 +141,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
         assignment = PositionAssignment.objects.create(employee=employee, position=position)
         return account, assignment
 
-    def _client(self, account, assignment, *, mfa="recent"):
+    def _client(self, account, assignment, *, mfa="recent", control_plane=True):
         if mfa == "recent":
             verified_at = timezone.now() - timedelta(seconds=30)
             auth_strength = "password_totp"
@@ -149,7 +158,12 @@ class PermissionControlPlaneSecurityTests(TestCase):
         )
         client = APIClient()
         client.force_authenticate(user=account, token=auth_session)
-        client.credentials(HTTP_X_ASSIGNMENT_ID=str(assignment.id))
+        request_assignment = (
+            self.staff_control_assignment
+            if control_plane and assignment == self.staff_assignment
+            else assignment
+        )
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(request_assignment.id))
         return client
 
     def _access_payload(self, permission=None, target_unit=None, grantee=None):
@@ -164,6 +178,37 @@ class PermissionControlPlaneSecurityTests(TestCase):
             "valid_until": (now + timedelta(minutes=30)).isoformat(),
             "reason": "Cobertura temporal documentada",
         }
+
+    def test_control_plane_endpoints_require_active_direction_assignment(self):
+        # Ni siquiera un superusuario puede operar el plano de control desde
+        # una asignación de otro departamento.
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=["is_superuser", "updated_at"])
+        outside_client = self._client(self.staff, self.staff_assignment, control_plane=False)
+        endpoints = [
+            "/api/v2/permissions/access/",
+            "/api/v2/permissions/catalog/",
+            "/api/v2/permissions/role-policies/",
+            "/api/v2/permissions/access-rules/",
+            "/api/v2/permissions/authorities/",
+            f"/api/v2/permissions/effective/?unit={self.marketing.id}",
+            "/api/v2/permissions/audit/",
+        ]
+        for endpoint in endpoints:
+            self.assertEqual(outside_client.get(endpoint).status_code, 403, endpoint)
+
+        direction_member, direction_assignment = self._principal(
+            "direction.member@bold.gt",
+            "Asistente de Dirección",
+            self.manager_role,
+            self.root_unit,
+        )
+        direction_client = self._client(direction_member, direction_assignment)
+        self.assertEqual(direction_client.get("/api/v2/permissions/catalog/").status_code, 200)
+
+        # La revisión global no expone políticas y permanece disponible para
+        # invalidar cachés de autorización del resto de la aplicación.
+        self.assertEqual(outside_client.get("/api/v2/permissions/revision/").status_code, 200)
 
     def _delegated_authority(
         self,
@@ -181,8 +226,11 @@ class PermissionControlPlaneSecurityTests(TestCase):
         max_sensitivity=Permission.RISK_MEDIUM,
     ):
         now = timezone.now()
+        authority_assignment = assignment or self.staff_control_assignment
+        if authority_assignment == self.staff_assignment:
+            authority_assignment = self.staff_control_assignment
         authority = GrantAuthority.objects.create(
-            assignment=assignment or self.staff_assignment,
+            assignment=authority_assignment,
             scope_type=scope_type,
             target_unit=target_unit or self.marketing,
             max_sensitivity_level=max_sensitivity,
@@ -618,9 +666,9 @@ class PermissionControlPlaneSecurityTests(TestCase):
         )
         self.assertTrue(resolve_access(self.target_assignment, self.read_permission, self.content).allowed)
 
-        self.staff_assignment.is_active = False
-        self.staff_assignment.released_at = now
-        self.staff_assignment.save(update_fields=["is_active", "released_at"])
+        self.staff_control_assignment.is_active = False
+        self.staff_control_assignment.released_at = now
+        self.staff_control_assignment.save(update_fields=["is_active", "released_at"])
 
         decision = resolve_access(self.target_assignment, self.read_permission, self.content)
         self.assertFalse(decision.allowed)
@@ -1064,7 +1112,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
             job_role=self.manager_role,
             permission=critical,
             effect=JobRolePermission.EFFECT_ALLOW,
-            scope_type=JobRolePermission.SCOPE_OWN_UNIT,
+            scope_type=JobRolePermission.SCOPE_GLOBAL,
         )
         body = {
             "assignment": str(self.staff_assignment.id),

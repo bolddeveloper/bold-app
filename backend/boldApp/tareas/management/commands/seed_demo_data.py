@@ -170,6 +170,9 @@ class Command(BaseCommand):
                     "sensitivity_level": "critical" if name == "Dirección" else "medium",
                 },
             )
+            if name == "Dirección" and not units[name].is_control_plane:
+                units[name].is_control_plane = True
+                units[name].save(update_fields=["is_control_plane", "updated_at"])
         return units
 
     def seed_roles_and_permissions(self, people):

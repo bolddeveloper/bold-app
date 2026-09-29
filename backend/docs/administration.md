@@ -1,6 +1,6 @@
 # Módulo administrativo
 
-`boldApp.administrativo` concentra el gobierno operativo de la aplicación. En la primera etapa el acceso se reserva a una cuenta activa con `is_superuser`; `is_staff` no concede acceso. Esto representa al dueño de la empresa mientras el módulo de Permisos incorpora capacidades administrativas delegables.
+`boldApp.administrativo` concentra el gobierno operativo de la aplicación. En la primera etapa el acceso exige simultáneamente una cuenta activa con `is_superuser` y una asignación activa en la unidad marcada como plano de control (Dirección); `is_staff` no concede acceso. La navegación oculta el módulo fuera de esa unidad y el backend repite la validación para impedir accesos directos por URL o API.
 
 ## Alcance
 

@@ -1,4 +1,4 @@
-import { normalizeAssignment, selectAssignment } from "../../../core/core_models.js";
+import { isControlPlaneContext, normalizeAssignment, selectAssignment } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./task_models.js";
@@ -8,6 +8,12 @@ test("assignment selection handles none, one, several and stale stored selection
     assert.equal(selectAssignment([{ id: "a" }, { id: "b" }]), "");
     assert.equal(selectAssignment([{ id: "a" }, { id: "b" }], "b"), "b");
     assert.equal(selectAssignment([{ id: "a" }, { id: "b" }], "stale"), "");
+});
+test("control-plane modules are exposed only from the Direction context", () => {
+    assert.equal(isControlPlaneContext({ name: "Marketing", is_control_plane: false }, { unit_name: "Marketing" }), false);
+    assert.equal(isControlPlaneContext({ name: "Dirección", is_control_plane: true }, { unit_name: "Dirección" }), true);
+    assert.equal(isControlPlaneContext({ name: "Dirección", is_control_plane: false }, { unit_name: "Dirección" }), false);
+    assert.equal(isControlPlaneContext(null, { unit_name: "Direccion" }), true);
 });
 test("normalizers retain UUID identity and distinguish project links from task ownership", () => {
     assert.deepEqual(normalizeProject({ id: "p", name: "Proyecto", color_hex: "#123456", unit: "u" }), { id: "p", name: "Proyecto", color_hex: "#123456", unit: "u", label: "Proyecto", color: "#123456", unitId: "u" });

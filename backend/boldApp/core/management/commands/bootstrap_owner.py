@@ -61,8 +61,12 @@ class Command(BaseCommand):
                 "parent_unit": root,
                 "sensitivity_level": "critical",
                 "color_hex": "#3f3f41",
+                "is_control_plane": True,
             },
         )
+        if not unit.is_control_plane:
+            unit.is_control_plane = True
+            unit.save(update_fields=["is_control_plane", "updated_at"])
         role, _ = JobRole.objects.get_or_create(
             title="Propietario",
             defaults={"level": "owner", "description": "Propietario de la organizacion."},

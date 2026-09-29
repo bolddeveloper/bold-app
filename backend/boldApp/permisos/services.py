@@ -10,6 +10,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from boldApp.autenticacion.services import request_ip
+from boldApp.core.access_context import get_request_assignment
 from boldApp.core.authorization import (
     GRANT_CAPABILITY_DELEGATE,
     GRANT_CAPABILITY_GRANT,
@@ -31,7 +32,6 @@ from boldApp.core.models import (
 from .models import PermissionPolicyEvent, PermissionPolicyState
 
 
-ASSIGNMENT_HEADER = "X-Assignment-ID"
 PERMISSION_INVALIDATION_GROUP = "permission_watch"
 STRONG_MFA_STRENGTHS = {"password_totp", "webauthn"}
 DEFAULT_GRANT_SECONDS = {
@@ -62,30 +62,6 @@ def normalized_reason(value):
     if len(reason) < 8:
         raise ValidationError({"reason": "Explica el motivo con al menos 8 caracteres."})
     return reason
-
-
-def get_request_assignment(request, *, for_update=False):
-    assignment_id = request.headers.get(ASSIGNMENT_HEADER)
-    if not assignment_id:
-        raise PermissionDenied("Selecciona una asignación activa en X-Assignment-ID.")
-    queryset = PositionAssignment.objects.select_related(
-        "employee__user_account", "position__unit", "position__job_role"
-    )
-    if for_update:
-        queryset = queryset.select_for_update(of=("self",))
-    try:
-        assignment = queryset.get(
-            id=assignment_id,
-            employee_id=request.user.employee_id,
-            employee__is_active=True,
-            is_active=True,
-            released_at__isnull=True,
-        )
-    except (PositionAssignment.DoesNotExist, ValueError) as error:
-        raise PermissionDenied("La asignación seleccionada no está activa o no pertenece a tu cuenta.") from error
-    if not request.user.is_active:
-        raise PermissionDenied("La cuenta no está activa.")
-    return assignment
 
 
 def has_recent_strong_mfa(request):

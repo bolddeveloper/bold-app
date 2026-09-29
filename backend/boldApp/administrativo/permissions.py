@@ -2,14 +2,23 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
+
+from boldApp.core.access_context import require_control_plane_assignment
 
 
 class IsCompanyOwner(BasePermission):
     message = "Esta operación está reservada al dueño de la empresa."
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.is_active and request.user.is_superuser)
+        if not bool(request.user and request.user.is_authenticated and request.user.is_active and request.user.is_superuser):
+            return False
+        try:
+            require_control_plane_assignment(request)
+        except PermissionDenied:
+            return False
+        return True
 
 
 class HasRecentOwnerMFA(IsCompanyOwner):

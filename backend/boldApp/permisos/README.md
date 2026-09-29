@@ -6,6 +6,20 @@ conceder o denegar excepciones individuales, delegar autoridad limitada y
 auditar cada cambio. La decisión final de acceso continúa centralizada en
 Core para que todos los módulos de contenido apliquen las mismas reglas.
 
+## Frontera organizacional del plano de control
+
+La interfaz y los endpoints mutables o descriptivos de Permisos solo son
+accesibles cuando la solicitud usa una asignación activa perteneciente a la
+unidad marcada con `OrganizationalUnit.is_control_plane` (Dirección). Tener
+`is_staff`, `is_superuser` o una autoridad delegada desde otro departamento no
+omite esta frontera. Si una persona posee varias plazas, debe seleccionar su
+plaza de Dirección para entrar al módulo.
+
+La migración identifica como unidad de control la plaza activa del propietario
+y la base de datos garantiza que solo una unidad tenga esta marca. El endpoint
+de revisión global permanece disponible porque solo publica un contador y es
+necesario para invalidar las cachés de autorización de todos los módulos.
+
 El diseño sigue cuatro principios:
 
 - **Denegar por defecto**: si ninguna regla vigente permite una acción, se
