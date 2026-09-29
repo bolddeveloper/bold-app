@@ -1,4 +1,4 @@
-import { isControlPlaneContext, normalizeAssignment, selectAssignment } from "../../../core/core_models.js";
+import { isControlPlaneContext, normalizeAssignment, selectAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./task_models.js";
@@ -14,6 +14,14 @@ test("control-plane modules are exposed only from the Direction context", () => 
     assert.equal(isControlPlaneContext({ name: "Dirección", is_control_plane: true }, { unit_name: "Dirección" }), true);
     assert.equal(isControlPlaneContext({ name: "Dirección", is_control_plane: false }, { unit_name: "Dirección" }), false);
     assert.equal(isControlPlaneContext(null, { unit_name: "Direccion" }), true);
+});
+test("shell access guard preserves task subviews and leaves removed restricted modules", () => {
+    const navigation = [{ id: "home", default: true }, { id: "tasks" }];
+    assert.equal(shouldLeaveRestrictedShellModule("projects", navigation), false);
+    assert.equal(shouldLeaveRestrictedShellModule("workspaces", navigation), false);
+    assert.equal(shouldLeaveRestrictedShellModule("permissions", navigation), true);
+    assert.equal(shouldLeaveRestrictedShellModule("administration", navigation), true);
+    assert.equal(shouldLeaveRestrictedShellModule("permissions", [...navigation, { id: "permissions" }]), false);
 });
 test("normalizers retain UUID identity and distinguish project links from task ownership", () => {
     assert.deepEqual(normalizeProject({ id: "p", name: "Proyecto", color_hex: "#123456", unit: "u" }), { id: "p", name: "Proyecto", color_hex: "#123456", unit: "u", label: "Proyecto", color: "#123456", unitId: "u" });

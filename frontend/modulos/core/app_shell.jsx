@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, createElement }
 import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { is_using_real_backend } from "./http_client.js";
+import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 const icon_map = { home: home_icon, check: check_icon, inbox: inbox_icon, reports: bar_chart_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
@@ -22,7 +23,7 @@ export function ShellProvider({ children, navigation }) {
         document.documentElement.classList.toggle("theme_dark", is_dark_mode);
     }, [is_dark_mode]);
     useEffect(() => {
-        if (!navigation.some(item => item.id === active_module)) {
+        if (shouldLeaveRestrictedShellModule(active_module, navigation)) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
