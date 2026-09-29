@@ -7,13 +7,25 @@
 - Dashboard global con métricas organizacionales, seguridad y tarjetas aportadas por cada módulo.
 - Directorio de empleados, creación de cuenta e invitación de un solo uso.
 - Asignación de plazas y edición del nombre del empleado.
-- Recuperación de contraseña por correo; la administración nunca asigna, devuelve ni conoce la contraseña.
+- Recuperación de contraseña por correo. Existe un modo temporal, apagado por defecto, para que exclusivamente el propietario asigne una credencial inicial mientras el proveedor de correo no esté disponible.
 - Consulta y cierre de sesiones, restablecimiento de MFA, activación y desactivación de cuentas.
 - Baja de empleados con inventario previo y transferencia transaccional de responsabilidades.
 - Catálogos de unidades, cargos y plazas, sin borrado físico.
 - Auditoría combinada de Administración, Autenticación, Permisos y proveedores de módulos.
 
 Las acciones críticas exigen una sesión del dueño con MFA verificado en los últimos `ADMIN_STEP_UP_MFA_SECONDS` segundos y un motivo explícito. El valor predeterminado es 600 segundos.
+
+## Acceso temporal de contingencia
+
+`ADMIN_TEMPORARY_PASSWORD_ENABLED=true` habilita una opción experimental al crear empleados. Su uso:
+
+- está reservado a `is_superuser` y exige MFA reciente;
+- valida la contraseña con la política de Django y la almacena solamente como hash;
+- no devuelve, registra ni conserva la contraseña en auditoría;
+- omite la invitación por correo para esa cuenta;
+- marca `must_change_password`, por lo que el empleado debe sustituirla en su primer inicio de sesión.
+
+La credencial debe entregarse al empleado por un canal distinto a la aplicación. Cuando Postmark esté operativo, vuelve a establecer la bandera en `false`, recrea `backend` y `worker`, y utiliza exclusivamente invitaciones y recuperaciones por correo.
 
 ## Arquitectura modular
 

@@ -153,14 +153,16 @@ function Dashboard({ data, setNotice }) {
         <section className="admin_dashboard_grid">{rows.map((row, rowIndex) => <div className="admin_dashboard_row" style={{ "--dashboard-columns": columns }} key={rowIndex}>{row.map(({ widget, index, width }) => { const drag = { onDragStart: event => { setDragged(index); event.dataTransfer.effectAllowed = "move"; }, onKeyDown: event => { if (event.key === "ArrowLeft" || event.key === "ArrowUp") { event.preventDefault(); move(index, index - 1); } if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); move(index, index + 1); } } }; return <div className="admin_widget_slot" key={`${widget.type}:${index}`} style={{ "--widget-width": width }} onDragOver={event => event.preventDefault()} onDrop={() => { move(dragged, index); setDragged(null); }}>{widget.type === "metric" ? <MetricWidget widget={widget} metrics={metrics} busy={busy} onChange={value => replace(index, value)} onRemove={() => remove(index)} drag={drag} /> : widget.type === "modules" ? <ModulesWidget widget={widget} metrics={moduleMetrics} busy={busy} onChange={value => replace(index, value)} onRemove={() => remove(index)} drag={drag} /> : <ActivityWidget widget={widget} data={data} busy={busy} onRemove={() => remove(index)} drag={drag} />}</div>; })}</div>)}</section>{layout.length >= 8 && <p className="admin_dashboard_limit">Puedes mostrar hasta ocho widgets.</p>}</div>;
 }
 
-function CreateEmployee({ positions, onCreate, onCancel, busy }) {
+function CreateEmployee({ positions, onCreate, onCancel, busy, temporaryPasswordEnabled }) {
+    const [temporaryMode, setTemporaryMode] = useState(false);
     return <form className="admin_form" onSubmit={onCreate}>
-        <h3>Crear empleado y enviar invitación</h3>
+        <h3>{temporaryMode ? "Crear empleado con acceso temporal" : "Crear empleado y enviar invitación"}</h3>
         <label>Nombre completo<input name="full_name" required maxLength="140" /></label>
         <label>Correo corporativo<input name="email" type="email" placeholder="nombre@bold.gt" required /></label>
         <label>Plaza inicial<AdminSelect name="position" label="Plaza inicial" options={[{ value: "", label: "Sin plaza por ahora" }, ...positions.filter(item => !item.occupied && item.is_open).map(item => ({ value: item.id, label: positionLabel(item) }))]} /></label>
-        <p>La cuenta se crea sin contraseña y recibirá un enlace de activación de un solo uso.</p>
-        <footer><button type="button" onClick={onCancel}>Cancelar</button><button className="admin_primary" type="submit" disabled={busy}>{busy ? "Creando…" : "Crear e invitar"}</button></footer>
+        {temporaryPasswordEnabled && <label className="admin_experimental_toggle"><input type="checkbox" checked={temporaryMode} onChange={event => setTemporaryMode(event.target.checked)} /><span><strong>Acceso temporal experimental</strong><small>Disponible solo mientras se habilita el correo transaccional.</small></span></label>}
+        {temporaryMode ? <section className="admin_temporary_password"><strong>Contraseña temporal</strong><p>Compártela fuera de la aplicación. No se mostrará ni podrá recuperarse después, y el empleado deberá reemplazarla al iniciar sesión.</p><label>Contraseña<input name="temporary_password" type="password" autoComplete="new-password" minLength="8" required /></label><label>Confirmar contraseña<input name="password_confirmation" type="password" autoComplete="new-password" minLength="8" required /></label></section> : <p>La cuenta se crea sin contraseña y recibirá un enlace de activación de un solo uso.</p>}
+        <footer><button type="button" onClick={onCancel}>Cancelar</button><button className="admin_primary" type="submit" disabled={busy}>{busy ? "Creando…" : temporaryMode ? "Crear acceso temporal" : "Crear e invitar"}</button></footer>
     </form>;
 }
 
@@ -186,7 +188,7 @@ function EmployeeDetail({ employee, employees, organization, sessions, onRefresh
     </article>;
 }
 
-function Employees({ rows, organization, reload, refreshDirectory, setNotice }) {
+function Employees({ rows, organization, reload, refreshDirectory, setNotice, temporaryPasswordEnabled }) {
     const [selectedId, setSelectedId] = useState(rows[0]?.id || "");
     const [query, setQuery] = useState("");
     const [creating, setCreating] = useState(false);
@@ -197,7 +199,34 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice }) 
     const filtered = rows.filter(item => `${item.full_name} ${item.account?.email || ""}`.toLowerCase().includes(query.toLowerCase()));
 
     useEffect(() => { if (employee) adminApi.sessions(employee.id).then(setSessions).catch(() => setSessions([])); }, [employee?.id]);
-    async function create(event) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); try { await adminApi.createEmployee({ full_name: form.get("full_name"), email: form.get("email"), position: form.get("position") || null }); setCreating(false); setNotice("Empleado creado; la invitación fue enviada."); await Promise.all([reload(), refreshDirectory()]); } catch (error) { setNotice(error.message, true); } finally { setBusy(false); } }
+    async function create(event) {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        const temporaryPassword = form.get("temporary_password") || "";
+        if (temporaryPassword && temporaryPassword !== form.get("password_confirmation")) {
+            setNotice("Las contraseñas temporales no coinciden.", true);
+            return;
+        }
+        if (temporaryPassword) {
+            const code = await askText("Crear acceso temporal. Código MFA", "", 6);
+            if (!code) return;
+            setBusy(true);
+            try { await coreApi.stepUpMfa(code); }
+            catch (error) { setNotice(error.message, true); setBusy(false); return; }
+        }
+        setBusy(true);
+        try {
+            await adminApi.createEmployee({
+                full_name: form.get("full_name"),
+                email: form.get("email"),
+                position: form.get("position") || null,
+                ...(temporaryPassword ? { temporary_password: temporaryPassword } : {}),
+            });
+            setCreating(false);
+            setNotice(temporaryPassword ? "Empleado creado. Deberá cambiar la contraseña temporal al iniciar sesión." : "Empleado creado; la invitación fue enviada.");
+            await Promise.all([reload(), refreshDirectory()]);
+        } catch (error) { setNotice(error.message, true); } finally { setBusy(false); }
+    }
     async function runAction(kind, label) {
         if (!employee) return;
         if (kind === "resend") { try { await adminApi.resendInvitation(employee.id); setNotice("Invitación reenviada."); } catch (error) { setNotice(error.message, true); } return; }
@@ -248,7 +277,7 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice }) 
         }
     }
 
-    return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} sessions={sessions} onRefresh={reload} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
+    return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} temporaryPasswordEnabled={temporaryPasswordEnabled} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} sessions={sessions} onRefresh={reload} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
 }
 
 export function Audit({ page, onPage }) {
@@ -600,5 +629,5 @@ export default function AdministrationModule() {
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
     if (!data) return <Loading error={error} onRetry={load} />;
-    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}</section>;
+    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} temporaryPasswordEnabled={Boolean(data.dashboard.features?.temporary_password_provisioning)} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}</section>;
 }

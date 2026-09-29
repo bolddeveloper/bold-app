@@ -125,7 +125,7 @@ sudo mkdir -p /opt/bold-app
 sudo chown "$USER":"$USER" /opt/bold-app
 git clone URL_DEL_REPOSITORIO /opt/bold-app
 cd /opt/bold-app
-git switch Setup-CloudFlare-Oracle
+git switch Develop
 ```
 
 Para un repositorio privado, usa una deploy key de solo lectura. No guardes un
@@ -201,18 +201,24 @@ Las sesiones activas pueden revocarse antes del corte por precaucion.
 
 ### Correo
 
-La recuperacion de contrasena necesita SMTP real. Para Google Workspace usa un
-SMTP relay o una app password dedicada, no la contrasena normal del correo.
-Completa `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` y `DEFAULT_FROM_EMAIL`. Hasta
-configurarlo puedes cambiar temporalmente a:
+La recuperacion de contrasena necesita SMTP real. El entorno de prueba usa
+Postmark con una firma de remitente individual verificada, por lo que no
+requiere modificar el DNS de `bold.gt`. En `.env.oracle` configura
+`smtp.postmarkapp.com`, puerto `587`, TLS y el Server API Token de Postmark como
+`EMAIL_HOST_USER` y `EMAIL_HOST_PASSWORD`. El token pertenece al servidor
+transaccional, debe guardarse solo en el archivo privado con permisos `600` y
+no debe copiarse al repositorio.
+
+Postmark mantiene las cuentas nuevas en `Test mode` hasta completar su revision
+manual. La conexion SMTP puede validarse mientras la solicitud esta pendiente,
+pero los envios reales deben probarse despues de la aprobacion. Hasta tener un
+proveedor configurado puede cambiarse temporalmente a:
 
 ```text
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 ```
 
 En ese modo los enlaces solo aparecen en logs y no llegan al usuario.
-Si Google muestra una app password separada por espacios, guardala sin espacios
-en `.env.oracle`.
 
 ## 8. Validar y construir
 
@@ -396,7 +402,7 @@ Para probar restauracion usa una base o VM separada. No ejecutes `pg_restore
 ```bash
 cd /opt/bold-app
 git fetch origin
-git switch Setup-CloudFlare-Oracle
+git switch Develop
 git pull --ff-only
 cd deploy/oracle
 ./backup_postgres.sh

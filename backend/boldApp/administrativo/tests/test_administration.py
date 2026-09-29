@@ -1,3 +1,4 @@
+import json
 import re
 
 from django.core import mail
@@ -5,7 +6,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
-from boldApp.autenticacion.models import AuthEvent, AuthMFAMethod, AuthSession
+from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthMFAMethod, AuthSession
 from boldApp.autenticacion.services import create_session, encrypt_secret, generate_totp_secret
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position, PositionAssignment, UserAccount
 from boldApp.tareas.models import ActivityLog, Project, Task, TaskStatus
@@ -119,6 +120,68 @@ class AdministrationApiTests(TestCase):
         self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.employee_created", target_id=account.employee_id).exists())
         reused = APIClient().post("/api/v2/auth/invitation/confirm/", {"token": token, "password": "Otro Horizonte Violeta 2027!"}, format="json")
         self.assertEqual(reused.status_code, 400)
+
+    @override_settings(ADMIN_TEMPORARY_PASSWORD_ENABLED=True)
+    def test_owner_with_recent_mfa_can_create_forced_change_temporary_password(self):
+        password = "Ámbar Río Seguro 2026! Z9"
+        created = self.client.post("/api/v2/administration/employees/", {
+            "full_name": "Acceso Temporal",
+            "email": "temporal@bold.gt",
+            "temporary_password": password,
+        }, format="json")
+
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data["credential_mode"], "temporary_password")
+        account = UserAccount.objects.get(email="temporal@bold.gt")
+        self.assertTrue(account.check_password(password))
+        self.assertTrue(account.must_change_password)
+        self.assertFalse(AuthChallenge.objects.filter(user_account=account, purpose=AuthChallenge.PURPOSE_INVITATION).exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+        action = AdministrativeAction.objects.get(action_type="employee_created", target_account=account)
+        event = SystemAuditEvent.objects.get(event_type="administration.employee_created", target_id=account.employee_id)
+        audit_payload = json.dumps({"action": action.metadata, "changes": event.changes, "metadata": event.metadata})
+        self.assertNotIn(password, audit_payload)
+        self.assertIn("temporary_password", audit_payload)
+
+        login_client = APIClient(enforce_csrf_checks=True)
+        csrf_response = login_client.get("/api/v2/auth/session/")
+        logged_in = login_client.post(
+            "/api/v2/auth/login/",
+            {"email": account.email, "password": password},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_response.cookies["csrftoken"].value,
+        )
+        self.assertEqual(logged_in.status_code, 200, logged_in.data)
+        self.assertTrue(logged_in.data["password_change_required"])
+
+    @override_settings(ADMIN_TEMPORARY_PASSWORD_ENABLED=True)
+    def test_temporary_password_creation_requires_recent_owner_mfa(self):
+        weak_session = AuthSession.objects.create(
+            user_account=self.owner,
+            token_hash="2" * 64,
+            expires_at=self.owner_session.expires_at,
+            auth_strength="password",
+            credentials_version=self.owner.credentials_version,
+        )
+        weak_client = APIClient()
+        weak_client.force_authenticate(self.owner, weak_session)
+        response = weak_client.post("/api/v2/administration/employees/", {
+            "full_name": "Sin MFA",
+            "email": "sin.mfa@bold.gt",
+            "temporary_password": "Ámbar Río Seguro 2026! Z9",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(UserAccount.objects.filter(email="sin.mfa@bold.gt").exists())
+
+    def test_temporary_password_creation_is_disabled_by_default(self):
+        response = self.client.post("/api/v2/administration/employees/", {
+            "full_name": "Bandera Apagada",
+            "email": "bandera.apagada@bold.gt",
+            "temporary_password": "Ámbar Río Seguro 2026! Z9",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(UserAccount.objects.filter(email="bandera.apagada@bold.gt").exists())
 
     def test_owner_can_reset_mfa_and_revoke_target_sessions(self):
         target = UserAccount.objects.get(email="samuel@bold.gt")

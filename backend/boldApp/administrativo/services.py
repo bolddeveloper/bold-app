@@ -8,7 +8,10 @@ from boldApp.autenticacion.services import request_ip
 from .models import AdministrativeAction, SystemAuditEvent
 
 
-SENSITIVE_KEYS = {"password", "password_hash", "secret", "secret_encrypted", "token", "token_hash", "code", "recovery_codes"}
+SENSITIVE_KEYS = {
+    "password", "password_hash", "temporary_password", "password_confirmation",
+    "secret", "secret_encrypted", "token", "token_hash", "code", "recovery_codes",
+}
 
 
 def sanitize_audit_data(value):

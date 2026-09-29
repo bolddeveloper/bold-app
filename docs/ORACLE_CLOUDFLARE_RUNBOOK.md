@@ -9,7 +9,7 @@ iniciales de forma segura.
 
 - Aplicación pública: <https://boldapp.samuel-93b.workers.dev>
 - Instancia de Oracle: `bold-test`, Ubuntu 24.04 ARM64, 2 OCPU y 12 GB RAM.
-- Rama desplegada: `Setup-CloudFlare-Oracle`.
+- Rama desplegada y operativa: `Develop`.
 - Worker de Cloudflare: `boldapp`.
 - Versión publicada durante el corte: `49d92140-95a0-4a41-9e69-c1c377a6ce59`.
 - VPC Service: `boldapp-backend`.
@@ -104,6 +104,64 @@ reinicio controlado de MFA. Cambiarla directamente inutiliza los secretos TOTP
 ya enrolados. `SECRET_KEY` tampoco debe cambiarse durante una migración sin
 planificar la revocación de sesiones y tokens firmados.
 
+### Correo de invitaciones y recuperación
+
+En desarrollo local el valor predeterminado es:
+
+```text
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+```
+
+Esto no envía mensajes: imprime el asunto y el enlace en la terminal donde se
+ejecuta Django. Es apropiado para desarrollo porque evita entregar tokens de
+prueba a buzones reales.
+
+Oracle usa Postmark durante el periodo de prueba. Se verificó solamente la
+firma individual `samuel@bold.gt`; no se modificó el DNS, SPF, DKIM ni MX de
+`bold.gt`. Postmark debe aprobar la cuenta y retirar `Test mode` antes de poder
+entregar mensajes reales a los empleados.
+
+```text
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.postmarkapp.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=true
+EMAIL_USE_SSL=false
+EMAIL_HOST_USER=SERVER_API_TOKEN_DE_POSTMARK
+EMAIL_HOST_PASSWORD=EL_MISMO_SERVER_API_TOKEN
+DEFAULT_FROM_EMAIL=Bold App <samuel@bold.gt>
+EMAIL_TIMEOUT=10
+```
+
+Postmark permite usar el Server API Token del servidor transaccional como
+usuario y contraseña SMTP. Debe guardarse solamente en `.env.oracle` con
+permisos `600`, nunca en Git, documentación, capturas o logs. Después de editar
+el archivo hay que recrear `backend` y `worker`, ya que Docker Compose carga las
+variables al crear el contenedor:
+
+Mientras Postmark mantenga la cuenta en `Test mode`, se puede habilitar de
+forma excepcional la creación de empleados con contraseña inicial:
+
+```env
+ADMIN_TEMPORARY_PASSWORD_ENABLED=true
+```
+
+La opción solo aparece al propietario y la operación exige MFA reciente. La
+contraseña queda hasheada, no se incluye en respuestas ni auditoría, y debe
+cambiarse en el primer inicio. Una vez aprobado Postmark, cambia el valor a
+`false` y recrea `backend` y `worker` para retirar esta vía de contingencia.
+
+```bash
+docker compose --env-file .env.oracle -f compose.oracle.yaml up -d \
+  --force-recreate backend worker
+```
+
+La conexión puede validarse abriendo el backend SMTP sin enviar un mensaje. Una
+vez que Postmark apruebe la cuenta, prueba primero contra `samuel@bold.gt` y
+confirma recepción, remitente y que el enlace use
+`https://boldapp.samuel-93b.workers.dev`. No copies credenciales SMTP ni tokens
+de invitación o recuperación a logs compartidos.
+
 ## 4. Operación cotidiana en Oracle
 
 Conectarse desde PowerShell:
@@ -131,7 +189,7 @@ Actualizar código y recrear servicios:
 ```bash
 cd /opt/bold-app
 git fetch origin
-git switch Setup-CloudFlare-Oracle
+git switch Develop
 git pull --ff-only
 cd deploy/oracle
 docker compose --env-file .env.oracle -f compose.oracle.yaml build --pull

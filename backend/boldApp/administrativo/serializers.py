@@ -2,6 +2,9 @@ from difflib import SequenceMatcher
 import re
 import unicodedata
 
+from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Max
 from rest_framework import serializers
 
@@ -67,6 +70,14 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=140)
     email = serializers.EmailField()
     position = serializers.PrimaryKeyRelatedField(queryset=Position.objects.all(), required=False, allow_null=True)
+    temporary_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=False,
+        trim_whitespace=False,
+        max_length=1024,
+        style={"input_type": "password"},
+    )
 
     def validate_email(self, value):
         try:
@@ -81,6 +92,21 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
         if position and PositionAssignment.objects.filter(position=position, is_active=True, released_at__isnull=True).exists():
             raise serializers.ValidationError("La plaza seleccionada ya está ocupada.")
         return position
+
+    def validate(self, attrs):
+        temporary_password = attrs.get("temporary_password")
+        if not temporary_password:
+            return attrs
+        if not getattr(settings, "ADMIN_TEMPORARY_PASSWORD_ENABLED", False):
+            raise serializers.ValidationError({
+                "temporary_password": "La asignación temporal de contraseñas está deshabilitada."
+            })
+        candidate = UserAccount(email=attrs.get("email", ""))
+        try:
+            validate_password(temporary_password, user=candidate)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({"temporary_password": list(error.messages)}) from error
+        return attrs
 
 
 class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):

@@ -142,6 +142,9 @@ class DashboardView(APIView):
             layout = default_layout
         return Response({
             "generated_at": now,
+            "features": {
+                "temporary_password_provisioning": getattr(settings, "ADMIN_TEMPORARY_PASSWORD_ENABLED", False),
+            },
             "layout": layout,
             "organization": {
                 "employees_total": Employee.objects.count(),
@@ -178,7 +181,8 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
     )
 
     def get_permissions(self):
-        permission = HasRecentOwnerMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS else IsCompanyOwner
+        uses_temporary_password = self.action == "create" and bool(self.request.data.get("temporary_password"))
+        permission = HasRecentOwnerMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS or uses_temporary_password else IsCompanyOwner
         return [permission()]
 
     def get_queryset(self):
@@ -198,16 +202,42 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = AdminEmployeeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        temporary_password = data.get("temporary_password")
+        credential_mode = "temporary_password" if temporary_password else "email_invitation"
         with transaction.atomic():
             employee = Employee.objects.create(full_name=data["full_name"].strip())
-            account = UserAccount.objects.create_user(email=data["email"], employee=employee, password=None, is_active=True)
+            account = UserAccount.objects.create_user(
+                email=data["email"],
+                employee=employee,
+                password=temporary_password,
+                is_active=True,
+                must_change_password=bool(temporary_password),
+            )
             if data.get("position"):
                 PositionAssignment.objects.create(employee=employee, position=data["position"])
-            raw, _ = create_challenge(account, AuthChallenge.PURPOSE_INVITATION, request, ttl=getattr(settings, "AUTH_INVITATION_TTL_SECONDS", 259200))
-            transaction.on_commit(lambda: send_account_invitation(account, raw))
-            admin_action = create_administrative_action(request, "employee_created", "Creación e invitación de empleado", employee, account)
-            complete_administrative_action(admin_action, request, changes={"employee": {"after": {"full_name": employee.full_name, "email": account.email}}})
-        return Response(AdminEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
+            if not temporary_password:
+                raw, _ = create_challenge(account, AuthChallenge.PURPOSE_INVITATION, request, ttl=getattr(settings, "AUTH_INVITATION_TTL_SECONDS", 259200))
+                transaction.on_commit(lambda: send_account_invitation(account, raw))
+            admin_action = create_administrative_action(
+                request,
+                "employee_created",
+                "Creación de empleado con credencial temporal" if temporary_password else "Creación e invitación de empleado",
+                employee,
+                account,
+                {"credential_mode": credential_mode},
+            )
+            complete_administrative_action(
+                admin_action,
+                request,
+                changes={"employee": {"after": {
+                    "full_name": employee.full_name,
+                    "email": account.email,
+                    "credential_mode": credential_mode,
+                }}},
+            )
+        response_data = AdminEmployeeSerializer(employee).data
+        response_data["credential_mode"] = credential_mode
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
         employee = self.get_object()

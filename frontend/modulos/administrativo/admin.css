@@ -73,6 +73,12 @@
 .admin_security_note { display: flex; align-items: center; gap: 7px; color: #64748b; font-size: 13px; }
 .admin_danger_zone { margin-top: 20px; padding: 16px; border: 1px solid #f0c3c7; border-radius: 12px; background: #fff9f9; }
 .admin_form, .admin_offboarding { display: grid; gap: 14px; }
+.admin_experimental_toggle { grid-template-columns: auto minmax(0, 1fr); align-items: start; padding: 12px; border: 1px solid #f1c56b; border-radius: 10px; background: #fffaf0; }
+.admin_experimental_toggle input { min-height: auto; margin-top: 3px; accent-color: var(--bold_red, #ef1f2d); }
+.admin_experimental_toggle span { display: grid; gap: 3px; }
+.admin_experimental_toggle small { color: #64748b; }
+.admin_temporary_password { display: grid; gap: 12px; padding: 14px; border: 1px solid #f1c56b; border-radius: 10px; background: #fffaf0; }
+.admin_temporary_password p { margin: 0; color: #64748b; font-size: 13px; line-height: 1.45; }
 .admin_catalog_form { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
 .admin_catalog_form > header, .admin_catalog_form > footer, .admin_catalog_form > label:last-of-type { grid-column: 1 / -1; }
 .admin_catalog_form header select, .admin_catalog_form textarea { border: 1px solid #ccd4df; border-radius: 8px; padding: 10px; font: inherit; }
