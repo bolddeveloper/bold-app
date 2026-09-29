@@ -18,9 +18,12 @@ class CookieSessionAuthentication(BaseAuthentication):
         raw = request.COOKIES.get(settings.AUTH_SESSION_COOKIE_NAME)
         if not raw:
             return None
+        session_probe = request.path.rstrip("/") + "/" == "/api/v2/auth/session/"
         now = timezone.now()
         session = AuthSession.objects.select_related("user_account").filter(token_hash=token_hash(raw), revoked_at__isnull=True).first()
         if not session:
+            if session_probe:
+                return None
             raise exceptions.AuthenticationFailed("Sesión inválida.")
         user = session.user_account
         if not user.is_active or session.credentials_version != user.credentials_version or session.expires_at <= now or (session.idle_expires_at and session.idle_expires_at <= now):
@@ -28,6 +31,8 @@ class CookieSessionAuthentication(BaseAuthentication):
                 session.revoked_at = now
                 session.revocation_reason = "expired_or_credentials_changed"
                 session.save(update_fields=["revoked_at", "revocation_reason"])
+            if session_probe:
+                return None
             raise exceptions.AuthenticationFailed("La sesión expiró.")
         path = request.path.rstrip("/") + "/"
         if user.must_change_password and path not in {"/api/v2/auth/session/", "/api/v2/auth/logout/", "/api/v2/auth/password/change/"}:

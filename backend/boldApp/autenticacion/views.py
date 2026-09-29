@@ -1,6 +1,8 @@
 import secrets
 from datetime import timedelta
 
+from cryptography.fernet import InvalidToken
+
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -54,7 +56,10 @@ class SessionView(APIView):
     def get(self, request):
         get_token(request)
         if not request.user or not request.user.is_authenticated:
-            return Response({"authenticated": False, "csrf_token": get_token(request)})
+            response = Response({"authenticated": False, "csrf_token": get_token(request)})
+            if request.COOKIES.get(settings.AUTH_SESSION_COOKIE_NAME):
+                _clear_session_cookie(response)
+            return response
         mfa_enabled = request.user.mfa_methods.filter(is_active=True).exists()
         return Response({"authenticated": True, "csrf_token": get_token(request), "account": {"id": str(request.user.id), "employee": str(request.user.employee_id), "email": request.user.email}, "expires_at": request.auth.expires_at, "mfa_verified": bool(request.auth.mfa_verified_at), "mfa_enabled": mfa_enabled, "mfa_enrollment_required": settings.AUTH_MFA_REQUIRED and not mfa_enabled, "password_change_required": request.user.must_change_password})
 
@@ -124,25 +129,33 @@ class MFALoginVerifyView(APIView):
                 )
             return Response({"detail": "El desafío expiró."}, status=status.HTTP_401_UNAUTHORIZED)
         code = serializer.validated_data["code"]
+        if consume_recovery_code(user, code):
+            cache.delete(key)
+            raw, session = create_session(user, request, auth_strength="recovery_code", mfa_verified=True)
+            record_event("mfa.recovery_code_used", request, user=user, session=session)
+            response = Response({"authenticated": True, "expires_at": session.expires_at, "password_change_required": user.must_change_password})
+            _set_session_cookie(response, raw, session)
+            return response
         method = None
         matched_counter = None
+        unreadable_secret = False
         for item in user.mfa_methods.select_for_update().filter(
             is_active=True,
             method_type=AuthMFAMethod.TYPE_TOTP,
         ):
-            counter = matching_totp_counter(decrypt_secret(item.secret_encrypted), code)
+            try:
+                counter = matching_totp_counter(decrypt_secret(item.secret_encrypted), code)
+            except InvalidToken:
+                unreadable_secret = True
+                continue
             if counter is not None and (item.last_totp_counter is None or counter > item.last_totp_counter):
                 method = item
                 matched_counter = counter
                 break
         if not method:
-            if consume_recovery_code(user, code):
-                cache.delete(key)
-                raw, session = create_session(user, request, auth_strength="recovery_code", mfa_verified=True)
-                record_event("mfa.recovery_code_used", request, user=user, session=session)
-                response = Response({"authenticated": True, "expires_at": session.expires_at, "password_change_required": user.must_change_password})
-                _set_session_cookie(response, raw, session)
-                return response
+            if unreadable_secret:
+                record_event("login.mfa_failed", request, user=user, success=False, reason="secret_unreadable")
+                return Response({"detail": "No se puede verificar el autenticador con la clave actual del servidor. Usa un código de recuperación o contacta al administrador."}, status=status.HTTP_409_CONFLICT)
             record_event("login.mfa_failed", request, user=user, success=False, reason="invalid_code")
             return Response({"detail": "Código incorrecto."}, status=status.HTTP_401_UNAUTHORIZED)
         cache.delete(key)
@@ -170,13 +183,20 @@ class MFAStepUpView(APIView):
             is_active=True,
             method_type=AuthMFAMethod.TYPE_TOTP,
         )
+        unreadable_secret = False
         for item in methods:
-            counter = matching_totp_counter(decrypt_secret(item.secret_encrypted), code)
+            try:
+                counter = matching_totp_counter(decrypt_secret(item.secret_encrypted), code)
+            except InvalidToken:
+                unreadable_secret = True
+                continue
             if counter is not None and (item.last_totp_counter is None or counter > item.last_totp_counter):
                 method = item
                 matched_counter = counter
                 break
         if method is None:
+            if unreadable_secret:
+                return Response({"detail": "No se puede verificar el autenticador con la clave actual del servidor. Contacta al administrador."}, status=status.HTTP_409_CONFLICT)
             record_event(
                 "mfa.step_up_failed",
                 request,
@@ -495,15 +515,21 @@ class MFADisableView(APIView):
             return Response({"detail": "La cuenta no tiene MFA activo."}, status=status.HTTP_400_BAD_REQUEST)
 
         code = serializer.validated_data["code"]
-        verified = False
-        for method in methods:
-            counter = matching_totp_counter(decrypt_secret(method.secret_encrypted), code)
-            if counter is not None and (method.last_totp_counter is None or counter > method.last_totp_counter):
-                verified = True
-                break
+        verified = consume_recovery_code(user, code)
+        unreadable_secret = False
         if not verified:
-            verified = consume_recovery_code(user, code)
+            for method in methods:
+                try:
+                    counter = matching_totp_counter(decrypt_secret(method.secret_encrypted), code)
+                except InvalidToken:
+                    unreadable_secret = True
+                    continue
+                if counter is not None and (method.last_totp_counter is None or counter > method.last_totp_counter):
+                    verified = True
+                    break
         if not verified:
+            if unreadable_secret:
+                return Response({"detail": "No se puede verificar el autenticador con la clave actual del servidor. Usa un código de recuperación o contacta al administrador."}, status=status.HTTP_409_CONFLICT)
             record_event("mfa.disable_failed", request, user=user, actor=user, session=request.auth, success=False, reason="invalid_code")
             return Response({"code": ["El código MFA o de recuperación es incorrecto."]}, status=status.HTTP_400_BAD_REQUEST)
 

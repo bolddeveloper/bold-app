@@ -51,6 +51,14 @@ class AuthenticationFlowTests(TestCase):
         restored = self.client.get("/api/v2/auth/session/")
         self.assertTrue(restored.data["authenticated"])
 
+    def test_stale_cookie_does_not_block_login(self):
+        self.client.cookies["bold_session"] = "stale-session"
+        response = self.client.get("/api/v2/auth/session/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["authenticated"])
+        self.assertEqual(response.cookies["bold_session"].value, "")
+        self.assertEqual(self.post("/api/v2/auth/login/", {"email": self.user.email, "password": self.password}).status_code, 200)
+
     def test_login_requires_csrf_and_rejects_non_corporate_email(self):
         rejected = self.client.post("/api/v2/auth/login/", {"email": self.user.email, "password": self.password}, format="json")
         self.assertEqual(rejected.status_code, 403)
@@ -91,6 +99,25 @@ class AuthenticationFlowTests(TestCase):
         self.assertFalse(self.user.recovery_codes.filter(used_at__isnull=True).exists())
         self.assertFalse(AuthSession.objects.filter(user_account=self.user, revoked_at__isnull=True).exists())
         self.assertTrue(AuthEvent.objects.filter(event_type="mfa.disabled", user_account=self.user).exists())
+
+    def test_unreadable_totp_returns_clear_error_and_recovery_still_works(self):
+        self.login()
+        setup = self.post("/api/v2/auth/mfa/totp/setup/", {"label": "Teléfono", "current_password": self.password})
+        confirmed = self.post("/api/v2/auth/mfa/totp/confirm/", {
+            "method_id": setup.data["method_id"], "code": totp_code(setup.data["secret"]), "current_password": self.password,
+        })
+        method = self.user.mfa_methods.get(pk=setup.data["method_id"])
+        method.secret_encrypted = "clave-antigua"
+        method.save(update_fields=["secret_encrypted"])
+        self.post("/api/v2/auth/logout/", {})
+        challenge = self.post("/api/v2/auth/login/", {"email": self.user.email, "password": self.password}).data["challenge"]
+        failed = self.post("/api/v2/auth/mfa/verify/", {"challenge": challenge, "code": "123456"})
+        self.assertEqual(failed.status_code, 409)
+        self.assertIn("código de recuperación", failed.data["detail"])
+        recovered = self.post("/api/v2/auth/mfa/verify/", {"challenge": challenge, "code": confirmed.data["recovery_codes"][0]})
+        self.assertEqual(recovered.status_code, 200)
+        disabled = self.post("/api/v2/auth/mfa/disable/", {"current_password": self.password, "code": confirmed.data["recovery_codes"][1]})
+        self.assertEqual(disabled.status_code, 200)
 
     def test_totp_enrollment_requires_password_and_recent_mfa_for_replacement(self):
         self.login()

@@ -18,6 +18,14 @@ from corsheaders.defaults import default_headers
 # Define las rutas base del proyecto.
 base_dir = Path(__file__).resolve().parent.parent
 
+# El desarrollo local usa backend/.env; las variables del servidor tienen prioridad.
+env_file = base_dir / ".env"
+if env_file.is_file():
+    for line in env_file.read_text(encoding="utf-8-sig").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key and not key.lstrip().startswith("#"):
+            os.environ.setdefault(key.strip(), value.strip())
+
 
 # Define los valores sensibles leidos desde variables de entorno.
 # Nota: Django exige que los settings sean atributos en MAYUSCULAS a nivel
@@ -67,6 +75,7 @@ INSTALLED_APPS = [
     "boldApp.administrativo",
     "boldApp.permisos",
     "boldApp.tareas",
+    "boldApp.calendario",
 ]
 
 
@@ -193,6 +202,7 @@ REST_FRAMEWORK = {
         "auth_recovery_ip": "10/hour",
         "auth_recovery_account": "3/hour",
         "auth_websocket_ticket": "30/min",
+        "calendar_contacts": "60/min",
     },
 }
 
@@ -230,6 +240,9 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "false").lower() == "true"
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174")
+GOOGLE_CALENDAR_CLIENT_ID = os.environ.get("GOOGLE_CALENDAR_CLIENT_ID", "")
+GOOGLE_CALENDAR_CLIENT_SECRET = os.environ.get("GOOGLE_CALENDAR_CLIENT_SECRET", "")
+GOOGLE_CALENDAR_REDIRECT_URI = os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI", "")
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.
@@ -248,6 +261,12 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
     "true" if "REDIS_URL" not in os.environ else "false",
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_BEAT_SCHEDULE = {
+    "cleanup-calendar-drafts": {
+        "task": "boldApp.calendario.tasks.cleanup_calendar_drafts",
+        "schedule": 60.0,
+    },
+}
 
 
 # Define la capa de canales de Django Channels (push en vivo por WebSocket).
