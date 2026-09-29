@@ -1,0 +1,121 @@
+:root {
+    --driver-popover-font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.driver-popover.bold_onboarding_popover {
+    width: min(390px, calc(100vw - 28px));
+    max-width: 390px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(44, 48, 56, 0.12);
+    border-radius: 18px;
+    color: #2c3038;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(31, 35, 41, 0.24);
+}
+
+.bold_onboarding_popover .driver-popover-title {
+    padding: 24px 52px 0 24px;
+    font-size: 20px;
+    line-height: 1.2;
+    font-weight: 760;
+    letter-spacing: -0.025em;
+}
+
+.bold_onboarding_popover .driver-popover-description {
+    padding: 10px 24px 20px;
+    color: #616772;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.bold_onboarding_popover .driver-popover-close-btn {
+    top: 15px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    color: #6c727c;
+    font-size: 22px;
+}
+
+.bold_onboarding_popover .driver-popover-close-btn:hover,
+.bold_onboarding_popover .driver-popover-close-btn:focus-visible {
+    color: #2c3038;
+    background: #f1efec;
+}
+
+.bold_onboarding_popover .driver-popover-footer {
+    display: block;
+    padding: 16px 20px 18px;
+    border-top: 1px solid #ebe8e4;
+    background: #faf9f7;
+}
+
+.bold_onboarding_popover .driver-popover-progress-text {
+    display: block;
+    margin-bottom: 12px;
+    color: #737984;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+}
+
+.bold_onboarding_popover .driver-popover-footer button {
+    min-height: 38px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 720;
+    text-shadow: none;
+    cursor: pointer;
+}
+
+.bold_onboarding_popover .driver-popover-prev-btn {
+    color: #4f5560;
+    background: #ebe8e4;
+}
+
+.bold_onboarding_popover .driver-popover-next-btn {
+    color: #fff;
+    background: #e73535;
+}
+
+.bold_onboarding_popover .bold_tour_skip {
+    margin-right: auto;
+    padding-left: 4px;
+    color: #686e78;
+    background: transparent;
+}
+
+.bold_onboarding_popover .bold_tour_skip:hover,
+.bold_onboarding_popover .bold_tour_skip:focus-visible {
+    color: #b82029;
+    text-decoration: underline;
+}
+
+.bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: #fff; }
+.bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: #fff; }
+.bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: #fff; }
+.bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: #fff; }
+
+.driver-active-element {
+    scroll-margin: 90px;
+}
+
+.tour_help_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 760px) {
+    .driver-popover.bold_onboarding_popover { max-width: calc(100vw - 24px); }
+    .bold_onboarding_popover .driver-popover-title { padding: 20px 48px 0 20px; font-size: 18px; }
+    .bold_onboarding_popover .driver-popover-description { padding: 8px 20px 16px; }
+    .bold_onboarding_popover .driver-popover-footer { padding: 14px 16px 16px; }
+    .bold_onboarding_popover .driver-popover-footer button { padding-inline: 11px; }
+}

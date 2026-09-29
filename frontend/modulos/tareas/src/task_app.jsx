@@ -38,6 +38,7 @@ import {
 import { notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
 import { useCore } from "../../core/core_provider.jsx";
 import { AppShell, useShell } from "../../core/app_shell.jsx";
+import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
@@ -5709,7 +5710,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Returns the full shell with the focused tasks module.
     return (
-        <ProjectPreviewContext.Provider value={set_project_preview}><AppShell
+        <ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour /><AppShell
 sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
