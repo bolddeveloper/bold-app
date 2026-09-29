@@ -2,7 +2,7 @@ import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
 import { createContext, useContext, useEffect, useRef, useState, createElement } from "react";
-import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
+import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, Check as check_icon, ChevronDown as chevron_down_icon, CircleHelp as circle_help_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { is_using_real_backend } from "./http_client.js";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
@@ -72,6 +72,7 @@ function render_navigation_item(item, active_module, handle_module_change, optio
             className={`navigation_item ${is_active ? "navigation_item_active" : ""} ${is_expandable ? "navigation_item_expandable" : ""}`}
             key={item.id}
             type="button"
+            data-tour={`nav-${item.id}`}
             aria-expanded={is_expandable ? is_expanded : undefined}
             aria-controls={options.controls_id}
             onClick={handle_click}
@@ -108,7 +109,7 @@ function Sidebar(props) {
     const groups = [{ id: "work", label: current_user?.unit_name || "Trabajo" }, { id: "management", label: "Gestión" }];
 
     return (
-        <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
+        <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} data-tour="sidebar" inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
             <div className="sidebar_header">
                 {render_logo()}
                 <button
@@ -140,7 +141,7 @@ function Sidebar(props) {
                 </div>; })}
             </div>
 
-            <div className="sidebar_footer">
+            <div className="sidebar_footer" data-tour="profile">
                 <span className="profile_avatar">{current_user.initials}</span>
                 <div className="profile_text">
                     <strong>{current_user.name}</strong>
@@ -224,7 +225,7 @@ function render_top_bar(props) {
 
     return (
         <header className="top_bar">
-            <label className="search_box" htmlFor="task_search">
+            <label className="search_box" data-tour="search" htmlFor="task_search">
                 {render_icon(search_icon, 18)}
                 <input
                     id="task_search"
@@ -236,7 +237,18 @@ function render_top_bar(props) {
             </label>
             <div className="top_bar_actions">
                 <button
+                    className="theme_toggle_button tour_help_button"
+                    data-tour="help"
+                    type="button"
+                    aria-label="Abrir tutorial de Bold"
+                    title="Tutorial y ayuda"
+                    onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}
+                >
+                    <span className="theme_toggle_icon">{render_icon(circle_help_icon, 18)}</span>
+                </button>
+                <button
                     className="theme_toggle_button"
+                    data-tour="theme"
                     type="button"
                     aria-label={is_dark_mode ? "Activar modo claro" : "Activar modo oscuro"}
                     title={is_dark_mode ? "Modo claro" : "Modo oscuro"}
@@ -247,6 +259,7 @@ function render_top_bar(props) {
                 <div className="task_tool_anchor">
                     <button
                         className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}`}
+                        data-tour="notifications"
                         type="button"
                         aria-label="Notificaciones"
                         onClick={handle_toggle_notifications}
@@ -276,10 +289,11 @@ function render_mobile_header(props) {
     const title = props.detailTitle || active_item?.label || "Bold";
 
     return (
-        <header className="mobile_header">
+        <header className="mobile_header" data-tour="mobile-header">
             <div className="mobile_header_row">
                 <button
                     className="mobile_menu_button"
+                    data-tour="mobile-menu"
                     type="button"
                     aria-label={detailOpen ? "Volver" : "Abrir navegacion"}
                     onClick={() => detailOpen ? onBack() : set_is_sidebar_open(true)}
