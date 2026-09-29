@@ -112,9 +112,27 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
 
 
 class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):
+    reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
+
     class Meta:
         model = Employee
-        fields = ["full_name"]
+        fields = ["full_name", "reason"]
+
+    def validate_full_name(self, value):
+        value = " ".join(value.split())
+        if len(value) < 2:
+            raise serializers.ValidationError("Ingresa un nombre válido.")
+        return value
+
+    def validate(self, attrs):
+        if not str(self.initial_data.get("reason", "")).strip():
+            raise serializers.ValidationError({"reason": "El motivo es obligatorio."})
+        attrs["reason"] = attrs["reason"].strip()
+        return attrs
+
+    def update(self, instance, validated_data):
+        validated_data.pop("reason")
+        return super().update(instance, validated_data)
 
 
 class AdminTemporaryPasswordSerializer(serializers.Serializer):

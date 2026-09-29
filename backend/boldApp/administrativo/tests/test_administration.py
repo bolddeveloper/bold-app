@@ -145,6 +145,35 @@ class AdministrationApiTests(TestCase):
         reused = APIClient().post("/api/v2/auth/invitation/confirm/", {"token": token, "password": "Otro Horizonte Violeta 2027!"}, format="json")
         self.assertEqual(reused.status_code, 400)
 
+    def test_owner_can_edit_employee_name_with_reason_and_audit(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt").employee
+        response = self.client.patch(
+            f"/api/v2/administration/employees/{target.id}/",
+            {"full_name": "  Samuel   Actualizado  ", "reason": "Corrección del nombre del empleado"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        target.refresh_from_db()
+        self.assertEqual(target.full_name, "Samuel Actualizado")
+        action = AdministrativeAction.objects.get(action_type="employee_updated", target_employee=target)
+        self.assertEqual(action.reason, "Corrección del nombre del empleado")
+        event = SystemAuditEvent.objects.get(event_type="administration.employee_updated", target_id=target.id)
+        self.assertEqual(event.changes["before"]["full_name"], "Samuel")
+        self.assertEqual(event.changes["after"]["full_name"], "Samuel Actualizado")
+
+    def test_employee_name_edit_requires_a_reason(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt").employee
+        response = self.client.patch(
+            f"/api/v2/administration/employees/{target.id}/",
+            {"full_name": "Nombre sin motivo"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        target.refresh_from_db()
+        self.assertNotEqual(target.full_name, "Nombre sin motivo")
+
     @override_settings(ADMIN_TEMPORARY_PASSWORD_ENABLED=True)
     def test_owner_with_recent_mfa_can_create_forced_change_temporary_password(self):
         password = "Ámbar Río Seguro 2026! Z9"

@@ -244,9 +244,10 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         employee = self.get_object()
         serializer = AdminEmployeeUpdateSerializer(employee, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        reason = serializer.validated_data["reason"]
         before = {"full_name": employee.full_name}
         serializer.save()
-        admin_action = create_administrative_action(request, "employee_updated", str(request.data.get("reason") or "Actualización de datos del empleado"), employee, getattr(employee, "user_account", None))
+        admin_action = create_administrative_action(request, "employee_updated", reason, employee, getattr(employee, "user_account", None))
         complete_administrative_action(admin_action, request, changes={"before": before, "after": {"full_name": employee.full_name}})
         return Response(AdminEmployeeSerializer(employee).data)
 
