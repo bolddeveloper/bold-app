@@ -7,7 +7,7 @@
 - Dashboard global con métricas organizacionales, seguridad y tarjetas aportadas por cada módulo.
 - Directorio de empleados, creación de cuenta e invitación de un solo uso.
 - Asignación de plazas y edición del nombre del empleado.
-- Recuperación de contraseña por correo. Existe un modo temporal, apagado por defecto, para que exclusivamente el propietario asigne una credencial inicial mientras el proveedor de correo no esté disponible.
+- Recuperación de contraseña por correo y restablecimiento administrativo de contingencia. El propietario puede asignar una contraseña temporal a un empleado sin conocer la anterior, con MFA reciente, motivo auditable, cierre de sesiones y cambio obligatorio en el siguiente acceso.
 - Consulta y cierre de sesiones, restablecimiento de MFA, activación y desactivación de cuentas.
 - Baja de empleados con inventario previo y transferencia transaccional de responsabilidades.
 - Catálogos de unidades, cargos y plazas, sin borrado físico.
@@ -26,6 +26,8 @@ Las acciones críticas exigen una sesión del dueño con MFA verificado en los �
 - marca `must_change_password`, por lo que el empleado debe sustituirla en su primer inicio de sesión.
 
 La credencial debe entregarse al empleado por un canal distinto a la aplicación. Cuando Postmark esté operativo, vuelve a establecer la bandera en `false`, recrea `backend` y `worker`, y utiliza exclusivamente invitaciones y recuperaciones por correo.
+
+El restablecimiento desde la ficha de un empleado permanece disponible como mecanismo de contingencia aunque la creación con contraseña temporal esté deshabilitada. No permite cambiar la contraseña del propietario, no revela credenciales existentes y tampoco elimina el MFA del empleado; si el dispositivo MFA dejó de estar disponible, debe usarse por separado la acción auditada «Restablecer MFA».
 
 ## Arquitectura modular
 

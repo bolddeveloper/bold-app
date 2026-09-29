@@ -13,6 +13,7 @@ export const adminApi = {
     revokeSessions: (id, reason) => http.request(`/api/v2/administration/employees/${id}/revoke-sessions/`, { method: "POST", body: { reason } }),
     resetMfa: (id, reason) => http.request(`/api/v2/administration/employees/${id}/reset-mfa/`, { method: "POST", body: { reason } }),
     sendPasswordReset: (id, reason) => http.request(`/api/v2/administration/employees/${id}/send-password-reset/`, { method: "POST", body: { reason } }),
+    setTemporaryPassword: (id, body) => http.request(`/api/v2/administration/employees/${id}/set-temporary-password/`, { method: "POST", body }),
     deactivateAccount: (id, reason) => http.request(`/api/v2/administration/employees/${id}/deactivate-account/`, { method: "POST", body: { reason } }),
     reactivateAccount: (id, reason) => http.request(`/api/v2/administration/employees/${id}/reactivate-account/`, { method: "POST", body: { reason } }),
     offboardingPreview: id => http.request(`/api/v2/administration/employees/${id}/offboarding-preview/`),

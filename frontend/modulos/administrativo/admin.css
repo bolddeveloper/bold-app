@@ -79,6 +79,12 @@
 .admin_experimental_toggle small { color: #64748b; }
 .admin_temporary_password { display: grid; gap: 12px; padding: 14px; border: 1px solid #f1c56b; border-radius: 10px; background: #fffaf0; }
 .admin_temporary_password p { margin: 0; color: #64748b; font-size: 13px; line-height: 1.45; }
+.admin_password_reset_form { display: grid; gap: 12px; color: #172033; text-align: left; }
+.admin_password_reset_form p { margin: 0; color: #64748b; font-size: 13px; line-height: 1.45; }
+.admin_password_reset_form label { display: grid; gap: 6px; font-weight: 700; }
+.admin_password_reset_form :is(input, textarea) { width: 100%; min-height: 42px; border: 1px solid #ccd4df; border-radius: 8px; padding: 10px; background: #fff; color: inherit; font: inherit; box-sizing: border-box; }
+.admin_password_reset_form textarea { min-height: 82px; resize: vertical; }
+.admin_password_reset_form :is(input, textarea):focus { border-color: var(--bold_red, #ef1f2d); outline: 0; box-shadow: 0 0 0 3px rgb(239 31 45 / 12%); }
 .admin_catalog_form { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
 .admin_catalog_form > header, .admin_catalog_form > footer, .admin_catalog_form > label:last-of-type { grid-column: 1 / -1; }
 .admin_catalog_form header select, .admin_catalog_form textarea { border: 1px solid #ccd4df; border-radius: 8px; padding: 10px; font: inherit; }

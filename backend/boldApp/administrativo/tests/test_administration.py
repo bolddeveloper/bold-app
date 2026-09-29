@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory
 
 from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthMFAMethod, AuthSession
-from boldApp.autenticacion.services import create_session, encrypt_secret, generate_totp_secret
+from boldApp.autenticacion.services import create_challenge, create_session, encrypt_secret, generate_totp_secret
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position, PositionAssignment, UserAccount
 from boldApp.tareas.models import ActivityLog, Project, Task, TaskStatus
 
@@ -276,6 +276,89 @@ class AdministrationApiTests(TestCase):
         self.assertEqual(target.password, original_hash)
         self.assertEqual(len(mail.outbox), 1)
         self.assertNotIn("password", response.data)
+
+    def test_owner_can_set_employee_temporary_password_and_revoke_access(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        original_version = target.credentials_version
+        request = APIRequestFactory().get("/", REMOTE_ADDR="127.0.0.1")
+        _, target_session = create_session(target, request)
+        _, challenge = create_challenge(target, AuthChallenge.PURPOSE_PASSWORD_RESET, request)
+        password = "Bosque Seguro Temporal 2026! Z9"
+
+        response = self.client.post(
+            f"/api/v2/administration/employees/{target.employee_id}/set-temporary-password/",
+            {
+                "password": password,
+                "password_confirmation": password,
+                "reason": "Salida inesperada del empleado",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        target.refresh_from_db(); target_session.refresh_from_db(); challenge.refresh_from_db()
+        self.assertTrue(target.check_password(password))
+        self.assertTrue(target.must_change_password)
+        self.assertEqual(target.credentials_version, original_version + 1)
+        self.assertIsNotNone(target.password_changed_at)
+        self.assertIsNotNone(target_session.revoked_at)
+        self.assertIsNotNone(challenge.invalidated_at)
+        self.assertNotIn("password", response.data)
+        action = AdministrativeAction.objects.get(action_type="temporary_password_set", target_account=target)
+        audit_payload = json.dumps({"metadata": action.metadata, "response": response.data})
+        self.assertNotIn(password, audit_payload)
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.temporary_password_set", target_id=target.employee_id).exists())
+        self.assertTrue(AuthEvent.objects.filter(event_type="password.admin_reset", user_account=target, actor_account=self.owner).exists())
+
+    def test_temporary_password_reset_requires_recent_mfa_and_cannot_target_owner(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        original_hash = target.password
+        weak_session = AuthSession.objects.create(
+            user_account=self.owner,
+            token_hash="3" * 64,
+            expires_at=self.owner_session.expires_at,
+            auth_strength="password",
+            credentials_version=self.owner.credentials_version,
+        )
+        weak_client = APIClient(); weak_client.force_authenticate(self.owner, weak_session)
+        weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
+        payload = {
+            "password": "Bosque Seguro Temporal 2026! Z9",
+            "password_confirmation": "Bosque Seguro Temporal 2026! Z9",
+            "reason": "Prueba sin MFA reciente",
+        }
+        denied = weak_client.post(
+            f"/api/v2/administration/employees/{target.employee_id}/set-temporary-password/",
+            payload,
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        target.refresh_from_db()
+        self.assertEqual(target.password, original_hash)
+
+        owner_denied = self.client.post(
+            f"/api/v2/administration/employees/{self.owner.employee_id}/set-temporary-password/",
+            payload,
+            format="json",
+        )
+        self.assertEqual(owner_denied.status_code, 400)
+
+    def test_temporary_password_reset_validates_confirmation_and_policy(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        endpoint = f"/api/v2/administration/employees/{target.employee_id}/set-temporary-password/"
+        mismatch = self.client.post(endpoint, {
+            "password": "Bosque Seguro Temporal 2026! Z9",
+            "password_confirmation": "Una contraseña diferente 2026!",
+            "reason": "Prueba de confirmación",
+        }, format="json")
+        self.assertEqual(mismatch.status_code, 400)
+        weak = self.client.post(endpoint, {
+            "password": "12345678",
+            "password_confirmation": "12345678",
+            "reason": "Prueba de política",
+        }, format="json")
+        self.assertEqual(weak.status_code, 400)
+        self.assertFalse(AdministrativeAction.objects.filter(action_type="temporary_password_set", target_account=target).exists())
 
     def test_owner_can_manage_organization_catalog_with_audited_reason(self):
         unit = self.client.post("/api/v2/administration/units/", {

@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthSession
-from boldApp.autenticacion.services import create_challenge, revoke_all_sessions, revoke_session, send_account_invitation, send_password_reset
+from boldApp.autenticacion.services import create_challenge, record_event, revoke_all_sessions, revoke_session, send_account_invitation, send_password_reset
 from boldApp.core.models import Employee, JobRole, OrganizationalUnit, PermissionAuditLog, Position, PositionAssignment, UserAccount
 
 from .models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, SystemAuditEvent
@@ -25,6 +25,7 @@ from .serializers import (
     AdminEmployeeCreateSerializer,
     AdminEmployeeSerializer,
     AdminEmployeeUpdateSerializer,
+    AdminTemporaryPasswordSerializer,
     AdminSessionSerializer,
     AdministrativeActionSerializer,
     AdministrativeReasonSerializer,
@@ -41,7 +42,7 @@ from .serializers import (
 from .services import complete_administrative_action, create_administrative_action, fail_administrative_action, record_system_event
 
 
-SENSITIVE_EMPLOYEE_ACTIONS = {"revoke_sessions", "reset_mfa", "send_password_reset", "deactivate_account", "reactivate_account", "offboard"}
+SENSITIVE_EMPLOYEE_ACTIONS = {"revoke_sessions", "reset_mfa", "send_password_reset", "set_temporary_password", "deactivate_account", "reactivate_account", "offboard"}
 
 DEFAULT_DASHBOARD_LAYOUT = [
     {"type": "metric", "metrics": ["organization.employees_active"], "visualization": "circle"},
@@ -320,6 +321,57 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         admin_action = create_administrative_action(request, "password_reset_sent", serializer.validated_data["reason"], employee, account)
         complete_administrative_action(admin_action, request)
         return Response({"detail": "Recuperación de contraseña enviada al correo corporativo."})
+
+    @action(detail=True, methods=["post"], url_path="set-temporary-password")
+    def set_temporary_password(self, request, pk=None):
+        employee = self.get_object()
+        account = getattr(employee, "user_account", None)
+        if not account:
+            return Response({"detail": "El empleado no tiene cuenta."}, status=status.HTTP_400_BAD_REQUEST)
+        if account.is_superuser:
+            return Response({"detail": "La contraseña del propietario debe cambiarse desde su propio menú de seguridad."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AdminTemporaryPasswordSerializer(data=request.data, context={"account": account})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        admin_action = create_administrative_action(
+            request,
+            "temporary_password_set",
+            data["reason"],
+            employee,
+            account,
+            {"credential_mode": "temporary_password"},
+        )
+        now = timezone.now()
+        with transaction.atomic():
+            account.set_password(data["password"])
+            account.password_changed_at = now
+            account.must_change_password = True
+            account.credentials_version += 1
+            account.save(update_fields=["password", "password_changed_at", "must_change_password", "credentials_version", "updated_at"])
+            invalidated = account.auth_challenges.filter(
+                purpose__in=[AuthChallenge.PURPOSE_INVITATION, AuthChallenge.PURPOSE_PASSWORD_RESET],
+                consumed_at__isnull=True,
+                invalidated_at__isnull=True,
+            ).update(invalidated_at=now)
+            revoked = revoke_all_sessions(account, "administrative_password_reset", request.user)
+            complete_administrative_action(
+                admin_action,
+                request,
+                changes={"credentials": {"temporary_password_set": True, "must_change_password": True}},
+                metadata={"revoked_sessions": revoked, "invalidated_challenges": invalidated},
+            )
+            record_event(
+                "password.admin_reset",
+                request,
+                user=account,
+                actor=request.user,
+                session=request.auth,
+                metadata={"must_change_password": True},
+            )
+        return Response({
+            "detail": "Contraseña temporal establecida. El empleado deberá cambiarla al iniciar sesión.",
+            "revoked_sessions": revoked,
+        })
 
     @action(detail=True, methods=["post"], url_path="deactivate-account")
     def deactivate_account(self, request, pk=None):

@@ -115,6 +115,22 @@ class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):
         fields = ["full_name"]
 
 
+class AdminTemporaryPasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=1024)
+    password_confirmation = serializers.CharField(write_only=True, trim_whitespace=False, max_length=1024)
+    reason = serializers.CharField(min_length=8, max_length=1000)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirmation"]:
+            raise serializers.ValidationError({"password_confirmation": "Las contraseñas no coinciden."})
+        try:
+            validate_password(attrs["password"], user=self.context["account"])
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({"password": list(error.messages)}) from error
+        attrs["reason"] = attrs["reason"].strip()
+        return attrs
+
+
 class OrganizationalUnitAdminSerializer(serializers.ModelSerializer):
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
 

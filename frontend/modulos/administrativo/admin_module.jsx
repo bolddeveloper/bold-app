@@ -23,6 +23,24 @@ async function askText(title, value = "", minimum = 1) {
     });
     return result.isConfirmed ? result.value.trim() : null;
 }
+async function askTemporaryPassword() {
+    const result = await adminDialog({
+        title: "Establecer contraseña temporal",
+        html: `<div class="admin_password_reset_form"><p>El empleado deberá reemplazarla al iniciar sesión. La contraseña no se mostrará nuevamente.</p><label>Nueva contraseña<input id="admin_new_password" type="password" autocomplete="new-password" maxlength="1024"></label><label>Confirmar contraseña<input id="admin_password_confirmation" type="password" autocomplete="new-password" maxlength="1024"></label><label>Motivo<textarea id="admin_password_reason" maxlength="1000"></textarea></label></div>`,
+        showCancelButton: true,
+        focusConfirm: false,
+        preConfirm: () => {
+            const password = document.getElementById("admin_new_password")?.value || "";
+            const passwordConfirmation = document.getElementById("admin_password_confirmation")?.value || "";
+            const reason = document.getElementById("admin_password_reason")?.value.trim() || "";
+            if (password.length < 8) return Swal.showValidationMessage("La contraseña debe contener al menos 8 caracteres.");
+            if (password !== passwordConfirmation) return Swal.showValidationMessage("Las contraseñas no coinciden.");
+            if (reason.length < 8) return Swal.showValidationMessage("Ingresa un motivo de al menos 8 caracteres.");
+            return { password, password_confirmation: passwordConfirmation, reason };
+        },
+    });
+    return result.isConfirmed ? result.value : null;
+}
 async function confirmOrganization(title) {
     return (await adminDialog({ title, text: "El cambio quedará registrado en el historial.", icon: "question", showCancelButton: true })).isConfirmed;
 }
@@ -177,6 +195,7 @@ function EmployeeDetail({ employee, employees, organization, sessions, onRefresh
             {!account?.has_usable_password && <button onClick={() => runAction("resend", "Reenviar invitación")}>Reenviar invitación</button>}
             <button onClick={() => runAction("sessions", "Cerrar todas las sesiones")}>Cerrar sesiones</button>
             <button onClick={() => runAction("password", "Enviar recuperación de contraseña")}>Recuperar contraseña</button>
+            {!account?.is_superuser && <button onClick={() => runAction("set_password", "Establecer contraseña temporal")}>Cambiar contraseña</button>}
             <button onClick={() => runAction("mfa", "Restablecer MFA")}>Restablecer MFA</button>
             {account?.is_active ? <button className="is_danger" onClick={() => runAction("deactivate", "Desactivar cuenta")}>Desactivar cuenta</button> : <button onClick={() => runAction("reactivate", "Reactivar cuenta")}>Reactivar cuenta</button>}
         </div><p className="admin_security_note"><ShieldCheck size={16} /> Las acciones sensibles requieren MFA reciente del dueño y quedan auditadas.</p></section>
@@ -236,12 +255,15 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice, te
         try { await coreApi.stepUpMfa(code); }
         catch (error) { setNotice(error.message, true); setBusy(false); return; }
         setBusy(false);
-        const reason = await askText(`${label}. Motivo`, "", 8);
+        const passwordReset = kind === "set_password" ? await askTemporaryPassword() : null;
+        if (kind === "set_password" && !passwordReset) return;
+        const reason = passwordReset?.reason || await askText(`${label}. Motivo`, "", 8);
         if (!reason) return;
         setBusy(true);
         try {
             if (kind === "sessions") await adminApi.revokeSessions(employee.id, reason);
             if (kind === "password") await adminApi.sendPasswordReset(employee.id, reason);
+            if (kind === "set_password") await adminApi.setTemporaryPassword(employee.id, passwordReset);
             if (kind === "mfa") await adminApi.resetMfa(employee.id, reason);
             if (kind === "deactivate") await adminApi.deactivateAccount(employee.id, reason);
             if (kind === "reactivate") await adminApi.reactivateAccount(employee.id, reason);
@@ -301,6 +323,8 @@ export function Audit({ page, onPage }) {
         "administration.position_created": "Plaza creada", "administration.position_updated": "Plaza actualizada",
         "administration.catalog_option_created": "Opción de catálogo creada", "administration.catalog_option_updated": "Opción de catálogo actualizada",
         "administration.catalog_option_deleted": "Opción de catálogo eliminada", "administration.session_revoked": "Sesión revocada",
+        "administration.temporary_password_set": "Contraseña temporal establecida por el propietario",
+        "password.admin_reset": "Contraseña restablecida por el propietario",
     };
     const eventName = row => row.permission_name || eventNames[row.event_type] || row.event_type.replaceAll(".", " · ").replaceAll("_", " ");
     return <section className="admin_panel admin_audit_panel">
