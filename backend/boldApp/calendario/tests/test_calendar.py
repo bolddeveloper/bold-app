@@ -33,13 +33,12 @@ class GoogleResponse:
 class CalendarTests(TestCase):
     def setUp(self):
         call_command("seed_demo_data", verbosity=0)
-        self.owner = UserAccount.objects.get(email="ana@bold.gt")
-        self.owner.is_superuser = True
-        self.owner.save(update_fields=["is_superuser", "updated_at"])
+        self.owner = UserAccount.objects.get(email="luis@bold.gt")
         self.member = UserAccount.objects.get(email="samuel@bold.gt")
         _, session = create_session(self.owner, APIRequestFactory().get("/"))
         self.owner_client = APIClient()
         self.owner_client.force_authenticate(self.owner, session)
+        self.owner_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner.employee.position_assignments.get(is_active=True, released_at__isnull=True).id))
         self.member_client = APIClient()
         self.member_client.force_authenticate(self.member)
 
