@@ -138,8 +138,8 @@ class OrganizationalUnitAdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrganizationalUnit
-        fields = ["id", "name", "unit_type", "parent_unit", "sensitivity_level", "color_hex", "created_at", "updated_at", "reason"]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        fields = ["id", "name", "unit_type", "parent_unit", "sensitivity_level", "color_hex", "is_control_plane", "created_at", "updated_at", "reason"]
+        read_only_fields = ["id", "is_control_plane", "created_at", "updated_at"]
 
     def create(self, validated_data):
         validated_data.pop("reason")
@@ -156,10 +156,14 @@ class OrganizationalUnitAdminSerializer(serializers.ModelSerializer):
 
     def validate_parent_unit(self, parent):
         current = self.instance
+        if current and current.is_control_plane and parent != current.parent_unit:
+            raise serializers.ValidationError("La unidad de Dirección debe permanecer en la raíz de la organización.")
         ancestor = parent
+        visited = set()
         while ancestor:
-            if current and ancestor.id == current.id:
+            if ancestor.id in visited or (current and ancestor.id == current.id):
                 raise serializers.ValidationError("Una unidad no puede depender de sí misma ni de una descendiente.")
+            visited.add(ancestor.id)
             ancestor = ancestor.parent_unit
         return parent
 

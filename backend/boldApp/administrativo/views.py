@@ -577,7 +577,7 @@ class OrganizationOverviewView(APIView):
                 "is_protected": is_protected,
             })
         return Response({
-            "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
+            "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "is_control_plane": row.is_control_plane, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
             "roles": [{"id": row.id, "title": row.title, "level": row.level, "description": row.description} for row in JobRole.objects.all()],
             "positions": positions,
             "unit_types": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE), many=True).data,
@@ -634,6 +634,16 @@ class OrganizationalUnitAdminViewSet(mixins.DestroyModelMixin, OrganizationCatal
         reason_serializer = AdministrativeReasonSerializer(data=request.data)
         reason_serializer.is_valid(raise_exception=True)
         unit = self.get_object()
+        if unit.is_control_plane:
+            return Response({"detail": "La unidad de Dirección es estructural y no puede eliminarse."}, status=status.HTTP_400_BAD_REQUEST)
+        child_count = unit.child_units.count()
+        position_count = unit.positions.count()
+        if child_count or position_count:
+            return Response({
+                "detail": "La unidad debe estar vacía antes de eliminarse. Reubica primero sus subunidades y plazas.",
+                "blocking_subunits": child_count,
+                "blocking_positions": position_count,
+            }, status=status.HTTP_400_BAD_REQUEST)
         name, unit_id = unit.name, unit.id
         try:
             unit.delete()
