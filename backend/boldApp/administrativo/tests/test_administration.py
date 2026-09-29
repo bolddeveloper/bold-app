@@ -462,6 +462,61 @@ class AdministrationApiTests(TestCase):
         }, format="json")
         self.assertEqual(removed.status_code, 204, removed.data)
 
+    def test_owner_can_move_units_without_creating_hierarchy_cycles(self):
+        unit_type = OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE).first().value
+        sensitivity = OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.SENSITIVITY).first().value
+        root_a = OrganizationalUnit.objects.create(name="Área A", unit_type=unit_type, sensitivity_level=sensitivity)
+        root_b = OrganizationalUnit.objects.create(name="Área B", unit_type=unit_type, sensitivity_level=sensitivity)
+        child = OrganizationalUnit.objects.create(name="Equipo móvil", unit_type=unit_type, sensitivity_level=sensitivity, parent_unit=root_a)
+        endpoint = f"/api/v2/administration/units/{child.id}/"
+
+        moved = self.client.patch(endpoint, {
+            "name": "Equipo reubicado",
+            "unit_type": child.unit_type,
+            "sensitivity_level": child.sensitivity_level,
+            "parent_unit": str(root_b.id),
+            "reason": "Corrección de la estructura organizacional",
+        }, format="json")
+        self.assertEqual(moved.status_code, 200, moved.data)
+        child.refresh_from_db()
+        self.assertEqual(child.parent_unit, root_b)
+        self.assertEqual(child.name, "Equipo reubicado")
+
+        descendant = OrganizationalUnit.objects.create(name="Subequipo", unit_type=unit_type, sensitivity_level=sensitivity, parent_unit=child)
+        cycle = self.client.patch(endpoint, {
+            "parent_unit": str(descendant.id),
+            "reason": "Intento de ciclo organizacional",
+        }, format="json")
+        self.assertEqual(cycle.status_code, 400)
+        child.refresh_from_db()
+        self.assertEqual(child.parent_unit, root_b)
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="administration.organizational_unit_updated", target_id=child.id).exists())
+
+    def test_unit_deletion_is_limited_to_empty_non_control_units(self):
+        direction = OrganizationalUnit.objects.get(is_control_plane=True)
+        empty = OrganizationalUnit.objects.create(name="Unidad temporal", unit_type=direction.unit_type, sensitivity_level=direction.sensitivity_level)
+        deleted = self.client.delete(f"/api/v2/administration/units/{empty.id}/", {"reason": "Unidad creada en ubicación incorrecta"}, format="json")
+        self.assertEqual(deleted.status_code, 204, deleted.data)
+        self.assertFalse(OrganizationalUnit.objects.filter(id=empty.id).exists())
+
+        parent = OrganizationalUnit.objects.create(name="Unidad con rama", unit_type=direction.unit_type, sensitivity_level=direction.sensitivity_level)
+        OrganizationalUnit.objects.create(name="Unidad hija", unit_type=direction.unit_type, sensitivity_level=direction.sensitivity_level, parent_unit=parent)
+        blocked = self.client.delete(f"/api/v2/administration/units/{parent.id}/", {"reason": "Intento de eliminación con dependencias"}, format="json")
+        self.assertEqual(blocked.status_code, 400)
+        self.assertEqual(blocked.data["blocking_subunits"], 1)
+
+        protected_delete = self.client.delete(f"/api/v2/administration/units/{direction.id}/", {"reason": "Intento sobre la unidad estructural"}, format="json")
+        self.assertEqual(protected_delete.status_code, 400)
+        protected_move = self.client.patch(f"/api/v2/administration/units/{direction.id}/", {
+            "parent_unit": str(parent.id),
+            "reason": "Intento de mover la unidad estructural",
+        }, format="json")
+        self.assertEqual(protected_move.status_code, 400)
+
+        overview = self.client.get("/api/v2/administration/organization/")
+        direction_row = next(row for row in overview.data["units"] if str(row["id"]) == str(direction.id))
+        self.assertTrue(direction_row["is_control_plane"])
+
     def test_owner_position_is_visible_but_cannot_be_modified_even_with_recent_mfa(self):
         owner_position = self.owner_assignment.position
         overview = self.client.get("/api/v2/administration/organization/")
