@@ -4276,12 +4276,12 @@ function TaskAppContent({ externalModules = {} }) {
         try {
             const saved_projects = JSON.parse(localStorage.getItem(projects_storage_key));
 
-            return Array.isArray(saved_projects) && saved_projects.length ? saved_projects : project_items;
+            return Array.isArray(saved_projects) ? saved_projects : project_items;
         } catch (_error) {
             return project_items;
         }
     });
-    visible_project_items = projects.length ? projects : project_items;
+    visible_project_items = projects;
     const workspace_unit_id = session.activeUnit?.id || current_user?.unit_name || "demo";
     const load_workspace_state = () => {
         try { return { unitId: workspace_unit_id, items: readWorkspaces(localStorage, workspace_unit_id), activeId: localStorage.getItem(activeWorkspaceStorageKey(workspace_unit_id)) || "all", error: "" }; }
@@ -4815,6 +4815,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     const workspace_projects = active_workspace ? projects.filter(project => active_workspace.projectIds.includes(String(project.id))) : projects;
+    const home_projects = projects.filter(project => isActiveProject(project) && (!real || session.account?.is_superuser || String(project.unitId || project.unit) === String(session.activeUnit?.id)));
     const owner_department_view = real && Boolean(session.account?.is_superuser) && active_module === "department_projects";
     const workspace_tasks = tasksInWorkspace(active_workspace, tasks);
 
@@ -5733,7 +5734,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     onOpenTasks={handle_my_tasks_select}
                     onToggleTask={handle_toggle_task}
                     parseDueDate={parse_due_date}
-                    projects={projects}
+                    projects={home_projects}
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}

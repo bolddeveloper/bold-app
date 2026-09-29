@@ -1,13 +1,14 @@
 import { BoldSelect as AdminSelect } from "../core/shared/bold_select.jsx";
 import Swal from "sweetalert2";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Building2, Check, ChevronDown, GripVertical, LayoutDashboard, MoreHorizontal, Pencil, Plus, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Activity, Building2, Check, ChevronDown, GripVertical, LayoutDashboard, MoreHorizontal, Pencil, Plus, RefreshCw, Search, ShieldCheck, UserPlus, Users, PlugZap } from "lucide-react";
 
 import { useCore } from "../core/core_provider.jsx";
 import { coreApi } from "../core/core_api.js";
 import { adminApi } from "./admin_api.js";
 import { useDialog } from "../core/shared/use_dialog.js";
 import { useMediaQuery } from "../core/shared/use_media_query.js";
+import Connectors from "./connectors.jsx";
 
 const adminDialog = options => Swal.fire({
     confirmButtonColor: "#ef1f2d",
@@ -32,6 +33,7 @@ const tabs = [
     ["employees", "Empleados", Users],
     ["audit", "Auditoría", Activity],
     ["organization", "Organización", Building2],
+    ["connectors", "Conectores", PlugZap],
 ];
 
 const metricLabels = {
@@ -629,5 +631,5 @@ export default function AdministrationModule() {
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
     if (!data) return <Loading error={error} onRetry={load} />;
-    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} temporaryPasswordEnabled={Boolean(data.dashboard.features?.temporary_password_provisioning)} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}</section>;
+    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} temporaryPasswordEnabled={Boolean(data.dashboard.features?.temporary_password_provisioning)} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}{active === "connectors" && <Connectors />}</section>;
 }

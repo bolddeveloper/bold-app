@@ -161,16 +161,19 @@
 .home_dashboard_empty { width: 100%; }
 .home_gallery_backdrop .home_gallery { border-color: #e5ebf0; background: #fff; }.home_gallery_backdrop .home_gallery_card { background: #fff; }.home_gallery_backdrop .home_gallery_preview { color: #17324d; }
 .home_gallery_backdrop .home_gallery_metrics > span, .home_gallery_backdrop .home_gallery_metrics > span:first-child { background: #fff5f7; border-color: #ffd9e0; }
-.theme_dark .home_module, .theme_dark .home_gallery_backdrop { --bold_red: #ff5971; --bold_text: #e9f1fb; --bold_muted: #9aafc7; --bold_surface: #0d192a; --bold_surface_soft: #14233a; --bold_line: #283b55; color: var(--bold_text); }
-.theme_dark .main_workspace:has(.home_module) { background: #07111f; }
-.theme_dark .home_widget, .theme_dark .home_gallery_backdrop .home_gallery_card { background: #0d192a; border-color: #283b55; box-shadow: 0 8px 28px rgb(0 0 0 / 20%); }
-.theme_dark .home_widget_metrics { background: radial-gradient(circle at 12% -12%, rgb(255 51 85 / 23%), transparent 48%), #0d192a; }
-.theme_dark .home_widget_heading h2, .theme_dark .home_activity_item strong { color: #e9f1fb; }
-.theme_dark .home_widget_heading > div > i, .theme_dark .home_metric_grid i, .theme_dark .home_shortcuts i { background: #3b1b30; color: #ff5971; }
-.theme_dark .home_metric_grid > div, .theme_dark .home_metric_grid > div.is_primary, .theme_dark .home_project, .theme_dark .home_shortcuts > button, .theme_dark .home_deadlines_list > button { background: #14233a; border-color: #293b56; color: #e9f1fb; }
-.theme_dark .home_metric_grid span, .theme_dark .home_status_legend strong { color: #aec1d5; }.theme_dark .home_metric_grid small, .theme_dark .home_project small { color: #9aafc7; }
-.theme_dark .home_quick_add { background: #361b2c; border-color: #613148; }.theme_dark .home_status_ring > span { background: #0d192a; }
-.theme_dark .home_gallery_backdrop .home_gallery { background: #0d192a; border-color: #283b55; }.theme_dark .home_gallery_backdrop .home_gallery_preview { color: #e9f1fb; }
+.theme_dark .home_module, .theme_dark .home_gallery_backdrop { --bold_red: inherit; --bold_text: inherit; --bold_muted: inherit; --bold_surface: inherit; --bold_surface_soft: inherit; --bold_line: inherit; color: var(--bold_text); }
+.theme_dark .main_workspace:has(.home_module) { background: var(--bold_canvas); }
+.theme_dark .home_widget, .theme_dark .home_gallery_backdrop .home_gallery_card { background: var(--bold_surface); border-color: var(--bold_line); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); }
+.theme_dark .home_widget_metrics { background: var(--bold_surface); }
+.theme_dark .home_widget_heading h2, .theme_dark .home_activity_item strong { color: var(--bold_text); }
+.theme_dark .home_widget_heading > div > i, .theme_dark .home_metric_grid i, .theme_dark .home_shortcuts i { background: var(--bold_red_tint); color: var(--bold_red); }
+.theme_dark .home_metric_grid > div, .theme_dark .home_metric_grid > div.is_primary, .theme_dark .home_project, .theme_dark .home_shortcuts > button, .theme_dark .home_deadlines_list > button { background: var(--bold_surface_soft); border-color: var(--bold_line); color: var(--bold_text); }
+.theme_dark .home_metric_grid span, .theme_dark .home_status_legend strong, .theme_dark .home_metric_grid small, .theme_dark .home_project small { color: var(--bold_muted); }
+.theme_dark .home_quick_add { background: var(--bold_surface_soft); border-color: var(--bold_line); }.theme_dark .home_status_ring > span { background: var(--bold_surface); }
+.theme_dark .home_task, .theme_dark .home_tabs, .theme_dark .home_task_check { border-color: var(--bold_line); }
+.theme_dark .home_activity_item i:not(.home_activity_icon_comment, .home_activity_icon_status_changed, .home_activity_icon_project_created) { background: var(--bold_red); }
+.theme_dark .home_gallery_backdrop .home_gallery_metrics > span, .theme_dark .home_gallery_backdrop .home_gallery_metrics > span:first-child { background: var(--bold_surface_soft); border-color: var(--bold_line); }
+.theme_dark .home_gallery_backdrop .home_gallery { background: var(--bold_surface); border-color: var(--bold_line); }.theme_dark .home_gallery_backdrop .home_gallery_preview { color: var(--bold_text); }
 @container (max-width: 480px) { .home_metric_grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.home_widget_heading { padding-right: 80px; }.home_widget_heading > button { max-width: 60px; font-size: 11px; } }
 @container (max-width: 250px) { .home_metric_grid, .home_shortcuts { grid-template-columns: 1fr; }.home_status_content { flex-direction: column; align-items: flex-start; } }
 
@@ -204,7 +207,7 @@
 .home_activity_item:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
 .home_activity_item i.home_activity_icon_project_created { background: #4e82e8; }
 .home_widget_popover_portal { position: fixed; z-index: 1600; right: auto; bottom: auto; }
-.theme_dark .home_widget_popover_portal { --bold_surface: #0d192a; --bold_surface_soft: #14233a; --bold_line: #283b55; --bold_text: #e9f1fb; background: var(--bold_surface); border-color: var(--bold_line); color: var(--bold_text); }
+.theme_dark .home_widget_popover_portal { background: var(--bold_surface); border-color: var(--bold_line); color: var(--bold_text); }
 @media (max-width: 600px) { .home_widget_popover_portal { top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; } }
 .home_gallery { width: min(720px, 100vw); }
 .home_gallery_card_top > span { color: var(--bold_muted); font-size: 11px; font-weight: 700; }
@@ -216,8 +219,12 @@
 
 /* Keep compact widgets balanced inside their shared row height. */
 .home_widget_slot.is_uniform .home_widget_tasks .home_widget_body { display: flex; flex-direction: column; }
-.home_widget_slot.is_uniform .home_widget_tasks .home_task_list { flex: 1 1 auto; }
+.home_widget_slot.is_uniform .home_widget_tasks .home_task_list { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; }
+.home_widget_slot.is_uniform .home_widget_tasks .home_task_list::-webkit-scrollbar { display: none; }
 .home_widget_slot.is_uniform .home_widget_tasks .home_quick_add { flex: 0 0 auto; margin-top: auto; }
+.home_widget_slot.is_uniform .home_widget_projects .home_widget_body { display: flex; flex-direction: column; }
+.home_widget_slot.is_uniform .home_projects_list:has(> .home_empty) { flex: 1 1 auto; place-items: center; }
+.home_widget_slot.is_uniform .home_projects_list:has(> .home_empty) .home_empty { box-sizing: border-box; width: 100%; }
 .home_widget_slot.is_uniform .home_widget_metrics .home_widget_body { display: flex; flex-direction: column; justify-content: center; }
 .home_widget_slot.is_uniform :is(.home_widget_activity, .home_widget_deadlines) .home_widget_body { display: flex; flex-direction: column; }
 .home_widget_slot.is_uniform :is(.home_widget_activity, .home_widget_deadlines) :is(.home_activity_list, .home_deadlines_list) { flex: 1 1 auto; }
@@ -237,3 +244,8 @@
 .home_widget_slot.is_uniform .home_widget { display: flex; flex-direction: column; overflow: hidden; }
 .home_widget_slot.is_uniform .home_widget_heading { flex: 0 0 auto; }
 .home_widget_slot.is_uniform .home_widget_body { height: auto; min-height: 0; flex: 1 1 auto; overflow: auto; }
+.home_widget_slot.is_uniform .home_widget_tasks .home_widget_body { overflow: hidden; }
+@media (max-width: 767px) {
+  .home_widget_slot:not(.is_uniform) .home_widget { display: flex; max-height: 340px; flex-direction: column; overflow: hidden; }
+  .home_widget_slot:not(.is_uniform) .home_widget_body { min-height: 0; overflow: auto; }
+}
