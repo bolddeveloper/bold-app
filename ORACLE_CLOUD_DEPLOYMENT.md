@@ -343,7 +343,7 @@ despues recrea `backend` y `worker`. Si mas adelante se agrega un dominio
 propio, haz el cambio en una ventana de mantenimiento y conserva mismo origen.
 
 El entorno de prueba configurado en esta guia usa actualmente
-`https://boldapp.samuel-93b.workers.dev`.
+`https://boldapp.boldapp-93b.workers.dev`.
 
 ## 12. Lista de comprobacion funcional
 

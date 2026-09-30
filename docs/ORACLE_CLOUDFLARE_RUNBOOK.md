@@ -7,7 +7,7 @@ iniciales de forma segura.
 
 ## 1. Resultado actual
 
-- Aplicación pública: <https://boldapp.samuel-93b.workers.dev>
+- Aplicación pública: <https://boldapp.boldapp-93b.workers.dev>
 - Instancia de Oracle: `bold-test`, Ubuntu 24.04 ARM64, 2 OCPU y 12 GB RAM.
 - Rama desplegada y operativa: `Develop`.
 - Worker de Cloudflare: `boldapp`.
@@ -91,7 +91,8 @@ EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL
 ```
 
 Para este entorno, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL`
-incluyen `boldapp.samuel-93b.workers.dev`. La seed de demostración permanece
+incluyen `boldapp.boldapp-93b.workers.dev`. Durante la transición también puede
+mantenerse temporalmente el origen anterior en la lista de CORS. La seed de demostración permanece
 deshabilitada:
 
 ```text
@@ -159,7 +160,7 @@ docker compose --env-file .env.oracle -f compose.oracle.yaml up -d \
 La conexión puede validarse abriendo el backend SMTP sin enviar un mensaje. Una
 vez que Postmark apruebe la cuenta, prueba primero contra `samuel@bold.gt` y
 confirma recepción, remitente y que el enlace use
-`https://boldapp.samuel-93b.workers.dev`. No copies credenciales SMTP ni tokens
+`https://boldapp.boldapp-93b.workers.dev`. No copies credenciales SMTP ni tokens
 de invitación o recuperación a logs compartidos.
 
 ## 4. Operación cotidiana en Oracle
@@ -233,9 +234,9 @@ variables `VITE_*`: Vite las incorpora al JavaScript público.
 Comprobaciones sin iniciar sesión:
 
 ```powershell
-curl.exe -I https://boldapp.samuel-93b.workers.dev/
-curl.exe https://boldapp.samuel-93b.workers.dev/health/
-curl.exe https://boldapp.samuel-93b.workers.dev/api/v2/auth/session/
+curl.exe -I https://boldapp.boldapp-93b.workers.dev/
+curl.exe https://boldapp.boldapp-93b.workers.dev/health/
+curl.exe https://boldapp.boldapp-93b.workers.dev/api/v2/auth/session/
 ```
 
 Resultados esperados:
