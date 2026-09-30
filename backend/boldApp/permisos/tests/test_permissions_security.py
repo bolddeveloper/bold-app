@@ -28,6 +28,7 @@ from boldApp.core.models import (
     PositionAssignment,
     UserAccount,
 )
+from boldApp.permisos.models import PermissionPolicyEvent, PermissionPolicyState
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, PERMISSIONS_STEP_UP_MFA_SECONDS=600)
@@ -299,6 +300,19 @@ class PermissionControlPlaneSecurityTests(TestCase):
             format="json",
         )
         self.assertEqual(policy_write.status_code, 403, getattr(policy_write, "data", None))
+        self.assertFalse(JobRolePermission.objects.exists())
+
+        bulk_policy_write = client.post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permissions": [str(self.read_permission.id), str(self.update_permission.id)],
+                "rules": [{"effect": "allow", "scope_type": "global"}],
+                "reason": "Intento masivo de escalamiento mediante is_staff",
+            },
+            format="json",
+        )
+        self.assertEqual(bulk_policy_write.status_code, 403, getattr(bulk_policy_write, "data", None))
         self.assertFalse(JobRolePermission.objects.exists())
 
         legacy_write = client.post(
@@ -700,6 +714,77 @@ class PermissionControlPlaneSecurityTests(TestCase):
         self.assertEqual(accepted.status_code, 200, getattr(accepted, "data", None))
         rule = JobRolePermission.objects.get()
         self.assertEqual(rule.created_by_account, self.owner)
+
+    def test_owner_can_replace_multiple_role_policies_atomically(self):
+        client = self._client(self.owner, self.owner_assignment, mfa="recent")
+        initial_revision = PermissionPolicyState.current_revision()
+        response = client.post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permissions": [str(self.read_permission.id), str(self.update_permission.id)],
+                "rules": [{"effect": "allow", "scope_type": "own_unit"}],
+                "reason": "Configuración inicial masiva del módulo de tareas",
+                "expected_revision": initial_revision,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["revision"], initial_revision + 1)
+        rows = JobRolePermission.objects.filter(job_role=self.manager_role).order_by("permission__code")
+        self.assertEqual(rows.count(), 2)
+        self.assertTrue(all(row.effect == "allow" and row.scope_type == "own_unit" for row in rows))
+        event = PermissionPolicyEvent.objects.get(event_type="permissions.role_policy.bulk_replaced")
+        self.assertEqual(event.revision, initial_revision + 1)
+        self.assertEqual(event.metadata["permission_count"], 2)
+        self.assertEqual(set(event.metadata["permission_codes"]), {"tasks.task.read", "tasks.task.update"})
+        self.assertTrue(event.mfa_verified)
+
+    def test_bulk_role_policy_rejects_weak_mfa_without_partial_changes(self):
+        response = self._client(self.owner, self.owner_assignment, mfa="weak").post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permissions": [str(self.read_permission.id), str(self.update_permission.id)],
+                "rules": [{"effect": "allow", "scope_type": "own_unit"}],
+                "reason": "Intento masivo sin verificación reciente",
+                "expected_revision": 0,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertFalse(JobRolePermission.objects.filter(job_role=self.manager_role).exists())
+
+    def test_bulk_role_policy_rolls_back_if_any_permission_is_inactive(self):
+        JobRolePermission.objects.create(
+            job_role=self.manager_role,
+            permission=self.read_permission,
+            effect="deny",
+            scope_type="own_unit",
+            reason="Regla previa que debe conservarse",
+            created_by_account=self.owner,
+        )
+        self.update_permission.is_active = False
+        self.update_permission.save(update_fields=["is_active", "updated_at"])
+        response = self._client(self.owner, self.owner_assignment, mfa="recent").post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permissions": [str(self.read_permission.id), str(self.update_permission.id)],
+                "rules": [{"effect": "allow", "scope_type": "global"}],
+                "reason": "Operación que debe fallar completamente",
+                "expected_revision": 0,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        preserved = JobRolePermission.objects.get(job_role=self.manager_role, permission=self.read_permission)
+        self.assertEqual(preserved.effect, "deny")
+        self.assertEqual(preserved.scope_type, "own_unit")
+        self.assertFalse(JobRolePermission.objects.filter(job_role=self.manager_role, permission=self.update_permission).exists())
 
     def test_owner_can_remove_one_role_rule_without_removing_the_others(self):
         client = self._client(self.owner, self.owner_assignment, mfa="recent")

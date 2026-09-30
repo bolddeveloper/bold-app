@@ -11,6 +11,7 @@ from .views import (
     PolicyAuditView,
     PolicyRevisionView,
     RolePolicyView,
+    RolePolicyBulkView,
 )
 
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path("revision/", PolicyRevisionView.as_view(), name="permissions-revision"),
     path("catalog/", PermissionCatalogView.as_view(), name="permissions-catalog"),
     path("role-policies/", RolePolicyView.as_view(), name="permissions-role-policies"),
+    path("role-policies/bulk/", RolePolicyBulkView.as_view(), name="permissions-role-policies-bulk"),
     path("access-rules/", AccessRuleListCreateView.as_view(), name="permissions-access-rules"),
     path("access-rules/<uuid:grant_id>/revoke/", AccessRuleRevokeView.as_view(), name="permissions-access-rule-revoke"),
     path("authorities/", GrantAuthorityListCreateView.as_view(), name="permissions-authorities"),

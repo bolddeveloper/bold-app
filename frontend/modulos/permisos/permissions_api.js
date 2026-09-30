@@ -6,6 +6,7 @@ export const permissionsApi = {
     catalog: () => http.request("/api/v2/permissions/catalog/"),
     rolePolicies: () => http.request("/api/v2/permissions/role-policies/"),
     replaceRolePolicy: body => http.request("/api/v2/permissions/role-policies/", { method: "POST", body }),
+    replaceRolePoliciesBulk: body => http.request("/api/v2/permissions/role-policies/bulk/", { method: "POST", body }),
     grants: () => http.request("/api/v2/permissions/access-rules/"),
     createGrant: body => http.request("/api/v2/permissions/access-rules/", { method: "POST", body }),
     revokeGrant: (id, body) => http.request(`/api/v2/permissions/access-rules/${id}/revoke/`, { method: "POST", body }),

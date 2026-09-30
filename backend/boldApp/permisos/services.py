@@ -219,6 +219,72 @@ def replace_role_policy(request, *, role, permission, rules, reason, expected_re
     return created, event.revision
 
 
+@transaction.atomic
+def replace_role_policies_bulk(request, *, role, permissions, rules, reason, expected_revision=None):
+    """Reemplaza varios permisos de un cargo como una sola operación auditable."""
+    reason = normalized_reason(reason)
+    assignment = get_request_assignment(request, for_update=True)
+    if not request.user.is_superuser:
+        raise PermissionDenied("Solo el dueño puede modificar políticas base por cargo.")
+    require_recent_strong_mfa(request)
+    if role.positions.filter(
+        assignments__employee__user_account__is_superuser=True
+    ).exists():
+        raise PermissionDenied("Las políticas del cargo del propietario no se pueden modificar.")
+
+    permissions = sorted(list(permissions), key=lambda permission: permission.code)
+    inactive = [permission.code for permission in permissions if not permission.is_active]
+    if inactive:
+        raise ValidationError({"permissions": f"Hay permisos desactivados en la selección: {', '.join(inactive)}."})
+
+    state = _lock_state(expected_revision)
+    permission_ids = [permission.id for permission in permissions]
+    existing = list(
+        JobRolePermission.objects.select_for_update(of=("self",))
+        .filter(job_role=role, permission_id__in=permission_ids)
+        .select_related("permission", "target_unit")
+    )
+    existing_by_permission = {str(permission.id): [] for permission in permissions}
+    for row in existing:
+        existing_by_permission[str(row.permission_id)].append(_scope_payload(row))
+
+    JobRolePermission.objects.filter(job_role=role, permission_id__in=permission_ids).delete()
+    created = []
+    for permission in permissions:
+        for rule in rules:
+            created.append(JobRolePermission(
+                job_role=role,
+                permission=permission,
+                effect=rule["effect"],
+                scope_type=rule["scope_type"],
+                target_unit=rule.get("target_unit"),
+                reason=reason,
+                created_by_account=request.user,
+            ))
+    JobRolePermission.objects.bulk_create(created)
+
+    created_by_permission = {str(permission.id): [] for permission in permissions}
+    for row in created:
+        created_by_permission[str(row.permission_id)].append(_scope_payload(row))
+    event = record_policy_change(
+        request,
+        assignment,
+        state,
+        event_type="permissions.role_policy.bulk_replaced",
+        target_type="job_role",
+        target_id=role.id,
+        reason=reason,
+        before={"permissions": existing_by_permission},
+        after={"permissions": created_by_permission},
+        metadata={
+            "permission_count": len(permissions),
+            "permission_codes": [permission.code for permission in permissions],
+            "rules_per_permission": len(rules),
+        },
+    )
+    return created, event.revision
+
+
 def _maximum_grant_seconds(permission):
     return DEFAULT_GRANT_SECONDS.get(permission.risk_level, DEFAULT_GRANT_SECONDS[Permission.RISK_CRITICAL])
 

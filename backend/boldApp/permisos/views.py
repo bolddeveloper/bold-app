@@ -27,6 +27,7 @@ from .serializers import (
     PermissionPolicyEventSerializer,
     RevokeSerializer,
     RolePolicyApplySerializer,
+    RolePolicyBulkApplySerializer,
 )
 from .services import (
     control_plane_access,
@@ -36,6 +37,7 @@ from .services import (
     record_denied_event,
     require_recent_strong_mfa,
     replace_role_policy,
+    replace_role_policies_bulk,
     revoke_access_rule,
     revoke_grant_authority,
 )
@@ -114,6 +116,29 @@ class RolePolicyView(DirectionControlPlaneView):
             )
         except APIException as error:
             _denied_audit(request, "permissions.role_policy.denied", error, target_type="job_role", target_id=data["job_role"].id)
+            raise
+        return Response(
+            {"revision": revision, "rules": JobRolePermissionDetailSerializer(rows, many=True).data},
+            status=status.HTTP_200_OK,
+        )
+
+
+class RolePolicyBulkView(DirectionControlPlaneView):
+    def post(self, request):
+        serializer = RolePolicyBulkApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            rows, revision = replace_role_policies_bulk(
+                request,
+                role=data["job_role"],
+                permissions=data["permissions"],
+                rules=data["rules"],
+                reason=data["reason"],
+                expected_revision=data.get("expected_revision"),
+            )
+        except APIException as error:
+            _denied_audit(request, "permissions.role_policy.bulk_denied", error, target_type="job_role", target_id=data["job_role"].id)
             raise
         return Response(
             {"revision": revision, "rules": JobRolePermissionDetailSerializer(rows, many=True).data},

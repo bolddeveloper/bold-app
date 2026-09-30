@@ -47,15 +47,24 @@ function Unlock({ done }) { const [error, setError] = useState(null); const [bus
 function Summary({ state, units, unit, setUnit, go }) { const allowed = state.effective.filter(x => x.allowed), denied = state.effective.filter(x => !x.allowed), groups = Object.entries(state.effective.reduce((a, x) => { (a[x.module_code || "General"] ||= []).push(x); return a; }, {})); return <div className="permissions_stack"><section className="permissions_metrics"><article><span>Permitidos</span><strong>{allowed.length}</strong><small>{unit?.name}</small></article><article><span>Requieren atención</span><strong>{denied.length}</strong><small>denegados o pendientes de MFA</small></article><article><span>Accesos activos</span><strong>{state.grants.filter(x => grantState(x) === "Vigente").length}</strong><button onClick={() => go("grants")}>Ver accesos</button></article><article><span>Autoridades vigentes</span><strong>{state.authorities.filter(x => authorityState(x) === "Vigente").length}</strong><button onClick={() => go("authorities")}>Ver autoridades</button></article></section><section className="permissions_panel"><header><div><h2>Mis accesos efectivos</h2><p>Qué puedes hacer y por qué.</p></div>{units.length > 1 && <label className="permissions_unit_picker">Unidad<Select value={unit?.id} onChange={e => setUnit(e.target.value)}>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}</header>{groups.map(([module, rows]) => <section className="permissions_group" key={module}><h3>{module}</h3><div className="permissions_cards">{rows.map(row => { const p = state.catalog.find(x => x.id === row.permission), needsMfa = row.reason_code === "mfa_step_up_required"; return <article className="permission_card" key={row.code}><span className={row.allowed ? "allowed" : "denied"}>{row.allowed ? <Check /> : needsMfa ? <LockKeyhole /> : <X />}</span><div><strong>{nameOf(p)}</strong><code>{row.code}</code><small>{row.reason}</small></div><Status good={row.allowed}>{decisionLabel(row)}</Status></article>; })}</div></section>)}</section></div>; }
 
 function Policies({ state, units, changed, unlocked, unlock }) {
-    const roles = state.policies.roles.filter(x => x.level?.toLowerCase() !== "owner"), [roleId, setRole] = useState(roles[0]?.id || ""), [query, setQuery] = useState(""), [risk, setRisk] = useState(""), [edit, setEdit] = useState(null);
+    const roles = state.policies.roles.filter(x => x.level?.toLowerCase() !== "owner"), [roleId, setRole] = useState(roles[0]?.id || ""), [query, setQuery] = useState(""), [risk, setRisk] = useState(""), [edit, setEdit] = useState(null), [selected, setSelected] = useState([]), [bulkOpen, setBulkOpen] = useState(false);
     const role = roles.find(x => x.id === roleId) || roles[0];
     const visible = state.catalog.filter(x => `${nameOf(x)} ${x.code} ${x.module_code}`.toLowerCase().includes(query.toLowerCase()) && (!risk || x.risk_level === risk));
     const groups = Object.entries(visible.reduce((a, x) => { (a[x.module_code || "General"] ||= []).push(x); return a; }, {})).sort(([left], [right]) => left.localeCompare(right, "es"));
+    const selectedPermissions = state.catalog.filter(permission => selected.includes(permission.id));
+    useEffect(() => { setSelected([]); setBulkOpen(false); }, [role?.id]);
+    function toggleModule(items) {
+        const ids = items.map(item => item.id), allSelected = ids.every(id => selected.includes(id));
+        setSelected(current => allSelected ? current.filter(id => !ids.includes(id)) : [...new Set([...current, ...ids])]);
+    }
+    function openBulk() { unlocked ? setBulkOpen(true) : unlock(); }
     return <section className="permissions_panel"><header><div><h2>Políticas por cargo</h2><p>Permisos base organizados por módulo.</p></div><label>Cargo<Select value={role?.id || ""} onChange={e => setRole(e.target.value)}>{roles.map(x => <option key={x.id} value={x.id}>{x.title}</option>)}</Select></label></header>
         {!unlocked && <div className="permissions_callout permissions_policy_lock"><LockKeyhole /><div><strong>Edición protegida con MFA</strong><p>Verifica tu identidad antes de modificar las políticas de un cargo.</p><button type="button" onClick={unlock}>Desbloquear edición</button></div></div>}
         <Filters query={query} setQuery={setQuery}><Select value={risk} onChange={e => setRisk(e.target.value)}><option value="">Todos los riesgos</option>{Object.entries(risks).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Filters>
-        <div className="permissions_catalog">{groups.map(([module, items]) => <details className="permissions_policy_group" key={module} open><summary><span>{module}</span><small>{items.length} permiso{items.length === 1 ? "" : "s"}</small></summary><div className="permissions_policy_items">{items.map(p => { const rules = state.policies.rules.filter(x => x.job_role === role?.id && x.permission === p.id); return <button type="button" key={p.id} onClick={() => unlocked ? setEdit(p) : unlock()}><div><strong>{nameOf(p)}</strong><code>{p.code}</code></div><div>{rules.length ? rules.map(x => <Status key={x.id} good={x.effect === "allow"}>{x.effect === "allow" ? "Permitir" : "Denegar"} · {scopes[x.scope_type]}</Status>) : <Status>Sin regla</Status>}<Status>{risks[p.risk_level]}</Status></div></button>; })}</div></details>)}</div>
+        {selected.length > 0 && <div className="permissions_bulk_bar"><div><strong>{selected.length} permiso{selected.length === 1 ? "" : "s"} seleccionado{selected.length === 1 ? "" : "s"}</strong><small>Se aplicará una sola operación auditada.</small></div><button type="button" onClick={() => setSelected([])}>Limpiar</button><button className="permissions_primary" type="button" onClick={openBulk}>{unlocked ? "Configurar selección" : "Desbloquear y configurar"}</button></div>}
+        <div className="permissions_catalog">{groups.map(([module, items]) => { const allSelected = items.length > 0 && items.every(item => selected.includes(item.id)); return <details className="permissions_policy_group" key={module} open><summary><span>{module}</span><div className="permissions_policy_group_meta"><small>{items.length} permiso{items.length === 1 ? "" : "s"}</small><button type="button" className={allSelected ? "is_selected" : ""} aria-pressed={allSelected} onClick={event => { event.preventDefault(); event.stopPropagation(); toggleModule(items); }}>{allSelected ? <Check size={14} /> : null}{allSelected ? "Seleccionado" : "Seleccionar módulo"}</button></div></summary><div className="permissions_policy_items">{items.map(p => { const rules = state.policies.rules.filter(x => x.job_role === role?.id && x.permission === p.id); return <button type="button" key={p.id} onClick={() => unlocked ? setEdit(p) : unlock()}><div><strong>{nameOf(p)}</strong><code>{p.code}</code></div><div>{rules.length ? rules.map(x => <Status key={x.id} good={x.effect === "allow"}>{x.effect === "allow" ? "Permitir" : "Denegar"} · {scopes[x.scope_type]}</Status>) : <Status>Sin regla</Status>}<Status>{risks[p.risk_level]}</Status></div></button>; })}</div></details>; })}</div>
         {edit && <Drawer title="Configurar política" subtitle={role.title} close={() => setEdit(null)}><PolicyForm role={role} permission={edit} rules={state.policies.rules.filter(x => x.job_role === role.id && x.permission === edit.id)} units={units} revision={state.revision} changed={changed} close={() => setEdit(null)} unlock={unlock} /></Drawer>}
+        {bulkOpen && <Drawer title="Configurar permisos en lote" subtitle={role.title} close={() => setBulkOpen(false)}><BulkPolicyForm role={role} permissions={selectedPermissions} units={units} revision={state.revision} changed={changed} close={() => setBulkOpen(false)} completed={() => setSelected([])} unlock={unlock} /></Drawer>}
     </section>;
 }
 function PolicyForm({ role, permission, rules: current, units, revision, changed, close, unlock }) {
@@ -83,6 +92,40 @@ function PolicyForm({ role, permission, rules: current, units, revision, changed
     return <form className="permissions_drawer_form" onSubmit={save}><div className="permissions_selection"><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div>
         {current.length > 0 && <section className="permissions_current_rules"><h3>Reglas actuales</h3>{current.map(rule => <article key={rule.id}><div><strong>{rule.effect === "allow" ? "Permitir" : "Denegar"}</strong><span>{scopes[rule.scope_type]}{rule.target_unit_name ? ` · ${rule.target_unit_name}` : ""}</span></div><button type="button" onClick={() => remove(rule)}>Quitar</button></article>)}</section>}
         <label>Efecto<Select value={effect} onChange={e => setEffect(e.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></Select></label><label>Alcance<Select value={scope} onChange={e => setScope(e.target.value)}>{Object.entries(scopes).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></label>{needs && <label>Unidad<Select value={unit} onChange={e => setUnit(e.target.value)} required><option value="">Seleccionar…</option>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}<label>Motivo<textarea value={reason} onChange={e => setReason(e.target.value)} minLength="8" required /></label><FormError error={error} onMfa={() => { setError(null); unlock(); }} /><div className="permissions_form_actions"><button>Guardar regla</button></div>
+    </form>;
+}
+
+function BulkPolicyForm({ role, permissions, units, revision, changed, close, completed, unlock }) {
+    const [action, setAction] = useState("allow"), [scope, setScope] = useState("own_unit"), [unit, setUnit] = useState(""), [reason, setReason] = useState(""), [error, setError] = useState(null), [busy, setBusy] = useState(false);
+    const needsUnit = action !== "clear" && ["specific_unit", "sub_tree"].includes(scope);
+    const modules = [...new Set(permissions.map(permission => permission.module_code || "General"))].sort((a, b) => a.localeCompare(b, "es"));
+    const highRisk = permissions.filter(permission => ["high", "critical"].includes(permission.risk_level)).length;
+    async function submit(event) {
+        event.preventDefault();
+        const answer = await dialog({
+            title: `¿Aplicar a ${permissions.length} permisos?`,
+            text: action === "clear" ? "Las reglas actuales de la selección se eliminarán." : "Las reglas actuales de la selección serán reemplazadas por esta configuración.",
+            icon: "warning",
+            confirmButtonText: action === "clear" ? "Quitar reglas" : "Aplicar configuración",
+        });
+        if (!answer.isConfirmed) return;
+        setBusy(true); setError(null);
+        const rules = action === "clear" ? [] : [{ effect: action, scope_type: scope, ...(needsUnit && { target_unit: unit }) }];
+        try {
+            const result = await permissionsApi.replaceRolePoliciesBulk({ job_role: role.id, permissions: permissions.map(permission => permission.id), rules, reason, expected_revision: revision });
+            await changed(result.revision); completed(); close();
+        } catch (caught) { setError(caught); }
+        finally { setBusy(false); }
+    }
+    return <form className="permissions_drawer_form" onSubmit={submit}>
+        <div className="permissions_selection"><strong>{permissions.length} permisos seleccionados</strong><span>{modules.join(" · ")}</span>{highRisk > 0 && <small>{highRisk} de riesgo alto o crítico</small>}</div>
+        <div className="permissions_callout"><AlertTriangle /><p>Esta acción reemplaza por completo las reglas actuales de cada permiso seleccionado y queda registrada como un único cambio.</p></div>
+        <label>Acción<Select value={action} onChange={event => setAction(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Dejar sin regla</option></Select></label>
+        {action !== "clear" && <label>Alcance<Select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>}
+        {needsUnit && <label>Unidad<Select value={unit} onChange={event => setUnit(event.target.value)} required><option value="">Seleccionar…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}
+        <label>Motivo<textarea value={reason} onChange={event => setReason(event.target.value)} minLength="8" maxLength="2000" required placeholder="Explica por qué se aplica este cambio masivo" /></label>
+        <FormError error={error} onMfa={() => { setError(null); unlock(); }} />
+        <button disabled={busy || permissions.length === 0}>{busy ? "Aplicando…" : action === "clear" ? "Quitar reglas seleccionadas" : "Aplicar a la selección"}</button>
     </form>;
 }
 

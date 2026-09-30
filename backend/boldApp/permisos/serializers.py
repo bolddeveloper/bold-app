@@ -57,6 +57,38 @@ class RolePolicyApplySerializer(serializers.Serializer):
         return rules
 
 
+class RolePolicyBulkApplySerializer(serializers.Serializer):
+    job_role = serializers.PrimaryKeyRelatedField(queryset=JobRole.objects.all())
+    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)
+    rules = ScopeRuleSerializer(many=True, allow_empty=True)
+    reason = serializers.CharField(min_length=8, max_length=2000)
+    expected_revision = serializers.IntegerField(min_value=0, required=False)
+
+    def validate_permissions(self, permissions):
+        if not permissions:
+            raise serializers.ValidationError("Selecciona al menos un permiso.")
+        permission_ids = [permission.pk for permission in permissions]
+        if len(permission_ids) != len(set(permission_ids)):
+            raise serializers.ValidationError("No repitas permisos en la operación masiva.")
+        if len(permission_ids) > 100:
+            raise serializers.ValidationError("Puedes modificar hasta 100 permisos por operación.")
+        return permissions
+
+    def validate_rules(self, rules):
+        seen = set()
+        for rule in rules:
+            key = (rule["scope_type"], getattr(rule.get("target_unit"), "id", None))
+            if key in seen:
+                raise serializers.ValidationError("No repitas el mismo alcance.")
+            seen.add(key)
+        return rules
+
+    def validate(self, attrs):
+        if len(attrs["permissions"]) * len(attrs["rules"]) > 500:
+            raise serializers.ValidationError("La operación generaría demasiadas reglas; divide la selección.")
+        return attrs
+
+
 class JobRolePermissionDetailSerializer(serializers.ModelSerializer):
     job_role_title = serializers.CharField(source="job_role.title", read_only=True)
     permission_code = serializers.CharField(source="permission.code", read_only=True)

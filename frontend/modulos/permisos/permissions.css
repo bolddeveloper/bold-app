@@ -304,12 +304,19 @@
 .permissions_policy_group > summary::-webkit-details-marker { display: none; }
 .permissions_policy_group > summary span { font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .permissions_policy_group > summary small { color: #667085; }
+.permissions_policy_group_meta { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-left: auto; }
+.permissions_policy_group_meta button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: #475467; padding: 6px 9px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.permissions_policy_group_meta button.is_selected { border-color: #86d5ad; background: #ecfdf3; color: #067647; }
 .permissions_policy_group > summary::after { content: "⌄"; font-size: 18px; transition: rotate 150ms ease; }
 .permissions_policy_group:not([open]) > summary::after { rotate: -90deg; }
 .permissions_policy_items { display: grid; gap: 7px; padding: 10px; }
 .permissions_policy_items > button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; border: 1px solid #eaecf0; border-radius: 11px; background: #fff; color: inherit; padding: 12px 14px; text-align: left; cursor: pointer; }
 .permissions_policy_items > button:hover { border-color: #f3a1a8; background: #fffafb; }
 .permissions_policy_items > button > div:last-child { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.permissions_bulk_bar { position: sticky; top: 8px; z-index: 2; display: flex; align-items: center; gap: 9px; margin-bottom: 14px; border: 1px solid #f3a1a8; border-radius: 11px; background: #fff7f8; padding: 11px 12px; box-shadow: 0 8px 24px rgb(16 24 40 / 10%); }
+.permissions_bulk_bar > div { display: grid; flex: 1; gap: 2px; }
+.permissions_bulk_bar small { color: #667085; }
+.permissions_bulk_bar > button { border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: inherit; padding: 8px 10px; font-weight: 700; cursor: pointer; }
 .permissions_drawer_backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px); }
 .permissions_drawer { width: min(470px, 94vw); height: 100%; overflow: auto; background: #fff; color: #172033; box-shadow: -16px 0 42px rgba(16, 24, 40, .2); animation: permissions_drawer_in 180ms ease-out; }
 .permissions_drawer.wide { width: min(620px, 94vw); }
@@ -352,9 +359,10 @@
 .permissions_details pre { max-height: 220px; overflow: auto; margin: 0; white-space: pre-wrap; font-size: 11px; }
 @keyframes permissions_drawer_in { from { translate: 30px 0; opacity: .6; } }
 
-.theme_dark .permissions_module :is(.permissions_metrics article, .permissions_policy_group, .permissions_policy_items > button, .permissions_search) { background: #22262e; border-color: #465060; }
+.theme_dark .permissions_module :is(.permissions_metrics article, .permissions_policy_group, .permissions_policy_items > button, .permissions_search, .permissions_bulk_bar, .permissions_policy_group_meta button) { background: #22262e; border-color: #465060; }
 .theme_dark .permissions_module .permissions_policy_group > summary { background: #292e37; color: #edf0f5; }
 .theme_dark .permissions_module .permissions_policy_items > button:hover { background: #292e37; border-color: #ef6671; }
+.theme_dark .permissions_module .permissions_policy_group_meta button.is_selected { background: #153b2b; border-color: #279968; color: #9ce0bd; }
 .theme_dark .permissions_drawer { background: #22262e; color: #edf0f5; }
 .theme_dark .permissions_drawer > header { border-color: #465060; }
 .theme_dark .permissions_drawer header p, .theme_dark .permissions_drawer_form > label, .theme_dark .permissions_metrics span, .theme_dark .permissions_metrics small { color: #c7ced9; }
