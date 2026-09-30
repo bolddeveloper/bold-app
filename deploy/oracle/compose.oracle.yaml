@@ -133,7 +133,7 @@ services:
     healthcheck:
       disable: true
     environment: *backend-environment
-    command: ["celery", "-A", "config", "worker", "-B", "--loglevel=info", "--concurrency=2"]
+    command: ["celery", "-A", "config", "worker", "-B", "--schedule=/tmp/celerybeat-schedule", "--loglevel=info", "--concurrency=2"]
     depends_on:
       backend:
         condition: service_healthy
