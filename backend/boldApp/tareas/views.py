@@ -19,7 +19,6 @@ from .models import (
     ActivityLog,
     Attachment,
     Comment,
-    Notification,
     Project,
     ProjectMember,
     Section,
@@ -38,7 +37,6 @@ from .serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
     CommentSerializer,
-    NotificationSerializer,
     ProjectMemberSerializer,
     ProjectSerializer,
     SectionSerializer,
@@ -153,6 +151,7 @@ class ProjectViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
         new_unit = serializer.validated_data.get("unit")
         if new_unit and new_unit.id != project.unit_id:
             self.require_permission("tasks.project.manage", new_unit, project.id)
+        project._notification_actor_assignment_id = self.request.assignment.id
         serializer.save()
 
     def destroy(self, request, *args, **kwargs):
@@ -267,6 +266,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         if new_unit and new_unit.id != task.unit_id:
             self.require_permission("tasks.task.assign", new_unit, task.id)
         self._require_related_permissions(serializer.validated_data)
+        task._notification_actor_assignment_id = self.request.assignment.id
         serializer.save()
 
     def _require_related_permissions(self, data):
@@ -355,6 +355,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                     serializer = self.get_serializer(task, data=changes, partial=True)
                     serializer.is_valid(raise_exception=True)
                     self._require_related_permissions(serializer.validated_data)
+                    task._notification_actor_assignment_id = request.assignment.id
                     serializer.save()
         return Response({"count": len(tasks), "ids": [str(task.pk) for task in tasks]})
 
@@ -373,6 +374,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         self.require_permission("tasks.task.assign", data["unit"], task.id)
 
         with transaction.atomic():
+            task._notification_actor_assignment_id = request.assignment.id
             task.unit = data["unit"]
             task.status = data["status"]
             task.assignee_assignment = data.get("assignee_assignment")
@@ -584,24 +586,6 @@ class TaskTagViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self.require_permission("tasks.task.update", instance.task.unit, instance.task_id)
         instance.delete()
-
-
-class NotificationViewSet(AssignmentScopedViewSetMixin, viewsets.ReadOnlyModelViewSet):
-    serializer_class = NotificationSerializer
-
-    def get_queryset(self):
-        return Notification.objects.filter(
-            Q(task__isnull=True) | Q(task__in=self.visible_tasks()),
-            recipient_assignment=self.request.assignment,
-        )
-
-    @action(detail=True, methods=["post"], url_path="mark-read")
-    def mark_read(self, request, pk=None):
-        notification = self.get_object()
-        notification.is_read = True
-        notification.read_at = timezone.now()
-        notification.save(update_fields=["is_read", "read_at"])
-        return Response(NotificationSerializer(notification).data)
 
 
 class WebhookEndpointViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):

@@ -1,4 +1,5 @@
 import { api } from "./tasks_api.js";
+import { notificationsApi } from "../../../notificaciones/notifications_api.js";
 import { is_using_real_backend } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
@@ -9,7 +10,7 @@ export async function loadTaskData({ directory, units }) {
     const tasks = (await api.listTasks()).map(dto => normalizeTask(dto, statuses));
     const links = (await api.listTaskProjectLinks()).map(normalizeTaskProject);
     const [comments, followers, members, attachments, notifications, taskTags, tags] = await Promise.all([
-        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), api.list("notifications"), api.list("task-tags"),
+        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationsApi.list(), api.list("task-tags"),
         Promise.all(units.map(unit => api.list("tags", { unit: unit.id }))).then(rows => rows.flat())
     ]);
     const by = (rows, key) => { const result = new Map(); for (const row of rows) { const id = row[key]; if (!result.has(id)) result.set(id, []); result.get(id).push(row); } return result; };

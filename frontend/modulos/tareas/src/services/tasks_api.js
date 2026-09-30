@@ -20,8 +20,7 @@ export function createTasksApi(client = http) {
         listTaskProjectLinks: project => list("task-projects", { project }),
         updateTaskProjectLink: (id, body) => update("task-projects", id, body),
         listComments: () => list("comments"),
-        createComment: (task, body) => create("comments", { task, body }),
-        markNotificationRead: id => request(`/api/v2/notifications/${id}/mark-read/`, { method: "POST" })
+        createComment: (task, body) => create("comments", { task, body })
     };
 }
 export const api = createTasksApi();

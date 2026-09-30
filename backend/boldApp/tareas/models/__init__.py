@@ -3,7 +3,6 @@
 # en admin.py y serializers.py (from boldApp.models import Task, ...).
 
 from .collaboration import ActivityLog, Attachment, Comment, TaskFollower
-from .notifications import Notification
 from .projects import Project, ProjectMember, Section, TaskStatus
 from .tags import Tag, TaskTag
 from .tasks import Task, TaskDependency, TaskProject
@@ -14,7 +13,6 @@ __all__ = [
     "ActivityLog",
     "Attachment",
     "Comment",
-    "Notification",
     "Project",
     "ProjectMember",
     "Section",

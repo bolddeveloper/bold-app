@@ -370,7 +370,17 @@
     gap: 10px;
     padding: 10px 8px;
     border-radius: 10px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
 }
+
+.notification_item:hover { background: #f7f1f1; }
+.notification_empty { margin: 0; padding: 22px 12px; color: #75808d; text-align: center; font-size: 13px; }
 
 .notification_item_unread {
     background: #fbf5f0;
@@ -754,6 +764,8 @@
 .theme_dark .notification_item_unread {
     background: #30282b;
 }
+
+.theme_dark .notification_item:hover { background: #303640; }
 
 .theme_dark .notification_title {
     color: #f4f6f8;

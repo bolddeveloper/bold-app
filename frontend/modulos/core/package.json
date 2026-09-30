@@ -7,7 +7,7 @@
         "dev": "vite --configLoader runner --host 0.0.0.0",
         "build": "vite build --configLoader runner",
         "preview": "vite preview --configLoader runner --host 0.0.0.0",
-        "test": "node --test ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../calendario/*.test.js",
+        "test": "node --test ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js",
         "test:worker": "node --test worker/*.test.js",
         "deploy:cloudflare": "npm run build && wrangler deploy"
     },

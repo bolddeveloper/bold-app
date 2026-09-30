@@ -63,9 +63,11 @@ import {
     publish_task_event
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
+import { notificationsApi } from "../../notificaciones/notifications_api.js";
+import { connectNotificationStream, disconnectNotificationStream } from "../../notificaciones/notification_realtime.js";
 
 
-const notification_type_icons = { assignment: user_plus_icon, comment: message_circle_icon, status_changed: check_circle_icon };
+const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
 const app_toast = Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 2400, timerProgressBar: true });
 
 // Defines the project views available in the focused tasks module.
@@ -887,7 +889,7 @@ function get_inbox_type(notification_item) {
 function get_inbox_activities(notifications, tasks) {
     return notifications.map((notification_item, index) => {
         const task_item = get_inbox_task(notification_item, tasks);
-        const actor = team_members.find((member_item) => member_item.id === notification_item.actor_id) || null;
+        const actor = team_members.find((member_item) => member_item.id === (notification_item.actor_assignment || notification_item.actor_id)) || null;
         const project = get_project(task_item?.project_id);
         const type = get_inbox_type(notification_item);
 
@@ -4929,7 +4931,14 @@ function TaskAppContent({ externalModules = {} }) {
                 if (mounted && currentGeneration === streamGeneration && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
             }
         };
-        refresh.current().then(syncRealtime).catch(report);
+        const syncNotifications = () => connectNotificationStream({
+            assignmentId: session.activeAssignment.id,
+            getTicket: session.websocketTicket,
+            onNotification: () => refresh.current().catch(report),
+            onReconnect: () => refresh.current().catch(report),
+            onError: message => mounted && set_api_error(message),
+        });
+        refresh.current().then(() => { syncRealtime(); syncNotifications(); }).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.
         const reconcile = () => refresh.current().catch(report);
         const reconcilePermissions = () => {
@@ -4939,7 +4948,7 @@ function TaskAppContent({ externalModules = {} }) {
         window.addEventListener("focus", reconcile);
         window.addEventListener("bold:permissions-revision", reconcilePermissions);
         const timer = setInterval(reconcile, 30000);
-        return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
     async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados") {
@@ -5072,16 +5081,36 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_mark_notifications_read() {
-        if (real) { mutate(async () => { for (const id of notifications.filter(item => !item.is_read).map(item => item.id)) await api.markNotificationRead(id); }); return; }
+        if (real) { mutate(() => notificationsApi.markAllRead(), () => {}, "Notificaciones leídas"); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => ({
             ...notification_item,
             is_read: true
         })));
     }
 
+    function handle_notification_select(notification_item) {
+        if (!notification_item) return;
+        set_is_notifications_open(false);
+        set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
+        if (real && !notification_item.is_read) notificationsApi.markRead(notification_item.id).catch(error => set_api_error(error.message));
+        const route = notification_item.route || {};
+        if (route.task_id) {
+            set_active_module("tasks");
+            set_active_section("tasks");
+            set_task_scope("mine");
+            set_selected_task_id(route.task_id);
+            return;
+        }
+        if (route.project_id) {
+            handle_project_select(route.project_id);
+            return;
+        }
+        if (route.module) handle_module_change(route.target || route.module);
+    }
+
     function handle_inbox_activity_select(notification_id) {
         set_inbox_detail_open(true);
-        if (real) { set_selected_inbox_id(notification_id); mutate(async () => { for (const id of [notification_id]) await api.markNotificationRead(id); }); return; }
+        if (real) { set_selected_inbox_id(notification_id); mutate(() => notificationsApi.markRead(notification_id), () => {}, "Notificación leída"); return; }
         set_selected_inbox_id(notification_id);
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: true } : notification_item
@@ -5106,16 +5135,14 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_toggle_inbox_read(notification_id) {
-        if (real && notifications.find(item => item.id === notification_id)?.is_read) { set_api_error("El servidor todavía no permite marcar notificaciones como no leídas."); return; }
-        if (real) { mutate(async () => { for (const id of [notification_id]) await api.markNotificationRead(id); }); return; }
+        if (real) { const item = notifications.find(notification => notification.id === notification_id); mutate(() => item?.is_read ? notificationsApi.markUnread(notification_id) : notificationsApi.markRead(notification_id)); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: !notification_item.is_read } : notification_item
         )));
     }
 
     function handle_inbox_bulk_read_state(is_read) {
-        if (real && !is_read) { set_api_error("El servidor todavía no permite marcar notificaciones como no leídas."); return; }
-        if (real) { mutate(async () => { for (const id of inbox_selected_ids) await api.markNotificationRead(id); }); return; }
+        if (real) { mutate(async () => { for (const id of inbox_selected_ids) await (is_read ? notificationsApi.markRead(id) : notificationsApi.markUnread(id)); }); return; }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             inbox_selected_ids.includes(notification_item.id) ? { ...notification_item, is_read } : notification_item
         )));
@@ -5739,7 +5766,7 @@ function TaskAppContent({ externalModules = {} }) {
         <ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour /><AppShell
 sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
-            topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: team_members.find(member => member.id === item.actor_id), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
+            topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
             overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
         >

@@ -10,7 +10,6 @@ from .models import (
     ActivityLog,
     Attachment,
     Comment,
-    Notification,
     Project,
     ProjectMember,
     Section,
@@ -277,13 +276,6 @@ class TaskTagSerializer(serializers.ModelSerializer):
         if task and tag and task.unit_id != tag.unit_id:
             raise serializers.ValidationError({"tag": "La etiqueta no pertenece a la unidad responsable."})
         return attrs
-
-
-class NotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notification
-        fields = "__all__"
-        read_only_fields = ["created_at"]
 
 
 class WebhookEndpointSerializer(serializers.ModelSerializer):

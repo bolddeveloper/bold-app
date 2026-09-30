@@ -63,4 +63,4 @@ class MFADisableSerializer(serializers.Serializer):
 class WebSocketTicketSerializer(serializers.Serializer):
     assignment = serializers.UUIDField(required=False, allow_null=True)
     unit = serializers.UUIDField(required=False, allow_null=True)
-    channel = serializers.ChoiceField(choices=["tasks", "core"], default="tasks")
+    channel = serializers.ChoiceField(choices=["tasks", "notifications", "core"], default="tasks")

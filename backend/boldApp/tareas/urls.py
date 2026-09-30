@@ -4,7 +4,6 @@ from .views import (
     ActivityLogViewSet,
     AttachmentViewSet,
     CommentViewSet,
-    NotificationViewSet,
     ProjectMemberViewSet,
     ProjectViewSet,
     SectionViewSet,
@@ -34,7 +33,6 @@ router.register(r"task-followers", TaskFollowerViewSet, basename="task-follower"
 router.register(r"activity-logs", ActivityLogViewSet, basename="activity-log")
 router.register(r"tags", TagViewSet, basename="tag")
 router.register(r"task-tags", TaskTagViewSet, basename="task-tag")
-router.register(r"notifications", NotificationViewSet, basename="notification")
 router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-endpoint")
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 

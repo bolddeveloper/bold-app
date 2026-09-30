@@ -554,7 +554,7 @@ class WebSocketTicketView(APIView):
         data = serializer.validated_data
         assignment = None
         unit = None
-        if data["channel"] == "tasks":
+        if data["channel"] in {"tasks", "notifications"}:
             try:
                 assignment = PositionAssignment.objects.select_related(
                     "employee", "position__unit", "position__job_role"
@@ -565,12 +565,14 @@ class WebSocketTicketView(APIView):
                     is_active=True,
                     released_at__isnull=True,
                 )
-                unit = OrganizationalUnit.objects.get(id=data.get("unit"))
+                if data["channel"] == "tasks":
+                    unit = OrganizationalUnit.objects.get(id=data.get("unit"))
             except (PositionAssignment.DoesNotExist, OrganizationalUnit.DoesNotExist, ValueError, TypeError):
                 return Response({"detail": "Asignación o unidad inválida."}, status=status.HTTP_403_FORBIDDEN)
-            permission = Permission.objects.filter(code="tasks.task.read", is_active=True).first()
-            if not permission or not resolve_access(assignment, permission, unit).allowed:
-                return Response({"detail": "No tienes permiso de lectura para esta unidad."}, status=status.HTTP_403_FORBIDDEN)
+            if data["channel"] == "tasks":
+                permission = Permission.objects.filter(code="tasks.task.read", is_active=True).first()
+                if not permission or not resolve_access(assignment, permission, unit).allowed:
+                    return Response({"detail": "No tienes permiso de lectura para esta unidad."}, status=status.HTTP_403_FORBIDDEN)
         else:
             max_age = timedelta(seconds=getattr(settings, "PERMISSIONS_STEP_UP_MFA_SECONDS", 600))
             if (

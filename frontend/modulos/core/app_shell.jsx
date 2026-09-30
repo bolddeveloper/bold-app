@@ -166,6 +166,7 @@ function render_notifications_panel(props) {
     const {
         handle_close_notifications,
         handle_mark_notifications_read,
+        handle_notification_select,
         notifications
     } = props;
 
@@ -183,9 +184,11 @@ function render_notifications_panel(props) {
                     const notification_icon = notification_item.icon || bell_icon;
 
                     return (
-                        <div
+                        <button
+                            type="button"
                             className={`notification_item ${notification_item.is_read ? "" : "notification_item_unread"}`}
                             key={notification_item.id}
+                            onClick={() => handle_notification_select?.(notification_item)}
                         >
                             <span className="notification_avatar" style={{ backgroundColor: actor ? actor.color : "#7c8b9a" }}>
                                 {actor ? actor.initials : render_icon(notification_icon, 14)}
@@ -195,9 +198,10 @@ function render_notifications_panel(props) {
                                 <p className="notification_text">{notification_item.body}</p>
                                 <span className="notification_time">{notification_item.time_label}</span>
                             </div>
-                        </div>
+                        </button>
                     );
                 })}
+                {!notifications.length && <p className="notification_empty">No tienes notificaciones por ahora.</p>}
             </div>
             <footer className="modal_footer">
                 <button className="link_button" type="button" onClick={handle_close_notifications}>

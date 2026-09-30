@@ -4,7 +4,6 @@ from .models import (
     ActivityLog,
     Attachment,
     Comment,
-    Notification,
     Project,
     ProjectMember,
     Section,
@@ -85,11 +84,6 @@ class TagAdmin(admin.ModelAdmin):
 @admin.register(TaskTag)
 class TaskTagAdmin(admin.ModelAdmin):
     list_display = ("task", "tag", "added_by_assignment", "added_at")
-
-
-@admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
-    list_display = ("title", "recipient_assignment", "type", "is_read", "created_at")
 
 
 @admin.register(WebhookEndpoint)
