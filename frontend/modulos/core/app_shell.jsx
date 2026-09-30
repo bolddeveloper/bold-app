@@ -54,8 +54,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
 function render_logo() {
     return (
         <div className="brand_logo" aria-label="Bold">
-            <span>bold</span>
-            <span className="brand_dot"></span>
+            <img src="/logo-bold.svg" alt="" />
         </div>
     );
 }

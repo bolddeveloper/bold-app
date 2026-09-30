@@ -794,6 +794,25 @@ button {
     color: #ffffff;
 }
 
+.theme_dark :is(.board_column_form, .board_add_column_button) {
+    border-color: var(--bold_line);
+    background: var(--bold_surface_soft);
+}
+
+.theme_dark .board_column_form input {
+    border-color: var(--bold_line);
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+}
+
+.theme_dark .board_column_form input::placeholder { color: var(--bold_muted); }
+
+.theme_dark .board_column_form button:not(:last-child) {
+    border-color: var(--bold_line);
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+}
+
 .board_card[data-dragging="true"] {
     opacity: 0.55;
 }
@@ -9268,6 +9287,8 @@ button {
 }
 .project_item_active .project_dot { box-shadow: 0 0 0 3px rgba(255, 255, 255, .18); }
 .project_item_wrap_active .project_more_button { background: rgba(255, 255, 255, .1); color: #ffffff; }
+.project_item { grid-template-columns: 14px minmax(0, 1fr); min-height: 44px; padding-inline: 8px; }
+.project_item span:nth-child(2) { display: -webkit-box; overflow: hidden; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
 .project_summary_card {
     position: relative;
@@ -9692,6 +9713,7 @@ button {
 .theme_dark .project_create_step > span,
 .theme_dark .project_create_step > span > strong,
 .theme_dark .project_create_details label,
+.theme_dark .project_create_full_select,
 .theme_dark .bold_field_label {
     color: #edf0f5;
 }
@@ -9828,6 +9850,17 @@ button {
 .theme_dark .timeline_task_row:hover { background: #2e3035; }
 .theme_dark .detail_comments_heading > span:last-child { background: #35373c; color: #d6d9df; }
 .theme_dark .detail_comment_input_box { box-shadow: 0 -8px 18px rgba(36, 37, 41, .94); }
+.theme_dark .timeline_comments_section { background: var(--bold_surface); border-color: var(--bold_line); }
+.theme_dark .timeline_comments_header > span { background: var(--bold_surface_soft); color: var(--bold_muted); }
+.theme_dark .timeline_comment_composer { background: var(--bold_surface_soft); border-color: var(--bold_line); }
+.theme_dark .timeline_comment_composer > input { color: var(--bold_text); }
+.theme_dark .timeline_comment_composer > input::placeholder { color: var(--bold_muted); opacity: 1; }
+.theme_dark .timeline_comment_composer .detail_comment_image_button { color: var(--bold_muted); }
+.theme_dark .timeline_comment_composer .detail_comment_image_button:hover { background: #41262a; color: #ff929b; }
+.theme_dark .timeline_day_header_cell.timeline_day_today { background: #41262a; color: #ff929b; }
+.theme_dark .timeline_day_header_cell.timeline_day_today .timeline_day_sub { color: inherit; }
+.theme_dark .timeline_day_header_cell:not(.timeline_day_today) { color: var(--bold_muted); }
+.theme_dark .timeline_row:hover { background: #2e3035; }
 
 /* Multi-select rows replace visible checkboxes with a faster full-row target. */
 .task_tool_panel .filter_option {

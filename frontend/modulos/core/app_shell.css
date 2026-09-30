@@ -77,6 +77,8 @@
     border-radius: 999px;
     background: var(--bold_red);
 }
+.brand_logo img { display: block; width: 100px; height: auto; }
+.theme_dark .brand_logo img { filter: brightness(0) invert(1); }
 
 .sidebar_close_button {
     display: none;
@@ -1025,4 +1027,18 @@
     .profile_session_menu[open] .profile_session_popover {
         animation: none;
     }
+}
+
+/* One elevation for the main surfaces across modules in light mode. */
+:root:not(.theme_dark) .app_shell :is(
+    .home_widget, .task_table_card, .board_column, .board_card,
+    .timeline_view_card, .timeline_comments_section, .calendar_view,
+    .project_summary_card, .folder_card, .reports_metric, .reports_card,
+    .inbox_card, .inbox_list_panel, .inbox_detail_panel,
+    .permissions_panel, .permissions_metrics article, .permission_card,
+    .admin_panel, .admin_metric_card, .admin_module_card,
+    .admin_employee_detail, .admin_form, .admin_dashboard_widget,
+    .bold_calendar_grid, .bold_calendar_time_view, .bold_calendar_agenda section
+) {
+    box-shadow: 0 6px 20px rgb(28 36 48 / 9%);
 }

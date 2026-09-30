@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { notification_items, project_items, starter_tasks, team_members, current_user, current_user_id, setPresentationData } from "./services/presentation_data.js";
 import { useCore } from "../../core/core_provider.jsx";
+import { LoginIntro } from "../../core/login_screen.jsx";
 import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
@@ -168,7 +169,6 @@ const optional_column_items = [
     { key: "assignee", label: "RESPONSABLE", width: "140px" },
     { key: "date", label: "FECHA", width: "120px" },
     { key: "priority", label: "PRIORIDAD", width: "140px" },
-    { key: "status", label: "ESTADO", width: "140px" },
     { key: "project", label: "PROYECTO", width: "160px" }
 ];
 
@@ -332,12 +332,6 @@ function get_tasks_by_section(tasks, section_id) {
 // Returns a class name for priority badges.
 function get_priority_class(priority) {
     return `priority_${String(priority || "media").toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-}
-
-
-// Returns a class name for status badges.
-function get_status_class(status) {
-    return `status_${String(status || "pend").toLowerCase().replace(/[^a-z0-9]/g, "")}`;
 }
 
 
@@ -658,7 +652,7 @@ function render_project_item(project_item, selected_project_id, handle_project_s
             onClick={() => handle_project_select(project_item.id)}
         >
             {render_project_dot(project_item)}
-            <span>{pinned ? "📌 " : ""}{project_item.label}</span>
+            <span title={project_item.label}>{pinned ? "📌 " : ""}{project_item.label}</span>
             {is_active ? (
                 <span className="project_more">•••</span>
             ) : null}
@@ -1430,41 +1424,6 @@ function QuickPriorityPopover({ current_priority, on_close, on_select }) {
 }
 
 
-// Inline status quick-change popover (Image 5 of design reference).
-function QuickStatusPopover({ current_status, on_close, on_select, status_options = default_status_items }) {
-    const status_colors = {
-        "Activa": "#3b82f6",
-        "Pend.": "#f59e0b",
-        "Inactiva": "#9ca3af",
-        "Lista": "#22c55e"
-    };
-    const options = status_options.map((status_item) => ({
-        value: status_item,
-        dot: status_colors[status_item] || "#9ca3af",
-        label: status_item === "Pend." ? "PENDIENTE" : status_item.toUpperCase()
-    }));
-    return (
-        <div className="quick_popover_bubble" role="menu" onClick={(e) => e.stopPropagation()}>
-            {options.map((opt) => (
-                <button
-                    key={opt.value}
-                    type="button"
-                    className="quick_popover_item_btn"
-                    role="menuitem"
-                    onClick={() => { on_select(opt.value); on_close(); }}
-                >
-                    <span className="quick_popover_circle" style={{ background: opt.dot }}></span>
-                    <span>{opt.label}</span>
-                    {current_status === opt.value ? (
-                        <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>
-                    ) : null}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-
 // Custom calendar date picker popover (Images 2 & 4 of design reference).
 export function CalendarDateField({ name, value, defaultValue = "", onChange, withTime = false, required = false }) {
     const root_ref = use_ref(null);
@@ -1614,13 +1573,6 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
     const done_count = subtasks.filter((s) => s.completed).length;
     const subtask_pct = subtasks.length ? Math.round((done_count / subtasks.length) * 100) : 0;
 
-    const status_colors = {
-        "Activa": "#3b82f6",
-        "Pend.": "#f59e0b",
-        "Inactiva": "#9ca3af",
-        "Lista": "#22c55e"
-    };
-    const status_color = status_colors[selected_task.status] || "#9ca3af";
 
     async function submit_comment() {
         if (!comment_text.trim() && !comment_images.length) return;
@@ -1692,12 +1644,6 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                     {selected_task.completed ? render_icon(check_icon, 12) : null}
                 </button>
                 <h2 className="detail_task_title">{selected_task.title}</h2>
-                <span
-                    className="status_pill_badge"
-                    style={{ background: `${status_color}1a`, color: status_color, border: `1px solid ${status_color}55` }}
-                >
-                    {selected_task.status}
-                </span>
             </div>
 
             <div className="detail_meta_grid">
@@ -2074,16 +2020,9 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                         }}
                     />
 
-                    {/* Prioridad & Estado */}
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label className="bold_field_label">Prioridad</label>
-                            <TaskSelect aria_label="Prioridad" variant="priority" value={edit_draft.priority || "Media"} options={priority_items} on_change={value => handle_edit_field_change("priority", value)} />
-                        </div>
-                        <div className="bold_field_group">
-                            <label className="bold_field_label">Estado</label>
-                            <TaskSelect aria_label="Estado" variant="status" value={edit_draft.status || "Pend."} options={status_options} on_change={value => handle_edit_field_change("status", value)} />
-                        </div>
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Prioridad</label>
+                        <TaskSelect aria_label="Prioridad" variant="priority" value={edit_draft.priority || "Media"} options={priority_items} on_change={value => handle_edit_field_change("priority", value)} />
                     </div>
 
                     {/* Descripción */}
@@ -2295,15 +2234,9 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
                         on_change={set_collaborator_ids}
                     />
 
-                    <div className="bold_field_row_2">
-                        <div className="bold_field_group">
-                            <label className="bold_field_label">Prioridad</label>
-                            <TaskSelect aria_label="Prioridad" variant="priority" value={priority} options={priority_items} on_change={set_priority} />
-                        </div>
-                        <div className="bold_field_group">
-                            <label className="bold_field_label">Estado</label>
-                            <TaskSelect aria_label="Estado" variant="status" value={status} options={status_options} on_change={set_status} />
-                        </div>
+                    <div className="bold_field_group">
+                        <label className="bold_field_label">Prioridad</label>
+                        <TaskSelect aria_label="Prioridad" variant="priority" value={priority} options={priority_items} on_change={set_priority} />
                     </div>
 
                     <div className="bold_field_group">
@@ -2495,9 +2428,6 @@ function render_tasks_module(props) {
                         ))}
                         {!is_using_real_backend() && <span className="avatar_more">+2</span>}
                     </div>
-                    <button className="secondary_button" type="button" onClick={() => set_active_modal("share")}>
-                        Compartir
-                    </button>
                     <button className="primary_button" type="button" onClick={() => set_active_modal("task")}>
                         {render_icon(plus_icon, 17)}
                         Agregar tarea
@@ -3115,7 +3045,6 @@ function render_task_row(props) {
     const project_item = get_project(task_item.project_id);
 
     const is_priority_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "priority";
-    const is_status_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "status";
 
     return (
         <div
@@ -3127,7 +3056,7 @@ function render_task_row(props) {
             style={{
                 ...get_task_table_columns_style(visible_fields, true, column_items),
                 cursor: handle_drag_start ? "grab" : "pointer",
-                zIndex: is_priority_open || is_status_open ? 50 : 1
+                zIndex: is_priority_open ? 50 : 1
             }}
             onDragEnd={handle_drag_end}
             onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
@@ -3219,30 +3148,6 @@ function render_task_row(props) {
                             current_priority={task_item.priority}
                             on_close={() => handle_toggle_quick_popover(null, null)}
                             on_select={(val) => handle_quick_change(task_item.id, "priority", val)}
-                        />
-                    ) : null}
-                </div>
-            ) : null}
-
-            {visible_fields.status ? (
-                <div className="quick_popover_container">
-                    <button
-                        type="button"
-                        className={`status_pill_badge status_pill_${get_status_class(task_item.status).replace("status_", "")}`}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handle_toggle_quick_popover(task_item.id, "status");
-                        }}
-                    >
-                        {(task_item.status || "Pend.").toUpperCase()}
-                        {render_icon(chevron_down_icon, 11)}
-                    </button>
-                    {is_status_open ? (
-                        <QuickStatusPopover
-                            current_status={task_item.status}
-                            on_close={() => handle_toggle_quick_popover(null, null)}
-                            on_select={(val) => handle_quick_change(task_item.id, "status", val)}
-                            status_options={is_using_real_backend() ? task_item.status_options || status_options : status_options}
                         />
                     ) : null}
                 </div>
@@ -3352,9 +3257,6 @@ function render_task_card(props) {
                     {render_days_badge(task_item)}
                 </span>
                 <span className="mobile_badge_row">
-                    <span className={`task_badge status_badge ${get_status_class(task_item.status)}`}>
-                        {task_item.status}
-                    </span>
                     <span className="muted_meta">{task_item.due_label || "Sin fecha"} · Prioridad {task_item.priority}</span>
                     <span className="muted_meta">{member_item?.name || "Sin responsable"} · {project_item.label}</span>
                 </span>
@@ -4235,6 +4137,11 @@ function TaskAppContent({ externalModules = {} }) {
     const { active_module, set_active_module, set_is_sidebar_open } = useShell();
     const real = is_using_real_backend();
     const [data, set_data] = use_state(null);
+    const [intro_finished, set_intro_finished] = use_state(false);
+    use_effect(() => {
+        const timer = window.setTimeout(() => set_intro_finished(true), 4000);
+        return () => window.clearTimeout(timer);
+    }, []);
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
@@ -4267,7 +4174,6 @@ function TaskAppContent({ externalModules = {} }) {
         assignee: true,
         date: true,
         priority: true,
-        status: true,
         project: false
     });
     const status_options = real ? (data?.statuses || []).filter(item => !item.unitId || item.unitId === (edit_draft?.unitId || session.activeUnit?.id)).map(item => item.label) : default_status_items;
@@ -5759,7 +5665,8 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="status">{api_error || "Cargando tus tareas…"}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => refresh.current().catch(error => set_api_error(error.message))}>Reintentar</button></div></div></div>;
+    if (real && (!data || !intro_finished) && !api_error) return <LoginIntro />;
+    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current().catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (

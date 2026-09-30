@@ -54,6 +54,15 @@
 .theme_dark :is(.task_select_option:hover, .task_select_option_focused, .subtask_toggle_area:hover) { background: var(--bold_hover); }
 .theme_dark :is(.task_select, .task_select_option, .task_select_trigger, .task_select_icon, .task_select_trigger > svg) { color: var(--bold_text); }
 .theme_dark .task_select_option[aria-selected="true"] { background: var(--bold_red_tint); color: #ff9aa1; }
+.theme_dark .days_badge_today { background: #4b3b22; border-color: #99743a; color: #ffda8a; }
+.theme_dark .days_badge_future { background: #243c49; border-color: #456b80; color: #a8dbf5; }
+.theme_dark .days_badge_overdue { background: #4b2b31; border-color: #92515b; color: #ffadb5; }
+.theme_dark .priority_pill_alta { background: #4b2b31; color: #ffadb5; }
+.theme_dark .priority_pill_media { background: #4b3b22; color: #ffda8a; }
+.theme_dark .priority_pill_baja { background: #303e4d; color: #bfd5ed; }
+.theme_dark .quick_popover_bubble::before { background: var(--bold_elevated); border-color: var(--bold_line); }
+.theme_dark .quick_popover_item_btn { color: var(--bold_text); }
+.theme_dark .quick_popover_item_btn:focus-visible { outline: 2px solid var(--bold_red); outline-offset: -2px; }
 .theme_dark :is(.task_select_text small, .project_preview p, .row_subtask_popover small) { color: var(--bold_muted); }
 .theme_dark :is(.quick_subtask_form, .row_subtask_popover, .project_preview_content > .project_identity) { border-color: var(--bold_line); }
 .theme_dark :is(.api_feedback, .swal2-popup) { border: 1px solid var(--bold_line); background: var(--bold_elevated); color: var(--bold_text); }
