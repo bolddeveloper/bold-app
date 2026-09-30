@@ -330,12 +330,13 @@
 .permissions_bulk_bar > button { border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: inherit; padding: 8px 10px; font-weight: 700; cursor: pointer; }
 .permissions_drawer_backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px); }
 .permissions_drawer { width: min(470px, 94vw); height: 100%; overflow: auto; background: #fff; color: #172033; box-shadow: -16px 0 42px rgba(16, 24, 40, .2); animation: permissions_drawer_in 180ms ease-out; }
-.permissions_drawer.wide { width: min(620px, 94vw); }
+.permissions_drawer.wide { width: min(900px, 96vw); }
 .permissions_drawer > header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; gap: 18px; border-bottom: 1px solid #eaecf0; background: inherit; padding: 20px 22px; }
+.permissions_drawer > header > div { min-width: 0; }
 .permissions_drawer h2 { margin: 0; font-size: 20px; }
-.permissions_drawer header p { margin: 4px 0 0; color: #667085; }
+.permissions_drawer header p { margin: 4px 0 0; overflow-wrap: anywhere; color: #667085; }
 .permissions_drawer header button { display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
-.permissions_drawer_body { padding: 22px; }
+.permissions_drawer_body { min-width: 0; overflow-x: hidden; padding: 22px; }
 .permissions_drawer_form { display: grid; gap: 15px; }
 .permissions_drawer_form > label { display: grid; gap: 6px; color: #475467; font-size: 13px; font-weight: 700; }
 .permissions_drawer_form :is(input, textarea, select) { box-sizing: border-box; width: 100%; border: 1px solid #d0d5dd; border-radius: 9px; background: #fff; color: inherit; padding: 10px; font: inherit; }
@@ -361,6 +362,7 @@
 .permissions_bulk_drafts h3 { margin: 0; font-size: 13px; }
 .permissions_bulk_drafts article { display: grid; grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(120px, 1fr)); align-items: center; gap: 7px; border: 1px solid #e2e6ef; border-radius: 9px; padding: 9px; }
 .permissions_bulk_drafts article > div { min-width: 0; }
+.permissions_bulk_drafts article > :is(.admin_select, label) { min-width: 0; width: 100%; }
 .permissions_bulk_drafts article strong { display: block; overflow-wrap: anywhere; }
 .permissions_bulk_drafts article code { display: block; overflow-wrap: anywhere; color: #667085; font-size: 10px; }
 .permissions_current_rules { display: grid; gap: 8px; }
