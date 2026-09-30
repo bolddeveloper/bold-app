@@ -154,8 +154,8 @@ export default function HomeModule({ currentUser, notifications, onCreateProject
         const taskCount = widget.tab === "upcoming" ? data.upcoming.length : widget.tab === "undated" ? data.undated.length : data.attention.length;
         const count = widget.type === "tasks" ? taskCount : widget.type === "projects" ? data.projects.length : widget.type === "activity" ? data.activity.length : widget.type === "deadlines" ? data.deadlines.length : 0;
         const shortcutColumns = widget.size === "small" ? 1 : columns === 6 ? 2 : widget.size === "large" ? 5 : 4;
-        const height = widget.type === "tasks" ? 174 + Math.min(4, count) * 58 : widget.type === "projects" ? 76 + Math.min(3, count) * (widget.size === "small" ? 88 : 72) : widget.type === "activity" || widget.type === "deadlines" ? 76 + Math.min(4, count) * 50 : widget.type === "shortcuts" ? 76 + Math.ceil((widget.shortcuts?.length || 0) / shortcutColumns) * 55 : 180;
-        return [widget.id, Math.min(340, Math.max(widget.type === "shortcuts" ? 240 : 180, height))];
+        const height = widget.type === "tasks" ? 210 + Math.min(4, count) * 58 : widget.type === "projects" ? 110 + Math.min(3, count) * (widget.size === "small" ? 88 : 72) : widget.type === "activity" || widget.type === "deadlines" ? 110 + Math.min(4, count) * 60 : widget.type === "shortcuts" ? 110 + Math.ceil((widget.shortcuts?.length || 0) / shortcutColumns) * 55 : 260;
+        return [widget.id, Math.min(340, Math.max(260, height))];
     }));
     const { positions, height: dashboardHeight } = placeHomeWidgets(layout, mobile ? heights : desktopHeights, columns);
     const measureWidget = (id, height) => setHeights(current => current[id] === height ? current : { ...current, [id]: height });

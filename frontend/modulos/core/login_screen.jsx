@@ -11,6 +11,15 @@ function readTheme() {
 }
 function readEmail() { try { return localStorage.getItem(emailKey) || ""; } catch { return ""; } }
 
+export function LoginIntro() {
+    const [dark] = useState(readTheme);
+    const variant = dark ? "blanco" : "rojo";
+    return <main className={`core_login_intro ${dark ? "theme_dark" : ""}`} aria-label="Preparando tu espacio de trabajo">
+        <img src={`/auth/bold-carga-animada-oscuro-${variant}.svg`} alt="" aria-hidden="true" />
+        <span className="core_login_intro_status" role="status">Preparando tu espacio de trabajo…</span>
+    </main>;
+}
+
 export function LoginScreen({ title, error, busy, account, assignments, active, mfaChallenge, recoveryMessage, passwordChangeRequired, mfaEnrollmentRequired, totpSetup, recoveryCodes, onLogin, onMfa, onRecovery, onRecoveryConfirm, onInvitationConfirm, onPasswordChange, onStartMfaEnrollment, onConfirmMfaEnrollment, onFinishMfaEnrollment, onAssignmentChange, onLogout }) {
     const [dark, setDark] = useState(readTheme);
     const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +45,8 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
     return <main className={`core_auth_page ${dark ? "theme_dark" : ""}`}>
         <div className="core_auth_layout">
             <section className="core_auth_brand" aria-label="Bold">
-                <div className="core_auth_logo">bold<span aria-hidden="true">.</span></div>
+                <div className="core_auth_brand_art" aria-hidden="true"><img src="/auth/bold-loader.svg" alt="" /></div>
+                <div className="core_auth_logo"><img src="/logo-bold.svg" alt="Bold" /></div>
                 <div className="core_auth_brand_message">
                     <span className="core_auth_eyebrow">TU ESPACIO DE TRABAJO</span>
                     <h1>Todo tu trabajo, en un solo lugar.</h1>
@@ -47,7 +57,7 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
             <section className="core_auth_content" aria-labelledby="core_auth_heading">
                 <button className="core_auth_theme" type="button" aria-label={dark ? "Activar modo claro" : "Activar modo oscuro"} onClick={() => setDark(!dark)}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
                 <div className="core_auth_form_wrap">
-                    <div className="core_auth_mobile_logo" aria-hidden="true">bold<span>.</span></div>
+                    <div className="core_auth_mobile_logo"><img src="/logo-bold.svg" alt="Bold" /></div>
                     <p className="core_auth_section">{title}</p>
                     <h2 id="core_auth_heading">{account ? "Selecciona tu cargo" : passwordChangeRequired ? "Cambia tu contraseña" : mfaEnrollmentRequired ? "Protege tu cuenta" : invitationToken ? "Activa tu cuenta" : resetToken ? "Crea una contraseña nueva" : mfaChallenge ? "Verificación en dos pasos" : recoveryHelp ? "Recupera tu cuenta" : "Bienvenido de nuevo"}</h2>
                     <p className="core_auth_subtitle">{account ? "Elige la asignación con la que quieres continuar." : passwordChangeRequired ? "Debes reemplazar la contraseña temporal antes de continuar." : mfaEnrollmentRequired ? "Configura una aplicación autenticadora para completar el acceso." : invitationToken ? "Define tu contraseña para aceptar la invitación corporativa." : resetToken ? "El enlace se puede utilizar una sola vez." : mfaChallenge ? "Ingresa el código de tu aplicación autenticadora." : recoveryHelp ? "Enviaremos un enlace de un solo uso si la cuenta existe." : "Ingresa a tu cuenta para continuar."}</p>

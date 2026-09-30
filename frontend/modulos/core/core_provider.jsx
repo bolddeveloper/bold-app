@@ -86,7 +86,9 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const directory = rawDirectory.map(normalizeAssignment);
         const assignments = directory.filter(item => own.some(row => row.id === item.id));
         updateCore({ account, employee, directory, assignments, units });
-        setActiveAssignment(selectAssignment(assignments, savedId));
+        if (enteredFromLogin.current && assignments.length) {
+            updateCore({ activeAssignment: null, sessionStatus: "selecting", error: "" });
+        } else setActiveAssignment(selectAssignment(assignments, savedId));
         if (!assignments.length) updateCore({ error: "Tu cuenta no tiene asignaciones activas. Contacta al administrador." });
     }
     async function can(permissionCode, unitId = getCoreState().activeUnit?.id, resourceId) {
