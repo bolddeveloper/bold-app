@@ -10,11 +10,11 @@ test("network failures show a Spanish connection error without expiring the sess
     assert.equal(expired, false);
 });
 
-test("V2 serializes JSON, merges headers and follows every page through the local proxy", async () => {
+test("V2 serializes JSON, merges headers and normalizes private pagination through the public origin", async () => {
     const calls = [];
     const api = createApiClient({ baseUrl: "http://localhost:5173", fetchImpl: async (url, options) => {
         calls.push({ url, options });
-        return new Response(JSON.stringify(calls.length === 1 ? { count: 2, next: "http://127.0.0.1:8000/api/v2/tasks/?page=2", results: [{ id: "a" }] } : { results: [{ id: "b" }], next: null }));
+        return new Response(JSON.stringify(calls.length === 1 ? { count: 2, next: "https://backend/api/v2/tasks/?page=2", results: [{ id: "a" }] } : { results: [{ id: "b" }], next: null }));
     } });
     api.setSession(true, "ana@bold.gt"); api.setAssignment("assignment");
     assert.deepEqual(await api.listTasks({ unit: "unit" }), [{ id: "a" }, { id: "b" }]);

@@ -47,6 +47,10 @@ ALLOWED_HOSTS = [
 # X-Forwarded-Proto. Estas opciones solo aplican al entorno de producción.
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    # El backend solo es accesible a través del proxy privado de Cloudflare.
+    # Honrar X-Forwarded-Host evita que DRF publique enlaces de paginación con
+    # el hostname interno del contenedor (por ejemplo, https://backend/...).
+    USE_X_FORWARDED_HOST = os.environ.get("USE_X_FORWARDED_HOST", "true").lower() == "true"
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

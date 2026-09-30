@@ -61,7 +61,17 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
             seen.add(path);
             const page = await request(path, { signal });
             rows.push(...(Array.isArray(page) ? page : page?.results || []));
-            path = Array.isArray(page) ? null : page?.next;
+            const next = Array.isArray(page) ? null : page?.next;
+            if (next) {
+                // Los enlaces de paginación proceden de una respuesta API ya
+                // autenticada. Conservamos únicamente ruta y query para que
+                // un hostname privado del proxy nunca se convierta en una
+                // navegación cross-origin, sin relajar request() para URLs
+                // externas aportadas por otros consumidores.
+                const nextUrl = new URL(next, baseUrl);
+                if (!nextUrl.pathname.startsWith("/api/v2/")) throw new Error("Ruta de paginación no permitida.");
+                path = `${nextUrl.pathname}${nextUrl.search}`;
+            } else path = null;
         }
         return rows;
     }
