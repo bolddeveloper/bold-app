@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="es" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="assets/music/audio-data.js"></script>
+    <style>
+      :root {
+        --paper: #f4f3f1;
+        --surface: #ffffff;
+        --ink: #2c3038;
+        --charcoal: #3f3f41;
+        --muted: #686f7d;
+        --line: #e6e3df;
+        --soft: #f8f8f7;
+        --red: #e73535;
+        --red-dark: #bd2c2c;
+        --green: #117e58;
+        --green-soft: #e6f5ef;
+        --blue: #3e69c7;
+        --blue-soft: #eaf0ff;
+        --amber: #a36000;
+        --amber-soft: #fff3db;
+        --audio: 0;
+      }
+
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+      body {
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      button, input, textarea { font: inherit; }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        isolation: isolate;
+        background: var(--paper);
+      }
+      .clip { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+      .scene-inner { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+      .eyebrow {
+        margin: 0 0 16px;
+        color: var(--red);
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: .17em;
+        text-transform: uppercase;
+      }
+      .display {
+        margin: 0;
+        max-width: 1120px;
+        font-size: 94px;
+        font-weight: 820;
+        line-height: .96;
+        letter-spacing: -.06em;
+      }
+      .support {
+        margin: 22px 0 0;
+        color: var(--muted);
+        font-size: 30px;
+        line-height: 1.28;
+        letter-spacing: -.025em;
+      }
+      .brand { display: inline-flex; align-items: flex-start; color: inherit; font-weight: 850; letter-spacing: -.075em; }
+      .brand-dot {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        margin: 4px 0 0 8px;
+        border-radius: 50%;
+        background: var(--red);
+        box-shadow: 0 0 calc(10px + var(--audio) * 16px) rgba(231, 53, 53, .48);
+      }
+      .ambient-dot {
+        position: absolute;
+        right: 54px;
+        bottom: 48px;
+        width: calc(11px + var(--audio) * 4px);
+        height: calc(11px + var(--audio) * 4px);
+        border-radius: 50%;
+        background: var(--red);
+      }
+
+      /* Shared fixed-ratio application surface. */
+      .app-window {
+        position: absolute;
+        overflow: hidden;
+        border: 1px solid rgba(44, 48, 56, .12);
+        border-radius: 26px;
+        background: var(--surface);
+        box-shadow: 0 34px 90px rgba(44, 48, 56, .17);
+      }
+      .app-sidebar {
+        width: 220px;
+        flex: 0 0 220px;
+        padding: 30px 24px;
+        color: #fff;
+        background: var(--charcoal);
+      }
+      .app-sidebar .brand { margin-bottom: 38px; font-size: 38px; }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 46px;
+        margin-bottom: 7px;
+        padding: 0 15px;
+        border-radius: 11px;
+        color: #dadadd;
+        font-size: 17px;
+        font-weight: 650;
+      }
+      .nav-item.active { color: #fff; background: rgba(255, 255, 255, .12); }
+      .nav-icon { width: 8px; height: 8px; border: 2px solid currentColor; border-radius: 3px; }
+      .app-main { min-width: 0; flex: 1; padding: 34px 42px 40px; background: #fbfbfa; }
+      .app-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+      .app-topbar h2 { margin: 0; font-size: 28px; letter-spacing: -.035em; }
+      .app-topbar p { margin: 6px 0 0; color: var(--muted); font-size: 16px; }
+      .avatar { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 50%; color: var(--red-dark); background: #ffe9e9; font-weight: 800; }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: 0 10px 26px rgba(44, 48, 56, .055);
+      }
+      .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; font-size: 13px; font-weight: 750; }
+      .pill.red { color: var(--red-dark); background: #ffe9e9; }
+      .pill.green { color: var(--green); background: var(--green-soft); }
+      .pill.blue { color: var(--blue); background: var(--blue-soft); }
+      .pill.amber { color: var(--amber); background: var(--amber-soft); }
+
+      /* Scene 1 */
+      #scene-1 .scene-inner { color: #fff; background: var(--charcoal); }
+      .intro-grid {
+        position: absolute;
+        right: 118px;
+        top: 164px;
+        display: grid;
+        width: 690px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 22px;
+      }
+      .intro-card {
+        display: flex;
+        min-height: 150px;
+        align-items: center;
+        gap: 20px;
+        padding: 28px;
+        border: 1px solid rgba(255, 255, 255, .13);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .08);
+      }
+      .intro-card i { display: grid; width: 54px; height: 54px; flex: 0 0 54px; place-items: center; border-radius: 16px; color: #fff; background: var(--red); font-style: normal; font-size: 22px; font-weight: 850; }
+      .intro-card strong { display: block; font-size: 23px; }
+      .intro-card span { display: block; margin-top: 7px; color: #bfbfc4; font-size: 16px; }
+      #scene-1 .eyebrow { color: #eb5656; }
+      #scene-1 .copy { position: absolute; left: 130px; top: 198px; width: 760px; }
+      #scene-1 .display { font-size: 116px; }
+      #scene-1 .support { max-width: 570px; color: #c3c3c8; }
+      .intro-line { position: absolute; left: 132px; top: 626px; width: 310px; height: 7px; border-radius: 7px; background: var(--red); transform-origin: left center; }
+      .intro-mark { position: absolute; left: 132px; bottom: 86px; font-size: 46px; }
+
+      /* Scene 2 */
+      #scene-2 .scene-inner, #scene-3 .scene-inner, #scene-4 .scene-inner { background: var(--paper); }
+      .scene-label { position: absolute; left: 92px; top: 70px; width: 430px; }
+      .scene-label h2 { margin: 0; font-size: 58px; line-height: 1; letter-spacing: -.055em; }
+      .scene-label p { margin: 14px 0 0; color: var(--muted); font-size: 22px; line-height: 1.35; }
+      #scene-2 .app-window { left: 520px; top: 92px; display: flex; width: 1300px; height: 860px; }
+      .dashboard-banner { display: flex; align-items: center; justify-content: space-between; padding: 24px 28px; border-color: #f4d3d3; background: linear-gradient(100deg, #fff 45%, #fff1f1); }
+      .dashboard-banner p { margin: 0 0 8px; color: var(--muted); font-size: 15px; }
+      .dashboard-banner strong { font-size: 24px; letter-spacing: -.03em; }
+      .dashboard-banner b { color: var(--red); font-size: 43px; }
+      .widget-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-top: 18px; }
+      .widget { min-height: 218px; padding: 23px 25px; }
+      .widget h3 { margin: 0 0 4px; font-size: 18px; }
+      .widget > p { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+      .metric-row { display: flex; align-items: flex-end; justify-content: space-between; }
+      .metric-row strong { font-size: 48px; letter-spacing: -.055em; }
+      .metric-row span { color: var(--green); font-weight: 750; }
+      .progress-track { overflow: hidden; height: 9px; margin-top: 22px; border-radius: 999px; background: #ecebea; }
+      .progress-value { width: 72%; height: 100%; border-radius: inherit; background: var(--red); }
+      .task-row, .project-row { display: flex; align-items: center; justify-content: space-between; min-height: 47px; border-top: 1px solid #efeeec; font-size: 15px; }
+      .task-row:first-of-type, .project-row:first-of-type { border-top: 0; }
+      .task-name { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+      .check { width: 18px; height: 18px; border: 2px solid #bebdc1; border-radius: 5px; }
+      .status-ring { position: relative; width: 94px; height: 94px; margin: 4px auto 10px; border-radius: 50%; background: conic-gradient(var(--red) 0 47%, #f3c344 47% 70%, #dfe4ec 70% 100%); }
+      .status-ring::after { content: "47%"; position: absolute; inset: 14px; display: grid; place-items: center; border-radius: 50%; background: #fff; font-size: 18px; font-weight: 820; }
+      .ring-label { text-align: center; color: var(--muted); font-size: 14px; }
+
+      /* Scene 3 */
+      #scene-3 .scene-label { width: 380px; }
+      #scene-3 .app-window { left: 520px; top: 92px; display: flex; width: 1320px; height: 860px; }
+      .project-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+      .project-head h2 { margin: 0; font-size: 29px; letter-spacing: -.04em; }
+      .project-head p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+      .primary { border: 0; border-radius: 11px; padding: 12px 18px; color: #fff; background: #d33135; font-size: 14px; font-weight: 780; }
+      .board { display: grid; height: 585px; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .column { position: relative; padding: 17px; border-radius: 16px; background: #f1f0ee; }
+      .column-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; font-size: 15px; font-weight: 780; }
+      .column-head span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: var(--muted); background: #fff; font-size: 12px; }
+      .task-card {
+        width: 100%;
+        min-height: 124px;
+        padding: 18px;
+        border: 1px solid #e3e1de;
+        border-radius: 13px;
+        background: #fff;
+        box-shadow: 0 9px 20px rgba(44, 48, 56, .08);
+      }
+      .task-card strong { display: block; font-size: 15px; line-height: 1.35; }
+      .task-card p { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+      #moving-task { position: absolute; left: 17px; top: 200px; width: calc(100% - 34px); z-index: 5; }
+      .placeholder { border-style: dashed; color: #717171; background: rgba(255, 255, 255, .62); box-shadow: none; }
+      .project-progress { display: grid; grid-template-columns: 150px 1fr 55px; align-items: center; gap: 18px; margin-top: 28px; font-size: 14px; font-weight: 750; }
+      .project-progress .progress-track { margin: 0; }
+      #project-fill { width: 100%; transform-origin: left center; }
+      #progress-number { color: var(--red-dark); font-size: 20px; }
+      .cursor {
+        position: absolute;
+        z-index: 12;
+        width: 58px;
+        height: 72px;
+        filter: drop-shadow(0 5px 4px rgba(0, 0, 0, .2));
+      }
+      .cursor svg { width: 100%; height: 100%; }
+      .click-ring { position: absolute; z-index: 11; width: 58px; height: 58px; border: 4px solid rgba(231, 53, 53, .5); border-radius: 50%; }
+
+      /* Scene 4 */
+      #scene-4 .scene-label { width: 380px; }
+      .dual-window { position: absolute; left: 520px; top: 92px; display: grid; width: 1318px; height: 860px; grid-template-columns: .9fr 1.1fr; gap: 22px; }
+      .module-panel { overflow: hidden; border: 1px solid rgba(44, 48, 56, .12); border-radius: 24px; background: #fbfbfa; box-shadow: 0 28px 76px rgba(44, 48, 56, .13); }
+      .module-head { display: flex; align-items: center; justify-content: space-between; padding: 30px 32px 24px; border-bottom: 1px solid var(--line); background: #fff; }
+      .module-head h3 { margin: 0; font-size: 25px; letter-spacing: -.035em; }
+      .module-head p { margin: 7px 0 0; color: var(--muted); font-size: 14px; }
+      .module-body { padding: 26px 30px; }
+      .inbox-tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+      .inbox-tabs span { padding: 8px 12px; border-radius: 9px; color: #646b78; background: #ecebea; font-size: 13px; font-weight: 750; }
+      .inbox-tabs span:first-child { color: var(--red-dark); background: #ffe9e9; }
+      .notification {
+        display: grid;
+        grid-template-columns: 46px 1fr auto;
+        gap: 15px;
+        align-items: start;
+        padding: 20px;
+        border: 1px solid #efcaca;
+        border-radius: 15px;
+        background: #fff;
+        box-shadow: 0 12px 26px rgba(44, 48, 56, .07);
+      }
+      .notification-icon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 14px; color: #fff; background: #d33135; font-weight: 850; }
+      .notification strong { font-size: 15px; }
+      .notification p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+      .notification time { color: var(--muted); font-size: 12px; }
+      .suggestion-form label { display: block; margin-bottom: 17px; color: #424650; font-size: 13px; font-weight: 780; }
+      .suggestion-form input, .suggestion-form textarea {
+        display: block;
+        width: 100%;
+        margin-top: 8px;
+        border: 1px solid #dcd9d5;
+        border-radius: 11px;
+        padding: 12px 14px;
+        color: var(--ink);
+        background: #fff;
+        font-size: 14px;
+      }
+      .suggestion-form textarea { height: 104px; resize: none; }
+      .suggestion-form footer { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; }
+      .suggestion-form footer span { color: var(--muted); font-size: 13px; }
+      .toast {
+        position: absolute;
+        right: 32px;
+        bottom: 30px;
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding: 16px 20px;
+        border: 1px solid #b7dfcf;
+        border-radius: 14px;
+        color: #0d6949;
+        background: #edfaf4;
+        box-shadow: 0 15px 32px rgba(19, 138, 97, .14);
+        font-size: 14px;
+        font-weight: 760;
+      }
+      .toast i { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; color: #fff; background: var(--green); font-style: normal; }
+
+      /* Scene 5 */
+      #scene-5 .scene-inner { color: #fff; background: var(--charcoal); }
+      .result-grid { position: absolute; left: 126px; top: 150px; display: grid; width: 720px; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .result-card { min-height: 180px; padding: 25px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 20px; background: rgba(255, 255, 255, .08); }
+      .result-card span { color: #bfbfc3; font-size: 14px; }
+      .result-card strong { display: block; margin-top: 21px; font-size: 35px; letter-spacing: -.04em; }
+      .result-card small { display: block; margin-top: 8px; color: #d5d5d8; font-size: 13px; line-height: 1.35; }
+      .outro-copy { position: absolute; left: 126px; top: 426px; display: flex; width: 920px; flex-direction: column; gap: 24px; }
+      .outro-copy .eyebrow { margin: 0; color: #eb5656; font-size: 22px; }
+      .outro-copy h2 { margin: 0; font-size: 80px; line-height: .98; letter-spacing: -.06em; }
+      .outro-copy p { margin: 0; color: #c4c4c9; font-size: 28px; }
+      .outro-brand {
+        position: absolute;
+        right: 170px;
+        top: 350px;
+        display: flex;
+        width: 520px;
+        height: 350px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, .12);
+        border-radius: 32px;
+        background: rgba(255, 255, 255, .055);
+      }
+      .outro-brand .brand { font-size: 128px; }
+      .outro-brand .brand-dot { width: 24px; height: 24px; margin-top: 9px; }
+      .outro-tag { position: absolute; right: 170px; top: 736px; width: 520px; text-align: center; color: #d0d0d4; font-size: 22px; }
+    </style>
+  </head>
+  <body>
+    <main data-hf-id="hf-30di" id="root" data-root="true" data-composition-id="bold-launch" data-start="0" data-duration="22" data-width="1920" data-height="1080">
+      <section data-hf-id="hf-3svi" id="scene-1" class="clip" data-start="0" data-duration="3.82" data-track-index="10">
+        <div data-hf-id="hf-97sb" class="scene-inner">
+          <div data-hf-id="hf-bdx3" class="copy">
+            <p data-hf-id="hf-xxbq" class="eyebrow">BOLD WORKSPACE</p>
+            <h1 data-hf-id="hf-5qh2" class="display">El trabajo,<br data-hf-id="hf-x5px">visible.</h1>
+            <p data-hf-id="hf-45d7" class="support">Prioridades, proyectos, actividad e ideas dentro de una sola experiencia.</p>
+          </div>
+          <div data-hf-id="hf-d2l9" class="intro-line"></div>
+          <div data-hf-id="hf-ul57" class="intro-grid">
+            <article data-hf-id="hf-xo14" class="intro-card"><i data-hf-id="hf-b7wv">01</i><div data-hf-id="hf-yeow"><strong data-hf-id="hf-5q8u">Prioridades</strong><span data-hf-id="hf-dsyr">Lo importante, primero</span></div></article>
+            <article data-hf-id="hf-8s80" class="intro-card"><i data-hf-id="hf-atlu">02</i><div data-hf-id="hf-y7yw"><strong data-hf-id="hf-j9gy">Proyectos</strong><span data-hf-id="hf-31q2">Avance por departamento</span></div></article>
+            <article data-hf-id="hf-7lax" class="intro-card"><i data-hf-id="hf-afat">03</i><div data-hf-id="hf-x11t"><strong data-hf-id="hf-lekh">Actividad</strong><span data-hf-id="hf-z091">Cambios con contexto</span></div></article>
+            <article data-hf-id="hf-7zly" class="intro-card"><i data-hf-id="hf-d7g0">04</i><div data-hf-id="hf-xfcu"><strong data-hf-id="hf-ppky">Ideas</strong><span data-hf-id="hf-5rne">Feedback dentro de Bold</span></div></article>
+          </div>
+          <div data-hf-id="hf-tn5k" class="intro-mark brand">bold<span data-hf-id="hf-i9p2" class="brand-dot"></span></div>
+          <i data-hf-id="hf-umpm" class="ambient-dot"></i>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-pbkt" id="scene-2" class="clip" data-start="3.82" data-duration="4.92" data-track-index="11">
+        <div data-hf-id="hf-skgb" class="scene-inner">
+          <header data-hf-id="hf-s1z9" class="scene-label">
+            <p data-hf-id="hf-y9ov" class="eyebrow">INICIO</p>
+            <h2 data-hf-id="hf-2piv">Hoy,<br data-hf-id="hf-rsrt">prioridades claras.</h2>
+            <p data-hf-id="hf-1sg6">Una vista diaria con los indicadores y el trabajo que requieren atención.</p>
+          </header>
+          <div data-hf-id="hf-etgy" class="app-window">
+            <aside data-hf-id="hf-p5m7" class="app-sidebar">
+              <div data-hf-id="hf-45ao" class="brand">bold<span data-hf-id="hf-k48q" class="brand-dot"></span></div>
+              <div data-hf-id="hf-ri3e" class="nav-item active"><i data-hf-id="hf-os0f" class="nav-icon"></i>Inicio</div>
+              <div data-hf-id="hf-a7u7" class="nav-item"><i data-hf-id="hf-yhv3" class="nav-icon"></i>Tareas</div>
+              <div data-hf-id="hf-04hc" class="nav-item"><i data-hf-id="hf-y3k2" class="nav-icon"></i>Bandeja</div>
+              <div data-hf-id="hf-u9b3" class="nav-item"><i data-hf-id="hf-xp91" class="nav-icon"></i>Calendario</div>
+              <div data-hf-id="hf-082e" class="nav-item"><i data-hf-id="hf-0he8" class="nav-icon"></i>Sugerencias</div>
+              <div data-hf-id="hf-muwk" class="nav-item"><i data-hf-id="hf-0337" class="nav-icon"></i>Informes</div>
+            </aside>
+            <div data-hf-id="hf-yb6x" class="app-main">
+              <div data-hf-id="hf-txom" class="app-topbar"><div data-hf-id="hf-w8fr"><h2 data-hf-id="hf-b32e">Buenos días</h2><p data-hf-id="hf-y9m7">Dirección · Vista general</p></div><span data-hf-id="hf-1ces" class="avatar">BD</span></div>
+              <article data-hf-id="hf-r6ve" class="card dashboard-banner"><div data-hf-id="hf-wmqs"><p data-hf-id="hf-qrsg">INICIO</p><strong data-hf-id="hf-u5tu">Esto es lo más importante para hoy.</strong></div><b data-hf-id="hf-2zw4">03</b></article>
+              <div data-hf-id="hf-opxx" class="widget-grid">
+                <article data-hf-id="hf-6g7a" class="card widget dashboard-widget"><h3 data-hf-id="hf-wicx">Indicadores</h3><p data-hf-id="hf-gm8j">Avance general</p><div data-hf-id="hf-bf37" class="metric-row"><strong data-hf-id="hf-12ta">72%</strong><span data-hf-id="hf-uqaj">+8% esta semana</span></div><div data-hf-id="hf-lxwj" class="progress-track"><div data-hf-id="hf-ftkp" class="progress-value"></div></div></article>
+                <article data-hf-id="hf-4bka" class="card widget dashboard-widget"><h3 data-hf-id="hf-l05b">Mis tareas</h3><p data-hf-id="hf-s8iw">Prioridades próximas</p><div data-hf-id="hf-z1vw" class="task-row"><span data-hf-id="hf-vw7f" class="task-name"><i data-hf-id="hf-yqa4" class="check"></i>Revisar propuesta</span><span data-hf-id="hf-a8j3" class="pill red">Hoy</span></div><div data-hf-id="hf-4spw" class="task-row"><span data-hf-id="hf-i8sh" class="task-name"><i data-hf-id="hf-cb6s" class="check"></i>Validar métricas</span><span data-hf-id="hf-mx7w" class="pill amber">Mañana</span></div></article>
+                <article data-hf-id="hf-4pvb" class="card widget dashboard-widget"><h3 data-hf-id="hf-i2zw">Proyectos</h3><p data-hf-id="hf-tnk3">Avance de tu organización</p><div data-hf-id="hf-nx90" class="project-row"><strong data-hf-id="hf-o7n7">Lanzamiento demo</strong><span data-hf-id="hf-vm77" class="pill blue">En curso</span></div><div data-hf-id="hf-sp4c" class="project-row"><strong data-hf-id="hf-v80q">Portal de clientes</strong><span data-hf-id="hf-x9tq" class="pill green">Al día</span></div></article>
+                <article data-hf-id="hf-546c" class="card widget dashboard-widget"><h3 data-hf-id="hf-kk57">Tareas por estado</h3><p data-hf-id="hf-sags">Distribución actual</p><div data-hf-id="hf-o9ap" class="status-ring"></div><div data-hf-id="hf-lr3o" class="ring-label">47% en curso</div></article>
+              </div>
+            </div>
+          </div>
+          <i data-hf-id="hf-ny1q" class="ambient-dot"></i>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-a0i6" id="scene-3" class="clip" data-start="8.74" data-duration="4.37" data-track-index="12">
+        <div data-hf-id="hf-s65a" class="scene-inner">
+          <header data-hf-id="hf-l9w9" class="scene-label">
+            <p data-hf-id="hf-p5qc" class="eyebrow">PROYECTOS</p>
+            <h2 data-hf-id="hf-l1on">El avance<br data-hf-id="hf-szow">se ve.</h2>
+            <p data-hf-id="hf-4x8j">El trabajo cambia de estado y el progreso se actualiza en el mismo contexto.</p>
+          </header>
+          <div data-hf-id="hf-scja" class="app-window">
+            <aside data-hf-id="hf-5w3z" class="app-sidebar">
+              <div data-hf-id="hf-khwo" class="brand">bold<span data-hf-id="hf-kijr" class="brand-dot"></span></div>
+              <div data-hf-id="hf-jl9u" class="nav-item"><i data-hf-id="hf-zos6" class="nav-icon"></i>Inicio</div>
+              <div data-hf-id="hf-tiaf" class="nav-item active"><i data-hf-id="hf-zah5" class="nav-icon"></i>Proyectos</div>
+              <div data-hf-id="hf-77tb" class="nav-item"><i data-hf-id="hf-vppw" class="nav-icon"></i>Tareas</div>
+              <div data-hf-id="hf-klcc" class="nav-item"><i data-hf-id="hf-vbev" class="nav-icon"></i>Informes</div>
+            </aside>
+            <div data-hf-id="hf-rs4d" class="app-main">
+              <header data-hf-id="hf-cug6" class="project-head"><div data-hf-id="hf-vftp"><h2 data-hf-id="hf-tsgy">Lanzamiento demo</h2><p data-hf-id="hf-3q3b">12 tareas · 4 personas · Dirección</p></div><button data-hf-id="hf-0uya" class="primary">+ Nueva tarea</button></header>
+              <div data-hf-id="hf-vhiw" class="board">
+                <div data-hf-id="hf-84me" class="column"><div data-hf-id="hf-2w2p" class="column-head">Por hacer <span data-hf-id="hf-hs2e">3</span></div><article data-hf-id="hf-l2ky" class="task-card placeholder"><strong data-hf-id="hf-087k">Definir alcance final</strong><p data-hf-id="hf-zap1">Prioridad media</p></article><article data-hf-id="hf-i9bq" id="moving-task" class="task-card" data-layout-allow-overflow=""><strong data-hf-id="hf-vtap">Preparar recorrido del producto</strong><p data-hf-id="hf-q1an"><span data-hf-id="hf-t403" class="pill red">Prioridad alta</span></p></article></div>
+                <div data-hf-id="hf-aaju" class="column"><div data-hf-id="hf-glqa" class="column-head">En curso <span data-hf-id="hf-gl5b">4</span></div><article data-hf-id="hf-vfwh" class="task-card"><strong data-hf-id="hf-5anz">Validar experiencia móvil</strong><p data-hf-id="hf-tgcp">En revisión</p></article></div>
+                <div data-hf-id="hf-aouv" class="column"><div data-hf-id="hf-85z3" class="column-head">Completado <span data-hf-id="hf-gzgc">5</span></div><article data-hf-id="hf-k3md" class="task-card"><strong data-hf-id="hf-urym">Configurar entorno demo</strong><p data-hf-id="hf-wo4v"><span data-hf-id="hf-gfu5" class="pill green">Completada</span></p></article></div>
+              </div>
+              <div data-hf-id="hf-10rt" class="project-progress"><span data-hf-id="hf-plfe">Progreso del proyecto</span><div data-hf-id="hf-drz7" class="progress-track"><div data-hf-id="hf-lh60" id="project-fill" class="progress-value"></div></div><strong data-hf-id="hf-eqvh" id="progress-number">64%</strong></div>
+            </div>
+          </div>
+          <div data-hf-id="hf-f5ea" id="click-ring" class="click-ring"></div>
+          <div data-hf-id="hf-ya5f" id="demo-cursor" class="cursor" aria-hidden="true"><svg data-hf-id="hf-wpgb" viewBox="0 0 58 72"><path data-hf-id="hf-afsi" d="M5 4 48 39 29 42 39 64 27 70 17 47 5 60Z" fill="#fff" stroke="#24262b" stroke-width="4" stroke-linejoin="round" /></svg></div>
+          <i data-hf-id="hf-occr" class="ambient-dot"></i>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-0q76" id="scene-4" class="clip" data-start="13.11" data-duration="4.36" data-track-index="13">
+        <div data-hf-id="hf-rru9" class="scene-inner">
+          <header data-hf-id="hf-mgtc" class="scene-label">
+            <p data-hf-id="hf-f2s7" class="eyebrow">ACTIVIDAD</p>
+            <h2 data-hf-id="hf-5huo">El contexto<br data-hf-id="hf-sldv">no se pierde.</h2>
+            <p data-hf-id="hf-1a8b">Las actualizaciones llegan a Bandeja y las ideas vuelven al producto sin usar correo.</p>
+          </header>
+          <div data-hf-id="hf-2ukz" class="dual-window">
+            <section data-hf-id="hf-y950" class="module-panel" id="inbox-panel">
+              <header data-hf-id="hf-36rj" class="module-head"><div data-hf-id="hf-vu4q"><h3 data-hf-id="hf-ks41">Bandeja de entrada</h3><p data-hf-id="hf-eehv">Actividad reciente</p></div><span data-hf-id="hf-pjvl" class="pill red">1 nueva</span></header>
+              <div data-hf-id="hf-vtbx" class="module-body"><div data-hf-id="hf-61dp" class="inbox-tabs"><span data-hf-id="hf-no1l">Todo</span><span data-hf-id="hf-58m2">Menciones</span><span data-hf-id="hf-2587">Cambios</span></div><article data-hf-id="hf-z4uz" id="notification" class="notification"><i data-hf-id="hf-0uje" class="notification-icon">✓</i><div data-hf-id="hf-1043"><strong data-hf-id="hf-z4yf">La tarea cambió a En curso</strong><p data-hf-id="hf-b8vo">Preparar recorrido del producto · Lanzamiento demo</p></div><time data-hf-id="hf-4ftj">Ahora</time></article></div>
+            </section>
+            <section data-hf-id="hf-hrye" class="module-panel" id="suggestion-panel">
+              <header data-hf-id="hf-6sqn" class="module-head"><div data-hf-id="hf-1ef4"><h3 data-hf-id="hf-f2i1">Sugerencias</h3><p data-hf-id="hf-p9n0">Comparte ideas, problemas y ajustes sin salir de Bold.</p></div><span data-hf-id="hf-sa6t" class="pill blue">Mejora continua</span></header>
+              <div data-hf-id="hf-efci" class="module-body suggestion-form"><label data-hf-id="hf-cevg">Categoría<input data-hf-id="hf-wob4" value="Idea" readonly></label><label data-hf-id="hf-nggc">Título<input data-hf-id="hf-yhv0" value="Añadir filtros al informe semanal" readonly></label><label data-hf-id="hf-v3vg">Detalle<textarea data-hf-id="hf-jjfk" readonly>Permitir guardar una combinación de filtros para reutilizarla en el siguiente informe.</textarea></label><footer data-hf-id="hf-d3ia"><span data-hf-id="hf-iug2">Módulo relacionado · Informes</span><button data-hf-id="hf-cq90" class="primary">Enviar sugerencia</button></footer></div>
+              <div data-hf-id="hf-wg8m" id="success-toast" class="toast"><i data-hf-id="hf-q7i5">✓</i>Sugerencia registrada <span data-hf-id="hf-bfp6" class="pill green">Nueva</span></div>
+            </section>
+          </div>
+          <i data-hf-id="hf-oqns" class="ambient-dot"></i>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-rssu" id="scene-5" class="clip" data-start="17.47" data-duration="4.53" data-track-index="14">
+        <div data-hf-id="hf-rdj8" class="scene-inner">
+          <div data-hf-id="hf-5prw" class="result-grid">
+            <article data-hf-id="hf-7ybt" class="result-card"><span data-hf-id="hf-2s8q">PROYECTO</span><strong data-hf-id="hf-l4ki">72%</strong><small data-hf-id="hf-7i1c">Lanzamiento demo en curso</small></article>
+            <article data-hf-id="hf-0kn1" class="result-card"><span data-hf-id="hf-i910">ACTIVIDAD</span><strong data-hf-id="hf-1hac">1 nueva</strong><small data-hf-id="hf-j65k">Cambio recibido con contexto</small></article>
+            <article data-hf-id="hf-1rk4" class="result-card"><span data-hf-id="hf-fakv">IDEAS</span><strong data-hf-id="hf-gkdb">Nueva</strong><small data-hf-id="hf-lwn6">Sugerencia registrada en Bold</small></article>
+          </div>
+          <div data-hf-id="hf-0gt5" class="outro-copy"><p data-hf-id="hf-ffge" class="eyebrow">UN MISMO FLUJO</p><h2 data-hf-id="hf-caax">Proyectos,<br data-hf-id="hf-qluq">actividad e ideas.</h2><p data-hf-id="hf-y3um">La operación se entiende mientras sucede.</p></div>
+          <div data-hf-id="hf-nz55" class="outro-brand"><div data-hf-id="hf-jazl" class="brand">bold<span data-hf-id="hf-kwus" class="brand-dot"></span></div></div>
+          <p data-hf-id="hf-ibmz" class="outro-tag">Todo el trabajo, visible.</p>
+          <i data-hf-id="hf-lyil" class="ambient-dot"></i>
+        </div>
+      </section>
+
+      <audio data-hf-id="hf-qcc8" id="music" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-start="0" data-duration="22" data-track-index="1" data-volume="1" data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0.10},{&quot;t&quot;:0.55,&quot;v&quot;:0.28},{&quot;t&quot;:21.28,&quot;v&quot;:0.28},{&quot;t&quot;:22,&quot;v&quot;:0}]}]}"></audio>
+      <audio data-hf-id="hf-t27k" id="sfx-click" src="assets/sfx/interface/click_003.ogg" data-start="10.00" data-track-index="2" data-volume="0.45"></audio>
+      <audio data-hf-id="hf-zly4" id="sfx-success" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="16.10" data-track-index="3" data-volume="0.38"></audio>
+      <audio data-hf-id="hf-wv4d" id="sfx-logo" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="21.28" data-track-index="4" data-volume="0.28"></audio>
+    </main>
+
+    <script>
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+      const root = document.getElementById("root");
+
+      // Scene 1: restrained title-card reveal and short-path grid assembly.
+      tl.fromTo("#scene-1 .eyebrow", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: .48 }, .10);
+      tl.fromTo("#scene-1 .display", { opacity: 0, y: 54 }, { opacity: 1, y: 0, duration: .72 }, .22);
+      tl.fromTo("#scene-1 .support", { opacity: 0, y: 25 }, { opacity: 1, y: 0, duration: .54 }, .70);
+      tl.fromTo(".intro-line", { scaleX: 0 }, { scaleX: 1, duration: .60 }, .70);
+      tl.fromTo(".intro-card", { opacity: 0, y: 32 }, { opacity: 1, y: 0, duration: .54, stagger: .12 }, .34); // beat-grid
+      tl.fromTo(".intro-mark", { opacity: 0 }, { opacity: 1, duration: .45 }, 1.62);
+
+      // Scene 2 lands on the 3.82s cue; all UI remains frontal and uniformly scaled.
+      tl.fromTo("#scene-2 .scene-label", { opacity: 0, x: -44 }, { opacity: 1, x: 0, duration: .62 }, 3.82); // beat-locked
+      tl.fromTo("#scene-2 .app-window", { opacity: 0, x: 70, scale: .985 }, { opacity: 1, x: 0, scale: 1, duration: .78 }, 3.82);
+      tl.fromTo(".dashboard-banner", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: .50 }, 4.34);
+      tl.fromTo(".dashboard-widget", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .52, stagger: .14 }, 4.70); // beat-grid
+      tl.fromTo("#scene-2 .progress-value", { scaleX: .20 }, { scaleX: 1, duration: .95, transformOrigin: "left center" }, 5.32);
+      tl.to("#scene-2 .app-window", { y: -8, duration: 2.1, ease: "sine.inOut" }, 6.20);
+
+      // Scene 3: oversized cursor, click, drag-like task translation and progress result.
+      tl.fromTo("#scene-3 .scene-label", { opacity: 0, x: -44 }, { opacity: 1, x: 0, duration: .58 }, 8.74); // beat-locked
+      tl.fromTo("#scene-3 .app-window", { opacity: 0, x: 64 }, { opacity: 1, x: 0, duration: .68 }, 8.74);
+      tl.set("#demo-cursor", { x: 910, y: 166, opacity: 0 }, 8.74);
+      tl.set("#click-ring", { x: 920, y: 440, opacity: 0, scale: .35 }, 8.74);
+      tl.fromTo("#demo-cursor", { opacity: 0, x: 1140, y: 180 }, { opacity: 1, x: 930, y: 450, duration: .66, ease: "power3.inOut" }, 9.30);
+      tl.fromTo("#click-ring", { opacity: .78, scale: .35 }, { opacity: 0, scale: 1.35, duration: .36, ease: "power2.out" }, 10.00); // beat-locked
+      tl.to("#moving-task", { x: 344, y: 0, duration: .78, ease: "power3.inOut" }, 10.18);
+      tl.to("#demo-cursor", { x: 1274, y: 480, duration: .78, ease: "power3.inOut" }, 10.18);
+      tl.fromTo("#project-fill", { scaleX: .64 }, { scaleX: .72, duration: .78, ease: "power2.out" }, 11.02);
+      tl.to("#progress-number", { innerText: 72, snap: { innerText: 1 }, duration: .68, onUpdate: function () { this.targets()[0].textContent = `${Math.round(Number(this.targets()[0].innerText))}%`; } }, 11.02);
+      tl.to("#moving-task", { boxShadow: "0 16px 34px rgba(231, 53, 53, .18)", duration: .34 }, 11.12);
+      tl.to("#demo-cursor", { opacity: 0, x: 1450, y: 530, duration: .45 }, 11.45);
+
+      // Scene 4: notification first, then internal suggestion confirmation.
+      tl.fromTo("#scene-4 .scene-label", { opacity: 0, x: -44 }, { opacity: 1, x: 0, duration: .58 }, 13.11); // beat-locked
+      tl.fromTo("#inbox-panel", { opacity: 0, y: 45 }, { opacity: 1, y: 0, duration: .64 }, 13.11);
+      tl.fromTo("#notification", { opacity: 0, x: -28 }, { opacity: 1, x: 0, duration: .48 }, 13.66);
+      tl.fromTo("#suggestion-panel", { opacity: 0, y: 45 }, { opacity: 1, y: 0, duration: .64 }, 14.18);
+      tl.fromTo("#success-toast", { opacity: 0, y: 24, scale: .96 }, { opacity: 1, y: 0, scale: 1, duration: .48 }, 16.10); // beat-locked
+
+      // Scene 5: result cards resolve into the final brand lockup.
+      tl.fromTo("#scene-5 .result-card", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .52, stagger: .12 }, 17.47); // beat-locked
+      tl.fromTo(".outro-copy", { opacity: 0, y: 38 }, { opacity: 1, y: 0, duration: .70 }, 18.16);
+      tl.fromTo(".outro-brand", { opacity: 0, scale: .94 }, { opacity: 1, scale: 1, duration: .78, ease: "power4.out" }, 19.10);
+      tl.fromTo(".outro-tag", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .52 }, 20.05);
+      tl.to(".outro-brand .brand-dot", { scale: 1.10, duration: .22, yoyo: true, repeat: 1, ease: "sine.inOut" }, 21.28); // beat-locked
+
+      const audioFrames = (window.BOLD_AUDIO_DATA && window.BOLD_AUDIO_DATA.frames) || [];
+      tl.eventCallback("onUpdate", () => {
+        const index = Math.max(0, Math.min(audioFrames.length - 1, Math.round(tl.time() * 30)));
+        const energy = audioFrames[index] ? audioFrames[index].rms : 0;
+        root.style.setProperty("--audio", String(energy));
+      });
+
+      window.__timelines["bold-launch"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

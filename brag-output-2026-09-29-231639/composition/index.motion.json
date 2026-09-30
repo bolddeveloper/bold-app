@@ -1,0 +1,18 @@
+{
+  "duration": 22,
+  "maxStaticSec": 2.2,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#scene-1 .display", "bySec": 1.1 },
+    { "kind": "before", "a": "#scene-1 .display", "b": ".intro-mark" },
+    { "kind": "appearsBy", "selector": "#scene-2 .app-window", "bySec": 4.9 },
+    { "kind": "appearsBy", "selector": "#moving-task", "bySec": 9.6 },
+    { "kind": "appearsBy", "selector": "#notification", "bySec": 14.3 },
+    { "kind": "before", "a": "#notification", "b": "#success-toast" },
+    { "kind": "appearsBy", "selector": ".outro-brand", "bySec": 20.2 },
+    { "kind": "staysInFrame", "selector": "#scene-2 .app-window" },
+    { "kind": "staysInFrame", "selector": "#scene-3 .app-window" },
+    { "kind": "staysInFrame", "selector": "#demo-cursor" },
+    { "kind": "staysInFrame", "selector": ".outro-brand" },
+    { "kind": "keepsMoving", "withinSelector": "#root", "maxStaticSec": 2.2 }
+  ]
+}
