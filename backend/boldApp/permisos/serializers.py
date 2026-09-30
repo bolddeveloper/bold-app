@@ -20,6 +20,7 @@ class PermissionCatalogSerializer(serializers.ModelSerializer):
         fields = [
             "id", "code", "module_code", "resource", "action", "description", "risk_level",
             "is_delegable", "requires_step_up_mfa", "is_active", "system_managed", "created_at", "updated_at",
+            "is_bulk_assignable",
         ]
 
 
@@ -59,8 +60,9 @@ class RolePolicyApplySerializer(serializers.Serializer):
 
 class RolePolicyBulkApplySerializer(serializers.Serializer):
     job_role = serializers.PrimaryKeyRelatedField(queryset=JobRole.objects.all())
-    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)
-    rules = ScopeRuleSerializer(many=True, allow_empty=True)
+    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True, required=False)
+    rules = ScopeRuleSerializer(many=True, allow_empty=True, required=False)
+    configurations = serializers.ListField(child=serializers.DictField(), required=False)
     reason = serializers.CharField(min_length=8, max_length=2000)
     expected_revision = serializers.IntegerField(min_value=0, required=False)
 
@@ -84,7 +86,49 @@ class RolePolicyBulkApplySerializer(serializers.Serializer):
         return rules
 
     def validate(self, attrs):
-        if len(attrs["permissions"]) * len(attrs["rules"]) > 500:
+        configurations = attrs.get("configurations")
+        if configurations is not None:
+            if "permissions" in attrs or "rules" in attrs:
+                raise serializers.ValidationError("Usa configurations o permissions/rules, no ambos formatos.")
+            if not configurations or len(configurations) > 100:
+                raise serializers.ValidationError({"configurations": "Incluye entre 1 y 100 permisos."})
+            permission_field = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all())
+            rule_field = ScopeRuleSerializer(many=True, allow_empty=True)
+            normalized, seen = [], set()
+            for index, entry in enumerate(configurations):
+                if set(entry) - {"permission", "rules"}:
+                    raise serializers.ValidationError({"configurations": f"Campos desconocidos en la posición {index}."})
+                try:
+                    permission = permission_field.run_validation(entry.get("permission"))
+                    rules = rule_field.run_validation(entry.get("rules", []))
+                except serializers.ValidationError as error:
+                    raise serializers.ValidationError({"configurations": {index: error.detail}}) from error
+                if permission.pk in seen:
+                    raise serializers.ValidationError({"configurations": "No repitas permisos en la operación."})
+                seen.add(permission.pk)
+                normalized.append({"permission": permission, "rules": rules})
+            attrs["configurations"] = normalized
+            permissions = [entry["permission"] for entry in normalized]
+            rules_by_permission = [entry["rules"] for entry in normalized]
+        else:
+            if "permissions" not in attrs or "rules" not in attrs:
+                raise serializers.ValidationError("permissions y rules son obligatorios en el formato uniforme.")
+            permissions = attrs["permissions"]
+            rules_by_permission = [attrs["rules"] for _ in permissions]
+
+        unsafe = [
+            permission.code for permission, rules in zip(permissions, rules_by_permission)
+            if any(rule["effect"] == JobRolePermission.EFFECT_ALLOW for rule in rules)
+            and not permission.is_bulk_assignable
+        ]
+        if unsafe:
+            raise serializers.ValidationError({
+                "permissions": (
+                    "Estos permisos sensibles requieren configuracion individual y no pueden "
+                    f"concederse en lote: {', '.join(sorted(unsafe))}."
+                )
+            })
+        if sum(len(rules) for rules in rules_by_permission) > 500:
             raise serializers.ValidationError("La operación generaría demasiadas reglas; divide la selección.")
         return attrs
 

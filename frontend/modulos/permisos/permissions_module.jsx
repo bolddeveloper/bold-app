@@ -16,6 +16,11 @@ const dialog = options => Swal.fire({ confirmButtonColor: "#ef1f2d", cancelButto
 const scopes = { global: "Global", own_unit: "Unidad propia", sub_tree: "Unidad y subárbol", specific_unit: "Unidad específica" };
 const risks = { low: "Bajo", medium: "Medio", high: "Alto", critical: "Crítico" };
 const nameOf = p => p?.description || p?.resource || p?.code || "Permiso";
+const presetDefinitions = [
+    { id: "read", label: "Solo consulta", description: "Lectura y consulta de catálogos", actions: new Set(["read", "list", "view"]) },
+    { id: "collaborate", label: "Colaboración", description: "Consulta, creación y comentarios", actions: new Set(["read", "list", "view", "create", "comment"]) },
+    { id: "operate", label: "Operación", description: "Todas las reglas ordinarias aptas para lote", actions: null },
+];
 const iso = value => value ? new Date(value).toISOString() : null;
 function expiry(hours = 24, ceiling) { const d = new Date(Math.min(Date.now() + hours * 3600000, ceiling ? new Date(ceiling).getTime() : Infinity)); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
 function grantState(x) { if (x.status === "revoked") return "Revocada"; if (x.valid_from && new Date(x.valid_from) > new Date()) return "Programada"; if (x.valid_until && new Date(x.valid_until) <= new Date()) return "Expirada"; return x.effective ? "Vigente" : "Inactiva"; }
@@ -54,15 +59,23 @@ function Policies({ state, units, changed, unlocked, unlock }) {
     const selectedPermissions = state.catalog.filter(permission => selected.includes(permission.id));
     useEffect(() => { setSelected([]); setBulkOpen(false); }, [role?.id]);
     function toggleModule(items) {
-        const ids = items.map(item => item.id), allSelected = ids.every(id => selected.includes(id));
+        const ids = items.filter(item => item.is_bulk_assignable).map(item => item.id), allSelected = ids.length > 0 && ids.every(id => selected.includes(id));
         setSelected(current => allSelected ? current.filter(id => !ids.includes(id)) : [...new Set([...current, ...ids])]);
+    }
+    function applyPreset(preset) {
+        setSelected(state.catalog.filter(permission => permission.is_bulk_assignable && (!preset.actions || preset.actions.has(permission.action))).map(permission => permission.id));
+    }
+    function togglePermission(permission) {
+        if (!permission.is_bulk_assignable) return;
+        setSelected(current => current.includes(permission.id) ? current.filter(id => id !== permission.id) : [...current, permission.id]);
     }
     function openBulk() { unlocked ? setBulkOpen(true) : unlock(); }
     return <section className="permissions_panel"><header><div><h2>Políticas por cargo</h2><p>Permisos base organizados por módulo.</p></div><label>Cargo<Select value={role?.id || ""} onChange={e => setRole(e.target.value)}>{roles.map(x => <option key={x.id} value={x.id}>{x.title}</option>)}</Select></label></header>
         {!unlocked && <div className="permissions_callout permissions_policy_lock"><LockKeyhole /><div><strong>Edición protegida con MFA</strong><p>Verifica tu identidad antes de modificar las políticas de un cargo.</p><button type="button" onClick={unlock}>Desbloquear edición</button></div></div>}
+        <section className="permissions_presets" aria-label="Preselecciones de permisos"><div><strong>Preselección rápida</strong><small>Prepara un conjunto seguro; después puedes quitar elementos o ajustar cada regla.</small></div>{presetDefinitions.map(preset => <button type="button" key={preset.id} onClick={() => applyPreset(preset)}><strong>{preset.label}</strong><span>{preset.description}</span></button>)}</section>
         <Filters query={query} setQuery={setQuery}><Select value={risk} onChange={e => setRisk(e.target.value)}><option value="">Todos los riesgos</option>{Object.entries(risks).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Filters>
         {selected.length > 0 && <div className="permissions_bulk_bar"><div><strong>{selected.length} permiso{selected.length === 1 ? "" : "s"} seleccionado{selected.length === 1 ? "" : "s"}</strong><small>Se aplicará una sola operación auditada.</small></div><button type="button" onClick={() => setSelected([])}>Limpiar</button><button className="permissions_primary" type="button" onClick={openBulk}>{unlocked ? "Configurar selección" : "Desbloquear y configurar"}</button></div>}
-        <div className="permissions_catalog">{groups.map(([module, items]) => { const allSelected = items.length > 0 && items.every(item => selected.includes(item.id)); return <details className="permissions_policy_group" key={module} open><summary><span>{module}</span><div className="permissions_policy_group_meta"><small>{items.length} permiso{items.length === 1 ? "" : "s"}</small><button type="button" className={allSelected ? "is_selected" : ""} aria-pressed={allSelected} onClick={event => { event.preventDefault(); event.stopPropagation(); toggleModule(items); }}>{allSelected ? <Check size={14} /> : null}{allSelected ? "Seleccionado" : "Seleccionar módulo"}</button></div></summary><div className="permissions_policy_items">{items.map(p => { const rules = state.policies.rules.filter(x => x.job_role === role?.id && x.permission === p.id); return <button type="button" key={p.id} onClick={() => unlocked ? setEdit(p) : unlock()}><div><strong>{nameOf(p)}</strong><code>{p.code}</code></div><div>{rules.length ? rules.map(x => <Status key={x.id} good={x.effect === "allow"}>{x.effect === "allow" ? "Permitir" : "Denegar"} · {scopes[x.scope_type]}</Status>) : <Status>Sin regla</Status>}<Status>{risks[p.risk_level]}</Status></div></button>; })}</div></details>; })}</div>
+        <div className="permissions_catalog">{groups.map(([module, items]) => { const eligible = items.filter(item => item.is_bulk_assignable), allSelected = eligible.length > 0 && eligible.every(item => selected.includes(item.id)); return <details className="permissions_policy_group" key={module} open><summary><span>{module}</span><div className="permissions_policy_group_meta"><small>{items.length} permiso{items.length === 1 ? "" : "s"}</small><button type="button" disabled={!eligible.length} className={allSelected ? "is_selected" : ""} aria-pressed={allSelected} onClick={event => { event.preventDefault(); event.stopPropagation(); toggleModule(items); }}>{allSelected ? <Check size={14} /> : null}{allSelected ? "Seleccionado" : "Preseleccionar módulo"}</button></div></summary><div className="permissions_policy_items">{items.map(p => { const rules = state.policies.rules.filter(x => x.job_role === role?.id && x.permission === p.id), chosen = selected.includes(p.id); return <article key={p.id} className={chosen ? "is_selected" : ""}><button className="permissions_policy_select" type="button" disabled={!p.is_bulk_assignable} aria-pressed={chosen} aria-label={p.is_bulk_assignable ? `Seleccionar ${nameOf(p)} para lote` : `${nameOf(p)} requiere configuración individual`} onClick={() => togglePermission(p)}>{chosen ? <Check size={15} /> : null}</button><button className="permissions_policy_edit" type="button" onClick={() => unlocked ? setEdit(p) : unlock()}><div><strong>{nameOf(p)}</strong><code>{p.code}</code>{!p.is_bulk_assignable && <small className="permissions_sensitive">Configuración individual</small>}</div><div>{rules.length ? rules.map(x => <Status key={x.id} good={x.effect === "allow"}>{x.effect === "allow" ? "Permitir" : "Denegar"} · {scopes[x.scope_type]}</Status>) : <Status>Sin regla</Status>}<Status>{risks[p.risk_level]}</Status></div></button></article>; })}</div></details>; })}</div>
         {edit && <Drawer title="Configurar política" subtitle={role.title} close={() => setEdit(null)}><PolicyForm role={role} permission={edit} rules={state.policies.rules.filter(x => x.job_role === role.id && x.permission === edit.id)} units={units} revision={state.revision} changed={changed} close={() => setEdit(null)} unlock={unlock} /></Drawer>}
         {bulkOpen && <Drawer title="Configurar permisos en lote" subtitle={role.title} close={() => setBulkOpen(false)}><BulkPolicyForm role={role} permissions={selectedPermissions} units={units} revision={state.revision} changed={changed} close={() => setBulkOpen(false)} completed={() => setSelected([])} unlock={unlock} /></Drawer>}
     </section>;
@@ -97,35 +110,46 @@ function PolicyForm({ role, permission, rules: current, units, revision, changed
 
 function BulkPolicyForm({ role, permissions, units, revision, changed, close, completed, unlock }) {
     const [action, setAction] = useState("allow"), [scope, setScope] = useState("own_unit"), [unit, setUnit] = useState(""), [reason, setReason] = useState(""), [error, setError] = useState(null), [busy, setBusy] = useState(false);
+    const [drafts, setDrafts] = useState(() => Object.fromEntries(permissions.map(permission => [permission.id, { action: "allow", scope: "own_unit", unit: "" }])));
     const needsUnit = action !== "clear" && ["specific_unit", "sub_tree"].includes(scope);
     const modules = [...new Set(permissions.map(permission => permission.module_code || "General"))].sort((a, b) => a.localeCompare(b, "es"));
     const highRisk = permissions.filter(permission => ["high", "critical"].includes(permission.risk_level)).length;
+    function updateDraft(id, changes) { setDrafts(current => ({ ...current, [id]: { ...current[id], ...changes } })); }
+    function applyToAll() { setDrafts(Object.fromEntries(permissions.map(permission => [permission.id, { action, scope, unit: needsUnit ? unit : "" }]))); }
     async function submit(event) {
         event.preventDefault();
+        const incomplete = permissions.find(permission => {
+            const draft = drafts[permission.id];
+            return draft?.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft?.scope) && !draft?.unit;
+        });
+        if (incomplete) return setError(new Error(`Selecciona una unidad para ${nameOf(incomplete)}.`));
         const answer = await dialog({
             title: `¿Aplicar a ${permissions.length} permisos?`,
-            text: action === "clear" ? "Las reglas actuales de la selección se eliminarán." : "Las reglas actuales de la selección serán reemplazadas por esta configuración.",
+            text: "Cada permiso reemplazará sus reglas actuales por la configuración mostrada.",
             icon: "warning",
-            confirmButtonText: action === "clear" ? "Quitar reglas" : "Aplicar configuración",
+            confirmButtonText: "Aplicar configuraciones",
         });
         if (!answer.isConfirmed) return;
         setBusy(true); setError(null);
-        const rules = action === "clear" ? [] : [{ effect: action, scope_type: scope, ...(needsUnit && { target_unit: unit }) }];
+        const configurations = permissions.map(permission => {
+            const draft = drafts[permission.id];
+            const ruleNeedsUnit = draft.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft.scope);
+            return { permission: permission.id, rules: draft.action === "clear" ? [] : [{ effect: draft.action, scope_type: draft.scope, ...(ruleNeedsUnit && { target_unit: draft.unit }) }] };
+        });
         try {
-            const result = await permissionsApi.replaceRolePoliciesBulk({ job_role: role.id, permissions: permissions.map(permission => permission.id), rules, reason, expected_revision: revision });
+            const result = await permissionsApi.replaceRolePoliciesBulk({ job_role: role.id, configurations, reason, expected_revision: revision });
             await changed(result.revision); completed(); close();
         } catch (caught) { setError(caught); }
         finally { setBusy(false); }
     }
     return <form className="permissions_drawer_form" onSubmit={submit}>
         <div className="permissions_selection"><strong>{permissions.length} permisos seleccionados</strong><span>{modules.join(" · ")}</span>{highRisk > 0 && <small>{highRisk} de riesgo alto o crítico</small>}</div>
-        <div className="permissions_callout"><AlertTriangle /><p>Esta acción reemplaza por completo las reglas actuales de cada permiso seleccionado y queda registrada como un único cambio.</p></div>
-        <label>Acción<Select value={action} onChange={event => setAction(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Dejar sin regla</option></Select></label>
-        {action !== "clear" && <label>Alcance<Select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>}
-        {needsUnit && <label>Unidad<Select value={unit} onChange={event => setUnit(event.target.value)} required><option value="">Seleccionar…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}
+        <div className="permissions_callout"><AlertTriangle /><p>Esta acción reemplaza las reglas de la selección. Los permisos sensibles, como webhooks salientes, solo pueden configurarse individualmente y nunca entran en preselecciones.</p></div>
+        <fieldset className="permissions_bulk_template"><legend>Regla rápida para toda la selección</legend><label>Acción<Select value={action} onChange={event => setAction(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Dejar sin regla</option></Select></label>{action !== "clear" && <label>Alcance<Select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>}{needsUnit && <label>Unidad<Select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Seleccionar…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}<button type="button" onClick={applyToAll}>Aplicar al borrador</button></fieldset>
+        <section className="permissions_bulk_drafts"><h3>Ajuste por permiso</h3>{permissions.map(permission => { const draft = drafts[permission.id], draftNeedsUnit = draft.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft.scope); return <article key={permission.id}><div><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div><Select value={draft.action} onChange={event => updateDraft(permission.id, { action: event.target.value })}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Sin regla</option></Select>{draft.action !== "clear" && <Select value={draft.scope} onChange={event => updateDraft(permission.id, { scope: event.target.value, unit: "" })}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>}{draftNeedsUnit && <Select value={draft.unit} onChange={event => updateDraft(permission.id, { unit: event.target.value })}><option value="">Unidad…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>}</article>; })}</section>
         <label>Motivo<textarea value={reason} onChange={event => setReason(event.target.value)} minLength="8" maxLength="2000" required placeholder="Explica por qué se aplica este cambio masivo" /></label>
         <FormError error={error} onMfa={() => { setError(null); unlock(); }} />
-        <button disabled={busy || permissions.length === 0}>{busy ? "Aplicando…" : action === "clear" ? "Quitar reglas seleccionadas" : "Aplicar a la selección"}</button>
+        <button disabled={busy || permissions.length === 0}>{busy ? "Aplicando…" : "Aplicar configuraciones"}</button>
     </form>;
 }
 

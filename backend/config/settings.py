@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "boldApp.permisos",
     "boldApp.tareas",
     "boldApp.notificaciones",
+    "boldApp.sugerencias",
     "boldApp.calendario",
 ]
 
@@ -208,6 +209,7 @@ REST_FRAMEWORK = {
         "auth_recovery_account": "3/hour",
         "auth_websocket_ticket": "30/min",
         "calendar_contacts": "60/min",
+        "suggestions_create": "8/hour",
     },
 }
 

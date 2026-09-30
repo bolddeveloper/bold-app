@@ -220,7 +220,10 @@ def replace_role_policy(request, *, role, permission, rules, reason, expected_re
 
 
 @transaction.atomic
-def replace_role_policies_bulk(request, *, role, permissions, rules, reason, expected_revision=None):
+def replace_role_policies_bulk(
+    request, *, role, permissions=None, rules=None, configurations=None,
+    reason, expected_revision=None,
+):
     """Reemplaza varios permisos de un cargo como una sola operación auditable."""
     reason = normalized_reason(reason)
     assignment = get_request_assignment(request, for_update=True)
@@ -232,7 +235,31 @@ def replace_role_policies_bulk(request, *, role, permissions, rules, reason, exp
     ).exists():
         raise PermissionDenied("Las políticas del cargo del propietario no se pueden modificar.")
 
-    permissions = sorted(list(permissions), key=lambda permission: permission.code)
+    if configurations is None:
+        configurations = [
+            {"permission": permission, "rules": rules or []}
+            for permission in (permissions or [])
+        ]
+    configurations = sorted(configurations, key=lambda entry: entry["permission"].code)
+    permissions = [entry["permission"] for entry in configurations]
+    rules_by_permission = {
+        entry["permission"].id: entry["rules"] for entry in configurations
+    }
+    unsafe_bulk_grants = [
+        permission.code for permission in permissions
+        if not permission.is_bulk_assignable
+        and any(
+            rule["effect"] == JobRolePermission.EFFECT_ALLOW
+            for rule in rules_by_permission[permission.id]
+        )
+    ]
+    if unsafe_bulk_grants:
+        raise ValidationError({
+            "permissions": (
+                "Los permisos sensibles solo pueden concederse individualmente: "
+                f"{', '.join(unsafe_bulk_grants)}."
+            )
+        })
     inactive = [permission.code for permission in permissions if not permission.is_active]
     if inactive:
         raise ValidationError({"permissions": f"Hay permisos desactivados en la selección: {', '.join(inactive)}."})
@@ -251,7 +278,7 @@ def replace_role_policies_bulk(request, *, role, permissions, rules, reason, exp
     JobRolePermission.objects.filter(job_role=role, permission_id__in=permission_ids).delete()
     created = []
     for permission in permissions:
-        for rule in rules:
+        for rule in rules_by_permission[permission.id]:
             created.append(JobRolePermission(
                 job_role=role,
                 permission=permission,
@@ -279,7 +306,10 @@ def replace_role_policies_bulk(request, *, role, permissions, rules, reason, exp
         metadata={
             "permission_count": len(permissions),
             "permission_codes": [permission.code for permission in permissions],
-            "rules_per_permission": len(rules),
+            "rules_per_permission": {
+                permission.code: len(rules_by_permission[permission.id])
+                for permission in permissions
+            },
         },
     )
     return created, event.revision

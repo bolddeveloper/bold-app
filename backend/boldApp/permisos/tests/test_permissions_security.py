@@ -741,6 +741,45 @@ class PermissionControlPlaneSecurityTests(TestCase):
         self.assertEqual(set(event.metadata["permission_codes"]), {"tasks.task.read", "tasks.task.update"})
         self.assertTrue(event.mfa_verified)
 
+    def test_bulk_role_policy_cannot_grant_outbound_webhooks(self):
+        webhook_permission = Permission.objects.get(code="tasks.webhook.manage")
+        self.assertFalse(webhook_permission.is_bulk_assignable)
+        response = self._client(self.owner, self.owner_assignment, mfa="recent").post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "permissions": [str(self.read_permission.id), str(webhook_permission.id)],
+                "rules": [{"effect": "allow", "scope_type": "own_unit"}],
+                "reason": "Intento de incluir un permiso sensible en un lote",
+                "expected_revision": PermissionPolicyState.current_revision(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(JobRolePermission.objects.filter(job_role=self.manager_role).exists())
+
+    def test_bulk_role_policy_accepts_distinct_rules_per_permission(self):
+        response = self._client(self.owner, self.owner_assignment, mfa="recent").post(
+            "/api/v2/permissions/role-policies/bulk/",
+            {
+                "job_role": str(self.manager_role.id),
+                "configurations": [
+                    {"permission": str(self.read_permission.id), "rules": [{"effect": "allow", "scope_type": "global"}]},
+                    {"permission": str(self.update_permission.id), "rules": [{"effect": "deny", "scope_type": "own_unit"}]},
+                ],
+                "reason": "Reglas diferenciadas para el cargo de gerencia",
+                "expected_revision": PermissionPolicyState.current_revision(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        read_rule = JobRolePermission.objects.get(job_role=self.manager_role, permission=self.read_permission)
+        update_rule = JobRolePermission.objects.get(job_role=self.manager_role, permission=self.update_permission)
+        self.assertEqual((read_rule.effect, read_rule.scope_type), ("allow", "global"))
+        self.assertEqual((update_rule.effect, update_rule.scope_type), ("deny", "own_unit"))
+
     def test_bulk_role_policy_rejects_weak_mfa_without_partial_changes(self):
         response = self._client(self.owner, self.owner_assignment, mfa="weak").post(
             "/api/v2/permissions/role-policies/bulk/",

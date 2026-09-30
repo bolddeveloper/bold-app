@@ -33,6 +33,10 @@ class Permission(UUIDPrimaryKeyModel):
     requires_step_up_mfa = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     system_managed = models.BooleanField(default=True)
+    # Los permisos sensibles nunca deben entrar accidentalmente en una
+    # preseleccion o cambio masivo. Cada modulo habilita esta opcion de forma
+    # explicita para sus operaciones ordinarias.
+    is_bulk_assignable = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

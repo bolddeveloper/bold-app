@@ -132,8 +132,9 @@ class RolePolicyBulkView(DirectionControlPlaneView):
             rows, revision = replace_role_policies_bulk(
                 request,
                 role=data["job_role"],
-                permissions=data["permissions"],
-                rules=data["rules"],
+                permissions=data.get("permissions"),
+                rules=data.get("rules"),
+                configurations=data.get("configurations"),
                 reason=data["reason"],
                 expected_revision=data.get("expected_revision"),
             )
