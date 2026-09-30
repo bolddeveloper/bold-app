@@ -288,6 +288,14 @@ export default function CalendarModule() {
     const [showPrimary, setShowPrimary] = useState(true), [createMenu, setCreateMenu] = useState(false);
     const zone = connection?.time_zone || "UTC";
     useEffect(() => { calendarApi.connection().then(setConnection).catch(problem => setError(problem.message)); }, []);
+    useEffect(() => {
+        const navigate = event => {
+            if (event.detail?.module !== "calendar") return;
+            if (["day", "week", "month", "agenda"].includes(event.detail.view)) setView(event.detail.view);
+        };
+        globalThis.addEventListener("bold:global-search:navigate", navigate);
+        return () => globalThis.removeEventListener("bold:global-search:navigate", navigate);
+    }, []);
     const days = useMemo(() => {
         const first = view === "month" ? sundayStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1)) : view === "week" ? sundayStart(cursor) : cursor;
         const count = view === "month" ? 42 : view === "week" ? 7 : view === "agenda" ? 30 : 1;

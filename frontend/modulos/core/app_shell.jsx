@@ -1,11 +1,12 @@
 import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
-import { createContext, useContext, useEffect, useRef, useState, createElement } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, createElement } from "react";
 import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, CircleHelp as circle_help_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { is_using_real_backend } from "./http_client.js";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
+import { searchNavigation } from "./global_search.js";
 const icon_map = { home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
@@ -42,7 +43,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
             {render_mobile_header({ ...mobileHeaderProps, ...shell, ...identity, ...topBarProps })}
-            {render_top_bar({ ...topBarProps, ...shell, ...identity })}
+            <TopBar {...topBarProps} {...shell} {...identity} />
             {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{render_notifications_panel(topBarProps)}</div></ResponsiveOverlay>}
             {children}
         </main>
@@ -209,7 +210,7 @@ function render_notifications_panel(props) {
 
 
 // Renders the desktop top bar with search and user state.
-function render_top_bar(props) {
+function TopBar(props) {
     const { current_user,
         handle_close_notifications,
         handle_mark_notifications_read,
@@ -221,20 +222,56 @@ function render_top_bar(props) {
         set_search_query,
         set_is_dark_mode
     } = props;
+    const [open, setOpen] = useState(false), [activeIndex, setActiveIndex] = useState(0);
+    const searchRef = useRef(null);
+    const results = useMemo(() => searchNavigation(props.navigation_items, search_query), [props.navigation_items, search_query]);
     const has_unread_notifications = notifications.some((notification_item) => !notification_item.is_read);
+    useEffect(() => { setActiveIndex(0); setOpen(Boolean(search_query.trim())); }, [search_query]);
+    useEffect(() => {
+        if (!open) return undefined;
+        const close = event => { if (!searchRef.current?.contains(event.target)) setOpen(false); };
+        document.addEventListener("pointerdown", close);
+        return () => document.removeEventListener("pointerdown", close);
+    }, [open]);
+    function choose(result) {
+        if (!result) return;
+        if (!props.navigation_items?.some(item => item.id === result.module)) return;
+        if (props.handle_search_navigate) props.handle_search_navigate(result);
+        else props.set_active_module(result.target || result.module);
+        set_search_query(""); setOpen(false);
+    }
+    function handleKeyDown(event) {
+        if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActiveIndex(index => Math.min(index + 1, Math.max(0, results.length - 1))); }
+        if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex(index => Math.max(0, index - 1)); }
+        if (event.key === "Enter" && open && results.length) { event.preventDefault(); choose(results[activeIndex]); }
+        if (event.key === "Escape") { setOpen(false); event.currentTarget.blur(); }
+    }
 
     return (
         <header className="top_bar">
+            <div className="global_search" ref={searchRef}>
             <label className="search_box" data-tour="search" htmlFor="task_search">
                 {render_icon(search_icon, 18)}
                 <input
                     id="task_search"
                     type="search"
                     value={search_query}
-                    placeholder={props.searchPlaceholder || "Buscar"}
+                    placeholder="Buscar módulos, vistas y herramientas"
+                    autoComplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={open}
+                    aria-controls="global_search_results"
+                    aria-activedescendant={open && results[activeIndex] ? `global-search-${results[activeIndex].id}` : undefined}
+                    onFocus={() => search_query.trim() && setOpen(true)}
+                    onKeyDown={handleKeyDown}
                     onChange={(event) => set_search_query(event.target.value)}
                 />
             </label>
+            {open && <div className="global_search_results" id="global_search_results" role="listbox">
+                {results.length ? results.map((result, index) => <button id={`global-search-${result.id}`} className={index === activeIndex ? "is_active" : ""} type="button" role="option" aria-selected={index === activeIndex} key={result.id} onMouseEnter={() => setActiveIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(result)}><span className="global_search_icon">{render_icon(icon_map[result.icon] || search_icon, 17)}</span><span><strong>{result.label}</strong><small>{result.reference}</small></span><em>{result.section}</em></button>) : <p>No hay módulos o vistas disponibles con esa búsqueda.</p>}
+            </div>}
+            </div>
             <div className="top_bar_actions">
                 <button
                     className="theme_toggle_button tour_help_button"

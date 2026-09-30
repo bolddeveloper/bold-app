@@ -743,6 +743,14 @@ export default function AdministrationModule() {
     async function loadAudit(page = 1) { setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); setData(current => ({ ...current, audit: { ...audit, page } })); } catch (loadError) { setNotice(loadError.message, true); } finally { setAuditLoading(false); } }
     useEffect(() => { load(); }, []);
     useEffect(() => { if (active === "audit" && data && !data.audit && !auditLoading) loadAudit(); }, [active, data?.audit]);
+    useEffect(() => {
+        const navigate = event => {
+            if (event.detail?.module !== "administration") return;
+            if (tabs.some(([id]) => id === event.detail.view)) setActive(event.detail.view);
+        };
+        globalThis.addEventListener("bold:global-search:navigate", navigate);
+        return () => globalThis.removeEventListener("bold:global-search:navigate", navigate);
+    }, []);
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
     if (!core.activeUnit?.is_control_plane) return <div className="admin_state"><p>El módulo Administrativo está reservado a la unidad de Dirección.</p></div>;
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
