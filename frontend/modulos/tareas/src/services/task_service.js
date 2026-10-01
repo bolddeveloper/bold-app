@@ -3,15 +3,16 @@ import { notificationsApi } from "../../../notificaciones/notifications_api.js";
 import { is_using_real_backend } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
-export async function loadTaskData({ directory, units }) {
+export async function loadTaskData({ directory, units }, { catalogCache } = {}) {
+    const catalog = (key, load) => catalogCache ? catalogCache.get(key, load) : load();
     const projects = (await api.listProjects()).map(normalizeProject);
     const sections = (await api.listSections()).map(normalizeSection);
-    const statuses = [...new Map((await Promise.all(units.map(unit => api.listStatuses(unit.id)))).flat().map(dto => [dto.id, normalizeStatus(dto)])).values()];
+    const statuses = [...new Map((await Promise.all(units.map(unit => catalog(`statuses:${unit.id}`, () => api.listStatuses(unit.id))))).flat().map(dto => [dto.id, normalizeStatus(dto)])).values()];
     const tasks = (await api.listTasks()).map(dto => normalizeTask(dto, statuses));
     const links = (await api.listTaskProjectLinks()).map(normalizeTaskProject);
     const [comments, followers, members, attachments, notifications, taskTags, tags] = await Promise.all([
         api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationsApi.list(), api.list("task-tags"),
-        Promise.all(units.map(unit => api.list("tags", { unit: unit.id }))).then(rows => rows.flat())
+        Promise.all(units.map(unit => catalog(`tags:${unit.id}`, () => api.list("tags", { unit: unit.id })))).then(rows => rows.flat())
     ]);
     const by = (rows, key) => { const result = new Map(); for (const row of rows) { const id = row[key]; if (!result.has(id)) result.set(id, []); result.get(id).push(row); } return result; };
     const linksByTask = by(links, "taskId"), commentsByTask = by(comments, "task"), childrenByParent = by(tasks.filter(item => item.parentTaskId), "parentTaskId");

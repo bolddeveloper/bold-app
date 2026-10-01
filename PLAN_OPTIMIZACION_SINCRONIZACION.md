@@ -1,6 +1,6 @@
 # Plan de optimización de peticiones y sincronización
 
-Fecha: 1 de octubre de 2026. Estado: propuesta de ejecución, todavía no implementada.
+Fecha: 1 de octubre de 2026. Estado: en ejecución; primera entrega de medición local y contención implementada. Ver avance al final.
 
 Base: `ANALISIS_PETICIONES_CLOUDFLARE.md`, revisión de `Develop` en `4c38c852` y comprobación adicional de los consumidores, emisión de revisiones, caché y pruebas existentes.
 
@@ -249,4 +249,27 @@ Empezar por fases 0 y 1 con pruebas y cambios mínimos, añadir inmediatamente f
 
 No resolverlo comprando un plan y dejando la arquitectura igual, pero tampoco descartar capacidad pagada si hace falta asegurar una demo con fecha próxima. La disponibilidad operativa y la corrección estructural son decisiones complementarias.
 
-Este archivo es un plan: no se ha modificado el comportamiento de la app, desplegado, creado una rama, hecho commit ni cambiado un servicio durante su elaboración.
+Al redactar inicialmente este plan no se había modificado el comportamiento de la app ni cambiado un servicio. El avance posterior se documenta a continuación.
+
+## 12. Avance de la primera entrega — 1 de octubre de 2026
+
+Rama: `perf/sincronizacion-trafico`, separada de Develop. Primer commit: `9fe29b29`, diagnóstico y referencia reproducible.
+
+Implementado:
+
+- Diagnóstico agregado opcional en memoria, sin telemetría remota, URLs privadas, tickets o datos personales. Con `VITE_SYNC_DIAGNOSTICS=true`, consultar `window.boldSyncDiagnostics.snapshot()`; incluye la versión de build. `reset()` inicia una ventana nueva de medición.
+- Coordinador con debounce de 400 ms, una carga en vuelo y una ronda pendiente; seguridad no bloqueada por pestaña oculta.
+- Respaldo de Tareas cada cinco minutos (`VITE_TASK_RECONCILE_MS`), sin polling de contenido oculto/offline y recuperación agrupada al regresar.
+- Caché de catálogos vacíos/no vacíos por contexto, TTL de 15 minutos, invalidación al cambiar permisos y cancelación de respuestas antiguas.
+- Conexiones por diferencia de unidades; apertura inicial diferenciada de reconexión y una recuperación agrupada al terminar el handshake.
+- Máximo de dos peticiones de ticket en vuelo; backoff con jitter y sin reinicio inmediato por conexiones inestables; sin reintentos automáticos para 401/403.
+- Respeto a `Retry-After`; bloqueo local acotado de un endpoint ante throttling y de la API ante cuota 1027. No se reintentan escrituras automáticamente.
+- Caché de permisos monotónica y conservadora ante respuestas de generaciones anteriores; invalidación de datos y cambios optimistas del alcance antiguo.
+
+Prueba controlada con el cargador real y HTTP simulado: el arranque sigue costando 37 solicitudes para los datos de referencia. Una hora posterior con respaldo cada cinco minutos y catálogos cacheados genera 236 consultas de contenido; añadiendo los 720 checks de seguridad que se conservan, son **956 solicitudes periódicas/hora**, frente a 5.160 del escenario original: **81,47 % menos**. No incluye acciones, tickets, verificaciones adicionales ni pretende ser una captura de producción.
+
+Verificación inicial: 85 pruebas de frontend, 4 de Worker y build correcto. Queda el aviso preexistente de tamaño del bundle, no un error de compilación. La reducción no se debe declarar medida en nube hasta recoger una ventana real con clientes actualizados.
+
+Pendiente de la fase 0: registros estructurados/retención en el servidor y medición real por cargo. Pendiente de fases siguientes: canal de control backend, vencimientos por tiempo, reducción segura del polling de permisos, actualizaciones parciales, separación completa Core/Tareas y prueba de capacidad de 25 clientes.
+
+La comprobación pública de las 21:06 UTC seguía devolviendo cuota 1027. Publicar el frontend no renueva una cuota agotada. No se modificó el backend ni la base de datos en esta entrega; Oracle no necesita reinicio para estos cambios.

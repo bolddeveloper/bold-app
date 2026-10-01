@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { http, is_using_real_backend } from "./http_client.js";
 import { coreApi } from "./core_api.js";
 import { normalizeAssignment, selectEntranceAssignment } from "./core_models.js";
@@ -36,6 +36,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const real = is_using_real_backend();
     if (!permissionCache.current) {
         permissionCache.current = createPermissionCache({
+            onRevisionChange: revision => window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision } })),
             authorize: ({ assignmentId, permissionCode, unitId, resourceId }) => coreApi.authorize({
                 assignment: assignmentId,
                 permission_code: permissionCode,
@@ -92,12 +93,12 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         } else setActiveAssignment(entranceAssignment);
         if (!assignments.length) updateCore({ error: "Tu cuenta no tiene asignaciones activas. Contacta al administrador." });
     }
-    async function can(permissionCode, unitId = getCoreState().activeUnit?.id, resourceId) {
+    const can = useCallback(async (permissionCode, unitId = getCoreState().activeUnit?.id, resourceId) => {
         if (!real) return true;
         const assignment = getCoreState().activeAssignment?.id;
         if (!assignment) return false;
         return permissionCache.current.can({ assignmentId: assignment, permissionCode, unitId, resourceId });
-    }
+    }, [real]);
     async function refreshDirectory() {
         const directory = (await coreApi.listAssignmentDirectory()).map(normalizeAssignment);
         updateCore({ directory });
@@ -130,14 +131,19 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }, []);
     useEffect(() => {
         if (!real || state.sessionStatus !== "ready") return undefined;
-        let active = true;
-        const refreshRevision = () => coreApi.getPermissionRevision()
+        let active = true, inFlight = false;
+        const refreshRevision = () => {
+            if (!active || inFlight || navigator.onLine === false) return;
+            inFlight = true;
+            return coreApi.getPermissionRevision()
             .then(result => {
                 if (active && permissionCache.current.setRevision(result.revision)) {
                     window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision: result.revision } }));
                 }
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => { inFlight = false; });
+        };
         const handlePermissionChange = event => {
             const revision = event.detail?.revision;
             if (revision === undefined) permissionCache.current.invalidate();

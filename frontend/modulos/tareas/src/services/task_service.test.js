@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { api } from "./tasks_api.js";
 import { loadTaskData, saveTaskDraft } from "./task_service.js";
+import { createContextCache } from "../../../core/context_cache.js";
 const statuses = [{ id: "s1", unitId: "u1", label: "Pendiente", isFinal: false }, { id: "s2", unitId: "u2", label: "Destino", isFinal: false }];
 const data = { statuses, tasks: [], followers: [] };
 test("reference bootstrap with 13 units and 29 project members costs 37 requests", async () => {
@@ -20,6 +21,27 @@ test("reference bootstrap with 13 units and 29 project members costs 37 requests
         assert.equal(calls.length, 37);
         assert.equal(calls.filter(resource => resource === "task-statuses").length, 13);
         assert.equal(calls.filter(resource => resource === "tags").length, 13);
+    } finally { globalThis.fetch = previousFetch; }
+});
+test("an hour of five-minute reconciliation reuses catalogs and stays within containment budget", async () => {
+    const previousFetch = globalThis.fetch; let calls = 0, now = 0;
+    globalThis.fetch = async address => {
+        calls++;
+        const url = new URL(address), resource = url.pathname.split("/").filter(Boolean).at(-1);
+        const page = Number(url.searchParams.get("page") || 1), total = resource === "project-members" ? 29 : 0;
+        const results = Array.from({ length: Math.max(0, Math.min(25, total - (page - 1) * 25)) }, (_, i) => ({ id: `m${i}` }));
+        url.searchParams.set("page", String(page + 1));
+        return Response.json({ results, next: page * 25 < total ? url.href : null });
+    };
+    try {
+        const context = { directory: [], units: Array.from({ length: 13 }, (_, i) => ({ id: `u${i}` })) };
+        const catalogCache = createContextCache({ now: () => now });
+        await loadTaskData(context, { catalogCache }); assert.equal(calls, 37);
+        calls = 0;
+        for (let minute = 5; minute <= 60; minute += 5) { now = minute * 60_000; await loadTaskData(context, { catalogCache }); }
+        assert.equal(calls, 236);
+        assert.equal(calls + 720, 956); // Security polling deliberately remains at 5s.
+        assert.ok(calls + 720 <= 1250);
     } finally { globalThis.fetch = previousFetch; }
 });
 test("creating a task does not duplicate the creator follower added by the API", async () => {

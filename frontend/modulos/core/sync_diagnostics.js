@@ -5,7 +5,7 @@ export function diagnosticRoute(path) {
     return "/" + parts.map(part => safe.has(part) ? part : ":id").join("/");
 }
 
-export function createSyncDiagnostics({ enabled = false, now = () => Date.now() } = {}) {
+export function createSyncDiagnostics({ enabled = false, now = () => Date.now(), buildVersion = "local" } = {}) {
     let startedAt = now(), active = 0, peak = 0;
     const counters = new Map();
     function record(kind, label = "total") {
@@ -28,12 +28,12 @@ export function createSyncDiagnostics({ enabled = false, now = () => Date.now() 
         };
     }
     return { record, beginHttp,
-        snapshot: () => ({ enabled, startedAt, elapsedMs: now() - startedAt, activeHttp: active, peakHttp: peak, counters: Object.fromEntries(counters) }),
+        snapshot: () => ({ enabled, buildVersion, startedAt, elapsedMs: now() - startedAt, activeHttp: active, peakHttp: peak, counters: Object.fromEntries(counters) }),
         reset() { counters.clear(); startedAt = now(); peak = active; },
     };
 }
 
-export const syncDiagnostics = createSyncDiagnostics({ enabled: import.meta.env?.VITE_SYNC_DIAGNOSTICS === "true" });
+export const syncDiagnostics = createSyncDiagnostics({ enabled: import.meta.env?.VITE_SYNC_DIAGNOSTICS === "true", buildVersion: import.meta.env?.VITE_APP_VERSION || "local" });
 if (typeof window !== "undefined" && import.meta.env?.VITE_SYNC_DIAGNOSTICS === "true") {
     window.boldSyncDiagnostics = { snapshot: syncDiagnostics.snapshot, reset: syncDiagnostics.reset };
 }

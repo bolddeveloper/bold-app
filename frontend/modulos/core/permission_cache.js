@@ -7,7 +7,7 @@ function cacheKey({ assignmentId, permissionCode, unitId, resourceId }) {
     ]);
 }
 
-export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Date.now() }) {
+export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Date.now(), onRevisionChange = () => {} }) {
     const entries = new Map();
     let generation = 0;
     let revision = null;
@@ -19,11 +19,12 @@ export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Da
 
     function setRevision(nextRevision) {
         if (nextRevision === undefined || nextRevision === null) return false;
+        if (revision !== null && /^\d+$/.test(String(nextRevision)) && /^\d+$/.test(String(revision)) && BigInt(nextRevision) < BigInt(revision)) return false;
         if (revision === null) {
             revision = nextRevision;
             // Una revisión obtenida fuera de una decisión (polling/WS) vuelve
             // inciertas las solicitudes que ya estaban en vuelo.
-            if (entries.size) invalidate();
+            if (entries.size) { invalidate(); return true; }
             return false;
         }
         if (String(revision) !== String(nextRevision)) {
@@ -59,9 +60,11 @@ export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Da
         entry.promise = Promise.resolve(authorizationRequest)
             .then(result => {
                 const responseRevision = result?.policy_revision ?? result?.policy_version;
+                if (generation !== requestGeneration) return false;
+                if (revision !== null && responseRevision !== undefined && /^\d+$/.test(String(responseRevision)) && /^\d+$/.test(String(revision)) && BigInt(responseRevision) < BigInt(revision)) return false;
                 if (generation === requestGeneration) {
                     if (revision !== null && responseRevision !== undefined && String(revision) !== String(responseRevision)) {
-                        setRevision(responseRevision);
+                        if (setRevision(responseRevision)) onRevisionChange(responseRevision);
                     } else {
                         if (revision === null && responseRevision !== undefined) revision = responseRevision;
                         if (generation === requestGeneration) entries.set(key, entry);

@@ -42,6 +42,8 @@ import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
+import { createRefreshCoordinator, contentCanRefresh } from "../../core/refresh_coordinator.js";
+import { createContextCache } from "../../core/context_cache.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
@@ -61,6 +63,7 @@ import {
 import {
     connect_realtime_stream,
     disconnect_realtime_stream,
+    retain_realtime_streams,
     publish_task_event
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
@@ -4283,6 +4286,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
+    const mutation_generation = use_ref(0);
     const task_crud_mutations = use_ref(new Map());
     const [syncing_task_count, set_syncing_task_count] = use_state(0);
     use_effect(() => {
@@ -4963,15 +4967,12 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
-        let mounted = true, running = null, dirty = false;
-        refresh.current = () => {
-            dirty = true;
-            if (running) return running;
-            running = (async () => {
-                while (dirty && mounted) {
-                    dirty = false;
-                    const next = await loadTaskData(session);
-                    if (!mounted) return;
+        let mounted = true, dataGeneration = 0;
+        const catalogCache = createContextCache();
+        const coordinator = createRefreshCoordinator({ canRun: contentCanRefresh, run: async () => {
+                    const version = dataGeneration;
+                    const next = await loadTaskData(session, { catalogCache });
+                    if (!mounted || version !== dataGeneration) return;
                     let next_tasks = applyPendingTaskChanges(next.tasks, task_crud_mutations.current);
                     for (const [task_id, mutation] of task_status_mutations.current) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
@@ -4987,10 +4988,8 @@ function TaskAppContent({ externalModules = {} }) {
                     set_notifications(next_notifications);
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
-                }
-            })().finally(() => { running = null; });
-            return running;
-        };
+        } });
+        refresh.current = () => coordinator.request({ reason: "mutation", force: true });
         const report = error => {
             if (!mounted || error.name === "AbortError") return;
             set_api_error(error.message);
@@ -5010,42 +5009,78 @@ function TaskAppContent({ externalModules = {} }) {
             });
         };
         let streamGeneration = 0;
+        const scheduleContent = reason => {
+            // Hidden events only imply recovery on focus; do not accumulate promises.
+            if (contentCanRefresh()) coordinator.request({ reason }).catch(report);
+        };
         const syncRealtime = async () => {
             const currentGeneration = ++streamGeneration;
-            disconnect_realtime_stream();
             const units = session.units;
+            const allowedUnits = [];
             for (const unit of units) {
                 if (!mounted || currentGeneration !== streamGeneration) return;
                 const allowed = await session.permissions.can("tasks.task.read", unit.id);
-                if (mounted && currentGeneration === streamGeneration && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+                if (allowed) allowedUnits.push(unit.id);
             }
+            if (!mounted || currentGeneration !== streamGeneration) return;
+            retain_realtime_streams(allowedUnits);
+            const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
+                onEvent: () => scheduleContent("task-event"),
+                onReconnect: () => scheduleContent("socket-reconnect"),
+                onError: message => mounted && set_api_error(message) }));
+            await Promise.all(connections);
         };
         const syncNotifications = () => connectNotificationStream({
             assignmentId: session.activeAssignment.id,
             getTicket: session.websocketTicket,
-            onNotification: () => refresh.current().catch(report),
-            onReconnect: () => refresh.current().catch(report),
+            onNotification: () => scheduleContent("notification-event"),
+            onReconnect: () => scheduleContent("socket-reconnect"),
             onError: message => mounted && set_api_error(message),
         });
-        refresh.current().then(() => { syncRealtime(); syncNotifications(); }).catch(report);
+        coordinator.request({ reason: "bootstrap", immediate: true, force: true }).then(async () => {
+            if (!mounted) return;
+            await Promise.all([syncRealtime(), syncNotifications()]);
+            if (mounted) scheduleContent("socket-bootstrap");
+        }).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.
-        const reconcile = () => refresh.current().catch(report);
+        const reconcile = () => {
+            if (contentCanRefresh()) coordinator.request({ reason: "focus-or-poll" }).catch(report);
+        };
         const reconcilePermissions = () => {
+            dataGeneration++;
+            mutation_generation.current++;
+            catalogCache.clear(); api.cancelRequests();
+            task_crud_mutations.current.clear(); task_status_mutations.current.clear(); notification_read_mutations.current.clear();
+            set_syncing_task_count(0); set_selected_task_id(null);
+            set_edit_draft(null);
+            set_active_modal(current => current === "edit_task" ? null : current);
+            // Hide old-scope data before any asynchronous authorization or reload.
+            set_tasks([]); set_projects([]); set_notifications([]);
+            setPresentationData(null);
+            set_data(current => current ? { ...current, tasks: [], projects: [], sections: [], statuses: [], links: [], members: [], followers: [], notifications: [] } : current);
             syncRealtime().catch(report);
-            reconcile();
+            coordinator.request({ reason: "permissions", security: true }).catch(report);
         };
         window.addEventListener("focus", reconcile);
+        window.addEventListener("online", reconcile);
+        document.addEventListener("visibilitychange", reconcile);
         window.addEventListener("bold:permissions-revision", reconcilePermissions);
-        const timer = setInterval(reconcile, 30000);
-        return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        const configuredInterval = Number(import.meta.env?.VITE_TASK_RECONCILE_MS);
+        const interval = Number.isFinite(configuredInterval) && configuredInterval >= 60_000 ? configuredInterval : 300_000;
+        const timer = setInterval(reconcile, interval);
+        return () => { mounted = false; dataGeneration++; streamGeneration++; coordinator.dispose(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
     async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
+        const version = mutation_generation.current;
         try {
-            await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
+            await operation(); if (version !== mutation_generation.current) return false;
+            await refresh.current(); if (version !== mutation_generation.current) return false;
+            on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
         } catch (error) {
+            if (version !== mutation_generation.current) return false;
             if (error.name !== "AbortError") {
                 try { on_failure(error); } catch (rollback_error) { console.warn("No se pudo revertir el cambio optimista.", rollback_error); }
                 if (error.status !== 403) set_api_error(error.message);
@@ -5082,6 +5117,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function start_task_crud(changes, operation, { on_success = () => {}, on_failure = () => {}, success_title } = {}) {
+        const version = mutation_generation.current;
         const mutations = Array.isArray(changes) ? changes : [changes];
         if (mutations.some(mutation => task_crud_mutations.current.has(String(mutation.id)) || task_status_mutations.current.has(String(mutation.id)))) {
             set_api_error("Esta tarea aún se está sincronizando. Espera a que termine para volver a modificarla.");
@@ -5098,6 +5134,7 @@ function TaskAppContent({ externalModules = {} }) {
             try {
                 result = await operation();
             } catch (error) {
+                if (version !== mutation_generation.current) return;
                 for (const key of batch.keys()) task_crud_mutations.current.delete(key);
                 set_syncing_task_count(task_crud_mutations.current.size);
                 const rollback = (tasks, flat) => mutations.reduce((rows, mutation) => rollbackPendingTaskChange(rows, mutation, { flat }), tasks);
@@ -5116,6 +5153,7 @@ function TaskAppContent({ externalModules = {} }) {
                 }
                 return;
             }
+            if (version !== mutation_generation.current) return;
             for (const key of batch.keys()) task_crud_mutations.current.delete(key);
             set_syncing_task_count(task_crud_mutations.current.size);
             const createdIds = result?.created || (result?.id ? [result.id] : []);

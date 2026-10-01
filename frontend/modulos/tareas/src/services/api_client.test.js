@@ -2,6 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createApiClient } from "../../tests/test_client.js";
 import { ApiError } from "../../../core/http_client.js";
+import { createHttpClient } from "../../../core/http_client.js";
+
+test("Cloudflare quota stops other routes locally and resumes only after the pause", async () => {
+    let now = 0, calls = 0;
+    const client = createHttpClient({ now: () => now, fetchImpl: async () => {
+        calls++; return calls === 1 ? new Response("Cloudflare Error code: 1027", { status: 429 }) : Response.json([]);
+    } });
+    await assert.rejects(client.request("/api/v2/tasks/"), error => error.quotaExceeded && error.retryAfterMs === 300_000);
+    await assert.rejects(client.request("/api/v2/permissions/revision/"), error => error.quotaExceeded);
+    assert.equal(calls, 1);
+    now = 300_000; assert.deepEqual(await client.request("/api/v2/tasks/"), []); assert.equal(calls, 2);
+});
+test("endpoint throttling honors Retry-After without blocking unrelated routes", async () => {
+    let calls = 0;
+    const client = createHttpClient({ fetchImpl: async () => { calls++; return calls === 1 ? Response.json({ detail: "Limitado" }, { status: 429, headers: { "Retry-After": "120" } }) : Response.json([]); } });
+    await assert.rejects(client.request("/api/v2/auth/websocket-ticket/"), error => !error.quotaExceeded && error.retryAfterMs === 120_000);
+    await assert.rejects(client.request("/api/v2/auth/websocket-ticket/"), { status: 429 });
+    assert.deepEqual(await client.request("/api/v2/tasks/"), []); assert.equal(calls, 2);
+});
 
 test("network failures show a Spanish connection error without expiring the session", async () => {
     let expired = false;

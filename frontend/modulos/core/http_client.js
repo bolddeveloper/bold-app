@@ -12,9 +12,11 @@ export class ApiError extends Error {
     }
 }
 
-export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args) => fetch(...args), onUnauthorized = () => {} } = {}) {
+export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args) => fetch(...args), onUnauthorized = () => {}, now = () => Date.now() } = {}) {
     let authenticated = false, assignmentId = null, email = null, csrfToken = null;
     let controller = new AbortController();
+    let quotaPause = null;
+    const endpointPauses = new Map();
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
     async function request(path, { method = "GET", body, anonymous = false, signal = controller.signal, ...options } = {}) {
         signal = AbortSignal.any([controller.signal, signal]);
@@ -23,6 +25,9 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         const loopback = host => ["localhost", "127.0.0.1", "[::1]"].includes(host);
         if (url.origin !== base.origin && loopback(url.hostname) && loopback(base.hostname)) url = new URL(`${url.pathname}${url.search}`, base);
         if (url.origin !== base.origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
+        if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
+        const pause = quotaPause?.until > now() ? quotaPause : endpointPauses.get(url.pathname);
+        if (pause?.until > now()) { pause.error.retryAfterMs = pause.until - now(); throw pause.error; }
         let response;
         const unsafe = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase());
         const csrf = csrfToken || globalThis.document?.cookie?.split("; ").find(item => item.startsWith("csrftoken="))?.split("=").slice(1).join("=");
@@ -52,8 +57,21 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         if (data?.csrf_token) csrfToken = data.csrf_token;
         if (!response.ok) {
             if (response.status === 401 && !anonymous) onUnauthorized();
-            throw new ApiError(response.status, data);
+            const quotaExceeded = /cloudflare/i.test(raw) && /\b1027\b/.test(raw);
+            const error = new ApiError(response.status, quotaExceeded
+                ? { detail: "El servicio alcanzó su límite de peticiones. La sincronización está pausada temporalmente.", code: "service_quota_exceeded" } : data);
+            if (response.status === 429 || quotaExceeded) {
+                const retry = response.headers?.get?.("Retry-After");
+                const retryAfterMs = retry && Number.isFinite(Number(retry)) ? Number(retry) * 1000 : retry ? Date.parse(retry) - now() : 0;
+                error.retryAfterMs = Math.max(quotaExceeded ? 300_000 : 30_000, Number.isFinite(retryAfterMs) ? retryAfterMs : 0);
+                error.quotaExceeded = quotaExceeded;
+                const pause = { error, until: now() + error.retryAfterMs };
+                if (quotaExceeded) quotaPause = pause;
+                else { endpointPauses.set(url.pathname, pause); if (endpointPauses.size > 100) endpointPauses.delete(endpointPauses.keys().next().value); }
+            }
+            throw error;
         }
+        endpointPauses.delete(url.pathname);
         return data;
     }
     async function list(resource, params = {}, options = {}) {

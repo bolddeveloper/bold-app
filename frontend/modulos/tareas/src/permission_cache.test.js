@@ -98,10 +98,17 @@ test("a late response from an invalidated generation never overwrites the fresh 
     pending[1]({ allowed: false, policy_revision: 2 });
     assert.equal(await fresh, false);
     pending[0]({ allowed: true, policy_revision: 1 });
-    await stale;
+    assert.equal(await stale, false);
 
     assert.equal(await cache.can(query()), false);
     assert.equal(pending.length, 2);
+});
+
+test("late policy revisions cannot roll authorization back", async () => {
+    const cache = createPermissionCache({ authorize: async () => ({ allowed: true, policy_revision: 3 }) });
+    cache.setRevision(4);
+    assert.equal(cache.setRevision(3), false);
+    assert.equal(await cache.can(query()), false);
 });
 
 test("clear removes decisions when the session or active assignment changes", async () => {
