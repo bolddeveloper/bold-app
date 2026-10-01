@@ -249,3 +249,13 @@
   .home_widget_slot:not(.is_uniform) .home_widget { display: flex; max-height: 340px; flex-direction: column; overflow: hidden; }
   .home_widget_slot:not(.is_uniform) .home_widget_body { min-height: 0; overflow: auto; }
 }
+
+/* The body scrolls, while each widget title and its controls stay in view. */
+.home_widget_slot .home_widget_heading { position: sticky; z-index: 2; top: 0; background: var(--bold_surface); }
+.home_widget_slot .home_widget_tools { z-index: 3; }
+.home_widget_slot:not(.is_uniform) .home_widget_tasks { height: 340px; }
+.home_widget_slot:not(.is_uniform) .home_widget_tasks .home_widget_body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.home_widget_slot:not(.is_uniform) .home_widget_tasks .home_task_list { flex: 1; min-height: 0; overflow: auto; }
+.home_widget_slot:not(.is_uniform) .home_widget_tasks .home_quick_add { flex: 0 0 auto; }
+.home_widget_slot.is_uniform .home_widget_metrics .home_widget_body { justify-content: flex-start; }
+.home_size_small .home_metric_grid { grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr)); }

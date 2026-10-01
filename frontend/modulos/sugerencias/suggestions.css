@@ -18,8 +18,15 @@
 .suggestions_success { display: flex; align-items: center; gap: 7px; margin: 0; color: #067647; font-weight: 700; }
 .suggestions_error { margin-bottom: 16px; border: 1px solid #fecdca; border-radius: 10px; background: #fef3f2; color: #b42318; padding: 12px; }
 .suggestions_history > header { padding-bottom: 15px; border-bottom: 1px solid #eaecf0; }
+@media (min-width: 901px) {
+    .suggestions_layout { align-items: stretch; }
+    .suggestions_history { display: flex; min-height: 0; flex-direction: column; }
+    .suggestions_history > header { flex: 0 0 auto; }
+    .suggestions_history > .suggestions_list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; }
+    .suggestions_history { contain: size; }
+}
 .suggestions_history > header select { max-width: 180px; }
-.suggestions_list { display: grid; gap: 10px; padding-top: 14px; }
+.suggestions_list { display: grid; align-content: start; gap: 10px; padding-top: 14px; }
 .suggestions_list article { border: 1px solid #eaecf0; border-radius: 11px; padding: 14px; }
 .suggestions_list article > p { margin: 11px 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .suggestions_meta, .suggestions_list footer { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
@@ -43,6 +50,25 @@
 .suggestions_confirm { border: 1px solid color-mix(in srgb, #ef1f2d 22%, var(--bold_line)); border-radius: 16px; background: var(--bold_surface); color: var(--bold_text); }
 .suggestions_confirm :is(.swal2-title, .swal2-html-container) { color: inherit; }
 .suggestions_empty { padding: 28px 4px; color: #667085; text-align: center; }
+.suggestions_module [data-status] { --status-color: #667085; }
+.suggestions_module [data-status="new"] { --status-color: #438ae8; }
+.suggestions_module [data-status="reviewing"] { --status-color: #d79818; }
+.suggestions_module [data-status="accepted"] { --status-color: #9b65dc; }
+.suggestions_module [data-status="resolved"] { --status-color: #23a875; }
+.suggestions_module [data-status="dismissed"] { --status-color: #ef5262; }
+.suggestions_status_picker { position: relative; min-width: 150px; }
+.suggestions_status_picker summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 7px 11px; border: 1px solid color-mix(in srgb, var(--status-color) 40%, var(--bold_line)); border-radius: 10px; background: color-mix(in srgb, var(--status-color) 12%, var(--bold_surface)); color: var(--bold_text); font-size: 12px; font-weight: 750; cursor: pointer; list-style: none; }
+.suggestions_status_picker summary::-webkit-details-marker { display: none; }
+.suggestions_status_picker summary:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
+.suggestions_status_picker summary[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.suggestions_status_picker[open] { z-index: 20; }
+.suggestions_status_options { position: absolute; top: calc(100% + 6px); right: 0; width: 200px; padding: 6px; border: 1px solid var(--bold_line); border-radius: 12px; background: var(--bold_surface); box-shadow: 0 12px 30px #0003; }
+.suggestions_status_options button { display: flex; width: 100%; align-items: center; justify-content: flex-start; gap: 9px; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--bold_text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.theme_dark .suggestions_status_options button { background: transparent; border: 0; }
+.suggestions_status_options button:is(:hover, :focus-visible, [aria-pressed="true"]) { background: color-mix(in srgb, var(--status-color) 16%, var(--bold_surface)); }
+.suggestions_status_options i { width: 9px; height: 9px; border-radius: 50%; background: var(--status-color); }
+.suggestions_status_options svg { margin-left: auto; color: var(--status-color); }
+.suggestions_list footer .suggestions_status_badge { border: 1px solid color-mix(in srgb, var(--status-color) 40%, transparent); background: color-mix(in srgb, var(--status-color) 14%, var(--bold_surface)); color: var(--status-color); }
 .theme_dark .suggestions_module { color: #edf0f5; }
 .theme_dark .suggestions_module :is(.suggestions_form, .suggestions_history, .suggestions_header button, .suggestions_edit_form, .suggestions_row_actions button, select, textarea) { border-color: #465060; background: #22262e; color: #edf0f5; }
 .theme_dark .suggestions_row_actions button.is_danger { border-color: #7f3b43; background: #3a252a; color: #ffabb1; }

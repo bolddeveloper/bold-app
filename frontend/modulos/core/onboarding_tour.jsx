@@ -128,6 +128,24 @@ export function OnboardingTour() {
                     moveNext: () => tourRef.current?.moveNext(),
                 });
                 let tour;
+                const highlight = document.createElement("div");
+                highlight.className = "bold_tour_highlight";
+                highlight.setAttribute("aria-hidden", "true");
+                document.body.append(highlight);
+                let highlightFrame;
+                const updateHighlight = () => {
+                    const element = document.querySelector(".driver-active-element");
+                    highlight.hidden = !element;
+                    if (element) {
+                        const rect = element.getBoundingClientRect();
+                        Object.assign(highlight.style, {
+                            left: `${rect.left}px`, top: `${rect.top}px`,
+                            width: `${rect.width}px`, height: `${rect.height}px`,
+                        });
+                    }
+                    highlightFrame = requestAnimationFrame(updateHighlight);
+                };
+                updateHighlight();
                 tour = driver({
                     steps,
                     animate: true,
@@ -164,6 +182,8 @@ export function OnboardingTour() {
                         if (!closingRef.current) finish("skipped");
                     },
                     onDestroyed: () => {
+                        cancelAnimationFrame(highlightFrame);
+                        highlight.remove();
                         shell.set_is_sidebar_open(false);
                         tourRef.current = null;
                         closingRef.current = false;

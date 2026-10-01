@@ -78,7 +78,7 @@
     background: var(--bold_red);
 }
 .brand_logo img { display: block; width: 100px; height: auto; }
-.theme_dark .brand_logo img { filter: brightness(0) invert(1); }
+.theme_dark .brand_logo img { filter: none; }
 
 .sidebar_close_button {
     display: none;
