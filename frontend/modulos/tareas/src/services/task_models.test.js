@@ -1,7 +1,7 @@
 import { isControlPlaneContext, normalizeAssignment, selectAssignment, selectEntranceAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
+import { applyOptimisticTaskStatus, normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");
@@ -72,6 +72,13 @@ test("a fresh login skips assignment selection only when there is one option", (
     assert.equal(selectEntranceAssignment([{ id: "a" }], "", true), "a");
     assert.equal(selectEntranceAssignment([{ id: "a" }, { id: "b" }], "", true), "");
     assert.equal(selectEntranceAssignment([{ id: "a" }, { id: "b" }], "b", false), "b");
+});
+test("task completion updates immediately without mutating the server snapshot", () => {
+    const tasks = [{ id: "root", completed: false, subtasks: [{ id: "child", completed: false }] }];
+    const next = applyOptimisticTaskStatus(tasks, "child", { id: "done", label: "Lista", category: "completed", isFinal: true });
+    assert.equal(next[0].subtasks[0].completed, true);
+    assert.equal(next[0].subtasks[0].statusId, "done");
+    assert.equal(tasks[0].subtasks[0].completed, false);
 });
 test("project collaborators are limited to the selected project unit", () => {
     const members = [

@@ -43,7 +43,7 @@ import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
-import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
+import { applyOptimisticTaskStatus, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
@@ -70,6 +70,14 @@ import { connectNotificationStream, disconnectNotificationStream } from "../../n
 
 const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
 const app_toast = Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 2400, timerProgressBar: true });
+const show_task_permission_denied = message => Swal.fire({
+    icon: "warning",
+    title: "No puedes modificar esta tarea",
+    text: message || "Tu cargo no tiene autorización para modificar esta tarea. Si tu política está limitada a «creadas por mí», solo puedes editar tareas creadas con tu asignación activa.",
+    confirmButtonText: "Entendido",
+    confirmButtonColor: "#ef1f2d",
+    customClass: { popup: "task_permission_alert" },
+});
 
 // Defines the project views available in the focused tasks module.
 const view_items = [
@@ -167,6 +175,7 @@ const attachment_later = () => Swal.fire({ icon: "info", title: "Próximamente",
 // fixed order they render, so "Campos visibles" can show/hide them.
 const optional_column_items = [
     { key: "assignee", label: "RESPONSABLE", width: "140px" },
+    { key: "creator", label: "CREADO POR", width: "170px" },
     { key: "date", label: "FECHA", width: "120px" },
     { key: "priority", label: "PRIORIDAD", width: "140px" },
     { key: "project", label: "PROYECTO", width: "160px" }
@@ -2114,32 +2123,64 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
 }
 
 
+function read_task_creation_draft(storage_key) {
+    if (!storage_key) return {};
+    try {
+        const value = JSON.parse(sessionStorage.getItem(storage_key) || "{}");
+        return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch {
+        return {};
+    }
+}
+
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
+function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
     const real = is_using_real_backend();
-    const [unitId, set_unitId] = use_state(activeUnit || "");
-    const [assignee_id, set_assignee_id] = use_state("");
-    const [title, set_title] = use_state("");
-    const [project_id, set_project_id] = use_state(selected_project_id);
-    const [section, set_section] = use_state("todo");
-    const [collaborator_ids, set_collaborator_ids] = use_state([]);
-    const [due_day, set_due_day] = use_state(new Date().getDate());
-    const [due_month, set_due_month] = use_state(new Date().getMonth());
-    const [due_year, set_due_year] = use_state(new Date().getFullYear());
-    const [priority, set_priority] = use_state("Media");
-    const [status, set_status] = use_state("Pend.");
-    const [description, set_description] = use_state("");
-    const [subtasks, set_subtasks] = use_state([]);
+    const initial_draft = use_ref(read_task_creation_draft(draft_storage_key)).current;
+    const today = use_ref(new Date()).current;
+    const [unitId, set_unitId] = use_state(initial_draft.unitId || activeUnit || "");
+    const [assignee_id, set_assignee_id] = use_state(initial_draft.assignee_id || "");
+    const [title, set_title] = use_state(initial_draft.title || "");
+    const [project_id, set_project_id] = use_state(projects.some(project => project.id === initial_draft.project_id) ? initial_draft.project_id : selected_project_id);
+    const [section, set_section] = use_state(initial_draft.section || "todo");
+    const [collaborator_ids, set_collaborator_ids] = use_state(Array.isArray(initial_draft.collaborator_ids) ? initial_draft.collaborator_ids : []);
+    const [due_day, set_due_day] = use_state(Object.hasOwn(initial_draft, "due_day") ? initial_draft.due_day : today.getDate());
+    const [due_month, set_due_month] = use_state(Number.isInteger(initial_draft.due_month) ? initial_draft.due_month : today.getMonth());
+    const [due_year, set_due_year] = use_state(Number.isInteger(initial_draft.due_year) ? initial_draft.due_year : today.getFullYear());
+    const [priority, set_priority] = use_state(initial_draft.priority || "Media");
+    const [status, set_status] = use_state(initial_draft.status || "Pend.");
+    const [description, set_description] = use_state(initial_draft.description || "");
+    const [subtasks, set_subtasks] = use_state(Array.isArray(initial_draft.subtasks) ? initial_draft.subtasks : []);
     const [attachments, set_attachments] = use_state([]);
     const [show_datepicker, set_show_datepicker] = use_state(false);
+    const project_initialized = use_ref(false);
+    const unit_initialized = use_ref(false);
 
     if (real) {
         board_columns = [...data.sections.filter(item => item.projectId === project_id), { id: "unsectioned", label: "Sin sección" }];
         status_options = data.statuses.filter(item => !item.unitId || item.unitId === unitId).map(item => item.label);
     }
-    use_effect(() => { if (real) set_section(data.sections.find(item => item.projectId === project_id)?.id || "unsectioned"); }, [project_id]);
-    use_effect(() => { if (real) { set_status(data.statuses.find(item => (!item.unitId || item.unitId === unitId) && !item.isFinal)?.label || ""); set_assignee_id(""); } }, [unitId]);
-    function handle_submit(e) {
+    use_effect(() => {
+        if (!project_initialized.current) {
+            project_initialized.current = true;
+            if (real && initial_draft.section && data.sections.some(item => item.id === initial_draft.section && item.projectId === project_id)) return;
+        }
+        if (real) set_section(data.sections.find(item => item.projectId === project_id)?.id || "unsectioned");
+    }, [project_id]);
+    use_effect(() => {
+        if (!unit_initialized.current) {
+            unit_initialized.current = true;
+            if (real && initial_draft.status && data.statuses.some(item => (!item.unitId || item.unitId === unitId) && item.label === initial_draft.status)) return;
+        }
+        if (real) { set_status(data.statuses.find(item => (!item.unitId || item.unitId === unitId) && !item.isFinal)?.label || ""); set_assignee_id(""); }
+    }, [unitId]);
+    use_effect(() => {
+        if (!draft_storage_key) return;
+        try {
+            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, due_day, due_month, due_year, priority, status, description, subtasks }));
+        } catch { /* El formulario sigue funcionando aunque el navegador bloquee el almacenamiento. */ }
+    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, due_day, due_month, due_year, priority, status, description, subtasks]);
+    async function handle_submit(e) {
         e.preventDefault();
         if (pending) return;
         if (!title.trim()) return;
@@ -2165,7 +2206,10 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
             attachment_name: attachments.length ? attachments[attachments.length - 1].name : null,
             tags: []
         };
-        on_create(new_task);
+        const created = await on_create(new_task);
+        if (created !== false && draft_storage_key) {
+            try { sessionStorage.removeItem(draft_storage_key); } catch { /* Ya no es necesario conservar el borrador. */ }
+        }
     }
 
     return (
@@ -3044,6 +3088,7 @@ function render_task_row(props) {
         visible_fields
     } = props;
     const member_item = get_member(task_item.assignee_id);
+    const creator_item = get_member(task_item.created_by_assignment);
     const project_item = get_project(task_item.project_id);
 
     const is_priority_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "priority";
@@ -3125,6 +3170,13 @@ function render_task_row(props) {
             {visible_fields.assignee ? (
                 <span className="task_assignee">
                     {render_avatar(member_item, "avatar_small")}
+                </span>
+            ) : null}
+
+            {visible_fields.creator ? (
+                <span className="task_creator_cell" title={creator_item?.name || "Sin registro de creador"}>
+                    {creator_item ? render_avatar(creator_item, "avatar_small") : null}
+                    <span>{creator_item?.name || "Sin registro"}</span>
                 </span>
             ) : null}
 
@@ -4178,6 +4230,7 @@ function TaskAppContent({ externalModules = {} }) {
     });
     const [visible_fields, set_visible_fields] = use_state({
         assignee: true,
+        creator: false,
         date: true,
         priority: true,
         project: false
@@ -4868,17 +4921,22 @@ function TaskAppContent({ externalModules = {} }) {
         return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
-    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados") {
+    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
         try {
             await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
         } catch (error) {
             if (error.name !== "AbortError") {
-                set_api_error(error.message);
+                try { on_failure(error); } catch (rollback_error) { console.warn("No se pudo revertir el cambio optimista.", rollback_error); }
+                if (error.status !== 403) set_api_error(error.message);
                 if (error.status === 404) { set_selected_task_id(null); set_active_modal(null); }
                 // Reconcile partial multi-resource saves as well as rejected writes.
                 await refresh.current().catch(() => {});
+                if (error.status === 403) {
+                    const detail = typeof error.fields?.detail === "string" ? error.fields.detail : "";
+                    await show_task_permission_denied(detail);
+                }
                 if (error.partialDraft) {
                     set_selected_task_id(error.partialDraft.id); set_edit_draft(error.partialDraft);
                     set_edit_attachments(error.partialDraft.attachments || []); set_active_modal("edit_task");
@@ -4889,16 +4947,38 @@ function TaskAppContent({ externalModules = {} }) {
         } finally { mutation_pending.current = false; set_pending(false); }
     }
 
+    function apply_optimistic_task_status(task_id, status) {
+        set_tasks(current => applyOptimisticTaskStatus(current, task_id, status));
+        set_data(current => current ? { ...current, tasks: applyOptimisticTaskStatus(current.tasks, task_id, status) } : current);
+    }
+
     async function handle_workspace_bulk(operation, ids = [], values = {}) {
         const count = operation === "create" ? values.items.length : ids.length;
         const success_title = operation === "create" ? `${count} tarea${count === 1 ? "" : "s"} creada${count === 1 ? "" : "s"}` : operation === "delete" ? `${count} tarea${count === 1 ? "" : "s"} eliminada${count === 1 ? "" : "s"}` : operation === "link" ? `Proyecto o sección actualizado en ${count} tarea${count === 1 ? "" : "s"}` : `${count} tarea${count === 1 ? "" : "s"} actualizada${count === 1 ? "" : "s"}`;
         if (real) {
+            if (mutation_pending.current) return false;
             if (operation === "create") {
                 const items = values.items.map(item => taskPayload({ ...item, parent_task: item.parentTaskId || null }, data.statuses, { create: true, unitId: item.unitId || session.activeUnit?.id }));
                 return mutate(() => api.bulkTasks({ operation, items }), () => {}, success_title);
             }
             const changes = operation === "update" && values.priority ? { ...values, priority: ({ Alta: "high", Media: "medium", Baja: "low" })[values.priority] || values.priority } : values;
-            return mutate(() => api.bulkTasks({ operation, ids, ...(operation === "update" ? { changes } : operation === "link" ? values : {}) }), () => {}, success_title);
+            let rollback_statuses = [];
+            if (operation === "update" && values.status) {
+                const status = data.statuses.find(item => String(item.id) === String(values.status));
+                if (status) {
+                    rollback_statuses = ids.map(id => {
+                        const task = data.tasks.find(item => String(item.id) === String(id));
+                        return task ? [id, { id: task.statusId, label: task.status, category: task.statusCategory, isFinal: task.completed }] : null;
+                    }).filter(Boolean);
+                    ids.forEach(id => apply_optimistic_task_status(id, status));
+                }
+            }
+            return mutate(
+                () => api.bulkTasks({ operation, ids, ...(operation === "update" ? { changes } : operation === "link" ? values : {}) }),
+                () => {},
+                success_title,
+                () => rollback_statuses.forEach(([id, status]) => apply_optimistic_task_status(id, status)),
+            );
         }
         if (operation === "create") {
             set_tasks(current => {
@@ -5220,9 +5300,20 @@ function TaskAppContent({ externalModules = {} }) {
 
 
     // Opens the "Editar tarea" modal and seeds the draft.
-    function handle_open_edit_task(task_id) {
+    async function handle_open_edit_task(task_id) {
         const task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
+        if (real) {
+            try {
+                if (!await session.permissions.can("tasks.task.update", task_item.unitId, task_item.id)) {
+                    await show_task_permission_denied();
+                    return;
+                }
+            } catch (error) {
+                set_api_error(error.message);
+                return;
+            }
+        }
         set_editing_subtask_parent_id(null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
@@ -5316,9 +5407,20 @@ function TaskAppContent({ externalModules = {} }) {
     // Toggles task completion and emits a local template event for future sync.
     function handle_toggle_task(task_id) {
         if (real) {
+            if (mutation_pending.current) return;
             const task = data.tasks.find(item => item.id === task_id);
+            if (!task) return;
             const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
-            if (status) mutate(() => api.updateTask(task_id, { status: status.id }));
+            if (status) {
+                const previous_status = { id: task.statusId, label: task.status, category: task.statusCategory, isFinal: task.completed };
+                apply_optimistic_task_status(task_id, status);
+                mutate(
+                    () => api.updateTask(task_id, { status: status.id }),
+                    () => {},
+                    status.isFinal ? "Tarea completada" : "Tarea reabierta",
+                    () => apply_optimistic_task_status(task_id, previous_status),
+                );
+            }
             else set_api_error("No hay un estado compatible para cambiar la finalización.");
             return;
         }
@@ -5571,11 +5673,12 @@ function TaskAppContent({ externalModules = {} }) {
             return (
                 <CreateTaskModal
                     data={data} pending={pending} activeUnit={session.activeUnit?.id}
+                    draft_storage_key={`bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`}
                     drawer={drawer}
                     board_columns={board_columns}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
-                        if (real) { mutate(() => saveTaskDraft(new_task, data), () => { set_active_modal(null); set_active_view("list"); }); return; }
+                        if (real) return mutate(() => saveTaskDraft(new_task, data), () => { set_active_modal(null); set_active_view("list"); }, "Tarea creada");
                         const temporary_id = new_task.id;
                         set_tasks((current_tasks) => [...current_tasks, normalize_task(new_task)]);
                         set_active_modal(null);
@@ -5589,6 +5692,7 @@ function TaskAppContent({ externalModules = {} }) {
                             .catch((error) => {
                                 console.warn("No se pudo crear la tarea.", error);
                             });
+                        return true;
                     }}
                     projects={projects}
                     selected_project_id={selected_project_id}

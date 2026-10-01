@@ -5,6 +5,8 @@
 .reports_actions { display: flex; gap: 12px; }
 .reports_actions select { border: 1px solid var(--bold_line); border-radius: 10px; background: var(--bold_surface); padding: 10px 14px; font-size: 12px; font-weight: 700; color: inherit; }
 .reports_actions button { font-size: 12px; white-space: nowrap; }
+.reports_work_in_progress { display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 18px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--bold_red) 28%, var(--bold_line)); border-radius: 10px; background: color-mix(in srgb, var(--bold_red) 7%, var(--bold_surface)); color: var(--bold_text); font-size: 13px; }
+.reports_work_in_progress strong { color: var(--bold_red); }
 .reports_module .reports_scope { margin: 14px 0 24px; }
 .reports_scope span { color: #39835c; }
 .reports_metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }

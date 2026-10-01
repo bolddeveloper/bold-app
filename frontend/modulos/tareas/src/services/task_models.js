@@ -52,6 +52,16 @@ export function membersForUnit(members, unitId) {
     return (members || []).filter(member => String(member.unitId) === String(unitId));
 }
 export const isMyTask = (task, assignmentId) => task.assignee_id === assignmentId || task.collaborator_ids?.includes(assignmentId);
+export function applyOptimisticTaskStatus(tasks, taskId, status) {
+    const patch = task => String(task.id) === String(taskId) ? {
+        ...task,
+        statusId: status.id,
+        status: status.label,
+        statusCategory: status.category,
+        completed: Boolean(status.isFinal),
+    } : { ...task, subtasks: (task.subtasks || []).map(patch) };
+    return tasks.map(patch);
+}
 export const normalizeProject = dto => ({ ...dto, label: dto.name, color: dto.color_hex || "#ef1f2d", unitId: dto.unit });
 
 export const normalizeStatus = dto => ({ ...dto, label: dto.name, isFinal: dto.is_final, unitId: dto.unit });

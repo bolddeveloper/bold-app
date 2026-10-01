@@ -308,6 +308,7 @@ class TasksV2ApiTests(TransactionTestCase):
             format="json",
         )
         self.assertEqual(foreign_edit.status_code, 403)
+        self.assertIn("solo permite modificar tareas creadas", foreign_edit.data["detail"])
 
         JobRolePermission.objects.create(
             job_role=collaborator_role,

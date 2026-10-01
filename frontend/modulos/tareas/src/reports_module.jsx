@@ -32,6 +32,10 @@ export default function ReportsModule({ tasks, projects, parseDueDate }) {
                 <button className="primary_button" onClick={downloadReport}>+ Crear informe</button>
             </div>
         </header>
+        <div className="reports_work_in_progress" role="status">
+            <strong>Estamos trabajando en este módulo.</strong>
+            <span>Próximamente.</span>
+        </div>
         <p className="reports_scope">{days ? "Tareas con vencimiento en el período seleccionado." : "Todas las tareas, incluidas las que no tienen fecha."} <span role="status">{downloaded ? "Informe CSV descargado." : ""}</span></p>
         <div className="reports_metrics">
             {[["Tareas totales", report.total, null], ["Completadas", report.completed, `${completion}%`], ["En curso", report.active, `${active}%`], ["Retrasadas", report.overdue, `${percent(report.overdue, report.total)}%`]].map(([label, value, badge], index) => <article className={`reports_metric reports_metric_${index}`} key={label}><h2>{label}</h2><div><strong>{value}</strong>{badge && <span>{badge}</span>}</div></article>)}

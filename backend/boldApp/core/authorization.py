@@ -460,6 +460,23 @@ def resolve_access(
                 context.policy_version,
             )
 
+    if (
+        permission.code in CREATOR_SCOPED_PERMISSION_CODES
+        and resource_created_by_assignment_id is not None
+        and any(
+            rule.effect == JobRolePermission.EFFECT_ALLOW
+            and rule.scope_type == JobRolePermission.SCOPE_CREATED_BY_ME
+            for rule in role_rules
+        )
+    ):
+        return _decision(
+            False,
+            "Tu cargo solo permite modificar tareas creadas por tu asignación activa dentro de tu unidad.",
+            "resource_not_created_by_assignment",
+            "job_role_permission",
+            policy_version=context.policy_version,
+        )
+
     return _decision(
         False,
         "No existe una regla aplicable.",
