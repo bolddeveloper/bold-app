@@ -56,6 +56,78 @@ export const isMyTask = (task, assignmentId) => assignmentId != null && (
     || String(task.created_by_assignment) === String(assignmentId)
     || task.collaborator_ids?.some(id => String(id) === String(assignmentId))
 );
+export function previewTaskDraft(draft, original, statuses) {
+    const status = statuses.find(item => item.label === draft.status && (!item.unitId || item.unitId === draft.unitId));
+    const due = dateFromISO(draft.due_date);
+    const links = (original?.taskProjects || []).map(item => ({ ...item }));
+    if (draft.project_id) {
+        const link = links.find(item => item.projectId === draft.project_id);
+        if (link) link.sectionId = draft.section === "unsectioned" ? null : draft.section;
+        else links.push({ id: `pending:${draft.id}`, taskId: draft.id, projectId: draft.project_id,
+            sectionId: draft.section === "unsectioned" ? null : draft.section, position: String(draft.position || "1000") });
+    }
+    return {
+        ...original, ...draft,
+        id: original?.id || draft.id,
+        unitId: draft.unitId || original?.unitId,
+        statusId: status?.id || original?.statusId,
+        statusCategory: status?.category || original?.statusCategory,
+        completed: status ? Boolean(status.isFinal) : Boolean(draft.completed),
+        due_day: due?.getDate() || null,
+        due_label: due?.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) || "",
+        parentTaskId: draft.parent_task ?? draft.parentTaskId ?? original?.parentTaskId ?? null,
+        taskProjects: links,
+        comments: original?.comments || [],
+        subtasks: (draft.subtasks || original?.subtasks || []).map(item => ({ ...item, parentTaskId: original?.id || draft.id })),
+        collaborator_ids: draft.collaborator_ids || original?.collaborator_ids || [],
+        attachments: draft.attachments || original?.attachments || [],
+    };
+}
+function removeTaskFromTree(tasks, id) {
+    return tasks.filter(task => String(task.id) !== String(id)).map(task => task.subtasks?.length
+        ? { ...task, subtasks: removeTaskFromTree(task.subtasks, id) } : task);
+}
+function replaceTaskInTree(tasks, id, replacement) {
+    return tasks.map(task => String(task.id) === String(id) ? replacement : task.subtasks?.length
+        ? { ...task, subtasks: replaceTaskInTree(task.subtasks, id, replacement) } : task);
+}
+function addChildToTree(tasks, parentId, child) {
+    return tasks.map(task => String(task.id) === String(parentId)
+        ? { ...task, subtasks: [...(task.subtasks || []).filter(item => String(item.id) !== String(child.id)), child] }
+        : task.subtasks?.length ? { ...task, subtasks: addChildToTree(task.subtasks, parentId, child) } : task);
+}
+export function applyPendingTaskChanges(tasks, mutations) {
+    let visible = tasks;
+    for (const mutation of mutations.values()) {
+        if (mutation.kind === "delete") {
+            visible = removeTaskFromTree(visible, mutation.id);
+        } else if (mutation.kind === "create") {
+            if (mutation.serverId) visible = removeTaskFromTree(visible, mutation.serverId);
+            if (!visible.some(task => String(task.id) === String(mutation.id))) visible = [...visible, mutation.task];
+            if (mutation.task.parentTaskId) visible = addChildToTree(visible, mutation.task.parentTaskId, mutation.task);
+        } else if (mutation.kind === "update") {
+            visible = replaceTaskInTree(visible, mutation.id, mutation.task);
+        }
+    }
+    return visible;
+}
+export function rollbackPendingTaskChange(tasks, mutation, { flat = false } = {}) {
+    const withoutPreview = removeTaskFromTree(tasks, mutation.id);
+    if (mutation.kind === "create" || !mutation.original) return withoutPreview;
+    const restored = mutation.original.parentTaskId
+        ? addChildToTree(withoutPreview, mutation.original.parentTaskId, mutation.original) : withoutPreview;
+    if (mutation.original.parentTaskId && !flat) return restored;
+    const position = Math.min(mutation.originalIndex ?? restored.length, restored.length);
+    return [...restored.slice(0, position), mutation.original, ...restored.slice(position)];
+}
+export function replaceTemporaryTaskIds(tasks, idMap) {
+    return tasks.map(task => ({ ...task,
+        id: idMap.get(String(task.id)) || task.id,
+        parentTaskId: idMap.get(String(task.parentTaskId)) || task.parentTaskId,
+        taskProjects: task.taskProjects?.map(link => ({ ...link, taskId: idMap.get(String(link.taskId)) || link.taskId })) || [],
+        subtasks: task.subtasks?.length ? replaceTemporaryTaskIds(task.subtasks, idMap) : task.subtasks || [],
+    }));
+}
 export function applyOptimisticTaskStatus(tasks, taskId, status) {
     const patch = task => String(task.id) === String(taskId) ? {
         ...task,

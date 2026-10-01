@@ -67,7 +67,7 @@ export async function saveSubtasks(parent, drafts, data) {
     }
     for (const old of existing) if (!drafts.some(item => item.id === old.id)) await api.deleteTask(old.id);
 }
-export async function saveTaskDraft(draft, data, original = null) {
+export async function saveTaskDraft(draft, data, original = null, { onCreated } = {}) {
     draft = { ...draft, subtasks: (draft.subtasks || []).map(item => ({ ...item })), attachments: (draft.attachments || []).map(item => ({ ...item })) };
     const unitId = draft.unitId || original?.unitId;
     const payload = taskPayload(draft, data.statuses, { create: !original, unitId });
@@ -76,6 +76,7 @@ export async function saveTaskDraft(draft, data, original = null) {
     }
     const dto = original ? await api.updateTask(original.id, payload) : await api.createTask(payload);
     draft.id = dto.id;
+    if (!original) onCreated?.(dto);
     try {
         // The initial TaskProject is already committed atomically by createTask.
         if (original && draft.project_id) {

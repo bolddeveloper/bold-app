@@ -43,7 +43,7 @@ import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
-import { applyOptimisticTaskStatus, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
+import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
@@ -2191,7 +2191,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
         if (!title.trim()) return;
         const col = board_columns.find((c) => c.id === section);
         const new_task = {
-            id: `task_${Date.now()}`,
+            id: `task_${crypto.randomUUID()}`,
             created_at: new Date().toISOString(),
             created_by_assignment: currentAssignmentId,
             title: title.trim(),
@@ -2214,7 +2214,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
             tags: []
         };
         const created = await on_create(new_task);
-        if (created !== false && draft_storage_key) {
+        if (created !== false && created !== "queued" && draft_storage_key) {
             try { sessionStorage.removeItem(draft_storage_key); } catch { /* Ya no es necesario conservar el borrador. */ }
         }
     }
@@ -4210,6 +4210,32 @@ function TaskAppContent({ externalModules = {} }) {
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
+    const task_crud_mutations = use_ref(new Map());
+    const [syncing_task_count, set_syncing_task_count] = use_state(0);
+    use_effect(() => {
+        if (!syncing_task_count) return;
+        const warn = event => { event.preventDefault(); event.returnValue = ""; };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [syncing_task_count]);
+    const failed_drafts_key = `bold_failed_task_creates:${session.activeAssignment?.id || "demo"}`;
+    const read_failed_drafts = key => {
+        try { const saved = JSON.parse(sessionStorage.getItem(key)); return Array.isArray(saved) ? saved : []; }
+        catch { return []; }
+    };
+    const [failed_task_state, set_failed_task_state] = use_state(() => ({ key: failed_drafts_key, items: read_failed_drafts(failed_drafts_key) }));
+    const failed_task_creates = failed_task_state.key === failed_drafts_key ? failed_task_state.items : [];
+    const set_failed_task_creates = update => set_failed_task_state(current => ({
+        key: failed_drafts_key,
+        items: update(current.key === failed_drafts_key ? current.items : read_failed_drafts(failed_drafts_key)),
+    }));
+    use_effect(() => {
+        if (failed_task_state.key !== failed_drafts_key) set_failed_task_state({ key: failed_drafts_key, items: read_failed_drafts(failed_drafts_key) });
+    }, [failed_drafts_key, failed_task_state.key]);
+    use_effect(() => {
+        if (failed_task_state.key !== failed_drafts_key) return;
+        try { sessionStorage.setItem(failed_drafts_key, JSON.stringify(failed_task_state.items)); } catch { /* La recuperación sigue disponible en esta pestaña. */ }
+    }, [failed_drafts_key, failed_task_state]);
     const task_status_mutations = use_ref(new Map());
     const notification_read_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
@@ -4871,7 +4897,7 @@ function TaskAppContent({ externalModules = {} }) {
                     dirty = false;
                     const next = await loadTaskData(session);
                     if (!mounted) return;
-                    let next_tasks = next.tasks;
+                    let next_tasks = applyPendingTaskChanges(next.tasks, task_crud_mutations.current);
                     for (const [task_id, mutation] of task_status_mutations.current) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
                     }
@@ -4885,7 +4911,7 @@ function TaskAppContent({ externalModules = {} }) {
                     set_tasks(next_tasks.filter(item => !item.parentTaskId || !next_tasks.some(parent => parent.id === item.parentTaskId)));
                     set_notifications(next_notifications);
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
-                    set_selected_task_id(id => next.tasks.some(item => item.id === id) ? id : null);
+                    set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
                 }
             })().finally(() => { running = null; });
             return running;
@@ -4980,6 +5006,74 @@ function TaskAppContent({ externalModules = {} }) {
         set_api_error(error?.message || "No se pudo sincronizar el cambio.");
     }
 
+    function start_task_crud(changes, operation, { on_success = () => {}, on_failure = () => {}, success_title } = {}) {
+        const mutations = Array.isArray(changes) ? changes : [changes];
+        if (mutations.some(mutation => task_crud_mutations.current.has(String(mutation.id)) || task_status_mutations.current.has(String(mutation.id)))) {
+            set_api_error("Esta tarea aún se está sincronizando. Espera a que termine para volver a modificarla.");
+            return false;
+        }
+        const batch = new Map(mutations.map(mutation => [String(mutation.id), mutation]));
+        const rootTasks = rows => rows.filter(task => !task.parentTaskId || !rows.some(parent => String(parent.id) === String(task.parentTaskId)));
+        for (const [key, mutation] of batch) task_crud_mutations.current.set(key, mutation);
+        set_syncing_task_count(task_crud_mutations.current.size);
+        set_data(current => current ? { ...current, tasks: applyPendingTaskChanges(current.tasks, batch) } : current);
+        set_tasks(current => rootTasks(applyPendingTaskChanges(current, batch)));
+        void (async () => {
+            let result;
+            try {
+                result = await operation();
+            } catch (error) {
+                for (const key of batch.keys()) task_crud_mutations.current.delete(key);
+                set_syncing_task_count(task_crud_mutations.current.size);
+                const rollback = (tasks, flat) => mutations.reduce((rows, mutation) => rollbackPendingTaskChange(rows, mutation, { flat }), tasks);
+                set_data(current => current ? { ...current, tasks: rollback(current.tasks, true) } : current);
+                set_tasks(current => rootTasks(rollback(current, false)));
+                await refresh.current().catch(() => {});
+                on_failure(error);
+                if (error.partialDraft) {
+                    set_selected_task_id(error.partialDraft.id);
+                    set_edit_draft(error.partialDraft);
+                    set_edit_attachments(error.partialDraft.attachments || []);
+                    set_active_modal("edit_task");
+                    set_api_error(`La tarea se creó, pero algunos datos adicionales no se guardaron. Revisa y reintenta: ${error.message}`);
+                } else {
+                    await report_background_mutation_error(error);
+                }
+                return;
+            }
+            for (const key of batch.keys()) task_crud_mutations.current.delete(key);
+            set_syncing_task_count(task_crud_mutations.current.size);
+            const createdIds = result?.created || (result?.id ? [result.id] : []);
+            if (createdIds.length) {
+                const idMap = new Map(mutations.filter(mutation => mutation.kind === "create").map((mutation, index) => [String(mutation.id), createdIds[index]]));
+                const confirm = tasks => replaceTemporaryTaskIds(tasks, idMap);
+                set_data(current => current ? { ...current, tasks: confirm(current.tasks) } : current);
+                set_tasks(confirm);
+                set_selected_task_id(id => idMap.get(String(id)) || id);
+            }
+            on_success(result);
+            try { await refresh.current(); }
+            catch { set_api_error("El cambio se guardó, pero no se pudo actualizar la vista. Vuelve a cargar la página."); }
+            if (success_title) app_toast.fire({ icon: "success", title: success_title });
+        })();
+        return true;
+    }
+
+    function restore_failed_task_draft(failed) {
+        if (active_modal) { set_api_error("Cierra el formulario actual antes de recuperar otra tarea."); return; }
+        const draftKey = `bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`;
+        try {
+            const current = sessionStorage.getItem(draftKey);
+            if (current) {
+                const parsed = JSON.parse(current);
+                if (parsed.title?.trim()) set_failed_task_creates(items => [...items, { id: crypto.randomUUID(), title: parsed.title, snapshot: current }]);
+            }
+            sessionStorage.setItem(draftKey, failed.snapshot);
+        } catch { set_api_error("No se pudo recuperar el borrador en este navegador."); return; }
+        set_failed_task_creates(items => items.filter(item => item.id !== failed.id));
+        set_active_modal("task");
+    }
+
     function task_status_snapshot(task) {
         return {
             id: task.statusId,
@@ -4991,6 +5085,10 @@ function TaskAppContent({ externalModules = {} }) {
 
     function queue_task_status(task_id, status) {
         const key = String(task_id);
+        if (task_crud_mutations.current.has(key)) {
+            set_api_error("Esta tarea aún se está sincronizando. Podrás cambiar su estado al terminar.");
+            return false;
+        }
         let mutation = task_status_mutations.current.get(key);
         if (!mutation) {
             const task = data?.tasks.find(item => String(item.id) === key);
@@ -5101,20 +5199,48 @@ function TaskAppContent({ externalModules = {} }) {
             if (operation === "update" && values.status) {
                 const status = data.statuses.find(item => String(item.id) === String(values.status));
                 if (!status) { set_api_error("No hay un estado compatible para esta tarea."); return false; }
-                ids.forEach(id => queue_task_status(id, status));
-                return true;
+                return ids.map(id => queue_task_status(id, status)).every(Boolean);
             }
-            if (mutation_pending.current) return false;
             if (operation === "create") {
-                const items = values.items.map(item => taskPayload({ ...item, parent_task: item.parentTaskId || null }, data.statuses, { create: true, unitId: item.unitId || session.activeUnit?.id }));
-                return mutate(() => api.bulkTasks({ operation, items }), () => {}, success_title);
+                let drafts, items;
+                try {
+                    if (values.items.some(item => item.parentTaskId && task_crud_mutations.current.has(String(item.parentTaskId)))) {
+                        throw new Error("Espera a que se sincronice la tarea principal antes de agregar subtareas.");
+                    }
+                    drafts = values.items.map(item => {
+                        const unitId = item.unitId || session.activeUnit?.id;
+                        const payload = taskPayload({ ...item, unitId, parent_task: item.parentTaskId || null, follow_creator: true }, data.statuses, { create: true, unitId });
+                        const status = data.statuses.find(row => row.id === payload.status);
+                        return { ...item, id: `task_${crypto.randomUUID()}`, unitId, status: status?.label || "", section: item.section || "unsectioned",
+                            created_at: new Date().toISOString(), created_by_assignment: session.activeAssignment?.id,
+                            collaborator_ids: [session.activeAssignment?.id].filter(Boolean), follow_creator: true, payload };
+                    });
+                    items = drafts.map(({ payload }) => payload);
+                } catch (error) { set_api_error(error.message); return false; }
+                const mutations = drafts.map(draft => ({ kind: "create", id: draft.id, task: previewTaskDraft(draft, null, data.statuses) }));
+                return start_task_crud(mutations, () => api.bulkTasks({ operation, items }), {
+                    success_title,
+                    on_failure: () => set_failed_task_creates(current => [...current, ...drafts.map(draft => {
+                        const due = dateFromISO(draft.due_date);
+                        return { id: draft.id, title: draft.title, snapshot: JSON.stringify({ ...draft,
+                            due_day: due?.getDate() || null, due_month: due?.getMonth() ?? new Date().getMonth(), due_year: due?.getFullYear() || new Date().getFullYear() }) };
+                    })]),
+                });
             }
             const changes = operation === "update" && values.priority ? { ...values, priority: ({ Alta: "high", Media: "medium", Baja: "low" })[values.priority] || values.priority } : values;
-            return mutate(
+            const originals = ids.map(id => data.tasks.find(item => String(item.id) === String(id)));
+            if (originals.some(item => !item)) { set_api_error("Una o más tareas ya no están disponibles. Actualiza la vista."); return false; }
+            const mutations = originals.map(original => {
+                if (operation === "delete") return { kind: "delete", id: original.id, original, originalIndex: data.tasks.indexOf(original) };
+                const patch = operation === "link" ? { project_id: values.project, section: values.section || "unsectioned" } : changesFromWorkspace(changes);
+                if (changes.status) patch.status = data.statuses.find(item => item.id === changes.status)?.label || original.status;
+                if (changes.priority) patch.priority = ({ high: "Alta", medium: "Media", low: "Baja" })[changes.priority] || changes.priority;
+                const preview = previewTaskDraft({ ...original, ...patch }, original, data.statuses);
+                return { kind: "update", id: original.id, task: preview, original, originalIndex: data.tasks.indexOf(original) };
+            });
+            return start_task_crud(mutations,
                 () => api.bulkTasks({ operation, ids, ...(operation === "update" ? { changes } : operation === "link" ? values : {}) }),
-                () => {},
-                success_title,
-            );
+                { success_title });
         }
         if (operation === "create") {
             set_tasks(current => {
@@ -5455,6 +5581,10 @@ function TaskAppContent({ externalModules = {} }) {
     async function handle_open_edit_task(task_id) {
         const task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
+        if (real && task_crud_mutations.current.has(String(task_id))) {
+            set_api_error("Esta tarea aún se está sincronizando. Podrás editarla al terminar.");
+            return;
+        }
         if (real) {
             try {
                 if (!await session.permissions.can("tasks.task.update", task_item.unitId, task_item.id)) {
@@ -5506,7 +5636,18 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
-        if (real) { const task = data.tasks.find(item => item.id === task_id); mutate(() => api.updateTask(task_id, taskPayload({ unitId: task.unitId, [field]: value }, data.statuses)), () => set_active_quick_popover(null)); return; }
+        if (real) {
+            const task = data.tasks.find(item => item.id === task_id);
+            if (!task) return;
+            let payload;
+            try { payload = taskPayload({ unitId: task.unitId, [field]: value }, data.statuses); }
+            catch (error) { set_api_error(error.message); return; }
+            const preview = previewTaskDraft({ ...task, [field]: value }, task, data.statuses);
+            const started = start_task_crud({ kind: "update", id: task_id, task: preview, original: task, originalIndex: data.tasks.indexOf(task) },
+                () => api.updateTask(task_id, payload), { success_title: "Tarea actualizada" });
+            if (started) set_active_quick_popover(null);
+            return;
+        }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
             if (task_item.id !== task_id) return task_item;
             const state_patch = field === "status"
@@ -5525,6 +5666,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_add_comment(task_id, comment_text, images = []) {
         if (real) {
+            if (task_crud_mutations.current.has(String(task_id))) { set_api_error("Espera a que se sincronice la tarea antes de comentarla."); return Promise.resolve(false); }
             if (images.length) { set_api_error("Los comentarios admiten texto. A?ade los archivos como enlaces adjuntos a la tarea."); return Promise.resolve(false); }
             return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim())) : Promise.resolve(false);
         }
@@ -5553,6 +5695,14 @@ function TaskAppContent({ externalModules = {} }) {
                 console.warn("No se pudo sincronizar el comentario.", error);
             });
         }
+    }
+
+    function handle_followers_change(task_id, ids) {
+        if (!real) { set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task)); return true; }
+        const original = data.tasks.find(task => String(task.id) === String(task_id));
+        if (!original) { set_api_error("La tarea ya no está disponible. Actualiza la vista."); return false; }
+        return start_task_crud({ kind: "update", id: task_id, task: { ...original, collaborator_ids: ids }, original, originalIndex: data.tasks.indexOf(original) },
+            () => saveFollowers(task_id, ids, data), { success_title: "Colaboradores actualizados" });
     }
 
 
@@ -5589,6 +5739,10 @@ function TaskAppContent({ externalModules = {} }) {
     function handle_request_delete_task(task_id) {
         const task_item = tasks.find((item) => item.id === task_id);
         if (!task_item) return;
+        if (real && task_crud_mutations.current.has(String(task_id))) {
+            set_api_error("Esta tarea aún se está sincronizando. Podrás eliminarla al terminar.");
+            return;
+        }
         set_delete_target({ type: "task", id: task_id });
         set_active_modal("delete_confirm");
     }
@@ -5623,7 +5777,13 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Deletes a task through the backend and removes it from local state.
     function handle_confirm_delete_task(task_id) {
-        if (real) { mutate(() => api.deleteTask(task_id), () => { set_active_modal(null); set_selected_task_id(null); set_delete_target(null); }); return; }
+        if (real) {
+            const original = data.tasks.find(item => String(item.id) === String(task_id));
+            if (!original) { set_api_error("La tarea ya no está disponible. Actualiza la vista."); return; }
+            const started = start_task_crud({ kind: "delete", id: task_id, original, originalIndex: data.tasks.indexOf(original) }, () => api.deleteTask(task_id), { success_title: "Tarea eliminada" });
+            if (started) { set_active_modal(null); set_selected_task_id(null); set_delete_target(null); }
+            return;
+        }
         delete_task_request(task_id)
             .then(() => {
                 set_tasks((current_tasks) => current_tasks.filter((task_item) => task_item.id !== task_id));
@@ -5675,6 +5835,7 @@ function TaskAppContent({ externalModules = {} }) {
     async function handle_add_quick_subtask(task_id, title) {
         const task = tasks.find(item => item.id === task_id);
         if (!task || !title.trim()) return false;
+        if (real && task_crud_mutations.current.has(String(task_id))) { set_api_error("Espera a que se sincronice la tarea principal."); return false; }
         const next = [...(task.subtasks || []), { id: `subtask_${Date.now()}`, title: title.trim(), completed: false }];
         if (real) return mutate(() => saveSubtasks(task, next, data));
         set_tasks(current => current.map(item => item.id === task_id ? { ...item, subtasks: next } : item));
@@ -5684,6 +5845,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_open_subtask(parent_id, subtask_id) {
+        if (real && task_crud_mutations.current.has(String(parent_id))) { set_api_error("Espera a que se sincronice la tarea principal."); return; }
         if (tasks.some(item => item.id === subtask_id)) {
             handle_open_edit_task(subtask_id);
             return;
@@ -5774,7 +5936,24 @@ function TaskAppContent({ externalModules = {} }) {
         if (!title) return set_api_error("El título de la tarea es obligatorio.");
         if (title.length > 220) return set_api_error("El título de la tarea no puede superar 220 caracteres.");
         const validated_draft = { ...edit_draft, title };
-        if (real) { mutate(() => saveTaskDraft({ ...validated_draft, attachments: edit_attachments }, data, data.tasks.find(item => item.id === task_id)), () => set_active_modal(null)); return; }
+        if (real) {
+            const original = data.tasks.find(item => String(item.id) === String(task_id));
+            if (!original) { set_api_error("La tarea ya no está disponible. Actualiza la vista."); return; }
+            const draft = { ...validated_draft, attachments: edit_attachments };
+            try { taskPayload(draft, data.statuses, { unitId: draft.unitId || original.unitId }); }
+            catch (error) { set_api_error(error.message); return; }
+            const preview = previewTaskDraft(draft, original, data.statuses);
+            const started = start_task_crud({ kind: "update", id: task_id, task: preview, original, originalIndex: data.tasks.indexOf(original) },
+                () => saveTaskDraft(draft, data, original), {
+                    success_title: "Tarea guardada",
+                    on_failure: error => {
+                        if (error.status === 403 || error.status === 404 || error.partialDraft) return;
+                        set_selected_task_id(task_id); set_edit_draft(draft); set_edit_attachments(draft.attachments || []); set_active_modal("edit_task");
+                    },
+                });
+            if (started) set_active_modal(null);
+            return;
+        }
 
         const due_label = validated_draft.due_day ? validated_draft.due_label || `${validated_draft.due_day} sep` : "";
         const completed = validated_draft.section === "completed";
@@ -5820,7 +5999,27 @@ function TaskAppContent({ externalModules = {} }) {
                     board_columns={board_columns}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
-                        if (real) return mutate(() => saveTaskDraft(new_task, data), () => { set_active_modal(null); set_active_view("list"); }, "Tarea creada");
+                        if (real) {
+                            try { taskPayload(new_task, data.statuses, { create: true, unitId: new_task.unitId }); }
+                            catch (error) { set_api_error(error.message); return false; }
+                            const draftKey = `bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`;
+                            let snapshot = "";
+                            try { snapshot = sessionStorage.getItem(draftKey) || ""; } catch { /* El formulario sigue funcionando. */ }
+                            const preview = previewTaskDraft(new_task, null, data.statuses);
+                            const mutation = { kind: "create", id: new_task.id, task: preview };
+                            const started = start_task_crud(mutation, () => saveTaskDraft(new_task, data, null, { onCreated: dto => { mutation.serverId = dto.id; } }), {
+                                success_title: "Tarea creada",
+                                on_failure: error => {
+                                    if (!error.partialDraft) set_failed_task_creates(items => [...items, { id: new_task.id, title: new_task.title, snapshot: snapshot || JSON.stringify(new_task) }]);
+                                },
+                            });
+                            if (!started) return false;
+                            try { sessionStorage.removeItem(draftKey); } catch { /* El borrador fallido sigue recuperable en memoria. */ }
+                            set_active_modal(null); set_active_view("list"); set_active_section("tasks"); set_active_module("tasks");
+                            if (new_task.project_id) { set_selected_project_id(new_task.project_id); set_task_scope("project"); }
+                            else set_task_scope("mine");
+                            return "queued";
+                        }
                         const temporary_id = new_task.id;
                         set_tasks((current_tasks) => [...current_tasks, normalize_task(new_task)]);
                         set_active_modal(null);
@@ -5933,7 +6132,17 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
-            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}{pending && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> Guardando cambios…</div>}</>}
+            overlays={<>
+                {render_active_modal()}
+                {render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}
+                {project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}
+                {workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}
+                {failed_task_creates.length > 0 && <div className="task_failed_drafts" role="alert">
+                    <span>No se pudo confirmar el guardado de {failed_task_creates.length} {failed_task_creates.length === 1 ? "tarea" : "tareas"}. Comprueba si ya aparecen antes de reintentarlo.</span>
+                    {failed_task_creates.map(failed => <button key={failed.id} type="button" onClick={() => restore_failed_task_draft(failed)}>Recuperar «{failed.title}»</button>)}
+                </div>}
+                {(pending || syncing_task_count > 0) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
+            </>}
         >
                 <div className="module_transition" key={active_module}>
                 {externalModules[active_module] || (active_module === "home" ? <HomeModule
@@ -5957,7 +6166,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
                     <WorkspacesModule TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
-                    <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={(task_id, ids) => real ? mutate(() => saveFollowers(task_id, ids, data)) : set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task))} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
+                    <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={handle_followers_change} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects"
                         ? owner_department_view ? projects.filter(isActiveProject) : projects.filter(project => !real || (project.unitId || project.unit) === session.activeUnit?.id)
@@ -5979,10 +6188,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     handle_quick_add_tasks,
                     handle_task_click,
                     selected_task_ids,
-                    on_followers_change: (task_id, ids) => {
-                        if (real) return mutate(() => saveFollowers(task_id, ids, data));
-                        set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: ids } : task));
-                    },
+                    on_followers_change: handle_followers_change,
                     mobile_actions: { onEdit: handle_open_edit_task, onWorkspace: task => set_workspace_assignment({ type: "task", item: task }), onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
                     active_modal,

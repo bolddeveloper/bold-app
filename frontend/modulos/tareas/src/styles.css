@@ -560,6 +560,27 @@ button {
     font-size: 12px;
     font-weight: 750;
 }
+.task_failed_drafts {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 20001;
+    display: flex;
+    max-width: min(360px, calc(100vw - 24px));
+    max-height: 40vh;
+    overflow: auto;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--bold_red);
+    border-radius: 11px;
+    background: var(--bold_surface);
+    color: var(--bold_text);
+    box-shadow: 0 14px 36px rgb(15 23 42 / 18%);
+    font-size: 13px;
+}
+.task_failed_drafts button { border: 0; background: transparent; color: var(--bold_red); cursor: pointer; font: inherit; font-weight: 700; text-align: left; }
+.task_failed_drafts button:hover { text-decoration: underline; }
 
 .swal2-container:has(.task_permission_alert) { z-index: 30000; }
 .task_permission_alert { border: 1px solid color-mix(in srgb, var(--bold_red) 26%, var(--bold_line)); border-radius: 16px; background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 24px 70px rgb(15 23 42 / 28%); }
@@ -570,6 +591,7 @@ button {
 @keyframes task_action_spin { to { transform: rotate(360deg); } }
 @keyframes task_saving_enter { from { opacity: 0; transform: translateY(-6px); } }
 @media (max-width: 760px) { .task_saving_indicator { top: auto; right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); left: 12px; justify-content: center; } }
+@media (max-width: 760px) { .task_failed_drafts { right: 12px; bottom: max(68px, calc(env(safe-area-inset-bottom) + 68px)); left: 12px; max-width: none; } }
 @media (prefers-reduced-motion: reduce) { .task_action_spinner, .task_saving_indicator { animation: none; } }
 
 .secondary_button,

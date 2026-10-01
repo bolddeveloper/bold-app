@@ -1,7 +1,7 @@
 import { isControlPlaneContext, normalizeAssignment, selectAssignment, selectEntranceAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyOptimisticTaskStatus, normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
+import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");
@@ -79,6 +79,40 @@ test("task completion updates immediately without mutating the server snapshot",
     assert.equal(next[0].subtasks[0].completed, true);
     assert.equal(next[0].subtasks[0].statusId, "done");
     assert.equal(tasks[0].subtasks[0].completed, false);
+});
+test("pending task writes remain visible across stale refreshes and roll back without mutating snapshots", () => {
+    const statuses = [{ id: "open", label: "Pendiente", unitId: "u", isFinal: false }];
+    const original = { id: "existing", title: "Antes", unitId: "u", statusId: "open", status: "Pendiente", taskProjects: [], subtasks: [] };
+    const preview = previewTaskDraft({ id: "existing", title: "Después", unitId: "u", status: "Pendiente", project_id: "p", section: "s", subtasks: [] }, original, statuses);
+    assert.equal(original.title, "Antes");
+    assert.deepEqual(original.taskProjects, []);
+    assert.equal(projectTask(preview, "p").section, "s");
+    const pending = new Map([
+        ["existing", { kind: "update", id: "existing", task: preview }],
+        ["new", { kind: "create", id: "new", task: { id: "new", title: "Nueva" } }],
+    ]);
+    assert.deepEqual(applyPendingTaskChanges([original], pending).map(task => task.title), ["Después", "Nueva"]);
+    pending.get("new").serverId = "server-new";
+    assert.deepEqual(applyPendingTaskChanges([original, { id: "server-new", title: "Nueva" }], pending).map(task => task.id), ["existing", "new"]);
+    assert.deepEqual(rollbackPendingTaskChange([preview], { kind: "update", id: "existing", original, originalIndex: 0 }), [original]);
+    assert.deepEqual(rollbackPendingTaskChange([], { kind: "delete", id: "existing", original, originalIndex: 0 }), [original]);
+    assert.deepEqual(rollbackPendingTaskChange([{ id: "new" }], { kind: "create", id: "new" }), []);
+    pending.delete("existing");
+    pending.set("new", { kind: "delete", id: "new" });
+    assert.deepEqual(applyPendingTaskChanges([original], pending).map(task => task.title), ["Antes"]);
+});
+test("optimistic edits and deletes stay consistent inside parent subtasks", () => {
+    const child = { id: "child", title: "Antes", parentTaskId: "parent", subtasks: [] };
+    const parent = { id: "parent", subtasks: [child] };
+    const edited = { ...child, title: "Después" };
+    assert.equal(applyPendingTaskChanges([parent, child], new Map([["child", { kind: "update", id: "child", task: edited }]]))[0].subtasks[0].title, "Después");
+    const deleted = applyPendingTaskChanges([parent, child], new Map([["child", { kind: "delete", id: "child" }]]));
+    assert.deepEqual(deleted[0].subtasks, []);
+    assert.deepEqual(rollbackPendingTaskChange(deleted, { kind: "delete", id: "child", original: child, originalIndex: 1 }, { flat: true })[0].subtasks, [child]);
+    const pending = { id: "temporary", parentTaskId: "parent", subtasks: [] };
+    const created = applyPendingTaskChanges([parent], new Map([[pending.id, { kind: "create", id: pending.id, task: pending }]]));
+    assert.equal(created[0].subtasks[1].id, "temporary");
+    assert.equal(replaceTemporaryTaskIds(created, new Map([["temporary", "server"]]))[0].subtasks[1].id, "server");
 });
 test("project collaborators are limited to the selected project unit", () => {
     const members = [

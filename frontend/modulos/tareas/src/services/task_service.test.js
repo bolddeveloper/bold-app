@@ -50,12 +50,14 @@ test("partial saves retain server IDs so retry cannot duplicate parent or succes
     api.createTask = async body => ({ id: `server-${++created}`, unit: body.unit });
     api.create = async () => { throw new Error("Follower rejected"); };
     const draft = { title: "Parent", unitId: "u1", status: "Pendiente", collaborator_ids: ["follower"], subtasks: [{ id: "temporary", title: "Child" }] };
+    const createdIds = [];
     try {
-        await assert.rejects(saveTaskDraft(draft, data), error => {
+        await assert.rejects(saveTaskDraft(draft, data, null, { onCreated: dto => createdIds.push(dto.id) }), error => {
             assert.equal(error.partialDraft.id, "server-1");
             assert.equal(error.partialDraft.subtasks[0].id, "server-2");
             assert.equal(draft.subtasks[0].id, "temporary");
             return true;
         });
+        assert.deepEqual(createdIds, ["server-1"]);
     } finally { Object.assign(api, original); }
 });
