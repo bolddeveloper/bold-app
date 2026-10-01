@@ -27,6 +27,28 @@ El listado vuelve a validar los permisos actuales. Una notificación histórica 
 
 El canal `/ws/notifications/` usa un ticket de un solo uso emitido para el canal `notifications`. Cada conexión queda aislada por asignación y se cierra si la sesión o la asignación dejan de ser válidas.
 
+### Control de seguridad (sin acceso administrativo)
+
+El mismo canal entrega sobres v2 `control.ready`, `permissions.revision` y
+`assignment.changed`. Contienen solo la asignación propia, revisión decimal como
+cadena, huellas opacas de estado/contexto, secuencia del canal, capacidad
+`permissions_revision`, vigencia de control de 45 segundos y tiempo restante
+para el próximo límite de seguridad. No contienen políticas, auditoría ni datos
+de otros empleados. No se suscribe al grupo de eventos administrativos de Core.
+
+Se comprueba el estado cada 30 segundos o antes al vencer sesión, inactividad,
+concesión, autoridad ancestral o MFA reciente. El cierre 4401 invalida la sesión;
+4403 indica plaza/ticket inválido. Las tareas asíncronas se cancelan al desconectar.
+Los avisos posteriores al commit consultan el estado vigente; señales repetidas
+sin cambio efectivo no fuerzan nuevas cargas del frontend. Las huellas permiten
+recuperar cambios temporales y cambios de modelos sin revisión global incluso
+si se perdió una señal. La autorización HTTP por operación no se modifica.
+
+El cliente verifica la capacidad antes de pasar al respaldo HTTP de 60 segundos
+en pestañas visibles. Si el servidor es antiguo, la conexión falla o la vigencia
+vence, mantiene/vuelve a verificaciones cada cinco segundos. Ante incertidumbre
+oculta datos del alcance anterior y pausa capacidades hasta verificarlas.
+
 ## Extensión a otros módulos
 
 Los próximos módulos pueden llamar `create_notification` con su propio `module`, `resource_type`, `route` y metadatos. Antes de hacerlo deben definir la regla que determina los destinatarios y validar el permiso de lectura del recurso tanto al crear como al listar la notificación.

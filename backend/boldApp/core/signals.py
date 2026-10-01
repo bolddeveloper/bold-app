@@ -14,6 +14,7 @@ from .events import (
 )
 from .models import (
     AccessGrant,
+    Employee,
     GrantAuthority,
     GrantAuthorityPermission,
     JobRolePermission,
@@ -22,6 +23,7 @@ from .models import (
     PermissionAuditLog,
     Position,
     PositionAssignment,
+    UserAccount,
 )
 from .serializers import AccessGrantSerializer, PermissionAuditLogSerializer, PositionAssignmentSerializer
 
@@ -132,5 +134,15 @@ def dispatch_permission_audit_events(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Permission)
 @receiver(post_save, sender=Position)
 @receiver(post_save, sender=OrganizationalUnit)
+@receiver(post_delete, sender=AccessGrant)
+@receiver(post_delete, sender=PositionAssignment)
 def invalidate_authorization_state(sender, instance, **kwargs):
+    transaction.on_commit(dispatch_authorization_invalidation)
+
+
+@receiver(post_save, sender=UserAccount)
+@receiver(post_save, sender=Employee)
+def invalidate_principal_state(sender, instance, update_fields=None, **kwargs):
+    if update_fields is not None and not set(update_fields) & {"is_active", "is_superuser", "employee", "full_name"}:
+        return
     transaction.on_commit(dispatch_authorization_invalidation)
