@@ -1462,22 +1462,39 @@ function QuickPriorityPopover({ current_priority, on_close, on_select }) {
     );
 }
 
-function QuickPeoplePopover({ multiple = false, on_change, on_close, selected_ids = [], task }) {
+function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, selected_ids = [], task }) {
     const [query, set_query] = use_state("");
+    const [draft_ids, set_draft_ids] = use_state(selected_ids);
+    const [position, set_position] = use_state({ visibility: "hidden" });
+    const popover = use_ref(null);
     const normalized = query.trim().toLocaleLowerCase("es");
-    const visible = team_members.filter(member => selected_ids.includes(member.id) || (normalized
+    const visible = team_members.filter(member => draft_ids.includes(member.id) || (normalized
         ? member.name.toLocaleLowerCase("es").includes(normalized)
         : !task.unitId || String(member.unitId) === String(task.unitId)));
-    return <div className="quick_popover_bubble quick_people_popover" role="dialog" aria-label={multiple ? "Cambiar colaboradores" : "Cambiar responsable"} onClick={event => event.stopPropagation()}>
+    use_effect(() => {
+        const place = () => {
+            if (!anchor?.isConnected || !popover.current) return;
+            const rect = anchor.getBoundingClientRect(), width = Math.min(260, window.innerWidth - 24);
+            const below = window.innerHeight - rect.bottom - 12, above = rect.top - 12;
+            const open_above = below < 180 && above > below;
+            const max_height = Math.max(120, Math.min(260, (open_above ? above : below) - 8));
+            const height = Math.min(popover.current.scrollHeight, max_height);
+            set_position({ visibility: "visible", position: "fixed", width, maxHeight: max_height, left: Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2)), top: open_above ? Math.max(12, rect.top - height - 8) : Math.min(window.innerHeight - height - 12, rect.bottom + 8), transform: "none" });
+        };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+    }, [anchor, visible.length]);
+    return createPortal(<div ref={popover} className="quick_popover_bubble quick_people_popover" style={position} role="dialog" aria-label={multiple ? "Cambiar colaboradores" : "Cambiar responsable"} onClick={event => event.stopPropagation()}>
         <label className="quick_people_search">{render_icon(search_icon, 14)}<input autoFocus type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar persona…" /></label>
-        {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => { on_change(""); on_close(); }}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!selected_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
+        {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => set_draft_ids([])}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!draft_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
         {visible.map(member => <button type="button" className="quick_popover_item_btn" key={member.id} onClick={() => {
-            if (multiple) on_change(selected_ids.includes(member.id) ? selected_ids.filter(id => id !== member.id) : [...selected_ids, member.id]);
-            else { on_change(member.id); on_close(); }
-        }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{selected_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
+            set_draft_ids(current => multiple ? current.includes(member.id) ? current.filter(id => id !== member.id) : [...current, member.id] : [member.id]);
+        }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{draft_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
         {!visible.length && <p className="quick_people_empty">No se encontraron personas.</p>}
-        {multiple && <button type="button" className="quick_people_done" onClick={on_close}>Listo</button>}
-    </div>;
+        <button type="button" className="quick_people_done" onClick={() => { on_change(multiple ? draft_ids : draft_ids[0] || ""); on_close(); }}>Listo</button>
+    </div>, document.body);
 }
 
 function InlineTaskTitle({ on_save, task }) {
@@ -3219,16 +3236,16 @@ function render_task_row(props) {
 
             {visible_fields.assignee ? (
                 <div className="quick_popover_container task_people_cell">
-                    <button type="button" className="task_people_trigger" title={member_item?.name || "Asignar responsable"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "assignee"); }}>{render_avatar(member_item, "avatar_small")}</button>
-                    {is_assignee_open && <QuickPeoplePopover task={task_item} selected_ids={task_item.assignee_id ? [task_item.assignee_id] : []} on_change={id => handle_quick_change(task_item.id, "assignee_id", id)} on_close={() => handle_toggle_quick_popover(null, null)} />}
+                    <button type="button" className="task_people_trigger" title={member_item?.name || "Asignar responsable"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "assignee", event.currentTarget); }}>{render_avatar(member_item, "avatar_small")}</button>
+                    {is_assignee_open && <QuickPeoplePopover anchor={active_quick_popover.anchor} task={task_item} selected_ids={task_item.assignee_id ? [task_item.assignee_id] : []} on_change={id => handle_quick_change(task_item.id, "assignee_id", id)} on_close={() => handle_toggle_quick_popover(null, null)} />}
                 </div>
             ) : null}
 
             {visible_fields.collaborators ? <div className="quick_popover_container task_people_cell">
-                <button type="button" className="task_people_trigger task_collaborators_trigger" title={collaborators.length ? collaborators.map(member => member.name).join(", ") : "Agregar colaboradores"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "collaborators"); }}>
+                <button type="button" className="task_people_trigger task_collaborators_trigger" title={collaborators.length ? collaborators.map(member => member.name).join(", ") : "Agregar colaboradores"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "collaborators", event.currentTarget); }}>
                     {collaborators.slice(0, 2).map(member => <span className="task_collaborator_avatar" key={member.id}>{render_avatar(member, "avatar_small")}</span>)}{!collaborators.length && <span className="avatar_small quick_empty_avatar">+</span>}{collaborators.length > 2 && <small>+{collaborators.length - 2}</small>}
                 </button>
-                {is_collaborators_open && <QuickPeoplePopover multiple task={task_item} selected_ids={task_item.collaborator_ids || []} on_change={ids => handle_quick_change(task_item.id, "collaborator_ids", ids)} on_close={() => handle_toggle_quick_popover(null, null)} />}
+                {is_collaborators_open && <QuickPeoplePopover anchor={active_quick_popover.anchor} multiple task={task_item} selected_ids={task_item.collaborator_ids || []} on_change={ids => handle_quick_change(task_item.id, "collaborator_ids", ids)} on_close={() => handle_toggle_quick_popover(null, null)} />}
             </div> : null}
 
             {visible_fields.creator ? (
@@ -4894,7 +4911,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         function handle_pointer_down(event) {
-            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .project_menu_popover, .project_item_wrap, .sidebar_project_menu_floating")) {
+            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .quick_people_popover, .project_menu_popover, .project_item_wrap, .sidebar_project_menu_floating")) {
                 return;
             }
 
@@ -5541,7 +5558,7 @@ function TaskAppContent({ externalModules = {} }) {
 
 
     // Toggles / closes a quick priority or status popover in the table row.
-    function handle_toggle_quick_popover(task_id, popover_type) {
+    function handle_toggle_quick_popover(task_id, popover_type, anchor = null) {
         set_active_task_tool(null);
         set_active_project_menu_id(null);
         if (!task_id) {
@@ -5551,7 +5568,7 @@ function TaskAppContent({ externalModules = {} }) {
         set_active_quick_popover((current) =>
             current?.taskId === task_id && current?.type === popover_type
                 ? null
-                : { taskId: task_id, type: popover_type }
+                : { taskId: task_id, type: popover_type, anchor }
         );
     }
 
