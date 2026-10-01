@@ -1,3 +1,4 @@
+import { syncDiagnostics } from "./sync_diagnostics.js";
 export const is_using_real_backend = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true";
 export const api_base_url = import.meta.env?.VITE_API_BASE_URL || globalThis.location?.origin || "http://127.0.0.1:8000";
 
@@ -25,6 +26,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         let response;
         const unsafe = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase());
         const csrf = csrfToken || globalThis.document?.cookie?.split("; ").find(item => item.startsWith("csrftoken="))?.split("=").slice(1).join("=");
+        const finishDiagnostic = syncDiagnostics.beginHttp(url.pathname, method);
         try {
             response = await fetchImpl(url.href, {
                 ...options, method, signal, credentials: "include",
@@ -32,9 +34,11 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
                 ...(body !== undefined ? { body: JSON.stringify(body) } : {})
             });
         } catch (error) {
+            finishDiagnostic(signal.aborted || error.name === "AbortError" ? "cancelled" : "network-error");
             if (signal.aborted || error.name === "AbortError") throw error;
             throw new ApiError(0, { detail: "No se pudo conectar con el servidor. Comprueba que el backend esté activo y que permita el origen de esta página (CORS)." });
         }
+        finishDiagnostic(response.status);
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         if (response.status === 204) return null;
         const raw = await response.text();

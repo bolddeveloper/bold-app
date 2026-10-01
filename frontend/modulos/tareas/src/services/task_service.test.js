@@ -1,9 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { api } from "./tasks_api.js";
-import { saveTaskDraft } from "./task_service.js";
+import { loadTaskData, saveTaskDraft } from "./task_service.js";
 const statuses = [{ id: "s1", unitId: "u1", label: "Pendiente", isFinal: false }, { id: "s2", unitId: "u2", label: "Destino", isFinal: false }];
 const data = { statuses, tasks: [], followers: [] };
+test("reference bootstrap with 13 units and 29 project members costs 37 requests", async () => {
+    const previousFetch = globalThis.fetch;
+    const calls = [];
+    globalThis.fetch = async address => {
+        const url = new URL(address), resource = url.pathname.split("/").filter(Boolean).at(-1);
+        calls.push(resource);
+        const page = Number(url.searchParams.get("page") || 1), total = resource === "project-members" ? 29 : 0;
+        const rows = Array.from({ length: Math.max(0, Math.min(25, total - (page - 1) * 25)) }, (_, i) => ({ id: `m${(page - 1) * 25 + i}` }));
+        url.searchParams.set("page", String(page + 1));
+        return Response.json({ results: rows, next: page * 25 < total ? url.href : null });
+    };
+    try {
+        await loadTaskData({ directory: [], units: Array.from({ length: 13 }, (_, i) => ({ id: `u${i}` })) });
+        assert.equal(calls.length, 37);
+        assert.equal(calls.filter(resource => resource === "task-statuses").length, 13);
+        assert.equal(calls.filter(resource => resource === "tags").length, 13);
+    } finally { globalThis.fetch = previousFetch; }
+});
 test("creating a task does not duplicate the creator follower added by the API", async () => {
     const original = { createTask: api.createTask, create: api.create };
     const followers = [];
