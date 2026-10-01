@@ -300,7 +300,7 @@ Implementación de fase 2 en la misma rama `perf/sincronizacion-trafico`:
 - Las decisiones individuales de autorización conservan TTL de cinco segundos; MFA/escrituras siguen verificándose en el servidor. No se alarga una autorización porque el WebSocket esté conectado.
 - Tareas cancela respuestas antiguas y oculta datos del alcance anterior; Administración/Permisos limpian vistas sensibles y protegen respuestas en vuelo. Cambios organizativos del propio contexto reconstruyen Core antes de remontar los módulos.
 - La apertura del canal de control ya no depende de completar la descarga de Tareas. La propiedad final de sockets se moverá a Core en fase 4.
-- Diagnóstico local agrega `permission-control.verified-event`, `fallback-healthy`, `fallback-degraded` y `uncertain`, sin tickets, URLs ni datos personales.
+- Diagnóstico local agrega `permission-control:verified-event`, `permission-control:fallback-healthy`, `permission-control:fallback-degraded` y `permission-control:uncertain`, sin tickets, URLs ni datos personales.
 
 ### Configuración y compatibilidad
 
@@ -358,3 +358,30 @@ La medición de nube, retención/observabilidad de fase 0, actualizaciones parci
 de fase 3 y prueba de capacidad siguen pendientes. El objetivo de interfaz de
 dos segundos queda sujeto a validación pública; las pruebas deterministas no
 son una medición de latencia de extremo a extremo.
+
+### Publicación y verificación de la fase 2 — 1 de octubre de 2026
+
+- Backend/contrato: `8a6aaa5a`; frontend/control: `e2ba4b85`, ambos publicados en GitHub.
+- Oracle ejecuta temporalmente `perf/sincronizacion-trafico` en `e2ba4b85`. Develop permanece en `4c38c852`, sin merge. El clon remoto solo traía Develop; se recuperó explícitamente la rama nueva y se verificó el checkout limpio. La rama de prueba no tiene upstream; actualizarla con fetch explícito y merge `--ff-only`, no un `git pull` sin destino.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261001T215252Z.dump`. No se borraron respaldos anteriores.
+- Imagen anterior conservada como `bold-app-backend:rollback-before-control-20261001` (ID corto `26fdd9140a1f`). Nueva imagen: `776d7a608196`. Solo se recrearon backend/worker; PostgreSQL, Redis y el túnel se conservaron. No se modificaron secretos, cuentas, permisos ni esquema.
+- Backend saludable y `/health/` interno HTTP 200. Sonda ASGI interna con sesión activa existente de un empleado normal y ticket efímero: conexión/capacidad correctas, heartbeat recibido sin forzar recarga y rechazo del ticket reutilizado con 4403, usando PostgreSQL/Redis reales. No se crearon sesiones nuevas ni registros de demo en producción. Esta sonda no atraviesa Cloudflare ni sustituye la prueba pública.
+- Cinco lecturas internas del estado de seguridad del mismo empleado: ocho consultas SQL por lectura; tiempos totales 19,36 / 9,42 / 9,23 / 9,12 / 9,16 ms. Es una comprobación puntual con datos actuales, no p95 ni prueba de carga. El heartbeat reduce HTTP, pero hace trabajo en Oracle: medir SQL/CPU y autoridad ancestral compleja en fases posteriores; no describirlo como coste cero.
+- Cloudflare: versión `d7200883-ea63-49f6-ad0c-f3b5fbe0fb8a`, build `e2ba4b85`, control habilitado y diagnóstico agregado local habilitado. Bundle `index-D4ELxJ-e.js`.
+- Comprobación pública de las **21:58:48 UTC**: raíz y bundle HTTP 200, hash/versiones correctos; `/health/` HTTP 429 y cuota 1027. El recorrido autenticado y la ventana de tráfico siguen pendientes de recuperación de cuota y actualización de las pestañas/PWA.
+
+Reversión de frontend: versión anterior `d49e55c5-3fc3-462e-8f94-20add9a73a9a`
+mediante el mecanismo de rollback de Wrangler. Antes de una reversión del backend,
+preferir volver el frontend al respaldo conservador. Si fuese necesario recuperar
+la imagen anterior, desde `/opt/bold-app/deploy/oracle`:
+
+```bash
+BOLD_APP_IMAGE_TAG=rollback-before-control-20261001 docker compose --env-file .env.oracle -f compose.oracle.yaml up -d --no-build backend worker
+```
+
+Esa orden no restaura ni borra PostgreSQL; no ejecutar `down -v`, `git reset --hard`
+ni restaurar el dump sobre la base activa para revertir este cambio sin migraciones.
+El checkout puede seguir en la rama de prueba aunque el runtime use la imagen de
+rollback: comprobar ambas versiones. Tras aceptar/integrar el cambio en Develop,
+retomar la rama normal del servidor; no fusionarla automáticamente antes de la
+validación de los clientes limitados y los vencimientos en la web.

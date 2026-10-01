@@ -399,6 +399,27 @@ Para probar restauracion usa una base o VM separada. No ejecutes `pg_restore
 
 ## 14. Actualizaciones
 
+**Despliegue de prueba del 1 de octubre de 2026:** durante la optimización del
+tráfico, Oracle está temporalmente en `perf/sincronizacion-trafico`, commit
+`e2ba4b85`, no en Develop. Develop no se fusionó ni modificó. No aplicar la receta
+de retorno a Develop hasta integrar y validar esta entrega; cambiar la rama y
+reconstruir ahora volvería a una versión anterior. Estado, pruebas y reversión en
+`PLAN_OPTIMIZACION_SINCRONIZACION.md`, sección 13.
+
+El clon remoto está limitado por defecto al fetch de Develop. Para actualizar
+la rama de prueba (sin upstream) mientras dure esta etapa:
+
+```bash
+cd /opt/bold-app
+git status --short  # detenerse si hay cambios ajenos
+git fetch origin refs/heads/perf/sincronizacion-trafico:refs/remotes/origin/perf/sincronizacion-trafico
+git switch perf/sincronizacion-trafico
+git merge --ff-only origin/perf/sincronizacion-trafico
+```
+
+Después siguen el respaldo, build y `up -d` indicados abajo. La receta habitual
+para cuando la entrega esté integrada en Develop es:
+
 ```bash
 cd /opt/bold-app
 git fetch origin
