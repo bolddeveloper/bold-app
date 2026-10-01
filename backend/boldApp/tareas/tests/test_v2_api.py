@@ -15,7 +15,7 @@ from boldApp.core.models import (
     PositionAssignment,
     UserAccount,
 )
-from boldApp.tareas.models import Project, ProjectMember, Section, Task, TaskProject, TaskStatus
+from boldApp.tareas.models import Project, ProjectMember, Section, Task, TaskFollower, TaskProject, TaskStatus
 from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
 
@@ -470,6 +470,32 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(link.project, self.ops_project)
         self.assertEqual(link.section, self.ops_section)
         self.assertEqual(task.created_by_assignment, self.actor_assignment)
+
+    def test_projectless_task_follows_creator_by_default_and_allows_opt_out(self):
+        base = {
+            "unit": str(self.operations.id),
+            "status": str(self.ops_status.id),
+            "title": "Tarea sin proyecto ni responsable",
+            "priority": "medium",
+        }
+        created = self.client.post("/api/v2/tasks/", base, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        task = Task.objects.get(id=created.data["id"])
+        self.assertIsNone(task.assignee_assignment)
+        follower = TaskFollower.objects.get(task=task, assignment=self.actor_assignment)
+
+        removed = self.client.delete(f"/api/v2/task-followers/{follower.id}/")
+        self.assertEqual(removed.status_code, 204, getattr(removed, "data", None))
+        self.assertEqual(task.created_by_assignment, self.actor_assignment)
+        self.assertIn(str(task.id), {str(row["id"]) for row in self.client.get("/api/v2/tasks/").data["results"]})
+
+        opted_out = self.client.post("/api/v2/tasks/", {**base, "follow_creator": False}, format="json")
+        self.assertEqual(opted_out.status_code, 201, opted_out.data)
+        self.assertFalse(TaskFollower.objects.filter(task_id=opted_out.data["id"]).exists())
+
+        bulk = self.client.post("/api/v2/tasks/bulk/", {"operation": "create", "items": [base]}, format="json")
+        self.assertEqual(bulk.status_code, 201, bulk.data)
+        self.assertTrue(TaskFollower.objects.filter(task_id=bulk.data["created"][0], assignment=self.actor_assignment).exists())
 
     def test_rejects_a_status_from_another_unit(self):
         payload = self.task_payload()

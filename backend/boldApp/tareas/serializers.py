@@ -127,6 +127,7 @@ class TaskStatusSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    follow_creator = serializers.BooleanField(write_only=True, required=False, default=True)
     project = serializers.PrimaryKeyRelatedField(
         queryset=Project.objects.all(),
         write_only=True,
@@ -195,11 +196,19 @@ class TaskSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        follow_creator = validated_data.pop("follow_creator", True)
         project = validated_data.pop("project", None)
         section = validated_data.pop("section", None)
         position = validated_data.pop("project_position", 0)
         assignment = self.context["request"].assignment
         task = Task.objects.create(created_by_assignment=assignment, **validated_data)
+        if follow_creator:
+            TaskFollower.objects.create(
+                task=task,
+                assignment=assignment,
+                notification_level="all",
+                added_by_assignment=assignment,
+            )
         if project:
             TaskProject.objects.create(
                 task=task,
@@ -209,6 +218,10 @@ class TaskSerializer(serializers.ModelSerializer):
                 added_by_assignment=assignment,
             )
         return task
+
+    def update(self, instance, validated_data):
+        validated_data.pop("follow_creator", None)
+        return super().update(instance, validated_data)
 
 
 class TaskProjectSerializer(serializers.ModelSerializer):

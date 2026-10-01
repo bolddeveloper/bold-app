@@ -43,9 +43,12 @@ export const delete_task = async id => is_using_real_backend() ? api.deleteTask(
 export const add_comment = async (...args) => (await template()).add_comment(...args);
 export const toggle_subtask = async (...args) => (await template()).toggle_subtask(...args);
 
-export async function saveFollowers(taskId, ids, data) {
-    const existing = data.followers.filter(item => item.task === taskId);
-    for (const row of existing) if (!ids.includes(row.assignment)) await api.remove("task-followers", row.id);
+export async function saveFollowers(taskId, ids, data, assumedExisting = []) {
+    const existing = [
+        ...data.followers.filter(item => item.task === taskId),
+        ...assumedExisting.map(assignment => ({ assignment, task: taskId, created_with_task: true })),
+    ];
+    for (const row of existing) if (!ids.includes(row.assignment) && !row.created_with_task) await api.remove("task-followers", row.id);
     for (const id of ids) if (!existing.some(row => row.assignment === id)) await api.create("task-followers", { task: taskId, assignment: id, notification_level: "all" });
 }
 export async function saveSubtasks(parent, drafts, data) {
@@ -82,7 +85,8 @@ export async function saveTaskDraft(draft, data, original = null) {
             else if (link.sectionId !== section) await api.updateTaskProjectLink(link.id, { section, position: draft.position || link.position });
         }
         await saveSubtasks({ id: dto.id, unitId: dto.unit }, draft.subtasks || [], data);
-        await saveFollowers(dto.id, draft.collaborator_ids || [], data);
+        await saveFollowers(dto.id, draft.collaborator_ids || [], data,
+            !original && draft.follow_creator ? [draft.created_by_assignment] : []);
         const existingAttachments = original?.attachments || [];
         for (const item of draft.attachments || []) {
             if (existingAttachments.some(old => old.id === item.id)) continue;

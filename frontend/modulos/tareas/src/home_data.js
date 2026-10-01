@@ -1,3 +1,5 @@
+import { isMyTask } from "./services/task_models.js";
+
 export function buildHomeData(tasks, projects, parseDueDate, userId, now = new Date(), notifications = []) {
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
@@ -5,7 +7,7 @@ export function buildHomeData(tasks, projects, parseDueDate, userId, now = new D
     afterWindow.setDate(afterWindow.getDate() + 3);
     const dated = tasks.map(task => ({ task, due: parseDueDate(task) }));
     const open = dated.filter(({ task }) => !task.completed && task.section !== "completed");
-    const belongsToUser = task => userId != null && (String(task.assignee_id) === String(userId) || task.collaborator_ids?.some(id => String(id) === String(userId)));
+    const belongsToUser = task => isMyTask(task, userId);
     const assigned = open.filter(({ task }) => belongsToUser(task));
     const dueToday = assigned.filter(({ due }) => due?.getTime() === today.getTime());
     const attention = assigned.filter(({ due }) => due && due <= today).sort((a, b) => b.due - a.due);

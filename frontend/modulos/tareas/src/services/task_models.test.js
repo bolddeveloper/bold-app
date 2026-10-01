@@ -88,19 +88,21 @@ test("project collaborators are limited to the selected project unit", () => {
     ];
     assert.deepEqual(membersForUnit(members, "marketing").map(member => member.id), ["marketing-1", "marketing-2"]);
 });
-test("my tasks include responsible and follower assignments without duplicating rows", () => {
+test("my tasks include responsible, follower and creator assignments without duplicating rows", () => {
     const tasks = [
         { id: "owner", assignee_id: "a", collaborator_ids: ["a"] },
         { id: "follower", assignee_id: "b", collaborator_ids: ["a"] },
+        { id: "creator", assignee_id: "b", collaborator_ids: [], created_by_assignment: "a" },
         { id: "other", assignee_id: "b", collaborator_ids: [] }
     ];
-    assert.deepEqual(tasks.filter(task => isMyTask(task, "a")).map(task => task.id), ["owner", "follower"]);
+    assert.deepEqual(tasks.filter(task => isMyTask(task, "a")).map(task => task.id), ["owner", "follower", "creator"]);
 });
 test("payload creates atomic project link and patches only editable fields", () => {
     const statuses = [normalizeStatus({ id: "s", name: "Pendiente", unit: "u", is_final: false })];
     const task = { title: "Prueba", unitId: "u", status: "Pendiente", assignee_id: "assignment", due_date: "2030-01-01", project_id: "p", section: "section", priority: "Alta", created_by: "bad", subtasks: [] };
     const payload = taskPayload(task, statuses, { create: true });
     assert.equal(payload.project, "p"); assert.equal(payload.section, "section"); assert.equal(payload.assignee_assignment, "assignment"); assert.equal(payload.created_by, undefined); assert.equal(payload.priority, "high");
+    assert.equal(taskPayload({ ...task, follow_creator: false }, statuses, { create: true }).follow_creator, false);
     const patch = taskPayload({ title: "Editada", due_date: null }, statuses);
     assert.deepEqual(patch, { title: "Editada", due_date: null });
     assert.throws(() => taskPayload({ unitId: "other", status: "Pendiente" }, statuses), /compatible/);

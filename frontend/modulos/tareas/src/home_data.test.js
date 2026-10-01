@@ -29,6 +29,10 @@ assert.deepEqual(v2.assigned.map(item => item.task.id), ["shared", "both"]);
 assert.deepEqual(v2.deadlines.map(item => item.task.id), ["both", "shared"]);
 assert.deepEqual(v2.statusCounts, { completed: 1, inProgress: 1, pending: 1 });
 assert.deepEqual(v2.projects.map(project => project.total), [1, 1]);
+const createdWithoutProject = buildHomeData([
+    { id: "created", created_by_assignment: "a", assignee_id: "", collaborator_ids: [], completed: false },
+], [], () => null, "a", now);
+assert.deepEqual(createdWithoutProject.assigned.map(item => item.task.id), ["created"]);
 assert.deepEqual(defaultHomeLayout().map(widget => widget.type), ["status", "projects", "tasks", "activity", "deadlines", "shortcuts"]);
 assert.deepEqual(normalizeHomeLayout([{ id: "a", type: "metrics", width: 9, metrics: ["today", "today", "bad"] }]), [{ id: "a", type: "metrics", size: "large", variant: "compact", metrics: ["today"], shortcuts: undefined }]);
 assert.equal(normalizeHomeLayout([{ id: "a", type: "status", width: 2, variant: "compact" }])[0].variant, "compact");

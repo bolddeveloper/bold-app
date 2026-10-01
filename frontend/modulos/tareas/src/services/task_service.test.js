@@ -4,6 +4,24 @@ import { api } from "./tasks_api.js";
 import { saveTaskDraft } from "./task_service.js";
 const statuses = [{ id: "s1", unitId: "u1", label: "Pendiente", isFinal: false }, { id: "s2", unitId: "u2", label: "Destino", isFinal: false }];
 const data = { statuses, tasks: [], followers: [] };
+test("creating a task does not duplicate the creator follower added by the API", async () => {
+    const original = { createTask: api.createTask, create: api.create };
+    const followers = [];
+    api.createTask = async body => {
+        if (body.follow_creator) followers.push("creator");
+        return { id: "task-1", unit: body.unit };
+    };
+    api.create = async (resource, body) => {
+        if (resource === "task-followers") followers.push(body.assignment);
+        return { id: "follower-1" };
+    };
+    try {
+        await saveTaskDraft({ title: "Sin proyecto", unitId: "u1", status: "Pendiente",
+            created_by_assignment: "creator", follow_creator: true,
+            collaborator_ids: ["creator", "other"] }, data);
+        assert.deepEqual(followers, ["creator", "other"]);
+    } finally { Object.assign(api, original); }
+});
 test("task creation creates the project atomically and persists subtasks separately", async () => {
     const original = { createTask: api.createTask, create: api.create };
     const calls = [];

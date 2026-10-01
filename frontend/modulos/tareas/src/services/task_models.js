@@ -51,7 +51,11 @@ export function groupProjectsByUnit(projects, units) {
 export function membersForUnit(members, unitId) {
     return (members || []).filter(member => String(member.unitId) === String(unitId));
 }
-export const isMyTask = (task, assignmentId) => task.assignee_id === assignmentId || task.collaborator_ids?.includes(assignmentId);
+export const isMyTask = (task, assignmentId) => assignmentId != null && (
+    String(task.assignee_id) === String(assignmentId)
+    || String(task.created_by_assignment) === String(assignmentId)
+    || task.collaborator_ids?.some(id => String(id) === String(assignmentId))
+);
 export function applyOptimisticTaskStatus(tasks, taskId, status) {
     const patch = task => String(task.id) === String(taskId) ? {
         ...task,
@@ -98,6 +102,7 @@ export function taskPayload(task, statuses, { create = false, unitId } = {}) {
     }
     if (create) {
         payload.unit = unit;
+        if (task.follow_creator !== undefined) payload.follow_creator = Boolean(task.follow_creator);
         if (task.project_id) Object.assign(payload, { project: task.project_id, section: task.section === "unsectioned" ? null : task.section || null, project_position: task.position || "1000" });
     }
     return payload;

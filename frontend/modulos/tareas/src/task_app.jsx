@@ -2134,7 +2134,7 @@ function read_task_creation_draft(storage_key) {
 }
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, pending }) {
+function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
     const real = is_using_real_backend();
     const initial_draft = use_ref(read_task_creation_draft(draft_storage_key)).current;
     const today = use_ref(new Date()).current;
@@ -2143,7 +2143,12 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     const [title, set_title] = use_state(initial_draft.title || "");
     const [project_id, set_project_id] = use_state(projects.some(project => project.id === initial_draft.project_id) ? initial_draft.project_id : selected_project_id);
     const [section, set_section] = use_state(initial_draft.section || "todo");
-    const [collaborator_ids, set_collaborator_ids] = use_state(Array.isArray(initial_draft.collaborator_ids) ? initial_draft.collaborator_ids : []);
+    const [collaborator_ids, set_collaborator_ids] = use_state(() => {
+        const saved = Array.isArray(initial_draft.collaborator_ids) ? initial_draft.collaborator_ids : [];
+        return currentAssignmentId && !initial_draft.creator_collaboration_touched && !saved.includes(currentAssignmentId)
+            ? [currentAssignmentId, ...saved] : saved;
+    });
+    const [creator_collaboration_touched, set_creator_collaboration_touched] = use_state(Boolean(initial_draft.creator_collaboration_touched));
     const [due_day, set_due_day] = use_state(Object.hasOwn(initial_draft, "due_day") ? initial_draft.due_day : today.getDate());
     const [due_month, set_due_month] = use_state(Number.isInteger(initial_draft.due_month) ? initial_draft.due_month : today.getMonth());
     const [due_year, set_due_year] = use_state(Number.isInteger(initial_draft.due_year) ? initial_draft.due_year : today.getFullYear());
@@ -2177,9 +2182,9 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     use_effect(() => {
         if (!draft_storage_key) return;
         try {
-            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, due_day, due_month, due_year, priority, status, description, subtasks }));
+            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, subtasks }));
         } catch { /* El formulario sigue funcionando aunque el navegador bloquee el almacenamiento. */ }
-    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, due_day, due_month, due_year, priority, status, description, subtasks]);
+    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, subtasks]);
     async function handle_submit(e) {
         e.preventDefault();
         if (pending) return;
@@ -2188,12 +2193,14 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
         const new_task = {
             id: `task_${Date.now()}`,
             created_at: new Date().toISOString(),
+            created_by_assignment: currentAssignmentId,
             title: title.trim(),
             project_id,
             section,
             assignee_id: real ? assignee_id || null : collaborator_ids[0] || null,
             unitId,
             collaborator_ids,
+            follow_creator: collaborator_ids.includes(currentAssignmentId),
             due_day: due_day || null,
             due_date: toISODate(due_year, due_month, due_day),
             due_label: due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : null,
@@ -2277,7 +2284,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                     {real && <TaskIdentityFields data={data} unitId={unitId} assigneeId={assignee_id} onUnit={set_unitId} onAssignee={set_assignee_id} />}
                     <CollaboratorsSelector
                         selected_ids={collaborator_ids}
-                        on_change={set_collaborator_ids}
+                        on_change={ids => { set_creator_collaboration_touched(true); set_collaborator_ids(ids); }}
                     />
 
                     <div className="bold_field_group">
@@ -4821,7 +4828,7 @@ function TaskAppContent({ externalModules = {} }) {
     ), [active_workspace, projects, selected_project_id, task_scope]);
 
     const timeline_scope_id = task_scope === "mine" ? "my_tasks" : task_scope === "workspace" ? active_workspace_id : selected_project_id;
-    const timeline_comments = real ? tasks.filter(item => task_scope === "mine" ? item.assignee_id === current_user_id : task_scope === "workspace" ? workspace_tasks.some(task => task.id === item.id) : item.taskProjects.some(link => link.projectId === selected_project_id)).flatMap(item => item.comments).sort((a, b) => a.created_at.localeCompare(b.created_at)) : timeline_comments_by_scope[timeline_scope_id] || [];
+    const timeline_comments = real ? tasks.filter(item => task_scope === "mine" ? isMyTask(item, current_user_id) : task_scope === "workspace" ? workspace_tasks.some(task => task.id === item.id) : item.taskProjects.some(link => link.projectId === selected_project_id)).flatMap(item => item.comments).sort((a, b) => a.created_at.localeCompare(b.created_at)) : timeline_comments_by_scope[timeline_scope_id] || [];
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
@@ -5807,7 +5814,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (active_modal === "task") {
             return (
                 <CreateTaskModal
-                    data={data} pending={pending} activeUnit={session.activeUnit?.id}
+                    data={data} pending={pending} activeUnit={session.activeUnit?.id} currentAssignmentId={session.activeAssignment?.id}
                     draft_storage_key={`bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`}
                     drawer={drawer}
                     board_columns={board_columns}
