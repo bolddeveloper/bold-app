@@ -1,7 +1,7 @@
 from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
@@ -10,12 +10,12 @@ from boldApp.core.models import OrganizationalUnit, Permission
 from boldApp.core.permissions import HasActiveAssignment
 
 from .models import Suggestion, SuggestionEvent
-from .serializers import SuggestionReviewSerializer, SuggestionSerializer
+from .serializers import SuggestionAuthorUpdateSerializer, SuggestionReviewSerializer, SuggestionSerializer
 
 
 class SuggestionViewSet(
     mixins.CreateModelMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin,
-    mixins.UpdateModelMixin, viewsets.GenericViewSet,
+    mixins.UpdateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet,
 ):
     permission_classes = [HasActiveAssignment]
     serializer_class = SuggestionSerializer
@@ -50,12 +50,12 @@ class SuggestionViewSet(
             unit.id for unit in OrganizationalUnit.objects.select_related("parent_unit")
             if self._can("suggestions.feedback.read", unit)
         ]
-        return base.filter(
+        return base.filter(deleted_at__isnull=True).filter(
             models.Q(author_assignment=self.request.assignment) | models.Q(unit_id__in=readable_units)
         ).distinct()
 
     def get_serializer_class(self):
-        return SuggestionReviewSerializer if self.action in {"update", "partial_update"} else SuggestionSerializer
+        return SuggestionSerializer
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -75,20 +75,49 @@ class SuggestionViewSet(
     @transaction.atomic
     def partial_update(self, request, *args, **kwargs):
         suggestion = self.get_object()
-        if not self._can("suggestions.feedback.manage", suggestion.unit, suggestion.id, log=True):
-            raise PermissionDenied("No tienes permiso para gestionar esta sugerencia.")
-        before = {"status": suggestion.status, "internal_note": suggestion.internal_note}
-        serializer = self.get_serializer(suggestion, data=request.data, partial=True)
+        fields = set(request.data)
+        author_fields = {"category", "message", "source_module", "source_view"}
+        review_fields = {"status", "internal_note"}
+        is_author = suggestion.author_assignment_id == request.assignment.id
+        if fields and fields <= author_fields and is_author:
+            before = {field: getattr(suggestion, field) for field in fields}
+            serializer = SuggestionAuthorUpdateSerializer(suggestion, data=request.data, partial=True)
+            event_type = "suggestion.updated"
+            save_kwargs = {}
+        elif fields and fields <= review_fields and self._can(
+            "suggestions.feedback.manage", suggestion.unit, suggestion.id, log=True
+        ):
+            before = {field: getattr(suggestion, field) for field in fields}
+            serializer = SuggestionReviewSerializer(suggestion, data=request.data, partial=True)
+            event_type = "suggestion.reviewed"
+            save_kwargs = {"reviewed_by_assignment": request.assignment, "reviewed_at": timezone.now()}
+        elif fields & author_fields:
+            raise PermissionDenied("Solo la persona que creó la sugerencia puede editar su contenido.")
+        elif fields & review_fields:
+            raise PermissionDenied("No tienes permiso para gestionar el estado de esta sugerencia.")
+        else:
+            raise ValidationError("No se enviaron campos editables de la sugerencia.")
         serializer.is_valid(raise_exception=True)
-        suggestion = serializer.save(
-            reviewed_by_assignment=request.assignment, reviewed_at=timezone.now()
-        )
+        suggestion = serializer.save(**save_kwargs)
         SuggestionEvent.objects.create(
             suggestion=suggestion, actor_assignment=request.assignment,
-            event_type="suggestion.reviewed",
+            event_type=event_type,
             changes={"before": before, "after": serializer.validated_data},
         )
         return Response(SuggestionSerializer(suggestion).data)
 
     def update(self, request, *args, **kwargs):
         return self.partial_update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        suggestion = self.get_object()
+        if suggestion.author_assignment_id != request.assignment.id:
+            raise PermissionDenied("Solo la persona que creó la sugerencia puede eliminarla.")
+        suggestion.deleted_at = timezone.now()
+        suggestion.save(update_fields=["deleted_at", "updated_at"])
+        SuggestionEvent.objects.create(
+            suggestion=suggestion, actor_assignment=request.assignment,
+            event_type="suggestion.deleted", changes={},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

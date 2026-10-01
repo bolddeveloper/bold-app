@@ -38,3 +38,18 @@ class SuggestionReviewSerializer(serializers.ModelSerializer):
 
     def validate_internal_note(self, value):
         return value.strip()
+
+
+class SuggestionAuthorUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Suggestion
+        fields = ["category", "message", "source_module", "source_view"]
+
+    def validate_message(self, value):
+        value = " ".join(value.split())
+        if len(value) < 10:
+            raise serializers.ValidationError("Describe la sugerencia con al menos 10 caracteres.")
+        return value
+
+    def validate_source_module(self, value):
+        return value.strip().lower()
