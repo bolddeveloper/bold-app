@@ -74,7 +74,9 @@ export function normalizeHomeLayout(value) {
         metrics: widget.type === "metrics" ? [...new Set(widget.metrics || [])].filter(id => ["assigned", "today", "progress"].includes(id)) : widget.metrics,
         shortcuts: widget.type === "shortcuts" ? [...new Set(widget.shortcuts || [])] : widget.shortcuts,
     })).filter(widget => widget.type !== "metrics" || widget.metrics.length);
-    return widgets.length ? widgets : defaultHomeLayout();
+    const seenTypes = new Set();
+    const unique = widgets.filter(widget => widget.type === "shortcuts" || (!seenTypes.has(widget.type) && seenTypes.add(widget.type)));
+    return unique.length ? unique : defaultHomeLayout();
 }
 
 export function reorderHomeWidgets(widgets, draggedId, targetId, after = false) {

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es" data-resolution="landscape">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=1920,height=1080">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="150" data-width="1920" data-height="1080" data-fps="30">
+  <section class="clip scene" data-start="0" data-duration="16" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">EMPECEMOS</span><h1>Tu espacio de trabajo empieza aquí.</h1><p>Entra con tu cuenta y elige el cargo con el que trabajarás.</p></div>
+    <div class="module-label">INICIO DE SESIÓN</div>
+    <div class="window" data-layout-allow-occlusion><div class="login-view"><div class="login-art"><strong>bold<span>.</span></strong><h2>Todo tu trabajo,<br>en un solo lugar.</h2><p>Organiza lo que importa y mantén a tu equipo en movimiento.</p></div><div class="login-form"><small>BOLD</small><h2>Bienvenido de nuevo</h2><p>Ingresa a tu cuenta para continuar.</p><label>Correo electrónico<div class="field">demo@ejemplo.com</div></label><label>Contraseña<div class="field">••••••••••••</div></label><button class="action primary">Iniciar sesión</button><div class="reveal login-next">Verificación en dos pasos <span>Opcional si tu cuenta usa MFA</span><div class="field">••••••</div></div><div class="reveal more login-next">Cargo activo <span>Equipo de proyectos</span></div></div></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="16" data-duration="20" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">HOY, EN FOCO</span><h1>Empieza por lo importante.</h1><p>Inicio reúne tus tareas, proyectos y próximos vencimientos.</p></div>
+    <div class="module-label">INICIO</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div class="active">⌂ &nbsp; Inicio</div><div>✓ &nbsp; Tareas</div><div>▣ &nbsp; Bandeja</div><div>▦ &nbsp; Calendario</div><div>▤ &nbsp; Informes</div></aside><main><header><h2>Buenos días</h2><small>Esto es lo más importante para hoy</small></header><div class="cards"><article><small>MIS TAREAS</small><strong>08</strong><p>3 requieren atención hoy</p></article><article><small>PROYECTOS</small><strong>04</strong><p>Lanzamiento Aurora en curso</p></article><article><small>PRÓXIMOS VENCIMIENTOS</small><strong>02</strong><p>Esta semana</p></article></div><div class="panel"><h3>Mis tareas</h3><button class="row action">◯ &nbsp; Preparar presentación <em>Hoy</em></button><div class="row">◯ &nbsp; Revisar propuesta <em>Mañana</em></div><div class="reveal info">Detalle: Preparar presentación · Prioridad alta</div></div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="36" data-duration="28" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">TRABAJO EN MARCHA</span><h1>Una tarea, un siguiente paso claro.</h1><p>Crea la tarea, fija prioridad y fecha, y síguela hasta completarla.</p></div>
+    <div class="module-label">TAREAS</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div>⌂ &nbsp; Inicio</div><div class="active">✓ &nbsp; Tareas</div><div>▣ &nbsp; Bandeja</div><div>▦ &nbsp; Calendario</div><div>▤ &nbsp; Informes</div></aside><main><header class="with-button"><div><h2>Mis tareas</h2><small>Tareas asignadas a ti</small></div><button class="primary action">＋ Agregar tarea</button></header><div class="tabs"><strong>Tareas</strong><span>Cronograma</span></div><div class="table"><div class="table-head">TAREA <span>FECHA</span><span>PRIORIDAD</span></div><div class="row">◯ &nbsp; Revisar propuesta <em>03 oct</em><i>MEDIA</i></div><div class="reveal row">◯ &nbsp; Preparar presentación <em>05 oct</em><i>ALTA</i></div><div class="reveal more timeline">CRONOGRAMA &nbsp; 03 OCT ─── 05 OCT &nbsp; ▰ Preparar presentación</div><div class="reveal final-info">✓ Tarea completada · Proyecto actualizado</div></div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="64" data-duration="20" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">PROYECTOS</span><h1>El avance se ve.</h1><p>Al completar tareas, el progreso del proyecto refleja el trabajo realizado.</p></div>
+    <div class="module-label">PROYECTOS</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div>⌂ &nbsp; Inicio</div><div class="active">✓ &nbsp; Tareas</div><div>▣ &nbsp; Bandeja</div><div>▦ &nbsp; Calendario</div><div>▤ &nbsp; Informes</div></aside><main><header><h2>Proyectos</h2><small>Trabajo organizado por equipo</small></header><div class="project panel"><h3>Lanzamiento Aurora</h3><p>Campaña de presentación para clientes</p><div class="progress"><div></div></div><strong>68% completado</strong><button class="action">Abrir proyecto →</button><div class="reveal info">Nueva tarea completada: Preparar presentación</div><div class="reveal more progress-result">74% completado</div></div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="84" data-duration="18" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">SIN PERDER EL HILO</span><h1>Las novedades llegan juntas.</h1><p>Abre un aviso, revisa la tarea relacionada y márcalo como leído.</p></div>
+    <div class="module-label">BANDEJA DE ENTRADA</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div>⌂ &nbsp; Inicio</div><div>✓ &nbsp; Tareas</div><div class="active">▣ &nbsp; Bandeja</div><div>▦ &nbsp; Calendario</div><div>▤ &nbsp; Informes</div></aside><main><header><h2>Bandeja de entrada</h2><small>Actividad y conversaciones de tu equipo</small></header><div class="inbox"><div><button class="row action">● &nbsp; Nueva mención en Preparar presentación</button><div class="row">○ &nbsp; Fecha actualizada en Revisar propuesta</div></div><div class="panel reveal"><h3>Preparar presentación</h3><p>Hay un comentario nuevo en esta tarea.</p><button class="primary">Ver tarea</button></div></div><div class="reveal more info">✓ Notificación marcada como leída</div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="102" data-duration="22" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">PLANIFICA</span><h1>Reserva tiempo para avanzar.</h1><p>Cambia de vista y crea un evento con hora e invitado.</p></div>
+    <div class="module-label">CALENDARIO</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div>⌂ &nbsp; Inicio</div><div>✓ &nbsp; Tareas</div><div>▣ &nbsp; Bandeja</div><div class="active">▦ &nbsp; Calendario</div><div>▤ &nbsp; Informes</div></aside><main><header class="with-button"><div><h2>Calendario</h2><small>Octubre 2026</small></div><button class="action primary">＋ Crear evento</button></header><div class="tabs"><strong>Semana</strong><span>Día</span><span>Mes</span><span>Agenda</span></div><div class="calendar"><div class="table-head">LUN 05 &nbsp;&nbsp;&nbsp; MAR 06 &nbsp;&nbsp;&nbsp; MIÉ 07 &nbsp;&nbsp;&nbsp; JUE 08 &nbsp;&nbsp;&nbsp; VIE 09</div><div class="hours">09:00 ────────────────────<br>10:00 ────────────────────<br>11:00 ────────────────────</div><div class="reveal event">Reunión con cliente<br><small>09:00 – 10:00</small></div></div><div class="reveal more info">Invitado: cliente@ejemplo.com · 05 oct, 09:00</div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene" data-start="124" data-duration="18" data-track-index="0">
+    <div class="brand"><img src="assets/logo-bold.svg" alt="Bold"></div>
+    <div class="copy"><span class="eyebrow">RESULTADOS</span><h1>Ve lo que tu equipo logró.</h1><p>Elige un período, revisa métricas y descarga el informe en CSV.</p></div>
+    <div class="module-label">INFORMES</div>
+    <div class="window" data-layout-allow-occlusion><div class="app"><aside><b>bold<span>.</span></b><div>⌂ &nbsp; Inicio</div><div>✓ &nbsp; Tareas</div><div>▣ &nbsp; Bandeja</div><div>▦ &nbsp; Calendario</div><div class="active">▤ &nbsp; Informes</div></aside><main><header class="with-button"><div><h2>Informes</h2><small>Resumen del rendimiento de BOLD Workspace</small></div><button class="action primary">＋ Crear informe</button></header><div class="tabs">Últimos 30 días ▾</div><div class="cards reports"><article><small>TAREAS TOTALES</small><strong>32</strong></article><article><small>COMPLETADAS</small><strong>18</strong></article><article><small>EN CURSO</small><strong>09</strong></article></div><div class="panel"><h3>Progreso por proyecto</h3><p>Lanzamiento Aurora &nbsp; 74%</p><div class="progress"><div style="width:74%"></div></div></div><div class="reveal more info">✓ Informe CSV descargado</div></main></div><div class="cursor"></div><div class="ring"></div></div>
+  </section>
+  <section class="clip scene closing" data-start="142" data-duration="8" data-track-index="0"><img src="assets/logo-bold.svg" alt="Bold"><h1>Todo tu trabajo,<br>en un solo lugar.</h1><p>Inicio · Tareas · Bandeja · Calendario · Informes</p></section>
+  <audio id="music" data-start="0" data-duration="150" data-track-index="10" data-volume="0.18" data-fade-in="1" data-fade-out="2" src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3"></audio>
+  <audio id="click-login" data-start="5" data-track-index="11" data-volume="0.35" src="assets/sfx/interface/click_003.ogg"></audio>
+  <audio id="click-tasks" data-start="43" data-track-index="12" data-volume="0.35" src="assets/sfx/interface/click_003.ogg"></audio>
+  <audio id="success-project" data-start="71" data-track-index="13" data-volume="0.30" src="assets/sfx/impact/impactSoft_medium_000.ogg"></audio>
+  <audio id="click-inbox" data-start="90" data-track-index="14" data-volume="0.35" src="assets/sfx/interface/click_003.ogg"></audio>
+  <audio id="click-calendar" data-start="109" data-track-index="15" data-volume="0.35" src="assets/sfx/interface/click_003.ogg"></audio>
+  <audio id="click-reports" data-start="130" data-track-index="16" data-volume="0.35" src="assets/sfx/interface/click_003.ogg"></audio>
+</div>
+<script>window.__timelines = window.__timelines || {}; window.__timelines.main = gsap.timeline({paused:true,defaults:{ease:"power2.out"}});</script>
+<script src="motion.js"></script>
+</body></html>

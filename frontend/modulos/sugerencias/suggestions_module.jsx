@@ -11,6 +11,13 @@ const statusLabels = { new: "Nueva", reviewing: "En revisión", accepted: "Acept
 const moduleLabels = { tasks: "Tareas", calendar: "Calendario", notifications: "Notificaciones", permissions: "Permisos", administration: "Administración", core: "General" };
 const rowsOf = response => Array.isArray(response) ? response : response?.results || [];
 
+function StatusPicker({ value, onChange, disabled, label, filter = false }) {
+    return <details className="suggestions_status_picker" onKeyDown={event => { if (event.key === "Escape") event.currentTarget.open = false; }}>
+        <summary aria-label={label} aria-disabled={disabled} data-status={value} onClick={event => disabled && event.preventDefault()}>{statusLabels[value] || "Todos los estados"}<span aria-hidden="true">⌄</span></summary>
+        <div className="suggestions_status_options">{(filter ? [["", "Todos los estados"], ...Object.entries(statusLabels)] : Object.entries(statusLabels)).map(([status, name]) => <button type="button" key={status} data-status={status} aria-pressed={value === status} disabled={disabled} onClick={event => { event.currentTarget.closest("details").open = false; onChange(status); }}><i aria-hidden="true" />{name}{value === status && <CheckCircle2 size={15} />}</button>)}</div>
+    </details>;
+}
+
 function readableError(error) {
     const detail = error?.fields?.detail;
     return Array.isArray(detail) ? detail.join(" ") : detail || error?.message || "No se pudo completar la acción.";
@@ -120,7 +127,7 @@ export default function SuggestionsModule() {
                 <button className="suggestions_primary" disabled={busy}>{busy ? "Enviando…" : "Enviar sugerencia"}</button>
             </form>
             <section className="suggestions_history">
-                <header><div><h2>{canManage ? "Sugerencias recibidas" : "Mis sugerencias"}</h2><p>{rows.length} registro{rows.length === 1 ? "" : "s"}</p></div><select aria-label="Filtrar por estado" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">Todos los estados</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></header>
+                <header><div><h2>{canManage ? "Sugerencias recibidas" : "Mis sugerencias"}</h2><p>{rows.length} registro{rows.length === 1 ? "" : "s"}</p></div><StatusPicker label="Filtrar por estado" value={statusFilter} onChange={setStatusFilter} filter /></header>
                 {loading ? <p className="suggestions_empty">Cargando sugerencias…</p> : visible.length === 0 ? <p className="suggestions_empty">Aún no hay sugerencias en esta vista.</p> : <div className="suggestions_list">{visible.map(row => {
                     const isOwner = String(row.author_assignment) === String(core.activeAssignment?.id);
                     const isEditing = editingId === row.id;
@@ -131,7 +138,7 @@ export default function SuggestionsModule() {
                             <label>Mensaje<textarea minLength="10" maxLength="2000" required value={editDraft.message} onChange={event => setEditDraft(current => ({ ...current, message: event.target.value }))} /></label>
                             <footer><button type="button" onClick={() => { setEditingId(""); setEditDraft(null); }}><X size={15} /> Cancelar</button><button className="suggestions_primary" disabled={workingId === row.id}><CheckCircle2 size={15} /> {workingId === row.id ? "Guardando…" : "Guardar cambios"}</button></footer>
                         </form> : <p>{row.message}</p>}
-                        {!isEditing && <footer><small>{row.author_name} · {row.unit_name}</small><div className="suggestions_row_actions">{isOwner && <><button type="button" onClick={() => startEdit(row)} disabled={Boolean(workingId)}><Pencil size={15} /> Editar</button><button type="button" className="is_danger" onClick={() => remove(row)} disabled={Boolean(workingId)}><Trash2 size={15} /> Eliminar</button></>}{canManage ? <select aria-label={`Estado de ${row.message}`} disabled={workingId === row.id} value={row.status} onChange={event => changeStatus(row, event.target.value)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : <strong data-status={row.status}>{statusLabels[row.status]}</strong>}</div></footer>}
+                        {!isEditing && <footer><small>{row.author_name} · {row.unit_name}</small><div className="suggestions_row_actions">{isOwner && <><button type="button" onClick={() => startEdit(row)} disabled={Boolean(workingId)}><Pencil size={15} /> Editar</button><button type="button" className="is_danger" onClick={() => remove(row)} disabled={Boolean(workingId)}><Trash2 size={15} /> Eliminar</button></>}{canManage ? <StatusPicker label={`Estado de ${row.message}`} disabled={workingId === row.id} value={row.status} onChange={status => changeStatus(row, status)} /> : <strong className="suggestions_status_badge" data-status={row.status}>{statusLabels[row.status]}</strong>}</div></footer>}
                     </article>;
                 })}</div>}
             </section>

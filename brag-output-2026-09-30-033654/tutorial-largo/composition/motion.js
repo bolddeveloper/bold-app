@@ -1,0 +1,23 @@
+const timeline = window.__timelines.main;
+const scenes = [...document.querySelectorAll(".scene")];
+const points = [[700,420],[380,400],[890,50],[350,345],[360,155],[890,50],[890,50]];
+scenes.forEach((scene,index) => {
+  const start = Number(scene.dataset.start), duration = Number(scene.dataset.duration);
+  const copy = scene.querySelector(".copy"), win = scene.querySelector(".window");
+  if (copy) timeline.fromTo(copy,{opacity:0,x:-28},{opacity:1,x:0,duration:.55},start+.12);
+  if (win) timeline.fromTo(win,{opacity:0,y:36},{opacity:1,y:0,duration:.65},start+.18);
+  const cursor = scene.querySelector(".cursor"), ring = scene.querySelector(".ring");
+  if (!cursor || !points[index]) return;
+  const [x,y]=points[index], action = scene.querySelector(".action");
+  const click = start + Math.min(duration*.33,7);
+  timeline.fromTo(cursor,{opacity:0,x:x-110,y:y+75},{opacity:1,x,y,duration:.62},click-.75);
+  timeline.to(cursor,{scale:.78,duration:.12,yoyo:true,repeat:1},click);
+  timeline.fromTo(ring,{opacity:.8,scale:.2,x:x-16,y:y-16},{opacity:0,scale:1.35,duration:.42},click);
+  if(action) timeline.fromTo(action,{filter:"brightness(1)"},{filter:"brightness(.9)",duration:.12,yoyo:true,repeat:1},click);
+  scene.querySelectorAll(".reveal:not(.more):not(.final-info)").forEach((el,n)=>timeline.fromTo(el,{opacity:0,y:10},{opacity:1,y:0,duration:.45},click+.45+n*.16));
+  scene.querySelectorAll(".reveal.more:not(.final-info)").forEach((el,n)=>timeline.fromTo(el,{opacity:0,y:10},{opacity:1,y:0,duration:.45},start+duration*.68+n*.16));
+  scene.querySelectorAll(".final-info").forEach(el=>timeline.fromTo(el,{opacity:0,y:10},{opacity:1,y:0,duration:.45},start+duration*.84));
+  timeline.to(cursor,{opacity:0,duration:.35},start+duration-.85);
+});
+window.__timelines.main=timeline;
+timeline.seek(0);

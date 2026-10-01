@@ -161,6 +161,22 @@ const default_status_items = ["Activa", "Pend.", "Lista", "Inactiva"];
 
 const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
+
+function CustomProjectColor({ value, onChange }) {
+    const rgb = [1, 3, 5].map(index => Number.parseInt(value.slice(index, index + 2), 16));
+    const setChannel = (index, channel) => onChange(`#${rgb.map((item, itemIndex) => (itemIndex === index ? channel : item).toString(16).padStart(2, "0")).join("")}`);
+    const custom = !project_color_options.includes(value);
+    return <details className="project_color_picker">
+        <summary className={`project_color_option project_color_custom ${custom ? "project_color_option_active" : ""}`} aria-label="Elegir color personalizado" title="Color personalizado">
+            {custom ? render_icon(check_icon, 25) : null}
+        </summary>
+        <div className="project_color_panel">
+            <header><span style={{ background: value }} /><strong>Color personalizado</strong></header>
+            {[["R", 0], ["G", 1], ["B", 2]].map(([label, index]) => <label key={label}><span>{label}</span><input type="range" min="0" max="255" value={rgb[index]} onChange={event => setChannel(index, Number(event.target.value))} /><output>{rgb[index]}</output></label>)}
+            <label className="project_color_hex"><span>HEX</span><input key={value} defaultValue={value.toUpperCase()} maxLength="7" onBlur={event => /^#[\da-f]{6}$/i.test(event.target.value) ? onChange(event.target.value.toLowerCase()) : event.target.value = value.toUpperCase()} /></label>
+        </div>
+    </details>;
+}
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
 const today_iso = () => {
@@ -175,6 +191,7 @@ const attachment_later = () => Swal.fire({ icon: "info", title: "Próximamente",
 // fixed order they render, so "Campos visibles" can show/hide them.
 const optional_column_items = [
     { key: "assignee", label: "RESPONSABLE", width: "140px" },
+    { key: "collaborators", label: "COLABORADORES", width: "150px" },
     { key: "creator", label: "CREADO POR", width: "170px" },
     { key: "date", label: "FECHA", width: "120px" },
     { key: "priority", label: "PRIORIDAD", width: "140px" },
@@ -283,6 +300,7 @@ function get_filtered_tasks(tasks, search_query) {
             task_item.status,
             project_item.label,
             member_item?.name || "",
+            ...get_task_collaborators(task_item).map(member => member.name),
             ...(Array.isArray(task_item.tags) ? task_item.tags : [])
         ].join(" ").toLowerCase();
 
@@ -304,10 +322,11 @@ const priority_rank = {
 function get_tasks_matching_active_filters(tasks, active_filters) {
     return tasks.filter((task_item) => {
         const matches_assignee = !active_filters.assignee_ids.length || active_filters.assignee_ids.includes(task_item.assignee_id);
+        const matches_collaborator = !active_filters.collaborator_ids.length || active_filters.collaborator_ids.some(id => task_item.collaborator_ids?.includes(id));
         const matches_priority = !active_filters.priorities.length || active_filters.priorities.includes(task_item.priority);
         const matches_section = !active_filters.sections.length || active_filters.sections.includes(task_item.section);
 
-        return matches_assignee && matches_priority && matches_section;
+        return matches_assignee && matches_collaborator && matches_priority && matches_section;
     });
 }
 
@@ -1188,14 +1207,16 @@ function render_inbox_module(props) {
 }
 
 
-function ResponsibleFilterOptions({ items, selected, on_toggle }) {
+function PeopleFilterOptions({ items, selected, on_toggle, placeholder, team_unit_id }) {
     const [query, set_query] = use_state("");
     const normalized = query.trim().toLocaleLowerCase("es");
-    const visible = items.filter(item => selected.includes(item.id) || !normalized || item.label.toLocaleLowerCase("es").includes(normalized));
+    const visible = items.filter(item => selected.includes(item.id) || (normalized
+        ? item.label.toLocaleLowerCase("es").includes(normalized)
+        : !team_unit_id || String(item.unitId) === String(team_unit_id)));
     return <>
         <label className="responsible_filter_search">
             {render_icon(search_icon, 15)}
-            <input type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar responsable…" aria-label="Buscar responsable" />
+            <input type="search" value={query} onChange={event => set_query(event.target.value)} placeholder={placeholder} aria-label={placeholder} />
             {query ? <button type="button" aria-label="Limpiar búsqueda" onClick={() => set_query("")}>{render_icon(x_icon, 13)}</button> : null}
         </label>
         <div className="responsible_filter_results">
@@ -1203,7 +1224,7 @@ function ResponsibleFilterOptions({ items, selected, on_toggle }) {
                 <input type="checkbox" checked={selected.includes(item.id)} onChange={() => on_toggle(item.id)} />
                 {item.label}
             </label>)}
-            {!visible.length ? <p className="responsible_filter_empty">No se encontraron responsables.</p> : null}
+            {!visible.length ? <p className="responsible_filter_empty">No se encontraron personas.</p> : null}
         </div>
     </>;
 }
@@ -1212,6 +1233,7 @@ function ResponsibleFilterOptions({ items, selected, on_toggle }) {
 function render_filter_panel(props) {
     const {
         active_filters,
+        team_unit_id,
         handle_clear_filters,
         handle_close_task_tool,
         handle_toggle_filter_value
@@ -1220,7 +1242,14 @@ function render_filter_panel(props) {
         {
             key: "assignee_ids",
             label: "Responsable",
-            items: team_members.map((member_item) => ({ id: member_item.id, label: member_item.name }))
+            people: true,
+            items: team_members.map((member_item) => ({ id: member_item.id, label: member_item.name, unitId: member_item.unitId }))
+        },
+        {
+            key: "collaborator_ids",
+            label: "Colaboradores",
+            people: true,
+            items: team_members.map((member_item) => ({ id: member_item.id, label: member_item.name, unitId: member_item.unitId }))
         },
         {
             key: "sections",
@@ -1245,7 +1274,7 @@ function render_filter_panel(props) {
                             <span>{active_filters[group_item.key].length || ""}</span>
                             {render_icon(chevron_down_icon, 14)}
                         </summary>
-                        {group_item.key === "assignee_ids" ? <ResponsibleFilterOptions items={group_item.items} selected={active_filters.assignee_ids} on_toggle={value => handle_toggle_filter_value("assignee_ids", value)} /> : group_item.items.map((item) => (
+                        {group_item.people ? <PeopleFilterOptions items={group_item.items} selected={active_filters[group_item.key]} on_toggle={value => handle_toggle_filter_value(group_item.key, value)} placeholder={`Buscar ${group_item.label.toLocaleLowerCase("es")}…`} team_unit_id={team_unit_id} /> : group_item.items.map((item) => (
                             <label className="filter_option filter_list_option" key={item.id}>
                                 <input
                                     type="checkbox"
@@ -1431,6 +1460,35 @@ function QuickPriorityPopover({ current_priority, on_close, on_select }) {
             ))}
         </div>
     );
+}
+
+function QuickPeoplePopover({ multiple = false, on_change, on_close, selected_ids = [], task }) {
+    const [query, set_query] = use_state("");
+    const normalized = query.trim().toLocaleLowerCase("es");
+    const visible = team_members.filter(member => selected_ids.includes(member.id) || (normalized
+        ? member.name.toLocaleLowerCase("es").includes(normalized)
+        : !task.unitId || String(member.unitId) === String(task.unitId)));
+    return <div className="quick_popover_bubble quick_people_popover" role="dialog" aria-label={multiple ? "Cambiar colaboradores" : "Cambiar responsable"} onClick={event => event.stopPropagation()}>
+        <label className="quick_people_search">{render_icon(search_icon, 14)}<input autoFocus type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar persona…" /></label>
+        {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => { on_change(""); on_close(); }}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!selected_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
+        {visible.map(member => <button type="button" className="quick_popover_item_btn" key={member.id} onClick={() => {
+            if (multiple) on_change(selected_ids.includes(member.id) ? selected_ids.filter(id => id !== member.id) : [...selected_ids, member.id]);
+            else { on_change(member.id); on_close(); }
+        }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{selected_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
+        {!visible.length && <p className="quick_people_empty">No se encontraron personas.</p>}
+        {multiple && <button type="button" className="quick_people_done" onClick={on_close}>Listo</button>}
+    </div>;
+}
+
+function InlineTaskTitle({ on_save, task }) {
+    const [editing, set_editing] = use_state(false), [value, set_value] = use_state(task.title);
+    use_effect(() => set_value(task.title), [task.title]);
+    const save = () => { const title = value.trim(); if (title && title !== task.title) on_save(title); else set_value(task.title); set_editing(false); };
+    return <>{editing
+        ? <input autoFocus className="task_inline_title_input" style={{ width: `${Math.max(8, Math.min(48, value.length + 2))}ch` }} value={value} maxLength={220} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onChange={event => set_value(event.target.value)} onBlur={save} onKeyDown={event => { if (event.key === "Enter") save(); if (event.key === "Escape") { set_value(task.title); set_editing(false); } }} />
+        : <button className="task_name_button" type="button" title="Editar nombre" onClick={event => { event.stopPropagation(); set_editing(true); }}><span className="task_name_button_inner">{task.title}</span></button>}
+        {render_days_badge(task)}
+    </>;
 }
 
 
@@ -2357,6 +2415,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
 function render_tasks_module(props) {
     const {
         active_filters,
+        team_unit_id,
         active_modal,
         active_quick_popover,
         active_section = "tasks",
@@ -2439,6 +2498,7 @@ function render_tasks_module(props) {
     const completion_percent = project_tasks.length ? Math.round((completed_count / project_tasks.length) * 100) : 0;
     const filter_labels = {
         assignee_ids: id => team_members.find(member => member.id === id)?.name || id,
+        collaborator_ids: id => team_members.find(member => member.id === id)?.name || id,
         sections: id => board_columns.find(section => section.id === id)?.label || id,
         priorities: value => value
     };
@@ -2539,7 +2599,8 @@ function render_tasks_module(props) {
                                 active_filters,
                                 handle_clear_filters,
                                 handle_close_task_tool,
-                                handle_toggle_filter_value
+                                handle_toggle_filter_value,
+                                team_unit_id
                             }) : null}
                         </div>
                         <div className="task_tool_anchor">
@@ -2984,6 +3045,7 @@ function render_task_group(props) {
                     <input
                         autoFocus
                         className="board_column_title_input list_section_title_input"
+                        style={{ width: `${Math.max(8, Math.min(40, editing_column_name.length + 2))}ch` }}
                         value={editing_column_name}
                         onClick={(event) => event.stopPropagation()}
                         onChange={(event) => set_editing_column_name(event.target.value)}
@@ -2997,14 +3059,10 @@ function render_task_group(props) {
                         }}
                     />
                 ) : (
-                    <strong className="section_drag_title" draggable={can_reorder_sections} tabIndex={can_reorder_sections ? 0 : undefined} title={can_reorder_sections ? "Arrastra para ordenar la sección; Alt + flechas para moverla" : undefined} onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "list")}>{section_item.label.toUpperCase()}</strong>
+                    <strong className="section_drag_title" draggable={can_reorder_sections} tabIndex={can_reorder_sections ? 0 : undefined} title="Doble clic para cambiar el nombre" onClick={event => event.stopPropagation()} onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "list")}><span draggable="false" onDoubleClick={event => { event.stopPropagation(); handle_start_edit_column(section_item); }}>{section_item.label.toUpperCase()}</span></strong>
                 )}
-                <span>{section_tasks.length}</span>
                 {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
                     <div className="board_section_actions list_section_actions" onClick={(event) => event.stopPropagation()}>
-                        <button type="button" title="Renombrar sección" onClick={() => handle_start_edit_column(section_item)}>
-                            {render_icon(pencil_icon, 13)}
-                        </button>
                         <button type="button" title="Eliminar sección" onClick={() => handle_delete_column(section_item.id)}>
                             {render_icon(trash_icon, 13)}
                         </button>
@@ -3088,10 +3146,13 @@ function render_task_row(props) {
         visible_fields
     } = props;
     const member_item = get_member(task_item.assignee_id);
+    const collaborators = get_task_collaborators(task_item);
     const creator_item = get_member(task_item.created_by_assignment);
     const project_item = get_project(task_item.project_id);
 
     const is_priority_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "priority";
+    const is_assignee_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "assignee";
+    const is_collaborators_open = active_quick_popover?.taskId === task_item.id && active_quick_popover?.type === "collaborators";
 
     return (
         <div
@@ -3103,7 +3164,7 @@ function render_task_row(props) {
             style={{
                 ...get_task_table_columns_style(visible_fields, true, column_items),
                 cursor: handle_drag_start ? "grab" : "pointer",
-                zIndex: is_priority_open ? 50 : 1
+                zIndex: is_priority_open || is_assignee_open || is_collaborators_open ? 50 : 1
             }}
             onDragEnd={handle_drag_end}
             onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
@@ -3125,18 +3186,7 @@ function render_task_row(props) {
                 className="task_name_cell"
                 style={{ width: "100%", height: "100%", display: "flex", alignItems: "center" }}
             >
-                <button
-                    className="task_name_button"
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handle_task_click(task_item.id, e);
-                    }}
-                    style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
-                >
-                    <span className="task_name_button_inner">{task_item.title}</span>
-                    {render_days_badge(task_item)}
-                </button>
+                <InlineTaskTitle task={task_item} on_save={title => handle_quick_change(task_item.id, "title", title)} />
             </div>
 
             <div className="task_quick_actions" aria-label="Acciones de tarea">
@@ -3168,10 +3218,18 @@ function render_task_row(props) {
             </div>
 
             {visible_fields.assignee ? (
-                <span className="task_assignee">
-                    {render_avatar(member_item, "avatar_small")}
-                </span>
+                <div className="quick_popover_container task_people_cell">
+                    <button type="button" className="task_people_trigger" title={member_item?.name || "Asignar responsable"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "assignee"); }}>{render_avatar(member_item, "avatar_small")}</button>
+                    {is_assignee_open && <QuickPeoplePopover task={task_item} selected_ids={task_item.assignee_id ? [task_item.assignee_id] : []} on_change={id => handle_quick_change(task_item.id, "assignee_id", id)} on_close={() => handle_toggle_quick_popover(null, null)} />}
+                </div>
             ) : null}
+
+            {visible_fields.collaborators ? <div className="quick_popover_container task_people_cell">
+                <button type="button" className="task_people_trigger task_collaborators_trigger" title={collaborators.length ? collaborators.map(member => member.name).join(", ") : "Agregar colaboradores"} onClick={event => { event.stopPropagation(); handle_toggle_quick_popover(task_item.id, "collaborators"); }}>
+                    {collaborators.slice(0, 2).map(member => <span className="task_collaborator_avatar" key={member.id}>{render_avatar(member, "avatar_small")}</span>)}{!collaborators.length && <span className="avatar_small quick_empty_avatar">+</span>}{collaborators.length > 2 && <small>+{collaborators.length - 2}</small>}
+                </button>
+                {is_collaborators_open && <QuickPeoplePopover multiple task={task_item} selected_ids={task_item.collaborator_ids || []} on_change={ids => handle_quick_change(task_item.id, "collaborator_ids", ids)} on_close={() => handle_toggle_quick_popover(null, null)} />}
+            </div> : null}
 
             {visible_fields.creator ? (
                 <span className="task_creator_cell" title={creator_item?.name || "Sin registro de creador"}>
@@ -3382,6 +3440,7 @@ function render_board_view(props) {
                                 <input
                                     autoFocus
                                     className="board_column_title_input"
+                                    style={{ width: `${Math.max(8, Math.min(40, editing_column_name.length + 2))}ch` }}
                                     value={editing_column_name}
                                     onChange={(event) => set_editing_column_name(event.target.value)}
                                     onBlur={handle_save_column_name}
@@ -3394,14 +3453,10 @@ function render_board_view(props) {
                                     }}
                                 />
                             ) : (
-                                <h2 className="section_drag_title" draggable={board_columns.length > 1} tabIndex={board_columns.length > 1 ? 0 : undefined} title={board_columns.length > 1 ? "Arrastra para ordenar la sección; Alt + flechas para moverla" : undefined} onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "board")}>{section_item.label}</h2>
+                                <h2 className="section_drag_title" draggable={board_columns.length > 1} tabIndex={board_columns.length > 1 ? 0 : undefined} title="Doble clic para cambiar el nombre" onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "board")}><span draggable="false" onDoubleClick={() => handle_start_edit_column(section_item)}>{section_item.label}</span></h2>
                             )}
-                            <span>{section_tasks.length}</span>
                             {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
                                 <div className="board_section_actions" onClick={(event) => event.stopPropagation()}>
-                                    <button type="button" title="Renombrar sección" onClick={() => handle_start_edit_column(section_item)}>
-                                        {render_icon(pencil_icon, 13)}
-                                    </button>
                                     <button type="button" title="Eliminar sección" onClick={() => handle_delete_column(section_item.id)}>
                                         {render_icon(trash_icon, 13)}
                                     </button>
@@ -4015,6 +4070,7 @@ function render_project_modal(props) {
                                     {project_color === color_item ? render_icon(check_icon, 25) : null}
                                 </button>
                             ))}
+                            <CustomProjectColor value={project_color} onChange={set_project_color} />
                         </div>
                     </section>
 
@@ -4227,11 +4283,13 @@ function TaskAppContent({ externalModules = {} }) {
     const [sort_direction, set_sort_direction] = use_state("asc");
     const [active_filters, set_active_filters] = use_state({
         assignee_ids: [],
+        collaborator_ids: [],
         priorities: [],
         sections: []
     });
     const [visible_fields, set_visible_fields] = use_state({
         assignee: true,
+        collaborators: true,
         creator: false,
         date: true,
         priority: true,
@@ -5327,6 +5385,7 @@ function TaskAppContent({ externalModules = {} }) {
     function handle_clear_filters() {
         set_active_filters({
             assignee_ids: [],
+            collaborator_ids: [],
             priorities: [],
             sections: []
         });
@@ -5499,6 +5558,19 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
+        if (field === "collaborator_ids") {
+            if (real) { mutate(() => saveFollowers(task_id, value, data)); return; }
+            set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: value } : task));
+            return;
+        }
+        if (real && field === "assignee_id" && value) {
+            const task = data.tasks.find(item => item.id === task_id), assignee = team_members.find(member => member.id === value);
+            if (task && assignee && String(assignee.unitId) !== String(task.unitId)) {
+                const status = data.statuses.find(item => String(item.unitId) === String(assignee.unitId) && item.isFinal === task.completed);
+                mutate(() => status ? api.moveTask(task_id, { unit: assignee.unitId, status: status.id, assignee_assignment: value }) : Promise.reject(new Error("El área elegida no tiene un estado compatible para esta tarea.")), () => set_active_quick_popover(null));
+                return;
+            }
+        }
         if (real) { const task = data.tasks.find(item => item.id === task_id); mutate(() => api.updateTask(task_id, taskPayload({ unitId: task.unitId, [field]: value }, data.statuses)), () => set_active_quick_popover(null)); return; }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
             if (task_item.id !== task_id) return task_item;
@@ -5978,6 +6050,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     },
                     mobile_actions: { onEdit: handle_open_edit_task, onWorkspace: task => set_workspace_assignment({ type: "task", item: task }), onDelete: handle_request_delete_task, onMove: (id, section) => handle_column_drop(section, id), sections: board_columns },
                     active_filters,
+                    team_unit_id: selected_project?.unitId || selected_project?.unit || session.activeUnit?.id,
                     active_modal,
                     active_quick_popover,
                     active_section,

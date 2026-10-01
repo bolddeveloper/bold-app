@@ -106,6 +106,16 @@
     scroll-margin: 90px;
 }
 
+.bold_tour_highlight {
+    position: fixed;
+    z-index: 999999999;
+    box-sizing: border-box;
+    border: 3px solid #ef1f2d;
+    border-radius: 10px;
+    pointer-events: none;
+}
+.bold_tour_highlight[hidden] { display: none; }
+
 .tour_help_button {
     display: inline-flex;
     align-items: center;
@@ -113,9 +123,29 @@
 }
 
 @media (max-width: 760px) {
-    .driver-popover.bold_onboarding_popover { max-width: calc(100vw - 24px); }
-    .bold_onboarding_popover .driver-popover-title { padding: 20px 48px 0 20px; font-size: 18px; }
-    .bold_onboarding_popover .driver-popover-description { padding: 8px 20px 16px; }
-    .bold_onboarding_popover .driver-popover-footer { padding: 14px 16px 16px; }
-    .bold_onboarding_popover .driver-popover-footer button { padding-inline: 11px; }
+    .driver-popover.bold_onboarding_popover { width: min(320px, calc(100vw - 20px)); max-width: 320px; border-radius: 14px; }
+    .bold_onboarding_popover .driver-popover-title { padding: 15px 42px 0 16px; font-size: 16px; }
+    .bold_onboarding_popover .driver-popover-description { padding: 7px 16px 11px; font-size: 12px; line-height: 1.4; }
+    .bold_onboarding_popover .driver-popover-close-btn { top: 8px; right: 9px; }
+    .bold_onboarding_popover .driver-popover-footer { padding: 10px 12px 12px; }
+    .bold_onboarding_popover .driver-popover-progress-text { margin-bottom: 8px; font-size: 10px; }
+    .bold_onboarding_popover .driver-popover-footer button { min-height: 34px; padding: 6px 9px; font-size: 11px; }
 }
+
+html.theme_dark .driver-popover.bold_onboarding_popover {
+    border-color: #46505e;
+    color: #f2f4f7;
+    background: #242932;
+    box-shadow: 0 24px 70px rgb(0 0 0 / 55%);
+}
+html.theme_dark .bold_onboarding_popover .driver-popover-description,
+html.theme_dark .bold_onboarding_popover .driver-popover-progress-text { color: #aeb6c2; }
+html.theme_dark .bold_onboarding_popover .driver-popover-footer { border-color: #3b424d; background: #1d222a; }
+html.theme_dark .bold_onboarding_popover .driver-popover-prev-btn { color: #edf0f4; background: #353c47; }
+html.theme_dark .bold_onboarding_popover .bold_tour_skip { color: #b7bec8; background: transparent; }
+html.theme_dark .bold_onboarding_popover .driver-popover-close-btn { color: #b7bec8; }
+html.theme_dark .bold_onboarding_popover .driver-popover-close-btn:is(:hover, :focus-visible) { color: #fff; background: #353c47; }
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: #242932; }
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: #242932; }
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: #242932; }
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: #242932; }
