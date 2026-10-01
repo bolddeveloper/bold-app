@@ -4203,6 +4203,8 @@ function TaskAppContent({ externalModules = {} }) {
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
+    const task_status_mutations = use_ref(new Map());
+    const notification_read_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
     const [active_view, set_active_view] = use_state("list");
     const [active_modal, set_active_modal] = use_state(null);
@@ -4862,10 +4864,19 @@ function TaskAppContent({ externalModules = {} }) {
                     dirty = false;
                     const next = await loadTaskData(session);
                     if (!mounted) return;
-                    setPresentationData(next);
-                    set_data(next); set_projects(next.projects);
-                    set_tasks(next.tasks.filter(item => !item.parentTaskId || !next.tasks.some(parent => parent.id === item.parentTaskId)));
-                    set_notifications(next.notifications);
+                    let next_tasks = next.tasks;
+                    for (const [task_id, mutation] of task_status_mutations.current) {
+                        next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
+                    }
+                    const next_notifications = next.notifications.map(notification => {
+                        const mutation = notification_read_mutations.current.get(String(notification.id));
+                        return mutation ? { ...notification, is_read: mutation.desired } : notification;
+                    });
+                    const presented = { ...next, tasks: next_tasks, notifications: next_notifications };
+                    setPresentationData(presented);
+                    set_data(presented); set_projects(next.projects);
+                    set_tasks(next_tasks.filter(item => !item.parentTaskId || !next_tasks.some(parent => parent.id === item.parentTaskId)));
+                    set_notifications(next_notifications);
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next.tasks.some(item => item.id === id) ? id : null);
                 }
@@ -4952,32 +4963,150 @@ function TaskAppContent({ externalModules = {} }) {
         set_data(current => current ? { ...current, tasks: applyOptimisticTaskStatus(current.tasks, task_id, status) } : current);
     }
 
+    async function report_background_mutation_error(error) {
+        if (error?.name === "AbortError") return;
+        if (error?.status === 403) {
+            const detail = typeof error.fields?.detail === "string" ? error.fields.detail : "";
+            await show_task_permission_denied(detail);
+            return;
+        }
+        set_api_error(error?.message || "No se pudo sincronizar el cambio.");
+    }
+
+    function task_status_snapshot(task) {
+        return {
+            id: task.statusId,
+            label: task.status,
+            category: task.statusCategory,
+            isFinal: task.completed,
+        };
+    }
+
+    function queue_task_status(task_id, status) {
+        const key = String(task_id);
+        let mutation = task_status_mutations.current.get(key);
+        if (!mutation) {
+            const task = data?.tasks.find(item => String(item.id) === key);
+            if (!task) return false;
+            mutation = { confirmed: task_status_snapshot(task), desired: status, running: false };
+            task_status_mutations.current.set(key, mutation);
+        } else {
+            mutation.desired = status;
+        }
+        apply_optimistic_task_status(task_id, status);
+        if (!mutation.running) void flush_task_status(key, mutation);
+        return true;
+    }
+
+    async function flush_task_status(task_id, mutation) {
+        mutation.running = true;
+        try {
+            while (task_status_mutations.current.get(task_id) === mutation) {
+                while (String(mutation.confirmed.id) !== String(mutation.desired.id)) {
+                    const requested = mutation.desired;
+                    try {
+                        await api.updateTask(task_id, { status: requested.id });
+                        mutation.confirmed = requested;
+                    } catch (error) {
+                        if (task_status_mutations.current.get(task_id) === mutation) {
+                            task_status_mutations.current.delete(task_id);
+                            apply_optimistic_task_status(task_id, mutation.confirmed);
+                            await refresh.current().catch(() => {});
+                        }
+                        await report_background_mutation_error(error);
+                        return;
+                    }
+                }
+                await refresh.current().catch(() => {});
+                if (task_status_mutations.current.get(task_id) !== mutation) return;
+                if (String(mutation.confirmed.id) !== String(mutation.desired.id)) continue;
+                task_status_mutations.current.delete(task_id);
+                return;
+            }
+        } finally {
+            mutation.running = false;
+        }
+    }
+
+    function apply_optimistic_notification_read(notification_id, is_read) {
+        set_notifications(current => current.map(notification => (
+            String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
+        )));
+        set_data(current => current ? {
+            ...current,
+            notifications: current.notifications.map(notification => (
+                String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
+            )),
+        } : current);
+    }
+
+    function queue_notification_read(notification_id, is_read) {
+        const key = String(notification_id);
+        let mutation = notification_read_mutations.current.get(key);
+        if (!mutation) {
+            const notification = notifications.find(item => String(item.id) === key);
+            if (!notification) return false;
+            mutation = { confirmed: Boolean(notification.is_read), desired: Boolean(is_read), running: false };
+            notification_read_mutations.current.set(key, mutation);
+        } else {
+            mutation.desired = Boolean(is_read);
+        }
+        apply_optimistic_notification_read(notification_id, Boolean(is_read));
+        if (!mutation.running) void flush_notification_read(key, mutation);
+        return true;
+    }
+
+    async function flush_notification_read(notification_id, mutation) {
+        mutation.running = true;
+        try {
+            while (notification_read_mutations.current.get(notification_id) === mutation
+                && mutation.confirmed !== mutation.desired) {
+                const requested = mutation.desired;
+                try {
+                    await (requested
+                        ? notificationsApi.markRead(notification_id)
+                        : notificationsApi.markUnread(notification_id));
+                    mutation.confirmed = requested;
+                } catch (error) {
+                    if (notification_read_mutations.current.get(notification_id) === mutation) {
+                        notification_read_mutations.current.delete(notification_id);
+                        apply_optimistic_notification_read(notification_id, mutation.confirmed);
+                    }
+                    if (error?.name !== "AbortError") {
+                        set_api_error(error?.message || "No se pudo sincronizar la notificación.");
+                    }
+                    return;
+                }
+            }
+            if (notification_read_mutations.current.get(notification_id) === mutation
+                && mutation.confirmed === mutation.desired) {
+                notification_read_mutations.current.delete(notification_id);
+            }
+        } finally {
+            mutation.running = false;
+        }
+    }
+
     async function handle_workspace_bulk(operation, ids = [], values = {}) {
         const count = operation === "create" ? values.items.length : ids.length;
         const success_title = operation === "create" ? `${count} tarea${count === 1 ? "" : "s"} creada${count === 1 ? "" : "s"}` : operation === "delete" ? `${count} tarea${count === 1 ? "" : "s"} eliminada${count === 1 ? "" : "s"}` : operation === "link" ? `Proyecto o sección actualizado en ${count} tarea${count === 1 ? "" : "s"}` : `${count} tarea${count === 1 ? "" : "s"} actualizada${count === 1 ? "" : "s"}`;
         if (real) {
+            if (operation === "update" && values.status) {
+                const status = data.statuses.find(item => String(item.id) === String(values.status));
+                if (!status) { set_api_error("No hay un estado compatible para esta tarea."); return false; }
+                ids.forEach(id => queue_task_status(id, status));
+                return true;
+            }
             if (mutation_pending.current) return false;
             if (operation === "create") {
                 const items = values.items.map(item => taskPayload({ ...item, parent_task: item.parentTaskId || null }, data.statuses, { create: true, unitId: item.unitId || session.activeUnit?.id }));
                 return mutate(() => api.bulkTasks({ operation, items }), () => {}, success_title);
             }
             const changes = operation === "update" && values.priority ? { ...values, priority: ({ Alta: "high", Media: "medium", Baja: "low" })[values.priority] || values.priority } : values;
-            let rollback_statuses = [];
-            if (operation === "update" && values.status) {
-                const status = data.statuses.find(item => String(item.id) === String(values.status));
-                if (status) {
-                    rollback_statuses = ids.map(id => {
-                        const task = data.tasks.find(item => String(item.id) === String(id));
-                        return task ? [id, { id: task.statusId, label: task.status, category: task.statusCategory, isFinal: task.completed }] : null;
-                    }).filter(Boolean);
-                    ids.forEach(id => apply_optimistic_task_status(id, status));
-                }
-            }
             return mutate(
                 () => api.bulkTasks({ operation, ids, ...(operation === "update" ? { changes } : operation === "link" ? values : {}) }),
                 () => {},
                 success_title,
-                () => rollback_statuses.forEach(([id, status]) => apply_optimistic_task_status(id, status)),
             );
         }
         if (operation === "create") {
@@ -5078,7 +5207,10 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_mark_notifications_read() {
-        if (real) { mutate(() => notificationsApi.markAllRead(), () => {}, "Notificaciones leídas"); return; }
+        if (real) {
+            notifications.filter(item => !item.is_read).forEach(item => queue_notification_read(item.id, true));
+            return;
+        }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => ({
             ...notification_item,
             is_read: true
@@ -5088,8 +5220,8 @@ function TaskAppContent({ externalModules = {} }) {
     function handle_notification_select(notification_item) {
         if (!notification_item) return;
         set_is_notifications_open(false);
-        set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
-        if (real && !notification_item.is_read) notificationsApi.markRead(notification_item.id).catch(error => set_api_error(error.message));
+        if (real && !notification_item.is_read) queue_notification_read(notification_item.id, true);
+        else set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
         const route = notification_item.route || {};
         if (route.task_id) {
             set_active_module("tasks");
@@ -5107,7 +5239,12 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_inbox_activity_select(notification_id) {
         set_inbox_detail_open(true);
-        if (real) { set_selected_inbox_id(notification_id); mutate(() => notificationsApi.markRead(notification_id), () => {}, "Notificación leída"); return; }
+        if (real) {
+            set_selected_inbox_id(notification_id);
+            const notification = notifications.find(item => item.id === notification_id);
+            if (notification && !notification.is_read) queue_notification_read(notification_id, true);
+            return;
+        }
         set_selected_inbox_id(notification_id);
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: true } : notification_item
@@ -5132,14 +5269,22 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_toggle_inbox_read(notification_id) {
-        if (real) { const item = notifications.find(notification => notification.id === notification_id); mutate(() => item?.is_read ? notificationsApi.markUnread(notification_id) : notificationsApi.markRead(notification_id)); return; }
+        if (real) {
+            const item = notifications.find(notification => notification.id === notification_id);
+            if (item) queue_notification_read(notification_id, !item.is_read);
+            return;
+        }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             notification_item.id === notification_id ? { ...notification_item, is_read: !notification_item.is_read } : notification_item
         )));
     }
 
     function handle_inbox_bulk_read_state(is_read) {
-        if (real) { mutate(async () => { for (const id of inbox_selected_ids) await (is_read ? notificationsApi.markRead(id) : notificationsApi.markUnread(id)); }); return; }
+        if (real) {
+            inbox_selected_ids.forEach(id => queue_notification_read(id, is_read));
+            set_inbox_selected_ids([]);
+            return;
+        }
         set_notifications((current_notifications) => current_notifications.map((notification_item) => (
             inbox_selected_ids.includes(notification_item.id) ? { ...notification_item, is_read } : notification_item
         )));
@@ -5407,20 +5552,10 @@ function TaskAppContent({ externalModules = {} }) {
     // Toggles task completion and emits a local template event for future sync.
     function handle_toggle_task(task_id) {
         if (real) {
-            if (mutation_pending.current) return;
             const task = data.tasks.find(item => item.id === task_id);
             if (!task) return;
             const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
-            if (status) {
-                const previous_status = { id: task.statusId, label: task.status, category: task.statusCategory, isFinal: task.completed };
-                apply_optimistic_task_status(task_id, status);
-                mutate(
-                    () => api.updateTask(task_id, { status: status.id }),
-                    () => {},
-                    status.isFinal ? "Tarea completada" : "Tarea reabierta",
-                    () => apply_optimistic_task_status(task_id, previous_status),
-                );
-            }
+            if (status) queue_task_status(task_id, status);
             else set_api_error("No hay un estado compatible para cambiar la finalización.");
             return;
         }
