@@ -9,7 +9,13 @@ export const adminApi = {
     updateEmployee: (id, body) => http.request(`/api/v2/administration/employees/${id}/`, { method: "PATCH", body }),
     resendInvitation: id => http.request(`/api/v2/administration/employees/${id}/resend-invitation/`, { method: "POST", body: {} }),
     assignPosition: (id, position, reason) => http.request(`/api/v2/administration/employees/${id}/assign-position/`, { method: "POST", body: { position, reason } }),
-    sessions: id => http.request(`/api/v2/administration/employees/${id}/sessions/`),
+    releasePosition: (id, assignment, reason) => http.request(`/api/v2/administration/employees/${id}/release-position/`, { method: "POST", body: { assignment, reason } }),
+    sessions: (id, { page = 1, pageSize = 8, dateFrom = "", dateTo = "" } = {}) => {
+        const query = new URLSearchParams({ employee: id, page: String(page), page_size: String(pageSize) });
+        if (dateFrom) query.set("date_from", dateFrom);
+        if (dateTo) query.set("date_to", dateTo);
+        return http.request(`/api/v2/administration/sessions/?${query}`);
+    },
     revokeSessions: (id, reason) => http.request(`/api/v2/administration/employees/${id}/revoke-sessions/`, { method: "POST", body: { reason } }),
     resetMfa: (id, reason) => http.request(`/api/v2/administration/employees/${id}/reset-mfa/`, { method: "POST", body: { reason } }),
     sendPasswordReset: (id, reason) => http.request(`/api/v2/administration/employees/${id}/send-password-reset/`, { method: "POST", body: { reason } }),

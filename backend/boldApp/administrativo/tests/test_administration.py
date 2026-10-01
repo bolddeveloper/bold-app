@@ -1,9 +1,11 @@
 import json
 import re
+from datetime import timedelta
 
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 
 from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthMFAMethod, AuthSession
@@ -72,6 +74,13 @@ class AdministrationApiTests(TestCase):
         weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
         samuel = ordinary.employee
         response = weak_client.post(f"/api/v2/administration/employees/{samuel.id}/revoke-sessions/", {"reason": "Prueba sin MFA reciente"}, format="json")
+        self.assertEqual(response.status_code, 403)
+        assignment = samuel.position_assignments.filter(is_active=True, released_at__isnull=True).first()
+        response = weak_client.post(
+            f"/api/v2/administration/employees/{samuel.id}/release-position/",
+            {"assignment": str(assignment.id), "reason": "Intento de retiro sin MFA reciente"},
+            format="json",
+        )
         self.assertEqual(response.status_code, 403)
         role = JobRole.objects.first()
         response = weak_client.patch(f"/api/v2/administration/roles/{role.id}/", {"title": role.title, "reason": "Edición sin MFA reciente"}, format="json")
@@ -296,6 +305,94 @@ class AdministrationApiTests(TestCase):
             format="json",
         )
         self.assertEqual(occupied_response.status_code, 400)
+
+    def test_owner_can_release_an_assignment_without_responsibilities_and_open_the_vacancy(self):
+        employee = Employee.objects.create(full_name="Persona sin responsabilidades")
+        unit = OrganizationalUnit.objects.get(name="Marketing")
+        position = Position.objects.create(unit=unit, job_role=JobRole.objects.first(), display_order=94, is_open=True)
+        assignment = PositionAssignment.objects.create(employee=employee, position=position)
+
+        response = self.client.post(
+            f"/api/v2/administration/employees/{employee.id}/release-position/",
+            {"assignment": str(assignment.id), "reason": "La plaza debe quedar disponible para contratación"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        assignment.refresh_from_db()
+        self.assertFalse(assignment.is_active)
+        self.assertIsNotNone(assignment.released_at)
+        self.assertTrue(AdministrativeAction.objects.filter(action_type="position_released", target_employee=employee, status="completed").exists())
+        overview = self.client.get("/api/v2/administration/organization/")
+        released_position = next(row for row in overview.data["positions"] if str(row["id"]) == str(position.id))
+        self.assertFalse(released_position["occupied"])
+
+    def test_owner_position_cannot_be_released_and_responsibilities_block_other_releases(self):
+        protected = self.client.post(
+            f"/api/v2/administration/employees/{self.owner.employee_id}/release-position/",
+            {"assignment": str(self.owner_assignment.id), "reason": "Intento de liberar la plaza protegida"},
+            format="json",
+        )
+        self.assertEqual(protected.status_code, 403, protected.data)
+        self.owner_assignment.refresh_from_db()
+        self.assertTrue(self.owner_assignment.is_active)
+        self.assertTrue(AdministrativeAction.objects.filter(action_type="position_released", target_employee=self.owner.employee, status="failed", error_code="owner_position_protected").exists())
+
+        employee = Employee.objects.create(full_name="Persona con responsabilidad")
+        unit = OrganizationalUnit.objects.get(name="Marketing")
+        position = Position.objects.create(unit=unit, job_role=JobRole.objects.first(), display_order=95, is_open=True)
+        assignment = PositionAssignment.objects.create(employee=employee, position=position)
+        task_status = TaskStatus.objects.filter(unit=unit).first()
+        Task.objects.create(unit=unit, created_by_assignment=self.owner_assignment, assignee_assignment=assignment, status=task_status, title="Responsabilidad activa", priority="medium")
+
+        blocked = self.client.post(
+            f"/api/v2/administration/employees/{employee.id}/release-position/",
+            {"assignment": str(assignment.id), "reason": "Intento antes de transferir responsabilidades"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 409, blocked.data)
+        assignment.refresh_from_db()
+        self.assertTrue(assignment.is_active)
+        self.assertEqual(blocked.data["code"], "assignment_has_active_responsibilities")
+        self.assertGreaterEqual(blocked.data["blockers"]["resources"], 1)
+        self.assertTrue(AdministrativeAction.objects.filter(action_type="position_released", target_employee=employee, status="failed", error_code="assignment_has_active_responsibilities").exists())
+
+    def test_session_history_is_paginated_and_filters_by_exact_date_and_time(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        target.auth_sessions.all().delete()
+        now = timezone.now()
+        created = []
+        for index in range(12):
+            session = AuthSession.objects.create(
+                user_account=target,
+                token_hash=f"{index + 100:064x}",
+                expires_at=now + timedelta(days=1),
+                credentials_version=target.credentials_version,
+            )
+            used_at = now - timedelta(hours=index)
+            AuthSession.objects.filter(pk=session.pk).update(last_used_at=used_at)
+            created.append((session.id, used_at))
+
+        endpoint = f"/api/v2/administration/sessions/?employee={target.employee_id}&page_size=5"
+        first_page = self.client.get(endpoint)
+        self.assertEqual(first_page.status_code, 200, first_page.data)
+        self.assertEqual(first_page.data["count"], 12)
+        self.assertEqual(len(first_page.data["results"]), 5)
+        self.assertEqual(str(first_page.data["results"][0]["id"]), str(created[0][0]))
+
+        filtered = self.client.get(
+            endpoint,
+            {"employee": str(target.employee_id), "page_size": 8, "date_from": (now - timedelta(hours=3)).isoformat(), "date_to": (now + timedelta(minutes=1)).isoformat()},
+        )
+        self.assertEqual(filtered.status_code, 200, filtered.data)
+        self.assertEqual(filtered.data["count"], 4)
+        self.assertEqual(len(filtered.data["results"]), 4)
+
+        invalid = self.client.get(
+            endpoint,
+            {"employee": str(target.employee_id), "date_from": now.isoformat(), "date_to": (now - timedelta(days=1)).isoformat()},
+        )
+        self.assertEqual(invalid.status_code, 400)
 
     def test_offboarding_transfers_tasks_and_project_ownership_then_deactivates_employee(self):
         samuel = UserAccount.objects.get(email="samuel@bold.gt")

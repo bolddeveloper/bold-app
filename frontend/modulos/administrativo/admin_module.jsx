@@ -186,7 +186,58 @@ function CreateEmployee({ positions, onCreate, onCancel, busy, temporaryPassword
     </form>;
 }
 
-function EmployeeDetail({ employee, employees, organization, sessions, onRefresh, onEditName, onAssignPosition, runAction, onPreviewOffboarding, offboarding, onExecuteOffboarding, busy }) {
+function SessionHistory({ employeeId }) {
+    const pageSize = 8;
+    const [filters, setFilters] = useState({ dateFrom: "", dateTo: "" });
+    const [applied, setApplied] = useState(filters);
+    const [page, setPage] = useState(1);
+    const [data, setData] = useState({ count: 0, results: [] });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const pages = Math.max(1, Math.ceil(data.count / pageSize));
+
+    useEffect(() => {
+        let active = true;
+        setLoading(true);
+        setError("");
+        adminApi.sessions(employeeId, { page, pageSize, dateFrom: applied.dateFrom, dateTo: applied.dateTo })
+            .then(response => { if (active) setData(Array.isArray(response) ? { count: response.length, results: response } : response); })
+            .catch(requestError => { if (active) { setData({ count: 0, results: [] }); setError(requestError.message); } })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [employeeId, page, applied]);
+
+    useEffect(() => {
+        setFilters({ dateFrom: "", dateTo: "" });
+        setApplied({ dateFrom: "", dateTo: "" });
+        setPage(1);
+    }, [employeeId]);
+
+    function applyFilters(event) {
+        event.preventDefault();
+        if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+            setError("La fecha final debe ser posterior a la inicial.");
+            return;
+        }
+        setPage(1);
+        setApplied({ ...filters });
+    }
+    function clearFilters() {
+        const empty = { dateFrom: "", dateTo: "" };
+        setFilters(empty);
+        setApplied(empty);
+        setPage(1);
+    }
+
+    return <section className="admin_session_history"><div className="admin_section_heading"><div><h3>Historial de sesiones</h3><small>{data.count} registro{data.count === 1 ? "" : "s"} · hora de Guatemala</small></div></div>
+        <form className="admin_session_filters" onSubmit={applyFilters}><label>Desde<input type="datetime-local" value={filters.dateFrom} onChange={event => setFilters(current => ({ ...current, dateFrom: event.target.value }))} /></label><label>Hasta<input type="datetime-local" value={filters.dateTo} onChange={event => setFilters(current => ({ ...current, dateTo: event.target.value }))} /></label><div><button type="button" onClick={clearFilters} disabled={!filters.dateFrom && !filters.dateTo}>Limpiar</button><button className="admin_primary" type="submit">Filtrar</button></div></form>
+        {error && <p className="admin_session_error">{error}</p>}
+        {loading ? <p className="admin_session_empty">Cargando sesiones…</p> : data.results.length ? <div className="admin_session_list">{data.results.map(row => <p key={row.id}><span><strong>{row.device_name || row.client_type || "Dispositivo"}</strong><small>{row.auth_strength} · {row.last_ip || "IP desconocida"}{row.revoked_at ? " · Revocada" : ""}</small></span><time>{dateTime(row.last_used_at)}</time></p>)}</div> : <p className="admin_session_empty">No hay sesiones en este intervalo.</p>}
+        <footer className="admin_session_pagination"><span>Página {Math.min(page, pages)} de {pages}</span><div><button type="button" disabled={loading || page <= 1} onClick={() => setPage(current => current - 1)}>Anterior</button><button type="button" disabled={loading || page >= pages} onClick={() => setPage(current => current + 1)}>Siguiente</button></div></footer>
+    </section>;
+}
+
+function EmployeeDetail({ employee, employees, organization, onRefresh, onEditName, onAssignPosition, onReleasePosition, runAction, onPreviewOffboarding, offboarding, onExecuteOffboarding, busy }) {
     const [assigningPosition, setAssigningPosition] = useState(false);
     useEffect(() => setAssigningPosition(false), [employee.id]);
     const account = employee.account;
@@ -201,7 +252,7 @@ function EmployeeDetail({ employee, employees, organization, sessions, onRefresh
     return <article className="admin_employee_detail">
         <header><div className="admin_person_avatar">{employee.full_name.split(/\s+/).map(part => part[0]).slice(0, 2).join("")}</div><div><div className="admin_employee_name"><h2>{employee.full_name}</h2><button type="button" onClick={onEditName} disabled={busy} aria-label={`Editar nombre de ${employee.full_name}`} title="Editar nombre"><Pencil size={15} /></button></div><p>{account?.email || "Sin cuenta"}</p></div><span className={`admin_status ${account?.is_active ? "is_active" : ""}`}>{account?.is_active ? "Activa" : "Inactiva"}</span></header>
         <dl className="admin_detail_grid"><div><dt>MFA</dt><dd>{account?.mfa_enabled ? "Configurado" : "Sin configurar"}</dd></div><div><dt>Sesiones</dt><dd>{account?.active_sessions ?? 0}</dd></div><div><dt>Correo verificado</dt><dd>{account?.email_verified_at ? "Sí" : "Pendiente"}</dd></div><div><dt>Último acceso</dt><dd>{dateTime(account?.last_login)}</dd></div></dl>
-        <section className="admin_employee_positions"><div className="admin_section_heading"><h3>Cargos</h3><button type="button" onClick={() => setAssigningPosition(current => !current)} disabled={!employee.is_active || !vacantPositions.length}>{assigningPosition ? "Cancelar" : "Asignar plaza"}</button></div>{employee.assignments.filter(row => row.is_active).map(row => <p key={row.id}>{row.role_title} · {row.unit_name}</p>)}{!employee.assignments.some(row => row.is_active) && <p>Sin cargo activo.</p>}{!vacantPositions.length && <small>No hay plazas abiertas y vacantes disponibles.</small>}
+        <section className="admin_employee_positions"><div className="admin_section_heading"><h3>Cargos</h3><button type="button" onClick={() => setAssigningPosition(current => !current)} disabled={!employee.is_active || !vacantPositions.length}>{assigningPosition ? "Cancelar" : "Asignar plaza"}</button></div>{employee.assignments.filter(row => row.is_active).map(row => <div className="admin_position_row" key={row.id}><p>{row.role_title} · {row.unit_name}</p>{!account?.is_superuser && <button type="button" className="admin_release_position" disabled={busy} onClick={() => onReleasePosition(row)}>Retirar</button>}</div>)}{!employee.assignments.some(row => row.is_active) && <p>Sin cargo activo.</p>}{!vacantPositions.length && <small>No hay plazas abiertas y vacantes disponibles.</small>}
             {assigningPosition && <form className="admin_assignment_form" onSubmit={assignPosition}><label>Plaza vacante<AdminSelect name="position" label="Plaza vacante" required options={[{ value: "", label: "Seleccionar plaza" }, ...vacantPositions.map(item => ({ value: item.id, label: positionLabel(item) }))]} /></label><label>Motivo<textarea name="reason" minLength="8" maxLength="1000" required placeholder="Explica por qué se asigna esta plaza" /></label><button className="admin_primary" type="submit" disabled={busy}>{busy ? "Asignando…" : "Confirmar asignación"}</button></form>}
         </section>
         <section><h3>Seguridad de la cuenta</h3><div className="admin_action_grid">
@@ -212,7 +263,7 @@ function EmployeeDetail({ employee, employees, organization, sessions, onRefresh
             <button onClick={() => runAction("mfa", "Restablecer MFA")}>Restablecer MFA</button>
             {account?.is_active ? <button className="is_danger" onClick={() => runAction("deactivate", "Desactivar cuenta")}>Desactivar cuenta</button> : <button onClick={() => runAction("reactivate", "Reactivar cuenta")}>Reactivar cuenta</button>}
         </div><p className="admin_security_note"><ShieldCheck size={16} /> Las acciones sensibles requieren MFA reciente del dueño y quedan auditadas.</p></section>
-        {sessions?.length > 0 && <section><h3>Historial de sesiones</h3><div className="admin_session_list">{sessions.map(row => <p key={row.id}><span>{row.auth_strength} · {row.last_ip || "IP desconocida"}</span><time>{dateTime(row.last_used_at)}</time></p>)}</div></section>}
+        <SessionHistory employeeId={employee.id} />
         <section className="admin_danger_zone"><h3>Baja y transferencia</h3><p>Previsualiza todas las responsabilidades antes de desactivar al empleado.</p><button type="button" onClick={onPreviewOffboarding}>Preparar baja</button>
             {offboarding && <form className="admin_offboarding" onSubmit={onExecuteOffboarding}><p><strong>{offboarding.modules.reduce((sum, module) => sum + module.resources.length, 0)}</strong> responsabilidades detectadas y <strong>{offboarding.active_sessions}</strong> sesiones activas.</p><label>Transferir por defecto a<AdminSelect name="default_target_assignment" label="Transferir por defecto a" required options={[{ value: "", label: "Seleccionar reemplazo" }, ...targets.map(row => ({ value: row.id, label: `${row.employee_name} · ${row.role_title} · ${row.unit_name}` }))]} /></label><label>Motivo<textarea name="reason" minLength="8" required /></label><button className="admin_danger_button" type="submit" disabled={busy}>Ejecutar baja y transferencia</button></form>}
         </section>
@@ -225,12 +276,10 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice, te
     const [query, setQuery] = useState("");
     const [creating, setCreating] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [sessions, setSessions] = useState([]);
     const [offboarding, setOffboarding] = useState(null);
     const employee = rows.find(item => item.id === selectedId) || rows[0];
     const filtered = rows.filter(item => `${item.full_name} ${item.account?.email || ""}`.toLowerCase().includes(query.toLowerCase()));
 
-    useEffect(() => { if (employee) adminApi.sessions(employee.id).then(setSessions).catch(() => setSessions([])); }, [employee?.id]);
     async function create(event) {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -318,6 +367,32 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice, te
             setBusy(false);
         }
     }
+    async function releasePosition(assignment) {
+        if (!employee || employee.account?.is_superuser) return;
+        const confirmed = await adminDialog({
+            title: "¿Retirar esta plaza?",
+            text: `${assignment.role_title} · ${assignment.unit_name} quedará vacante. La operación se rechazará si aún tiene responsabilidades o accesos activos.`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Continuar",
+        });
+        if (!confirmed.isConfirmed) return;
+        const reason = await askText("Motivo para retirar la plaza", "", 8);
+        if (!reason) return;
+        const code = await askText("Retirar plaza. Código MFA", "", 6);
+        if (!code) return;
+        setBusy(true);
+        try {
+            await coreApi.stepUpMfa(code);
+            await adminApi.releasePosition(employee.id, assignment.id, reason);
+            setNotice("Plaza retirada y disponible como vacante.");
+            await Promise.all([reload(), refreshDirectory()]);
+        } catch (error) {
+            setNotice(error.message, true);
+        } finally {
+            setBusy(false);
+        }
+    }
     async function preview() { try { setOffboarding(await adminApi.offboardingPreview(employee.id)); } catch (error) { setNotice(error.message, true); } }
     async function executeOffboarding(event) {
         event.preventDefault();
@@ -347,7 +422,7 @@ function Employees({ rows, organization, reload, refreshDirectory, setNotice, te
         }
     }
 
-    return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} temporaryPasswordEnabled={temporaryPasswordEnabled} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} sessions={sessions} onRefresh={reload} onEditName={editName} onAssignPosition={assignPosition} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
+    return <div className="admin_directory"><aside><div className="admin_directory_tools"><label><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar empleado" /></label><button type="button" aria-label="Crear empleado" onClick={() => setCreating(true)}><UserPlus size={18} /></button></div><div className="admin_employee_list">{filtered.map(item => <button className={item.id === employee?.id ? "is_selected" : ""} type="button" key={item.id} onClick={() => { setSelectedId(item.id); setOffboarding(null); }}><span>{item.full_name}</span><small>{item.account?.email || "Sin cuenta"}</small></button>)}</div></aside><main>{creating ? <CreateEmployee positions={organization.positions} onCreate={create} onCancel={() => setCreating(false)} busy={busy} temporaryPasswordEnabled={temporaryPasswordEnabled} /> : employee ? <EmployeeDetail employee={employee} employees={rows} organization={organization} onRefresh={reload} onEditName={editName} onAssignPosition={assignPosition} onReleasePosition={releasePosition} runAction={runAction} onPreviewOffboarding={preview} offboarding={offboarding} onExecuteOffboarding={executeOffboarding} busy={busy} /> : <p>No hay empleados.</p>}</main></div>;
 }
 
 export function Audit({ page, onPage }) {

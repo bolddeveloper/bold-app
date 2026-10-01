@@ -321,6 +321,13 @@ class AssignmentCreateSerializer(serializers.Serializer):
         return position
 
 
+class AssignmentReleaseSerializer(serializers.Serializer):
+    assignment = serializers.PrimaryKeyRelatedField(
+        queryset=PositionAssignment.objects.filter(is_active=True, released_at__isnull=True)
+    )
+    reason = serializers.CharField(min_length=8, max_length=1000)
+
+
 class OffboardingExecuteSerializer(AdministrativeReasonSerializer):
     default_target_assignment = serializers.PrimaryKeyRelatedField(
         queryset=PositionAssignment.objects.filter(is_active=True, released_at__isnull=True),

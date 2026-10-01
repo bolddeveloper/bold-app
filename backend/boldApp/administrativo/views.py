@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from boldApp.autenticacion.models import AuthChallenge, AuthEvent, AuthSession
 from boldApp.autenticacion.services import create_challenge, record_event, revoke_all_sessions, revoke_session, send_account_invitation, send_password_reset
-from boldApp.core.models import Employee, JobRole, OrganizationalUnit, PermissionAuditLog, Position, PositionAssignment, UserAccount
+from boldApp.core.models import AccessGrant, Employee, GrantAuthority, JobRole, OrganizationalUnit, PermissionAuditLog, Position, PositionAssignment, UserAccount
 
 from .models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, SystemAuditEvent
 from .permissions import HasRecentOwnerMFA, IsCompanyOwner
@@ -30,6 +30,7 @@ from .serializers import (
     AdministrativeActionSerializer,
     AdministrativeReasonSerializer,
     AssignmentCreateSerializer,
+    AssignmentReleaseSerializer,
     OffboardingCaseSerializer,
     OffboardingExecuteSerializer,
     JobRoleAdminSerializer,
@@ -42,7 +43,7 @@ from .serializers import (
 from .services import complete_administrative_action, create_administrative_action, fail_administrative_action, record_system_event
 
 
-SENSITIVE_EMPLOYEE_ACTIONS = {"assign_position", "revoke_sessions", "reset_mfa", "send_password_reset", "set_temporary_password", "deactivate_account", "reactivate_account", "offboard"}
+SENSITIVE_EMPLOYEE_ACTIONS = {"assign_position", "release_position", "revoke_sessions", "reset_mfa", "send_password_reset", "set_temporary_password", "deactivate_account", "reactivate_account", "offboard"}
 
 DEFAULT_DASHBOARD_LAYOUT = [
     {"type": "metric", "metrics": ["organization.employees_active"], "visualization": "circle"},
@@ -119,6 +120,65 @@ def _responsibility_snapshot(employee):
         "active_sessions": AuthSession.objects.filter(user_account__employee=employee, revoked_at__isnull=True).count(),
         "modules": modules,
     }
+
+
+def _assignment_blockers(employee, assignment):
+    active_assignment_count = _active_assignments(employee).count()
+    assignment_id = str(assignment.id)
+    resources = []
+    for module in _responsibility_snapshot(employee)["modules"]:
+        for resource in module.get("resources", []):
+            source = resource.get("source_assignment")
+            if str(source or "") == assignment_id or (not source and active_assignment_count == 1):
+                resources.append({
+                    "module": module.get("module"),
+                    "resource_type": resource.get("resource_type"),
+                    "resource_id": resource.get("resource_id"),
+                    "label": resource.get("label"),
+                })
+    access_grants = AccessGrant.objects.filter(
+        grantee_assignment=assignment,
+        status=AccessGrant.STATUS_ACTIVE,
+        revoked_at__isnull=True,
+    ).count()
+    grant_authorities = GrantAuthority.objects.filter(
+        assignment=assignment,
+        is_active=True,
+        revoked_at__isnull=True,
+    ).count()
+    return {
+        "resources": resources,
+        "access_grants": access_grants,
+        "grant_authorities": grant_authorities,
+    }
+
+
+class AdminSessionPagination(PageNumberPagination):
+    page_size = 8
+    page_size_query_param = "page_size"
+    max_page_size = 25
+
+
+def _filter_sessions(queryset, request):
+    date_from_raw = request.query_params.get("date_from", "").strip()
+    date_to_raw = request.query_params.get("date_to", "").strip()
+    date_from = parse_datetime(date_from_raw) if date_from_raw else None
+    date_to = parse_datetime(date_to_raw) if date_to_raw else None
+    if date_from_raw and not date_from:
+        raise ValidationError({"date_from": "La fecha y hora inicial no son válidas."})
+    if date_to_raw and not date_to:
+        raise ValidationError({"date_to": "La fecha y hora final no son válidas."})
+    if date_from and timezone.is_naive(date_from):
+        date_from = timezone.make_aware(date_from)
+    if date_to and timezone.is_naive(date_to):
+        date_to = timezone.make_aware(date_to)
+    if date_from and date_to and date_from > date_to:
+        raise ValidationError({"date_to": "La fecha final debe ser posterior a la inicial."})
+    if date_from:
+        queryset = queryset.filter(last_used_at__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(last_used_at__lte=date_to)
+    return queryset.order_by("-last_used_at", "-created_at")
 
 
 class DashboardView(APIView):
@@ -280,6 +340,84 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
             admin_action = create_administrative_action(request, "position_assigned", serializer.validated_data["reason"], employee, getattr(employee, "user_account", None), {"assignment_id": str(assignment.id), "position_id": str(position.id)})
             complete_administrative_action(admin_action, request, metadata={"assignment_id": str(assignment.id), "position_id": str(position.id)})
         return Response(AdminEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="release-position")
+    def release_position(self, request, pk=None):
+        employee = self.get_object()
+        serializer = AssignmentReleaseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requested_assignment = serializer.validated_data["assignment"]
+        if requested_assignment.employee_id != employee.id:
+            raise ValidationError({"assignment": "La asignación no pertenece a este empleado."})
+        account = getattr(employee, "user_account", None)
+        admin_action = create_administrative_action(
+            request,
+            "position_released",
+            serializer.validated_data["reason"],
+            employee,
+            account,
+            {"assignment_id": str(requested_assignment.id), "position_id": str(requested_assignment.position_id)},
+        )
+
+        with transaction.atomic():
+            assignment = (
+                PositionAssignment.objects.select_for_update()
+                .select_related("position__unit", "position__job_role", "employee__user_account")
+                .get(pk=requested_assignment.pk, employee=employee)
+            )
+            if not assignment.is_active or assignment.released_at is not None:
+                fail_administrative_action(admin_action, request, "assignment_already_released")
+                return Response(
+                    {"detail": "La plaza ya fue retirada por otra operación."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if UserAccount.objects.filter(employee=employee, is_superuser=True).exists():
+                fail_administrative_action(admin_action, request, "owner_position_protected")
+                return Response(
+                    {"detail": "La plaza del propietario está protegida y no puede retirarse."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            blockers = _assignment_blockers(employee, assignment)
+            if blockers["resources"] or blockers["access_grants"] or blockers["grant_authorities"]:
+                blocker_counts = {
+                    "resources": len(blockers["resources"]),
+                    "access_grants": blockers["access_grants"],
+                    "grant_authorities": blockers["grant_authorities"],
+                }
+                fail_administrative_action(
+                    admin_action,
+                    request,
+                    "assignment_has_active_responsibilities",
+                    blocker_counts,
+                )
+                return Response(
+                    {
+                        "detail": "La plaza aún tiene responsabilidades o accesos activos. Transfiérelos o revócalos antes de retirarla.",
+                        "code": "assignment_has_active_responsibilities",
+                        "blockers": blocker_counts,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            now = timezone.now()
+            before = {
+                "assignment_id": str(assignment.id),
+                "position_id": str(assignment.position_id),
+                "role": assignment.position.job_role.title,
+                "unit": assignment.position.unit.name,
+                "is_active": True,
+            }
+            assignment.is_active = False
+            assignment.released_at = now
+            assignment.save(update_fields=["is_active", "released_at"])
+            complete_administrative_action(
+                admin_action,
+                request,
+                changes={"before": before, "after": {**before, "is_active": False, "released_at": now.isoformat()}},
+                metadata={"assignment_id": str(assignment.id), "position_id": str(assignment.position_id)},
+            )
+        return Response(AdminEmployeeSerializer(employee).data)
 
     @action(detail=True, methods=["get"], url_path="sessions")
     def sessions(self, request, pk=None):
@@ -466,12 +604,15 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
 class AdminSessionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsCompanyOwner]
     serializer_class = AdminSessionSerializer
+    pagination_class = AdminSessionPagination
     queryset = AuthSession.objects.select_related("user_account__employee").all()
 
     def get_queryset(self):
         queryset = super().get_queryset()
         employee = self.request.query_params.get("employee")
-        return queryset.filter(user_account__employee_id=employee) if employee else queryset
+        if employee:
+            queryset = queryset.filter(user_account__employee_id=employee)
+        return _filter_sessions(queryset, self.request)
 
     def destroy(self, request, *args, **kwargs):
         if not HasRecentOwnerMFA().has_permission(request, self):
