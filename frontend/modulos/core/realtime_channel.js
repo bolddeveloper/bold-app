@@ -13,7 +13,7 @@ export function createTicketQueue(limit = 2) {
 const queueTicket = createTicketQueue();
 
 export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () => {}, onConnected = () => {}, onReconnect = () => {},
-    onError = () => {}, onTerminal = () => {}, WebSocketImpl = globalThis.WebSocket,
+    onError = () => {}, onTerminal = () => {}, onState = () => {}, WebSocketImpl = globalThis.WebSocket,
     setTimer = setTimeout, clearTimer = clearTimeout, now = () => Date.now(), random = Math.random,
     online = () => globalThis.navigator?.onLine !== false, eventTarget = globalThis.window,
     ticketQueue = queueTicket, diagnostics = syncDiagnostics } = {}) {
@@ -23,6 +23,7 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
     const settle = () => { if (!settled) { settled = true; finishReady(); } };
     function schedule(error) {
         if (stopped) return;
+        onState("disconnected");
         settle();
         if (error?.name === "AbortError" || [401, 403].includes(error?.status)) { stop(); onTerminal(error); return; }
         if (!online()) { onError("Sin conexión. La sincronización se reanudará al recuperar Internet."); return; }
@@ -47,6 +48,7 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
             current.addEventListener("open", () => {
                 if (stopped || socket !== current) return;
                 openedAt = now(); diagnostics.record("socket", "open");
+                onState("open");
                 const recovered = hasOpened || settled; hasOpened = true;
                 settle(); recovered ? onReconnect() : onConnected();
             });
@@ -55,6 +57,7 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
             current.addEventListener("close", event => {
                 if (stopped || socket !== current) return;
                 socket = null; diagnostics.record("socket", "close");
+                onState("disconnected");
                 if ([4401, 4403].includes(event.code)) { settle(); stop(); onTerminal({ status: event.code === 4401 ? 401 : 403 }); return; }
                 if (hasOpened && now() - openedAt >= 30_000) attempt = 0;
                 schedule();
@@ -66,6 +69,7 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
     function stop() {
         if (stopped) return;
         stopped = true; clearTimer(timer); eventTarget?.removeEventListener("online", wake);
+        onState("stopped");
         const current = socket; socket = null; current?.close(); settle();
     }
     eventTarget?.addEventListener("online", wake);

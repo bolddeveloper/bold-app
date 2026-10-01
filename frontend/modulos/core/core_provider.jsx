@@ -6,6 +6,7 @@ import { getCoreState, subscribeCore, updateCore, clearCore } from "./core_store
 import { LoginScreen } from "./login_screen.jsx";
 import { MfaManagementDialog } from "./mfa_management.jsx";
 import { createPermissionCache } from "./permission_cache.js";
+import { createPermissionMonitor } from "./permission_monitor.js";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -71,10 +72,11 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         clearLocalSession();
     }
     function setActiveAssignment(id) {
+        generation.current++;
         const assignment = getCoreState().assignments.find(item => item.id === id) || null;
         http.setAssignment(assignment?.id || null);
         permissionCache.current.clear();
-        updateCore({ activeAssignment: assignment, error: "", sessionStatus: assignment ? "ready" : "selecting" });
+        updateCore({ activeAssignment: assignment, error: "", securityUncertain: false, sessionStatus: assignment ? "ready" : "selecting" });
         persistSession();
     }
     async function restore(savedId) {
@@ -130,35 +132,49 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         return () => { mounted = false; generation.current++; http.setSession(false); clearCore(); permissionCache.current.clear(); window.removeEventListener("bold:unauthorized", clearLocalSession); };
     }, []);
     useEffect(() => {
-        if (!real || state.sessionStatus !== "ready") return undefined;
-        let active = true, inFlight = false;
-        const refreshRevision = () => {
-            if (!active || inFlight || navigator.onLine === false) return;
-            inFlight = true;
-            return coreApi.getPermissionRevision()
-            .then(result => {
-                if (active && permissionCache.current.setRevision(result.revision)) {
-                    window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision: result.revision } }));
+        if (!real || state.sessionStatus !== "ready" || !state.activeAssignment?.id) return undefined;
+        const assignmentId = state.activeAssignment.id;
+        const monitor = createPermissionMonitor({ assignmentId, cache: permissionCache.current,
+            fetchRevision: () => coreApi.getPermissionRevision(),
+            onInvalidate: detail => {
+                updateCore({ securityUncertain: Boolean(detail.uncertain), authorizationRevision: getCoreState().authorizationRevision + 1 });
+                window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail }));
+                if (detail.contextChanged) {
+                    // Rebuild Core identity/unit projections before remounting modules.
+                    generation.current++;
+                    const version = generation.current;
+                    permissionCache.current.setUncertain(true);
+                    updateCore({ sessionStatus: "loading" });
+                    restore(assignmentId).catch(error => {
+                        if (version === generation.current) { clearLocalSession(); updateCore({ error: error.message }); }
+                    });
                 }
-            })
-            .catch(() => {})
-            .finally(() => { inFlight = false; });
-        };
-        const handlePermissionChange = event => {
-            const revision = event.detail?.revision;
-            if (revision === undefined) permissionCache.current.invalidate();
-            else permissionCache.current.setRevision(revision);
-            window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision } }));
-        };
-        window.addEventListener("bold:permissions-changed", handlePermissionChange);
-        refreshRevision();
-        const interval = window.setInterval(refreshRevision, 5_000);
+            },
+            onUnauthorized: clearLocalSession,
+        });
+        const change = event => monitor.localChange(event.detail?.revision);
+        const control = event => { if (import.meta.env?.VITE_PERMISSION_CONTROL_ENABLED !== "false") monitor.control(event.detail?.envelope); };
+        const disconnected = event => { if (event.detail?.assignmentId === assignmentId) monitor.disconnected(); };
+        const recover = () => monitor.recover();
+        const visibility = () => { if (document.visibilityState !== "hidden") recover(); };
+        window.addEventListener("bold:permissions-changed", change);
+        window.addEventListener("bold:control-message", control);
+        window.addEventListener("bold:control-disconnected", disconnected);
+        window.addEventListener("focus", recover);
+        window.addEventListener("online", recover);
+        window.addEventListener("offline", recover);
+        document.addEventListener("visibilitychange", visibility);
         return () => {
-            active = false;
-            window.clearInterval(interval);
-            window.removeEventListener("bold:permissions-changed", handlePermissionChange);
+            monitor.dispose();
+            window.removeEventListener("bold:permissions-changed", change);
+            window.removeEventListener("bold:control-message", control);
+            window.removeEventListener("bold:control-disconnected", disconnected);
+            window.removeEventListener("focus", recover);
+            window.removeEventListener("online", recover);
+            window.removeEventListener("offline", recover);
+            document.removeEventListener("visibilitychange", visibility);
         };
-    }, [real, state.sessionStatus]);
+    }, [real, state.sessionStatus, state.activeAssignment?.id]);
     async function login(event) {
         event.preventDefault(); updateCore({ sessionStatus: "loading", error: "" });
         const form = new FormData(event.currentTarget);

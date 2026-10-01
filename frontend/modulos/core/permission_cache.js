@@ -11,6 +11,7 @@ export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Da
     const entries = new Map();
     let generation = 0;
     let revision = null;
+    let uncertain = false;
 
     function invalidate() {
         generation += 1;
@@ -38,9 +39,11 @@ export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Da
     function clear() {
         invalidate();
         revision = null;
+        uncertain = false;
     }
 
     function can(query) {
+        if (uncertain) return Promise.resolve(false);
         const key = cacheKey(query);
         const current = entries.get(key);
         const timestamp = now();
@@ -80,5 +83,7 @@ export function createPermissionCache({ authorize, ttlMs = 5_000, now = () => Da
         return entry.promise;
     }
 
-    return { can, setRevision, invalidate, clear };
+    return { can, setRevision, invalidate, clear,
+        getRevision: () => revision,
+        setUncertain(value) { if (uncertain !== Boolean(value)) { uncertain = Boolean(value); invalidate(); } } };
 }

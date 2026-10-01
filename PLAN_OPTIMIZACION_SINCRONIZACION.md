@@ -286,3 +286,75 @@ La comprobación pública de las 21:06 UTC seguía devolviendo cuota 1027. Publi
 Para probar cuando vuelva la API, guardar primero cualquier borrador y actualizar cada pestaña/PWA de la demo. Comprobar `window.boldSyncDiagnostics.snapshot().buildVersion`, ejecutar `reset()` y recoger una ventana de 30 minutos del propietario y otra de un colaborador sin actividad. Medir por separado las acciones; no confundir los contadores del arranque con tráfico estable. No se hicieron creaciones de tareas ni cambios de permisos en producción para fabricar una prueba.
 
 La siguiente entrega será el canal de control y sus vencimientos, con pruebas de consumidores y revocación antes de reducir el polling de permisos. Los cambios incrementales por recurso siguen pendientes; esta publicación no significa que todo el plan esté finalizado.
+
+## 13. Segunda entrega — control de seguridad y vencimientos
+
+Implementación de fase 2 en la misma rama `perf/sincronizacion-trafico`:
+
+- Notificaciones recibe grupos de sesión, asignación propia y revisión de permisos. No se abre el canal administrativo global a empleados normales.
+- Sobres de control mínimos v2 con revisión, huellas opacas de estado/contexto y secuencia por conexión. Se anuncia la capacidad explícita antes de espaciar el respaldo.
+- Heartbeat autenticado cada 30 segundos, adelantado al siguiente límite de seguridad; cierre automático por expiración diaria/inactividad, revocación de sesión o plaza y rotación de credenciales.
+- Invalidación por inicio/vencimiento de concesiones, autoridades propias/ancestrales y MFA reciente, aunque no cambie la revisión global. Las huellas también recuperan señales perdidas y cambios de modelos sin incremento de revisión.
+- Avisos duplicados o atrasados no provocan nuevas invalidaciones ni restauran autorizaciones anteriores. Suspensión local al perder la conexión, vencer el control de 45 segundos o alcanzar un límite temporal anunciado.
+- Core conserva una sola verificación REST en vuelo. Con control confirmado: respaldo visible de un minuto y pausa en pestañas ocultas. Sin control confirmado: cinco segundos; offline no hace HTTP y `Retry-After`/cuota no se ignoran.
+- Las decisiones individuales de autorización conservan TTL de cinco segundos; MFA/escrituras siguen verificándose en el servidor. No se alarga una autorización porque el WebSocket esté conectado.
+- Tareas cancela respuestas antiguas y oculta datos del alcance anterior; Administración/Permisos limpian vistas sensibles y protegen respuestas en vuelo. Cambios organizativos del propio contexto reconstruyen Core antes de remontar los módulos.
+- La apertura del canal de control ya no depende de completar la descarga de Tareas. La propiedad final de sockets se moverá a Core en fase 4.
+- Diagnóstico local agrega `permission-control.verified-event`, `fallback-healthy`, `fallback-degraded` y `uncertain`, sin tickets, URLs ni datos personales.
+
+### Configuración y compatibilidad
+
+`VITE_PERMISSION_CONTROL_ENABLED=true` habilita el consumo del nuevo contrato.
+Si se compila con `false`, el cliente mantiene el respaldo conservador de cinco
+segundos; el backend nuevo continúa siendo compatible con ese cliente. Un
+backend anterior tampoco activa el respaldo lento porque no anuncia capacidad.
+El endpoint existente `/api/v2/permissions/revision/` conserva `revision` y, con
+sesión propia/plaza seleccionada, añade huellas y próximo límite temporal. Sin
+cabecera de plaza mantiene el contrato original. No hay migraciones nuevas.
+
+### Referencia reproducible, no medición en producción
+
+Una hora visible sin acciones, con heartbeat sano, produce **60 verificaciones
+periódicas de revisión** (arranque aparte), frente a 720. El cargador de referencia
+de fase 1 sigue produciendo 236 consultas de contenido: **296 peticiones
+periódicas/hora/pestaña**, frente a las 5.160 iniciales (**94,26 % menos**).
+No incluye bootstrap, autorización por recurso, tickets, reconexiones ni acciones.
+La meta de 250 todavía requiere la carga parcial de fase 3. No prometer capacidad
+para 25 usuarios sin pruebas representativas ni presentar estos números como
+estadísticas reales de Cloudflare.
+
+### Pruebas y comprobación manual
+
+Ejecutar desde el repositorio con la base aislada, sin heredar PostgreSQL, Redis o
+correo del desarrollador:
+
+```powershell
+.\.venv\Scripts\python.exe backend/manage.py test boldApp.notificaciones.tests boldApp.permisos.tests boldApp.core.tests boldApp.autenticacion.tests boldApp.administrativo.tests boldApp.tareas.tests boldApp.sugerencias.tests boldApp.calendario.tests --settings=config.settings_test --noinput
+```
+
+Desde `frontend/modulos/core`: `npm test`, `npm run test:worker`, `npm run build`.
+Resultado antes de publicar: **145 pruebas Django, 98 de frontend y 4 de Worker
+correctas**, build correcto y `makemigrations --check --dry-run` sin cambios.
+Persisten los avisos preexistentes de directorio staticfiles local ausente y
+tamaño del bundle; no se confundieron con fallos de las pruebas.
+Se cubren ticket de un uso, aislamiento, revocación, rotación de credenciales,
+plaza retirada, cierre diario/inactividad sin eventos, MFA/concesiones/ancestros
+vencidos, señales después del commit y no después de rollback, señal perdida,
+contexto cambiado, secuencias/revisiones antiguas, pérdida de control, quota,
+offline/foco, pestaña oculta y presupuesto horario. No se usan cuentas de demo
+para escribir datos en producción durante estas pruebas.
+
+Cuando vuelva la API pública: guardar borradores, actualizar pestañas/PWA,
+comprobar versión de build y ejecutar `window.boldSyncDiagnostics.reset()`.
+Con una pestaña visible y sin acciones, contar `fallback-healthy` (aproximadamente
+una por minuto) y `verified-event` (aproximadamente dos por minuto). Una pestaña
+oculta con control sano no debe generar consultas de respaldo. Usar una cuenta
+limitada y una concesión temporal de prueba en entorno controlado para validar
+retirada/vencimiento y recuperación; comprobar que un cambio de política no
+reabre todos los canales válidos. No atribuir un fallo de cuota 1027 al backend
+ni suponer que publicar código renueva la cuota.
+
+La medición de nube, retención/observabilidad de fase 0, actualizaciones parciales
+de fase 3 y prueba de capacidad siguen pendientes. El objetivo de interfaz de
+dos segundos queda sujeto a validación pública; las pruebas deterministas no
+son una medición de latencia de extremo a extremo.

@@ -9,14 +9,14 @@ export function notificationWebsocketURL({ ticket, baseUrl = api_base_url }) {
 export function createNotificationRealtime(dependencies = {}) {
     let channel = null;
     function disconnect() { channel?.stop(); channel = null; }
-    function connect({ assignmentId, getTicket, onNotification = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, baseUrl }) {
+    function connect({ assignmentId, getTicket, onNotification = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, onState = () => {}, onTerminal = () => {}, baseUrl }) {
         disconnect();
         if (!assignmentId || !getTicket) throw new Error("Falta el contexto para recibir notificaciones.");
         channel = createRealtimeChannel({ ...dependencies,
             getTicket: () => getTicket({ assignment: assignmentId, channel: "notifications" }),
             urlForTicket: ticket => notificationWebsocketURL({ ticket: ticket.ticket, baseUrl }),
-            onConnected, onReconnect, onError,
-            onTerminal: () => onError("El canal de notificaciones perdió autorización."),
+            onConnected, onReconnect, onError, onState,
+            onTerminal: error => { onTerminal(error); onError("El canal de notificaciones perdió autorización."); },
             onMessage: message => {
                 try {
                     const event = JSON.parse(message.data);

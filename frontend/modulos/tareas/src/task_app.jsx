@@ -4967,9 +4967,10 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
-        let mounted = true, dataGeneration = 0;
+        let mounted = true, dataGeneration = 0, securityUncertain = false;
         const catalogCache = createContextCache();
         const coordinator = createRefreshCoordinator({ canRun: contentCanRefresh, run: async () => {
+                    if (securityUncertain) return;
                     const version = dataGeneration;
                     const next = await loadTaskData(session, { catalogCache });
                     if (!mounted || version !== dataGeneration) return;
@@ -5036,17 +5037,29 @@ function TaskAppContent({ externalModules = {} }) {
             onNotification: () => scheduleContent("notification-event"),
             onReconnect: () => scheduleContent("socket-reconnect"),
             onError: message => mounted && set_api_error(message),
+            onControl: envelope => {
+                if (mounted) window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
+            },
+            onState: state => {
+                if (mounted && state !== "open") window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId: session.activeAssignment.id } }));
+            },
+            onTerminal: error => {
+                if (mounted && [401, 403].includes(error?.status)) window.dispatchEvent(new Event("bold:unauthorized"));
+            },
         });
+        // Security control must not depend on a successful download of Tareas.
+        const notificationReady = syncNotifications().catch(report);
         coordinator.request({ reason: "bootstrap", immediate: true, force: true }).then(async () => {
             if (!mounted) return;
-            await Promise.all([syncRealtime(), syncNotifications()]);
+            await Promise.all([syncRealtime(), notificationReady]);
             if (mounted) scheduleContent("socket-bootstrap");
         }).catch(report);
         // Secondary resources have no event stream; focus and polling reconcile them too.
         const reconcile = () => {
             if (contentCanRefresh()) coordinator.request({ reason: "focus-or-poll" }).catch(report);
         };
-        const reconcilePermissions = () => {
+        const reconcilePermissions = event => {
+            securityUncertain = Boolean(event.detail?.uncertain);
             dataGeneration++;
             mutation_generation.current++;
             catalogCache.clear(); api.cancelRequests();
@@ -5058,6 +5071,10 @@ function TaskAppContent({ externalModules = {} }) {
             set_tasks([]); set_projects([]); set_notifications([]);
             setPresentationData(null);
             set_data(current => current ? { ...current, tasks: [], projects: [], sections: [], statuses: [], links: [], members: [], followers: [], notifications: [] } : current);
+            if (event.detail?.uncertain) {
+                retain_realtime_streams([]);
+                return;
+            }
             syncRealtime().catch(report);
             coordinator.request({ reason: "permissions", security: true }).catch(report);
         };

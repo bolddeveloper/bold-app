@@ -40,8 +40,9 @@ test("an hour of five-minute reconciliation reuses catalogs and stays within con
         calls = 0;
         for (let minute = 5; minute <= 60; minute += 5) { now = minute * 60_000; await loadTaskData(context, { catalogCache }); }
         assert.equal(calls, 236);
-        assert.equal(calls + 720, 956); // Security polling deliberately remains at 5s.
+        assert.equal(calls + 720, 956); // Legacy/degraded control retains the conservative 5s fallback.
         assert.ok(calls + 720 <= 1250);
+        assert.equal(calls + 60, 296); // phase 2 stable-hour reference, not live telemetry
     } finally { globalThis.fetch = previousFetch; }
 });
 test("creating a task does not duplicate the creator follower added by the API", async () => {
