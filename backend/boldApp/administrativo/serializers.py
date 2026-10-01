@@ -126,7 +126,7 @@ class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        account = getattr(self.instance, "user_account", None)
+        account = self.context.get("account") or getattr(self.instance, "user_account", None)
         if account is None:
             raise serializers.ValidationError("El empleado no tiene una cuenta asociada.")
         try:

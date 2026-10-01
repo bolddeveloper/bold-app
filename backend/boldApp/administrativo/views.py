@@ -305,11 +305,19 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         employee_id = self.get_object().id
         try:
             with transaction.atomic():
-                employee = Employee.objects.select_for_update().select_related("user_account").get(pk=employee_id)
-                serializer = AdminEmployeeUpdateSerializer(employee, data=request.data, partial=True)
+                # PostgreSQL no permite FOR UPDATE sobre el lado nullable del
+                # OUTER JOIN que genera select_related("user_account"). Las
+                # dos filas se bloquean por separado y en un orden estable.
+                employee = Employee.objects.select_for_update().get(pk=employee_id)
+                account = UserAccount.objects.select_for_update().filter(employee=employee).first()
+                serializer = AdminEmployeeUpdateSerializer(
+                    employee,
+                    data=request.data,
+                    partial=True,
+                    context={"account": account},
+                )
                 serializer.is_valid(raise_exception=True)
                 reason = serializer.validated_data["reason"]
-                account = getattr(employee, "user_account", None)
                 before, after = {}, {}
 
                 if "full_name" in serializer.validated_data:
@@ -317,7 +325,6 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
                 requested_email = serializer.validated_data.get("email")
                 email_changed = bool(account and requested_email and requested_email != account.email)
                 if email_changed:
-                    account = UserAccount.objects.select_for_update().get(pk=account.pk)
                     before["email"] = account.email
                     before["email_verified"] = bool(account.email_verified_at)
 
