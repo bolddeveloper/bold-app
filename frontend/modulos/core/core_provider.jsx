@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { http, is_using_real_backend } from "./http_client.js";
 import { coreApi } from "./core_api.js";
-import { normalizeAssignment, selectAssignment } from "./core_models.js";
+import { normalizeAssignment, selectEntranceAssignment } from "./core_models.js";
 import { getCoreState, subscribeCore, updateCore, clearCore } from "./core_store.js";
 import { LoginScreen } from "./login_screen.jsx";
 import { MfaManagementDialog } from "./mfa_management.jsx";
@@ -86,9 +86,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const directory = rawDirectory.map(normalizeAssignment);
         const assignments = directory.filter(item => own.some(row => row.id === item.id));
         updateCore({ account, employee, directory, assignments, units });
-        if (enteredFromLogin.current && assignments.length) {
+        const entranceAssignment = selectEntranceAssignment(assignments, savedId, enteredFromLogin.current);
+        if (assignments.length > 1 && !entranceAssignment) {
             updateCore({ activeAssignment: null, sessionStatus: "selecting", error: "" });
-        } else setActiveAssignment(selectAssignment(assignments, savedId));
+        } else setActiveAssignment(entranceAssignment);
         if (!assignments.length) updateCore({ error: "Tu cuenta no tiene asignaciones activas. Contacta al administrador." });
     }
     async function can(permissionCode, unitId = getCoreState().activeUnit?.id, resourceId) {

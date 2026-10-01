@@ -629,6 +629,7 @@ function ProjectPreview({ project, anchor, members, onClose, onSave, onUpdate, p
                 <h2>{project.label}</h2>
                 <p>{project.description || "Sin descripción"}</p>
                 <div className="project_summary_badges"><TaskSelect aria_label="Estado del proyecto" class_name="project_preview_select" disabled={pending} variant="status" value={status} options={["Activo", "Pendiente", "Inactivo"]} on_change={value => onUpdate({ status: value })} /><TaskSelect aria_label="Prioridad del proyecto" class_name="project_preview_select" disabled={pending} variant="priority" value={project.priority || "Media"} options={priority_items} on_change={value => onUpdate({ priority: value })} /></div>
+                {pending && <div className="task_inline_saving" role="status"><span className="task_action_spinner" aria-hidden="true" /> Guardando proyecto…</div>}
                 <fieldset disabled={pending}>
                     <CollaboratorsSelector members={members} selected_ids={(project.member_ids || []).filter(id => members.some(member => member.id === id))} on_change={onSave} label="Personas del proyecto" action_label="Agregar persona" picker_title="Personas del proyecto" empty_text="Sin personas agregadas" />
                 </fieldset>
@@ -2105,7 +2106,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                     </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button" disabled={pending || (real && !edit_draft.status)}>Guardar cambios</button>
+                        <button type="submit" className="primary_button" disabled={pending || (real && !edit_draft.status)}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Guardando…</> : "Guardar cambios"}</button>
                     </footer>
                 </form>
         </TaskDrawer>
@@ -2140,6 +2141,7 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
     use_effect(() => { if (real) { set_status(data.statuses.find(item => (!item.unitId || item.unitId === unitId) && !item.isFinal)?.label || ""); set_assignee_id(""); } }, [unitId]);
     function handle_submit(e) {
         e.preventDefault();
+        if (pending) return;
         if (!title.trim()) return;
         const col = board_columns.find((c) => c.id === section);
         const new_task = {
@@ -2297,7 +2299,7 @@ function CreateTaskModal({ board_columns, drawer, on_cancel, on_create, projects
                     </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button" disabled={pending || !title.trim() || (real && !status)}>Crear tarea</button>
+                        <button type="submit" className="primary_button" disabled={pending || !title.trim() || (real && !status)}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Creando tarea…</> : "Crear tarea"}</button>
                     </footer>
                 </form>
         </TaskDrawer>
@@ -3827,7 +3829,7 @@ function ShareProjectModal({ project, members, onClose, onSave, onError, pending
             <label className="form_field"><span>Buscar personas</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre o correo electrónico" /></label>
             <div className="project_people_selected">{visible.map(member => <button className={`project_person_chip ${selected.includes(member.id) ? "project_person_chip_active" : ""}`} key={member.id} type="button" onClick={() => toggle(member.id)}>{render_avatar(member, "avatar_small")}<span>{member.name}<small>{member.email}</small></span>{render_icon(selected.includes(member.id) ? x_icon : plus_icon, 16)}</button>)}</div>
             <div className="copy_link_row"><input type="text" value={url.href} readOnly /><button className="dark_button" type="button" onClick={() => navigator.clipboard?.writeText(url.href).catch(error => onError(error.message))}>{render_icon(link_icon, 16)} Copiar enlace</button></div>
-            <footer className="bold_modal_footer"><button className="secondary_button" type="button" onClick={onClose}>Cancelar</button><button className="primary_button" type="button" disabled={pending} onClick={() => onSave(selected)}>Guardar acceso</button></footer>
+            <footer className="bold_modal_footer"><button className="secondary_button" type="button" disabled={pending} onClick={onClose}>Cancelar</button><button className="primary_button" type="button" disabled={pending} onClick={() => onSave(selected)}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Guardando…</> : "Guardar acceso"}</button></footer>
         </div>
     </section></div>;
 }
@@ -3881,7 +3883,7 @@ function DeleteConfirmModal({ item_label, item_meta, item_type, on_cancel, on_co
                 </div>
                 <footer className="delete_confirm_actions">
                     <button type="button" onClick={on_cancel}>Cancelar</button>
-                    <button type="button" onClick={on_confirm} disabled={pending}>Eliminar</button>
+                    <button type="button" onClick={on_confirm} disabled={pending}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Eliminando…</> : "Eliminar"}</button>
                 </footer>
             </section>
         </div>
@@ -3906,7 +3908,8 @@ function render_project_modal(props) {
         project_unit_id,
         set_project_unit_id,
         project_owner_assignment_id,
-        set_project_owner_assignment_id
+        set_project_owner_assignment_id,
+        pending
     } = props;
     const unit_people = membersForUnit(props.directory, project_unit_id);
 
@@ -4012,8 +4015,8 @@ function render_project_modal(props) {
 
                     </div>
                     <footer className="project_create_footer">
-                        <button type="button" data-drawer-close onClick={() => set_active_modal(null)}>Cancelar</button>
-                        <button type="submit">{editing_project ? "Guardar cambios" : "Crear proyecto"}</button>
+                        <button type="button" data-drawer-close disabled={pending} onClick={() => set_active_modal(null)}>Cancelar</button>
+                        <button type="submit" disabled={pending}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> {editing_project ? "Guardando…" : "Creando proyecto…"}</> : editing_project ? "Guardar cambios" : "Crear proyecto"}</button>
                     </footer>
                 </form>
         </TaskDrawer>
@@ -4385,6 +4388,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_create_project(event) {
         event.preventDefault();
+        if (mutation_pending.current) return;
         const form_data = new FormData(event.currentTarget);
         const base_label = (form_data.get("project_name") || "").toString().trim();
         const start_date = form_data.get("project_start") || "";
@@ -5634,6 +5638,7 @@ function TaskAppContent({ externalModules = {} }) {
                 set_project_unit_id,
                 project_owner_assignment_id,
                 set_project_owner_assignment_id,
+                pending,
                 is_owner: Boolean(session.account?.is_superuser),
                 units: data?.units || session.units || [],
                 directory: session.directory || [],
@@ -5682,7 +5687,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
-            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
+            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}{pending && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> Guardando cambios…</div>}</>}
         >
                 <div className="module_transition" key={active_module}>
                 {externalModules[active_module] || (active_module === "home" ? <HomeModule

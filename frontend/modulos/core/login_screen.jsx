@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Moon, Sun } from "lucide-react";
+import { BoldSelect } from "./shared/bold_select.jsx";
 
 const themeKey = "bold_color_theme";
 const emailKey = "bold_remembered_email";
@@ -119,9 +120,19 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
                             <button type="button" className="core_auth_text_button" aria-expanded={recoveryHelp} onClick={() => setRecoveryHelp(true)}>¿Olvidaste tu contraseña?</button>
                         </div>
                         <button className="core_auth_submit" type="submit" disabled={busy}>{busy ? <><span className="core_auth_spinner" aria-hidden="true" /> Iniciando sesión…</> : "Iniciar sesión"}</button>
-                    </form> : <div className="core_auth_form">
-                        <label htmlFor="core_auth_assignment">Cargo activo</label>
-                        <select id="core_auth_assignment" value={active} onChange={event => onAssignmentChange(event.target.value)}><option value="">Seleccionar asignación</option>{assignments.map(item => <option key={item.id} value={item.id}>{item.job_role_title} · {item.unit_name}</option>)}</select>
+                    </form> : <div className="core_auth_form core_auth_assignment_form">
+                        <label>Cargo activo</label>
+                        <div className="core_auth_assignment_select">
+                            <BoldSelect
+                                label="Seleccionar cargo activo"
+                                value={active}
+                                onValueChange={onAssignmentChange}
+                                options={[
+                                    { value: "", label: "Seleccionar cargo y área" },
+                                    ...assignments.map(item => ({ value: item.id, label: `${item.job_role_title} · ${item.unit_name}` })),
+                                ]}
+                            />
+                        </div>
                         <button type="button" className="core_auth_text_button" onClick={onLogout}>Cerrar sesión</button>
                     </div>}
                 </div>

@@ -1,4 +1,4 @@
-import { isControlPlaneContext, normalizeAssignment, selectAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
+import { isControlPlaneContext, normalizeAssignment, selectAssignment, selectEntranceAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
@@ -67,6 +67,11 @@ test("owner project view keeps current projects grouped and ordered by departmen
             .map(group => [group.name, group.projects.map(project => project.id)]),
         [["Marketing", ["p2"]], ["Operaciones", ["p1"]]],
     );
+});
+test("a fresh login skips assignment selection only when there is one option", () => {
+    assert.equal(selectEntranceAssignment([{ id: "a" }], "", true), "a");
+    assert.equal(selectEntranceAssignment([{ id: "a" }, { id: "b" }], "", true), "");
+    assert.equal(selectEntranceAssignment([{ id: "a" }, { id: "b" }], "b", false), "b");
 });
 test("project collaborators are limited to the selected project unit", () => {
     const members = [

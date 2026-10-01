@@ -1,6 +1,9 @@
 export function selectAssignment(assignments, savedId) {
     return assignments.find(item => item.id === savedId)?.id || (assignments.length === 1 ? assignments[0].id : "");
 }
+export function selectEntranceAssignment(assignments, savedId, enteredFromLogin) {
+    return enteredFromLogin && assignments.length > 1 ? "" : selectAssignment(assignments, savedId);
+}
 export const isControlPlaneContext = (activeUnit, activeAssignment) => activeUnit
     ? Boolean(activeUnit.is_control_plane)
     : ["Dirección", "Direccion"].includes(activeAssignment?.unit_name);

@@ -61,8 +61,10 @@ async function login() {
     document.querySelector('[name="email"]').value = "ana@bold.gt";
     document.querySelector('[name="password"]').value = "test";
     document.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await until(() => document.querySelector("select"), "assignment selection");
-    select(document.querySelector("select"), "a");
+    await until(() => document.querySelector('[aria-label="Seleccionar cargo activo"]'), "assignment selection");
+    document.querySelector('[aria-label="Seleccionar cargo activo"]').click();
+    await until(() => [...document.querySelectorAll('[role="option"]')].some(option => option.textContent.includes("Cargo a")), "assignment options");
+    [...document.querySelectorAll('[role="option"]')].find(option => option.textContent.includes("Cargo a")).click();
     await until(() => document.body.textContent.includes("Tarea exclusiva a"), "assignment a data");
 }
 try {
