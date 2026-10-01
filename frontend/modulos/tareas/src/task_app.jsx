@@ -1781,7 +1781,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
 
             <div className="detail_subtasks_block">
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em" }}>SUBTAREAS</span>
+                        <span className="detail_subtasks_label">SUBTAREAS</span>
                         <span className="subtasks_badge">{done_count} de {subtasks.length}</span>
                     </div>
                     <div className="subtasks_progress_bar">

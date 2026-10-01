@@ -7474,6 +7474,11 @@ button {
     border: 1px solid #e5e7eb;
 }
 
+.detail_subtasks_label { color: var(--bold_muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.theme_dark .collaborator_mini_pill { border-color: var(--bold_line); background: var(--bold_surface_soft); color: var(--bold_text); }
+.theme_dark .detail_subtasks_block .subtasks_badge { background: var(--bold_surface_soft); color: var(--bold_muted); }
+.theme_dark .detail_subtasks_block .subtasks_progress_bar { background: var(--bold_line); }
+
 .detail_collaborators_card {
     background: #fbfbfa;
     border: 1px solid #f0eeeb;
