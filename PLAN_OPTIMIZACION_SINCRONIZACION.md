@@ -273,3 +273,16 @@ Verificación inicial: 85 pruebas de frontend, 4 de Worker y build correcto. Que
 Pendiente de la fase 0: registros estructurados/retención en el servidor y medición real por cargo. Pendiente de fases siguientes: canal de control backend, vencimientos por tiempo, reducción segura del polling de permisos, actualizaciones parciales, separación completa Core/Tareas y prueba de capacidad de 25 clientes.
 
 La comprobación pública de las 21:06 UTC seguía devolviendo cuota 1027. Publicar el frontend no renueva una cuota agotada. No se modificó el backend ni la base de datos en esta entrega; Oracle no necesita reinicio para estos cambios.
+
+### Publicación de la contención
+
+- Commit de código: `52582d93`; rama publicada en GitHub: `perf/sincronizacion-trafico`. Develop no se ha fusionado ni modificado.
+- Versión desplegada en Cloudflare: `d49e55c5-3fc3-462e-8f94-20add9a73a9a`.
+- Versión anterior registrada para reversión: `1291900c-b56b-4885-b093-67429ed534ba`.
+- Frontend compilado en modo real, API del mismo origen y diagnóstico agregado local habilitado, con `buildVersion=52582d93`.
+- Verificación posterior: raíz HTTP 200, bundle `index-C_JAK1qX.js` HTTP 200 y versión correcta presente. API de salud: HTTP 429 y error 1027; la prueba autenticada en nube sigue pendiente de recuperación de cuota.
+- Oracle continúa ejecutando el backend anterior de Develop, compatible con esta entrega. No se alteraron infraestructura, usuarios, secretos ni esquema.
+
+Para probar cuando vuelva la API, guardar primero cualquier borrador y actualizar cada pestaña/PWA de la demo. Comprobar `window.boldSyncDiagnostics.snapshot().buildVersion`, ejecutar `reset()` y recoger una ventana de 30 minutos del propietario y otra de un colaborador sin actividad. Medir por separado las acciones; no confundir los contadores del arranque con tráfico estable. No se hicieron creaciones de tareas ni cambios de permisos en producción para fabricar una prueba.
+
+La siguiente entrega será el canal de control y sus vencimientos, con pruebas de consumidores y revocación antes de reducir el polling de permisos. Los cambios incrementales por recurso siguen pendientes; esta publicación no significa que todo el plan esté finalizado.
