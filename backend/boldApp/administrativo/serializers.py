@@ -112,11 +112,12 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
 
 
 class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=False)
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
 
     class Meta:
         model = Employee
-        fields = ["full_name", "reason"]
+        fields = ["full_name", "email", "reason"]
 
     def validate_full_name(self, value):
         value = " ".join(value.split())
@@ -124,14 +125,29 @@ class AdminEmployeeUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Ingresa un nombre válido.")
         return value
 
+    def validate_email(self, value):
+        account = getattr(self.instance, "user_account", None)
+        if account is None:
+            raise serializers.ValidationError("El empleado no tiene una cuenta asociada.")
+        try:
+            email = normalize_email(value)
+        except ValueError as error:
+            raise serializers.ValidationError(str(error)) from error
+        if UserAccount.objects.filter(email__iexact=email).exclude(pk=account.pk).exists():
+            raise serializers.ValidationError("Ya existe una cuenta con este correo.")
+        return email
+
     def validate(self, attrs):
         if not str(self.initial_data.get("reason", "")).strip():
             raise serializers.ValidationError({"reason": "El motivo es obligatorio."})
+        if "full_name" not in attrs and "email" not in attrs:
+            raise serializers.ValidationError("Indica el nombre o correo que deseas actualizar.")
         attrs["reason"] = attrs["reason"].strip()
         return attrs
 
     def update(self, instance, validated_data):
         validated_data.pop("reason")
+        validated_data.pop("email", None)
         return super().update(instance, validated_data)
 
 

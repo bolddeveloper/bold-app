@@ -62,10 +62,11 @@
 .admin_person_avatar { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: #ffe9e9; color: #c91f2b; font-weight: 900; box-shadow: 0 0 0 4px rgb(239 31 45 / 8%); animation: admin_avatar_enter 360ms cubic-bezier(.2, .8, .2, 1) backwards; }
 .admin_employee_detail > header > div:nth-child(2) { flex: 1; }
 .admin_employee_detail h2, .admin_employee_detail header p { margin: 0; }
-.admin_employee_name { display: flex; align-items: center; gap: 7px; }
-.admin_employee_name button { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid #dce2ea; border-radius: 8px; padding: 0; background: transparent; color: #64748b; cursor: pointer; }
-.admin_employee_name button:hover { border-color: #b8c1cd; background: #f8fafc; color: var(--bold_red, #ef1f2d); }
-.admin_employee_name button:disabled { cursor: not-allowed; opacity: .5; }
+.admin_employee_name, .admin_employee_email { display: flex; align-items: center; gap: 7px; }
+.admin_employee_name button, .admin_employee_email button { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid #dce2ea; border-radius: 8px; padding: 0; background: transparent; color: #64748b; cursor: pointer; }
+.admin_employee_email button { width: 26px; height: 26px; }
+.admin_employee_name button:hover, .admin_employee_email button:hover { border-color: #b8c1cd; background: #f8fafc; color: var(--bold_red, #ef1f2d); }
+.admin_employee_name button:disabled, .admin_employee_email button:disabled { cursor: not-allowed; opacity: .5; }
 .admin_status.is_active, .admin_outcome.is_success { background: #daf7e8; color: #137044; }
 .admin_detail_grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .admin_detail_grid div { padding: 12px; border: 1px solid transparent; border-radius: 10px; background: #f7f9fc; transition: border-color 150ms ease, transform 150ms ease; }
@@ -268,6 +269,16 @@
 }
 .theme_dark :is(.admin_form input, .admin_form textarea, .admin_audit_header input)::placeholder {
     color: var(--bold_muted);
+}
+.theme_dark :is(.admin_employee_name, .admin_employee_email) button {
+    border-color: var(--bold_line);
+    background: var(--bold_surface_soft);
+    color: var(--bold_muted);
+}
+.theme_dark :is(.admin_employee_name, .admin_employee_email) button:hover {
+    border-color: #596371;
+    background: var(--bold_hover);
+    color: #ff9aa1;
 }
 .theme_dark :is(.admin_experimental_toggle, .admin_temporary_password) {
     border-color: #755f31;

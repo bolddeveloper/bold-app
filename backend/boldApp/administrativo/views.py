@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db.models.deletion import ProtectedError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -243,7 +243,8 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_permissions(self):
         uses_temporary_password = self.action == "create" and bool(self.request.data.get("temporary_password"))
-        permission = HasRecentOwnerMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS or uses_temporary_password else IsCompanyOwner
+        changes_email = self.action == "partial_update" and "email" in self.request.data
+        permission = HasRecentOwnerMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS or uses_temporary_password or changes_email else IsCompanyOwner
         return [permission()]
 
     def get_queryset(self):
@@ -301,14 +302,67 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
-        employee = self.get_object()
-        serializer = AdminEmployeeUpdateSerializer(employee, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        reason = serializer.validated_data["reason"]
-        before = {"full_name": employee.full_name}
-        serializer.save()
-        admin_action = create_administrative_action(request, "employee_updated", reason, employee, getattr(employee, "user_account", None))
-        complete_administrative_action(admin_action, request, changes={"before": before, "after": {"full_name": employee.full_name}})
+        employee_id = self.get_object().id
+        try:
+            with transaction.atomic():
+                employee = Employee.objects.select_for_update().select_related("user_account").get(pk=employee_id)
+                serializer = AdminEmployeeUpdateSerializer(employee, data=request.data, partial=True)
+                serializer.is_valid(raise_exception=True)
+                reason = serializer.validated_data["reason"]
+                account = getattr(employee, "user_account", None)
+                before, after = {}, {}
+
+                if "full_name" in serializer.validated_data:
+                    before["full_name"] = employee.full_name
+                requested_email = serializer.validated_data.get("email")
+                email_changed = bool(account and requested_email and requested_email != account.email)
+                if email_changed:
+                    account = UserAccount.objects.select_for_update().get(pk=account.pk)
+                    before["email"] = account.email
+                    before["email_verified"] = bool(account.email_verified_at)
+
+                serializer.save()
+                if "full_name" in serializer.validated_data:
+                    after["full_name"] = employee.full_name
+
+                revoked_sessions = 0
+                invalidated_challenges = 0
+                if email_changed:
+                    account.email = requested_email
+                    account.email_verified_at = None
+                    account.credentials_version += 1
+                    account.save(update_fields=["email", "email_verified_at", "credentials_version", "updated_at"])
+                    now = timezone.now()
+                    invalidated_challenges = AuthChallenge.objects.filter(
+                        user_account=account,
+                        consumed_at__isnull=True,
+                        invalidated_at__isnull=True,
+                    ).update(invalidated_at=now)
+                    revoked_sessions = revoke_all_sessions(account, "administrative_email_change", request.user)
+                    after["email"] = account.email
+                    after["email_verified"] = False
+
+                admin_action = create_administrative_action(
+                    request,
+                    "employee_updated",
+                    reason,
+                    employee,
+                    account,
+                    {"email_changed": email_changed},
+                )
+                complete_administrative_action(
+                    admin_action,
+                    request,
+                    changes={"before": before, "after": after},
+                    metadata={
+                        "revoked_sessions": revoked_sessions,
+                        "invalidated_challenges": invalidated_challenges,
+                    },
+                )
+        except IntegrityError as error:
+            raise ValidationError({"email": "Ya existe una cuenta con este correo."}) from error
+
+        employee = self.get_queryset().get(pk=employee_id)
         return Response(AdminEmployeeSerializer(employee).data)
 
     @action(detail=True, methods=["post"], url_path="resend-invitation")

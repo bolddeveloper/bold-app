@@ -171,6 +171,86 @@ class AdministrationApiTests(TestCase):
         self.assertEqual(event.changes["before"]["full_name"], "Samuel")
         self.assertEqual(event.changes["after"]["full_name"], "Samuel Actualizado")
 
+    def test_owner_can_correct_employee_email_and_all_sessions_are_revoked(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        target.email_verified_at = timezone.now()
+        target.save(update_fields=["email_verified_at", "updated_at"])
+        original_version = target.credentials_version
+        _, target_session = create_session(
+            target,
+            APIRequestFactory().get("/", REMOTE_ADDR="127.0.0.2"),
+        )
+        _, challenge = create_challenge(
+            target,
+            AuthChallenge.PURPOSE_PASSWORD_RESET,
+            APIRequestFactory().post("/", REMOTE_ADDR="127.0.0.2"),
+        )
+
+        response = self.client.patch(
+            f"/api/v2/administration/employees/{target.employee_id}/",
+            {
+                "email": "Samuel.Corregido@BOLD.GT",
+                "reason": "Corrección del correo corporativo",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        target.refresh_from_db()
+        target_session.refresh_from_db()
+        challenge.refresh_from_db()
+        self.assertEqual(target.email, "samuel.corregido@bold.gt")
+        self.assertIsNone(target.email_verified_at)
+        self.assertEqual(target.credentials_version, original_version + 1)
+        self.assertIsNotNone(target_session.revoked_at)
+        self.assertEqual(target_session.revocation_reason, "administrative_email_change")
+        self.assertIsNotNone(challenge.invalidated_at)
+        self.assertFalse(AuthSession.objects.filter(user_account=target, revoked_at__isnull=True).exists())
+
+        action = AdministrativeAction.objects.get(action_type="employee_updated", target_account=target)
+        self.assertTrue(action.metadata["email_changed"])
+        event = SystemAuditEvent.objects.get(administrative_action=action)
+        self.assertEqual(event.changes["before"]["email"], "samuel@bold.gt")
+        self.assertEqual(event.changes["after"]["email"], "samuel.corregido@bold.gt")
+        self.assertEqual(event.metadata["revoked_sessions"], 1)
+        self.assertEqual(event.metadata["invalidated_challenges"], 1)
+
+    def test_employee_email_change_requires_recent_mfa_and_valid_unique_domain(self):
+        target = UserAccount.objects.get(email="samuel@bold.gt")
+        weak_session = AuthSession.objects.create(
+            user_account=self.owner,
+            token_hash="9" * 64,
+            expires_at=self.owner_session.expires_at,
+            auth_strength="password",
+            credentials_version=self.owner.credentials_version,
+        )
+        weak_client = APIClient()
+        weak_client.force_authenticate(self.owner, weak_session)
+        weak_client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.owner_assignment.id))
+        endpoint = f"/api/v2/administration/employees/{target.employee_id}/"
+
+        denied = weak_client.patch(
+            endpoint,
+            {"email": "nuevo.samuel@bold.gt", "reason": "Corrección sin MFA reciente"},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        outside = self.client.patch(
+            endpoint,
+            {"email": "samuel@example.com", "reason": "Prueba de dominio externo"},
+            format="json",
+        )
+        self.assertEqual(outside.status_code, 400)
+        duplicate = self.client.patch(
+            endpoint,
+            {"email": self.owner.email, "reason": "Prueba de correo duplicado"},
+            format="json",
+        )
+        self.assertEqual(duplicate.status_code, 400)
+        target.refresh_from_db()
+        self.assertEqual(target.email, "samuel@bold.gt")
+
     def test_employee_name_edit_requires_a_reason(self):
         target = UserAccount.objects.get(email="samuel@bold.gt").employee
         response = self.client.patch(
