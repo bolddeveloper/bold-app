@@ -25,6 +25,12 @@ GRANT_CAPABILITY_GRANT = "can_grant_access"
 GRANT_CAPABILITY_REVOKE = "can_revoke_access"
 GRANT_CAPABILITY_DELEGATE = "can_delegate_authority"
 
+CREATOR_SCOPED_PERMISSION_CODES = frozenset({
+    "tasks.task.update",
+    "tasks.task.delete",
+    "tasks.task.assign",
+})
+
 
 def sensitivity_rank(level):
     try:
@@ -65,11 +71,29 @@ def _scope_applies(scope_type, own_unit, target_unit, scoped_unit=None):
         return True
     if scope_type == JobRolePermission.SCOPE_OWN_UNIT:
         return target_unit.id == own_unit.id
+    if scope_type == JobRolePermission.SCOPE_OWN_SUB_TREE:
+        return unit_is_within(target_unit, own_unit)
     if scope_type == JobRolePermission.SCOPE_SPECIFIC_UNIT:
         return scoped_unit is not None and target_unit.id == scoped_unit.id
     if scope_type == JobRolePermission.SCOPE_SUB_TREE:
         return scoped_unit is not None and unit_is_within(target_unit, scoped_unit)
     return False
+
+
+def _role_scope_applies(rule, assignment, permission, target_unit, resource_created_by_assignment_id):
+    if rule.scope_type == JobRolePermission.SCOPE_CREATED_BY_ME:
+        return (
+            permission.code in CREATOR_SCOPED_PERMISSION_CODES
+            and resource_created_by_assignment_id is not None
+            and str(resource_created_by_assignment_id) == str(assignment.id)
+            and target_unit.id == assignment.position.unit_id
+        )
+    return _scope_applies(
+        rule.scope_type,
+        assignment.position.unit,
+        target_unit,
+        rule.target_unit,
+    )
 
 
 def _principal_is_active(assignment):
@@ -302,7 +326,15 @@ def build_authorization_context(assignment, permission, at=None):
     )
 
 
-def resolve_access(assignment, permission, target_unit, resource_id=None, at=None, context=None):
+def resolve_access(
+    assignment,
+    permission,
+    target_unit,
+    resource_id=None,
+    at=None,
+    context=None,
+    resource_created_by_assignment_id=None,
+):
     """Resuelve acceso con deny-first y herencia implícita para el dueño.
 
     Toda cuenta activa marcada ``is_superuser`` hereda cualquier permiso
@@ -360,6 +392,16 @@ def resolve_access(assignment, permission, target_unit, resource_id=None, at=Non
     role_rules = context.role_rules
     direct_rules = context.direct_rules
 
+    if (
+        resource_created_by_assignment_id is None
+        and resource_id is not None
+        and any(rule.scope_type == JobRolePermission.SCOPE_CREATED_BY_ME for rule in role_rules)
+    ):
+        from .resource_context import resolve_resource_context
+
+        resource_context = resolve_resource_context(permission, resource_id)
+        resource_created_by_assignment_id = resource_context.get("resource_created_by_assignment_id")
+
     applicable_direct = [
         rule for rule in direct_rules
         if _grant_is_applicable(rule, assignment, target_unit, resource_id, moment)
@@ -377,7 +419,13 @@ def resolve_access(assignment, permission, target_unit, resource_id=None, at=Non
 
     applicable_role = [
         rule for rule in role_rules
-        if _scope_applies(rule.scope_type, own_unit, target_unit, rule.target_unit)
+        if _role_scope_applies(
+            rule,
+            assignment,
+            permission,
+            target_unit,
+            resource_created_by_assignment_id,
+        )
     ]
     for rule in applicable_role:
         if rule.effect == JobRolePermission.EFFECT_DENY:
@@ -448,10 +496,17 @@ def apply_session_assurance(result, permission, request):
 
 
 def check_and_log(
-    *, assignment, permission_code, target_unit, resource_id=None, resource_type="", request=None
+    *, assignment, permission_code, target_unit, resource_id=None, resource_type="", request=None,
+    resource_created_by_assignment_id=None,
 ):
     permission = Permission.objects.get(code=permission_code.strip().lower())
-    result = resolve_access(assignment, permission, target_unit, resource_id=resource_id)
+    result = resolve_access(
+        assignment,
+        permission,
+        target_unit,
+        resource_id=resource_id,
+        resource_created_by_assignment_id=resource_created_by_assignment_id,
+    )
     result = apply_session_assurance(result, permission, request)
     account = None
     try:

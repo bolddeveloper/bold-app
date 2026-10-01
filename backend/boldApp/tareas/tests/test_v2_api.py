@@ -8,7 +8,13 @@ from rest_framework.test import APIClient
 from django.test import RequestFactory
 
 from boldApp.autenticacion.services import create_session, issue_ws_ticket
-from boldApp.core.models import OrganizationalUnit, PositionAssignment, UserAccount
+from boldApp.core.models import (
+    JobRolePermission,
+    OrganizationalUnit,
+    Permission,
+    PositionAssignment,
+    UserAccount,
+)
 from boldApp.tareas.models import Project, Section, Task, TaskProject, TaskStatus
 from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
@@ -121,6 +127,95 @@ class TasksV2ApiTests(TransactionTestCase):
             format="json",
         )
         self.assertEqual(edited.status_code, 200, edited.data)
+
+    def test_collaborator_can_mutate_only_tasks_created_by_its_assignment(self):
+        collaborator_role = self.ana_assignment.position.job_role
+        managed_codes = {
+            "tasks.task.update",
+            "tasks.task.delete",
+            "tasks.task.assign",
+        }
+        JobRolePermission.objects.filter(
+            job_role=collaborator_role,
+            permission__code__in=managed_codes,
+        ).delete()
+        update_permission = Permission.objects.get(code="tasks.task.update")
+        JobRolePermission.objects.create(
+            job_role=collaborator_role,
+            permission=update_permission,
+            effect=JobRolePermission.EFFECT_ALLOW,
+            scope_type=JobRolePermission.SCOPE_CREATED_BY_ME,
+        )
+
+        carla = UserAccount.objects.get(email="carla@bold.gt")
+        carla_assignment = PositionAssignment.objects.get(employee=carla.employee, is_active=True)
+        own_task = Task.objects.create(
+            unit=self.marketing,
+            created_by_assignment=self.ana_assignment,
+            assignee_assignment=self.ana_assignment,
+            status=self.marketing_status,
+            title="Tarea creada por Ana",
+            priority="medium",
+        )
+        foreign_task = Task.objects.create(
+            unit=self.marketing,
+            created_by_assignment=carla_assignment,
+            assignee_assignment=self.ana_assignment,
+            status=self.marketing_status,
+            title="Tarea creada por Carla",
+            priority="medium",
+        )
+
+        _, session = create_session(
+            self.ana,
+            RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"),
+        )
+        client = APIClient()
+        client.force_authenticate(self.ana, session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id))
+
+        edited = client.patch(
+            f"/api/v2/tasks/{own_task.id}/",
+            {"title": "Tarea propia editada"},
+            format="json",
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+
+        assign_without_permission = client.patch(
+            f"/api/v2/tasks/{own_task.id}/",
+            {"assignee_assignment": str(carla_assignment.id)},
+            format="json",
+        )
+        self.assertEqual(assign_without_permission.status_code, 403)
+
+        JobRolePermission.objects.create(
+            job_role=collaborator_role,
+            permission=Permission.objects.get(code="tasks.task.assign"),
+            effect=JobRolePermission.EFFECT_ALLOW,
+            scope_type=JobRolePermission.SCOPE_CREATED_BY_ME,
+        )
+        assigned = client.patch(
+            f"/api/v2/tasks/{own_task.id}/",
+            {"assignee_assignment": str(carla_assignment.id)},
+            format="json",
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.data)
+
+        foreign_edit = client.patch(
+            f"/api/v2/tasks/{foreign_task.id}/",
+            {"title": "No debe cambiar"},
+            format="json",
+        )
+        self.assertEqual(foreign_edit.status_code, 403)
+
+        JobRolePermission.objects.create(
+            job_role=collaborator_role,
+            permission=Permission.objects.get(code="tasks.task.delete"),
+            effect=JobRolePermission.EFFECT_ALLOW,
+            scope_type=JobRolePermission.SCOPE_CREATED_BY_ME,
+        )
+        self.assertEqual(client.delete(f"/api/v2/tasks/{foreign_task.id}/").status_code, 403)
+        self.assertEqual(client.delete(f"/api/v2/tasks/{own_task.id}/").status_code, 204)
 
     def test_bulk_create_update_delete_and_atomic_validation(self):
         payload = {key: value for key, value in self.task_payload().items() if key not in {"project", "section", "project_position"}}

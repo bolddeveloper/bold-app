@@ -81,9 +81,16 @@ ROLE_POLICIES = {
             "tasks.task.read",
             "tasks.task.create",
             "tasks.task.update",
+            "tasks.task.delete",
+            "tasks.task.assign",
             "tasks.comment.create",
             "tasks.project.read",
             "tasks.catalog.read",
+        },
+        "scope_by_permission": {
+            "tasks.task.update": JobRolePermission.SCOPE_CREATED_BY_ME,
+            "tasks.task.delete": JobRolePermission.SCOPE_CREATED_BY_ME,
+            "tasks.task.assign": JobRolePermission.SCOPE_CREATED_BY_ME,
         },
     },
     "Alta Gerencia": {
@@ -212,7 +219,7 @@ class Command(BaseCommand):
                 JobRolePermission.objects.create(
                     job_role=role,
                     permission=permissions[code],
-                    scope_type=profile["scope"],
+                    scope_type=profile.get("scope_by_permission", {}).get(code, profile["scope"]),
                     effect=JobRolePermission.EFFECT_ALLOW,
                     reason="Perfil seguro de demostración.",
                 )

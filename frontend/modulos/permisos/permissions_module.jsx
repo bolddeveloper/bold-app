@@ -13,7 +13,28 @@ import "./permissions.css";
 
 function Select({ children, onChange, ...props }) { const options = Children.toArray(children).map(x => ({ value: x.props.value, label: x.props.children })); return <BoldSelect {...props} options={options} onValueChange={value => onChange?.({ target: { value } })} />; }
 const dialog = options => Swal.fire({ confirmButtonColor: "#ef1f2d", cancelButtonText: "Cancelar", showCancelButton: true, customClass: { container: "permissions_swal_container", popup: "permissions_swal" }, ...options });
-const scopes = { global: "Global", own_unit: "Unidad propia", sub_tree: "Unidad y subárbol", specific_unit: "Unidad específica" };
+const scopes = {
+    global: "Global",
+    own_unit: "Unidad propia",
+    own_sub_tree: "Unidad propia y subárbol",
+    created_by_me: "Tareas creadas por mí",
+    sub_tree: "Unidad específica y subárbol",
+    specific_unit: "Unidad específica",
+};
+const roleScopes = {
+    global: scopes.global,
+    own_unit: scopes.own_unit,
+    own_sub_tree: scopes.own_sub_tree,
+    specific_unit: scopes.specific_unit,
+};
+const creatorScopedPermissions = new Set(["tasks.task.update", "tasks.task.delete", "tasks.task.assign"]);
+function roleScopeOptions(permission, effect, includeCreator = true) {
+    const options = Object.entries(roleScopes);
+    if (includeCreator && effect === "allow" && creatorScopedPermissions.has(permission?.code)) {
+        options.push(["created_by_me", scopes.created_by_me]);
+    }
+    return options;
+}
 const risks = { low: "Bajo", medium: "Medio", high: "Alto", critical: "Crítico" };
 const nameOf = p => p?.description || p?.resource || p?.code || "Permiso";
 const presetDefinitions = [
@@ -83,7 +104,7 @@ function Policies({ state, units, changed, unlocked, unlock, roleId, setRoleId }
 }
 function PolicyForm({ role, permission, rules: current, units, revision, changed, close, unlock }) {
     const [scope, setScope] = useState("own_unit"), [effect, setEffect] = useState("allow"), [unit, setUnit] = useState(""), [reason, setReason] = useState(""), [error, setError] = useState(null);
-    const needs = ["specific_unit", "sub_tree"].includes(scope);
+    const needs = scope === "specific_unit";
     const serialize = rows => rows.map(x => ({ effect: x.effect, scope_type: x.scope_type, ...(x.target_unit && { target_unit: x.target_unit }) }));
     async function replace(rules) {
         const result = await permissionsApi.replaceRolePolicy({ job_role: role.id, permission: permission.id, rules, reason, expected_revision: revision });
@@ -105,14 +126,14 @@ function PolicyForm({ role, permission, rules: current, units, revision, changed
     }
     return <form className="permissions_drawer_form" onSubmit={save}><div className="permissions_selection"><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div>
         {current.length > 0 && <section className="permissions_current_rules"><h3>Reglas actuales</h3>{current.map(rule => <article key={rule.id}><div><strong>{rule.effect === "allow" ? "Permitir" : "Denegar"}</strong><span>{scopes[rule.scope_type]}{rule.target_unit_name ? ` · ${rule.target_unit_name}` : ""}</span></div><button type="button" onClick={() => remove(rule)}>Quitar</button></article>)}</section>}
-        <label>Efecto<Select value={effect} onChange={e => setEffect(e.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option></Select></label><label>Alcance<Select value={scope} onChange={e => setScope(e.target.value)}>{Object.entries(scopes).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></label>{needs && <label>Unidad<Select value={unit} onChange={e => setUnit(e.target.value)} required><option value="">Seleccionar…</option>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}<label>Motivo<textarea value={reason} onChange={e => setReason(e.target.value)} minLength="8" required /></label><FormError error={error} onMfa={() => { setError(null); unlock(); }} /><div className="permissions_form_actions"><button>Guardar regla</button></div>
+        <label>Efecto<Select value={effect} onChange={e => { const next = e.target.value; setEffect(next); if (next !== "allow" && scope === "created_by_me") setScope("own_unit"); }}><option value="allow">Permitir</option><option value="deny">Denegar</option></Select></label><label>Alcance<Select value={scope} onChange={e => setScope(e.target.value)}>{roleScopeOptions(permission, effect).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></label>{needs && <label>Unidad<Select value={unit} onChange={e => setUnit(e.target.value)} required><option value="">Seleccionar…</option>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>}<label>Motivo<textarea value={reason} onChange={e => setReason(e.target.value)} minLength="8" required /></label><FormError error={error} onMfa={() => { setError(null); unlock(); }} /><div className="permissions_form_actions"><button>Guardar regla</button></div>
     </form>;
 }
 
 function BulkPolicyForm({ role, permissions, units, revision, changed, close, completed, unlock }) {
     const [action, setAction] = useState("allow"), [scope, setScope] = useState("own_unit"), [unit, setUnit] = useState(""), [reason, setReason] = useState(""), [error, setError] = useState(null), [busy, setBusy] = useState(false);
     const [drafts, setDrafts] = useState(() => Object.fromEntries(permissions.map(permission => [permission.id, { action: "allow", scope: "own_unit", unit: "" }])));
-    const needsUnit = action !== "clear" && ["specific_unit", "sub_tree"].includes(scope);
+    const needsUnit = action !== "clear" && scope === "specific_unit";
     const modules = [...new Set(permissions.map(permission => permission.module_code || "General"))].sort((a, b) => a.localeCompare(b, "es"));
     const highRisk = permissions.filter(permission => ["high", "critical"].includes(permission.risk_level)).length;
     function updateDraft(id, changes) { setDrafts(current => ({ ...current, [id]: { ...current[id], ...changes } })); }
@@ -121,7 +142,7 @@ function BulkPolicyForm({ role, permissions, units, revision, changed, close, co
         event.preventDefault();
         const incomplete = permissions.find(permission => {
             const draft = drafts[permission.id];
-            return draft?.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft?.scope) && !draft?.unit;
+            return draft?.action !== "clear" && draft?.scope === "specific_unit" && !draft?.unit;
         });
         if (incomplete) return setError(new Error(`Selecciona una unidad para ${nameOf(incomplete)}.`));
         const answer = await dialog({
@@ -134,7 +155,7 @@ function BulkPolicyForm({ role, permissions, units, revision, changed, close, co
         setBusy(true); setError(null);
         const configurations = permissions.map(permission => {
             const draft = drafts[permission.id];
-            const ruleNeedsUnit = draft.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft.scope);
+            const ruleNeedsUnit = draft.action !== "clear" && draft.scope === "specific_unit";
             return { permission: permission.id, rules: draft.action === "clear" ? [] : [{ effect: draft.action, scope_type: draft.scope, ...(ruleNeedsUnit && { target_unit: draft.unit }) }] };
         });
         try {
@@ -146,8 +167,8 @@ function BulkPolicyForm({ role, permissions, units, revision, changed, close, co
     return <form className="permissions_drawer_form" onSubmit={submit}>
         <div className="permissions_selection"><strong>{permissions.length} permisos seleccionados</strong><span>{modules.join(" · ")}</span>{highRisk > 0 && <small>{highRisk} de riesgo alto o crítico</small>}</div>
         <div className="permissions_callout"><AlertTriangle /><p>Esta acción reemplaza las reglas de la selección. Los permisos sensibles, como webhooks salientes, solo pueden configurarse individualmente y nunca entran en preselecciones.</p></div>
-        <fieldset className="permissions_bulk_template"><legend>Regla rápida para toda la selección</legend><label>Acción<Select value={action} onChange={event => setAction(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Dejar sin regla</option></Select></label>{action !== "clear" && <label>Alcance<Select value={scope} onChange={event => setScope(event.target.value)}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>}{needsUnit && <label>Unidad<Select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Seleccionar…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}<button type="button" onClick={applyToAll}>Aplicar al borrador</button></fieldset>
-        <section className="permissions_bulk_drafts"><h3>Ajuste por permiso</h3>{permissions.map(permission => { const draft = drafts[permission.id], draftNeedsUnit = draft.action !== "clear" && ["specific_unit", "sub_tree"].includes(draft.scope); return <article key={permission.id}><div><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div><Select value={draft.action} onChange={event => updateDraft(permission.id, { action: event.target.value })}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Sin regla</option></Select>{draft.action !== "clear" && <Select value={draft.scope} onChange={event => updateDraft(permission.id, { scope: event.target.value, unit: "" })}>{Object.entries(scopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>}{draftNeedsUnit && <Select value={draft.unit} onChange={event => updateDraft(permission.id, { unit: event.target.value })}><option value="">Unidad…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>}</article>; })}</section>
+        <fieldset className="permissions_bulk_template"><legend>Regla rápida para toda la selección</legend><label>Acción<Select value={action} onChange={event => setAction(event.target.value)}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Dejar sin regla</option></Select></label>{action !== "clear" && <label>Alcance<Select value={scope} onChange={event => setScope(event.target.value)}>{roleScopeOptions(null, action, false).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>}{needsUnit && <label>Unidad<Select value={unit} onChange={event => setUnit(event.target.value)}><option value="">Seleccionar…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>}<button type="button" onClick={applyToAll}>Aplicar al borrador</button></fieldset>
+        <section className="permissions_bulk_drafts"><h3>Ajuste por permiso</h3>{permissions.map(permission => { const draft = drafts[permission.id], draftNeedsUnit = draft.action !== "clear" && draft.scope === "specific_unit"; return <article key={permission.id}><div><strong>{nameOf(permission)}</strong><code>{permission.code}</code></div><Select value={draft.action} onChange={event => { const next = event.target.value; updateDraft(permission.id, { action: next, ...(next !== "allow" && draft.scope === "created_by_me" ? { scope: "own_unit" } : {}) }); }}><option value="allow">Permitir</option><option value="deny">Denegar</option><option value="clear">Sin regla</option></Select>{draft.action !== "clear" && <Select value={draft.scope} onChange={event => updateDraft(permission.id, { scope: event.target.value, unit: "" })}>{roleScopeOptions(permission, draft.action).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>}{draftNeedsUnit && <Select value={draft.unit} onChange={event => updateDraft(permission.id, { unit: event.target.value })}><option value="">Unidad…</option>{units.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>}</article>; })}</section>
         <label>Motivo<textarea value={reason} onChange={event => setReason(event.target.value)} minLength="8" maxLength="2000" required placeholder="Explica por qué se aplica este cambio masivo" /></label>
         <FormError error={error} onMfa={() => { setError(null); unlock(); }} />
         <button disabled={busy || permissions.length === 0}>{busy ? "Aplicando…" : "Aplicar configuraciones"}</button>

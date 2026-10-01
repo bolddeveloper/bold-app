@@ -11,7 +11,27 @@ from boldApp.core.models import (
 )
 
 from .models import PermissionPolicyEvent
-from boldApp.core.authorization import access_grant_is_potentially_effective
+from boldApp.core.authorization import (
+    CREATOR_SCOPED_PERMISSION_CODES,
+    access_grant_is_potentially_effective,
+)
+
+
+def validate_role_scope_rules(permission, rules):
+    for rule in rules:
+        if rule["scope_type"] != JobRolePermission.SCOPE_CREATED_BY_ME:
+            continue
+        if permission.code not in CREATOR_SCOPED_PERMISSION_CODES:
+            raise serializers.ValidationError({
+                "rules": (
+                    "El alcance 'creadas por mí' solo se admite para editar, eliminar "
+                    "o mover/reasignar tareas."
+                )
+            })
+        if rule["effect"] != JobRolePermission.EFFECT_ALLOW:
+            raise serializers.ValidationError({
+                "rules": "El alcance 'creadas por mí' solo admite reglas de permiso."
+            })
 
 
 class PermissionCatalogSerializer(serializers.ModelSerializer):
@@ -34,7 +54,12 @@ class ScopeRuleSerializer(serializers.Serializer):
     def validate(self, attrs):
         scope = attrs["scope_type"]
         target = attrs.get("target_unit")
-        if scope in {JobRolePermission.SCOPE_GLOBAL, JobRolePermission.SCOPE_OWN_UNIT} and target:
+        if scope in {
+            JobRolePermission.SCOPE_GLOBAL,
+            JobRolePermission.SCOPE_OWN_UNIT,
+            JobRolePermission.SCOPE_OWN_SUB_TREE,
+            JobRolePermission.SCOPE_CREATED_BY_ME,
+        } and target:
             raise serializers.ValidationError({"target_unit": "Este alcance no admite una unidad explícita."})
         if scope in {JobRolePermission.SCOPE_SPECIFIC_UNIT, JobRolePermission.SCOPE_SUB_TREE} and not target:
             raise serializers.ValidationError({"target_unit": "Este alcance requiere una unidad objetivo."})
@@ -56,6 +81,10 @@ class RolePolicyApplySerializer(serializers.Serializer):
                 raise serializers.ValidationError("No repitas el mismo alcance para un permiso.")
             seen.add(key)
         return rules
+
+    def validate(self, attrs):
+        validate_role_scope_rules(attrs["permission"], attrs["rules"])
+        return attrs
 
 
 class RolePolicyBulkApplySerializer(serializers.Serializer):
@@ -105,6 +134,10 @@ class RolePolicyBulkApplySerializer(serializers.Serializer):
                     raise serializers.ValidationError({"configurations": {index: error.detail}}) from error
                 if permission.pk in seen:
                     raise serializers.ValidationError({"configurations": "No repitas permisos en la operación."})
+                try:
+                    validate_role_scope_rules(permission, rules)
+                except serializers.ValidationError as error:
+                    raise serializers.ValidationError({"configurations": {index: error.detail}}) from error
                 seen.add(permission.pk)
                 normalized.append({"permission": permission, "rules": rules})
             attrs["configurations"] = normalized
@@ -115,6 +148,8 @@ class RolePolicyBulkApplySerializer(serializers.Serializer):
                 raise serializers.ValidationError("permissions y rules son obligatorios en el formato uniforme.")
             permissions = attrs["permissions"]
             rules_by_permission = [attrs["rules"] for _ in permissions]
+            for permission in permissions:
+                validate_role_scope_rules(permission, attrs["rules"])
 
         unsafe = [
             permission.code for permission, rules in zip(permissions, rules_by_permission)

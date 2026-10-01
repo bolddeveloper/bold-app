@@ -263,8 +263,14 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         task = self.get_object()
         self.require_permission("tasks.task.update", task.unit, task.id)
         new_unit = serializer.validated_data.get("unit")
-        if new_unit and new_unit.id != task.unit_id:
-            self.require_permission("tasks.task.assign", new_unit, task.id)
+        unit_changed = new_unit is not None and new_unit.id != task.unit_id
+        assignee_changed = (
+            "assignee_assignment" in serializer.validated_data
+            and getattr(serializer.validated_data["assignee_assignment"], "id", None)
+            != task.assignee_assignment_id
+        )
+        if unit_changed or assignee_changed:
+            self.require_permission("tasks.task.assign", new_unit or task.unit, task.id)
         self._require_related_permissions(serializer.validated_data)
         task._notification_actor_assignment_id = self.request.assignment.id
         serializer.save()
@@ -354,6 +360,12 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                     self.require_permission("tasks.task.update", task.unit, task.pk)
                     serializer = self.get_serializer(task, data=changes, partial=True)
                     serializer.is_valid(raise_exception=True)
+                    if (
+                        "assignee_assignment" in serializer.validated_data
+                        and getattr(serializer.validated_data["assignee_assignment"], "id", None)
+                        != task.assignee_assignment_id
+                    ):
+                        self.require_permission("tasks.task.assign", task.unit, task.pk)
                     self._require_related_permissions(serializer.validated_data)
                     task._notification_actor_assignment_id = request.assignment.id
                     serializer.save()

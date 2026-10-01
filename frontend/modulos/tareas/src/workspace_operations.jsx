@@ -118,6 +118,9 @@ export default function WorkspaceOperations({ TaskSelect, CalendarDateField, tas
                     const code = operation === "delete" ? "tasks.task.delete" : "tasks.task.update";
                     for (const id of ids) {
                         checks.push(permissionsCan(code, allById.get(String(id))?.unitId, id));
+                        if (operation === "update" && Object.hasOwn(changes || {}, "assignee_assignment")) {
+                            checks.push(permissionsCan("tasks.task.assign", allById.get(String(id))?.unitId, id));
+                        }
                     }
                     if (operation === "link") {
                         const project = projects.find(row => String(row.id) === String(changes.project));

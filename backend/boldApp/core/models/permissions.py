@@ -70,6 +70,8 @@ class Permission(UUIDPrimaryKeyModel):
 class JobRolePermission(models.Model):
     SCOPE_GLOBAL = "global"
     SCOPE_OWN_UNIT = "own_unit"
+    SCOPE_OWN_SUB_TREE = "own_sub_tree"
+    SCOPE_CREATED_BY_ME = "created_by_me"
     SCOPE_SUB_TREE = "sub_tree"
     SCOPE_SPECIFIC_UNIT = "specific_unit"
 
@@ -81,7 +83,9 @@ class JobRolePermission(models.Model):
     SCOPE_CHOICES = [
         (SCOPE_GLOBAL, "Global"),
         (SCOPE_OWN_UNIT, "Unidad propia"),
-        (SCOPE_SUB_TREE, "Subárbol"),
+        (SCOPE_OWN_SUB_TREE, "Unidad propia y subárbol"),
+        (SCOPE_CREATED_BY_ME, "Recursos creados por mí"),
+        (SCOPE_SUB_TREE, "Unidad específica y subárbol"),
         (SCOPE_SPECIFIC_UNIT, "Unidad específica"),
     ]
     EFFECT_CHOICES = [(EFFECT_ALLOW, "Permitir"), (EFFECT_DENY, "Denegar")]
@@ -120,7 +124,12 @@ class JobRolePermission(models.Model):
                 name="unique_role_permission_scope_with_unit",
             ),
             models.CheckConstraint(
-                condition=models.Q(scope_type__in=["global", "own_unit", "sub_tree", "specific_unit"]),
+                condition=models.Q(
+                    scope_type__in=[
+                        "global", "own_unit", "own_sub_tree", "created_by_me",
+                        "sub_tree", "specific_unit",
+                    ]
+                ),
                 name="job_role_permission_valid_scope",
             ),
             models.CheckConstraint(
@@ -129,7 +138,10 @@ class JobRolePermission(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    models.Q(scope_type__in=["global", "own_unit"], target_unit__isnull=True)
+                    models.Q(
+                        scope_type__in=["global", "own_unit", "own_sub_tree", "created_by_me"],
+                        target_unit__isnull=True,
+                    )
                     | models.Q(scope_type__in=["specific_unit", "sub_tree"], target_unit__isnull=False)
                 ),
                 name="job_role_permission_scope_target_consistent",

@@ -83,8 +83,10 @@ mantienen su requisito de MFA reciente. Un usuario con `is_staff=True` e
 | --- | --- |
 | `global` | Cualquier unidad válida. |
 | `own_unit` | Solo la unidad de la asignación evaluada. |
+| `own_sub_tree` | La unidad de la asignación evaluada y todos sus descendientes. Solo políticas por cargo. |
+| `created_by_me` | Solo tareas creadas por la misma asignación, dentro de su unidad propia. Solo permite `tasks.task.update`, `tasks.task.delete` y `tasks.task.assign` con efecto `allow`. |
 | `specific_unit` | Únicamente la unidad indicada en `target_unit`. |
-| `sub_tree` | La unidad indicada y todos sus descendientes. |
+| `sub_tree` | La unidad indicada y todos sus descendientes. Se conserva para accesos y autoridades con raíz explícita; la interfaz ya no lo ofrece en políticas por cargo. |
 
 Las vigencias usan el intervalo semiabierto `[valid_from, valid_until)`: una
 regla deja de ser efectiva exactamente en `valid_until`. Además deben estar
@@ -317,9 +319,10 @@ Campos comunes de mutación:
 - `expected_revision`: revisión que mostraba el cliente. Es recomendable
   enviarla siempre.
 - `effect`: `allow` o `deny`.
-- `scope_type`: `global`, `own_unit`, `specific_unit` o `sub_tree`.
+- `scope_type`: `global`, `own_unit`, `specific_unit` o `sub_tree`. Las
+  políticas por cargo también admiten `own_sub_tree` y `created_by_me`.
 - `target_unit`: obligatorio para `specific_unit`/`sub_tree` y prohibido para
-  `global`/`own_unit`.
+  `global`/`own_unit`/`own_sub_tree`/`created_by_me`.
 
 Una revisión desactualizada devuelve HTTP `409` con código
 `policy_revision_conflict`; el cliente debe recargar la política antes de

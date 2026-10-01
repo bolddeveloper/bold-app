@@ -29,6 +29,7 @@ from boldApp.core.models import (
     UserAccount,
 )
 from boldApp.permisos.models import PermissionPolicyEvent, PermissionPolicyState
+from boldApp.permisos.serializers import RolePolicyApplySerializer
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, PERMISSIONS_STEP_UP_MFA_SECONDS=600)
@@ -141,6 +142,75 @@ class PermissionControlPlaneSecurityTests(TestCase):
         )
         assignment = PositionAssignment.objects.create(employee=employee, position=position)
         return account, assignment
+
+    def test_own_subtree_scope_follows_the_assignment_unit(self):
+        JobRolePermission.objects.create(
+            job_role=self.manager_role,
+            permission=self.update_permission,
+            effect=JobRolePermission.EFFECT_ALLOW,
+            scope_type=JobRolePermission.SCOPE_OWN_SUB_TREE,
+        )
+
+        own = resolve_access(self.staff_assignment, self.update_permission, self.marketing)
+        descendant = resolve_access(self.staff_assignment, self.update_permission, self.content)
+        sibling = resolve_access(self.staff_assignment, self.update_permission, self.operations)
+
+        self.assertTrue(own.allowed)
+        self.assertTrue(descendant.allowed)
+        self.assertFalse(sibling.allowed)
+
+    def test_created_by_me_scope_uses_creator_assignment_and_own_unit(self):
+        JobRolePermission.objects.create(
+            job_role=self.worker_role,
+            permission=self.update_permission,
+            effect=JobRolePermission.EFFECT_ALLOW,
+            scope_type=JobRolePermission.SCOPE_CREATED_BY_ME,
+        )
+
+        own = resolve_access(
+            self.target_assignment,
+            self.update_permission,
+            self.content,
+            resource_id=uuid4(),
+            resource_created_by_assignment_id=self.target_assignment.id,
+        )
+        another_creator = resolve_access(
+            self.target_assignment,
+            self.update_permission,
+            self.content,
+            resource_id=uuid4(),
+            resource_created_by_assignment_id=self.outsider_assignment.id,
+        )
+        outside_own_unit = resolve_access(
+            self.target_assignment,
+            self.update_permission,
+            self.marketing,
+            resource_id=uuid4(),
+            resource_created_by_assignment_id=self.target_assignment.id,
+        )
+
+        self.assertTrue(own.allowed)
+        self.assertFalse(another_creator.allowed)
+        self.assertFalse(outside_own_unit.allowed)
+
+    def test_created_by_me_scope_is_limited_to_task_mutations_and_allow_rules(self):
+        base = {
+            "job_role": str(self.worker_role.id),
+            "reason": "Permitir operar únicamente tareas propias",
+            "rules": [{"effect": "allow", "scope_type": "created_by_me"}],
+        }
+        valid = RolePolicyApplySerializer(data={**base, "permission": str(self.update_permission.id)})
+        self.assertTrue(valid.is_valid(), valid.errors)
+
+        wrong_permission = RolePolicyApplySerializer(data={**base, "permission": str(self.read_permission.id)})
+        self.assertFalse(wrong_permission.is_valid())
+
+        deny = RolePolicyApplySerializer(data={
+            **base,
+            "permission": str(self.update_permission.id),
+            "rules": [{"effect": "deny", "scope_type": "created_by_me"}],
+        })
+        self.assertFalse(deny.is_valid())
 
     def _client(self, account, assignment, *, mfa="recent", control_plane=True):
         if mfa == "recent":
