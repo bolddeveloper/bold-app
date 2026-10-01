@@ -1,7 +1,7 @@
 import { isControlPlaneContext, normalizeAssignment, selectAssignment, shouldLeaveRestrictedShellModule } from "../../../core/core_models.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./task_models.js";
+import { normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");
@@ -67,6 +67,14 @@ test("owner project view keeps current projects grouped and ordered by departmen
             .map(group => [group.name, group.projects.map(project => project.id)]),
         [["Marketing", ["p2"]], ["Operaciones", ["p1"]]],
     );
+});
+test("project collaborators are limited to the selected project unit", () => {
+    const members = [
+        { id: "marketing-1", unitId: "marketing" },
+        { id: "operations-1", unitId: "operations" },
+        { id: "marketing-2", unitId: "marketing" },
+    ];
+    assert.deepEqual(membersForUnit(members, "marketing").map(member => member.id), ["marketing-1", "marketing-2"]);
 });
 test("my tasks include responsible and follower assignments without duplicating rows", () => {
     const tasks = [

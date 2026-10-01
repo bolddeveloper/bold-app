@@ -102,6 +102,15 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
         validate_active_assignment(value)
         return value
 
+    def validate(self, attrs):
+        project = attrs.get("project") or getattr(self.instance, "project", None)
+        assignment = attrs.get("assignment") or getattr(self.instance, "assignment", None)
+        if project and assignment and assignment.position.unit_id != project.unit_id:
+            raise serializers.ValidationError(
+                {"assignment": "La asignacion debe pertenecer al departamento del proyecto."}
+            )
+        return attrs
+
 
 class SectionSerializer(serializers.ModelSerializer):
     class Meta:

@@ -43,7 +43,7 @@ import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
-import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask } from "./services/task_models.js";
+import { dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
@@ -615,7 +615,7 @@ function ProjectIdentity({ project_or_color, size_class }) {
         : <span className={`project_dot project_identity ${size_class}`} style={{ "--project_color": color }} {...interaction} />;
 }
 
-function ProjectPreview({ project, anchor, onClose, onSave, onUpdate, pending }) {
+function ProjectPreview({ project, anchor, members, onClose, onSave, onUpdate, pending }) {
     useDialog(true, ".project_preview", onClose);
     const width = Math.min(360, window.innerWidth - 24);
     const left = Math.max(12, Math.min(anchor.left, window.innerWidth - width - 12));
@@ -630,7 +630,7 @@ function ProjectPreview({ project, anchor, onClose, onSave, onUpdate, pending })
                 <p>{project.description || "Sin descripción"}</p>
                 <div className="project_summary_badges"><TaskSelect aria_label="Estado del proyecto" class_name="project_preview_select" disabled={pending} variant="status" value={status} options={["Activo", "Pendiente", "Inactivo"]} on_change={value => onUpdate({ status: value })} /><TaskSelect aria_label="Prioridad del proyecto" class_name="project_preview_select" disabled={pending} variant="priority" value={project.priority || "Media"} options={priority_items} on_change={value => onUpdate({ priority: value })} /></div>
                 <fieldset disabled={pending}>
-                    <CollaboratorsSelector selected_ids={project.member_ids || []} on_change={onSave} label="Personas del proyecto" action_label="Agregar persona" picker_title="Personas del proyecto" empty_text="Sin personas agregadas" />
+                    <CollaboratorsSelector members={members} selected_ids={(project.member_ids || []).filter(id => members.some(member => member.id === id))} on_change={onSave} label="Personas del proyecto" action_label="Agregar persona" picker_title="Personas del proyecto" empty_text="Sin personas agregadas" />
                 </fieldset>
             </div>
         </section>
@@ -1792,7 +1792,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
 
 
 // Selector de colaboradores para los modales de Crear y Editar tarea
-function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colaboradores asignados", action_label, picker_title = "Agregar colaborador", empty_text = "Selecciona personas para seguir esta tarea", collapsible = false }) {
+function CollaboratorsSelector({ on_change, selected_ids = [], members = team_members, label = "Colaboradores asignados", action_label, picker_title = "Agregar colaborador", empty_text = "Selecciona personas para seguir esta tarea", collapsible = false }) {
     const [is_picker_open, set_is_picker_open] = use_state(false);
     const [is_expanded, set_is_expanded] = use_state(!collapsible);
     const [query, set_query] = use_state("");
@@ -1823,8 +1823,8 @@ function CollaboratorsSelector({ on_change, selected_ids = [], label = "Colabora
         on_change(selected_ids.filter((id) => id !== member_id));
     }
 
-    const assigned_members = selected_ids.map((id) => get_member(id)).filter(Boolean);
-    const visible_members = team_members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const assigned_members = selected_ids.map((id) => members.find(member => member.id === id)).filter(Boolean);
+    const visible_members = members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
 
     return (
         <div className={`bold_field_group collaborators_field_group ${collapsible && !is_expanded ? "is_collapsed" : ""}`}>
@@ -3814,10 +3814,10 @@ function render_share_modal(set_active_modal, project, onMembers, onError) {
     );
 }
 
-function ShareProjectModal({ project, onClose, onSave, onError, pending }) {
+function ShareProjectModal({ project, members, onClose, onSave, onError, pending }) {
     const [query, setQuery] = use_state("");
-    const [selected, setSelected] = use_state(() => project?.member_ids || []);
-    const visible = team_members.filter(member => selected.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const [selected, setSelected] = use_state(() => (project?.member_ids || []).filter(id => members.some(member => member.id === id)));
+    const visible = members.filter(member => selected.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
     const url = new URL(window.location.href);
     if (project?.id) url.searchParams.set("project", project.id);
     const toggle = id => setSelected(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
@@ -3908,7 +3908,7 @@ function render_project_modal(props) {
         project_owner_assignment_id,
         set_project_owner_assignment_id
     } = props;
-    const unit_people = (props.directory || []).filter(person => String(person.unitId) === String(project_unit_id));
+    const unit_people = membersForUnit(props.directory, project_unit_id);
 
     return (
         <TaskDrawer class_name="project_create_modal" label={editing_project ? "Editar proyecto" : "Crear proyecto"} on_close={() => set_active_modal(null)} {...drawer}>
@@ -3934,8 +3934,10 @@ function render_project_modal(props) {
                         <span>Departamento responsable</span>
                         <div className="project_create_grid_3">
                             <label>Departamento<TaskSelect aria_label="Departamento responsable" name="project_unit" value={project_unit_id} on_change={value => {
+                                const people = membersForUnit(props.directory, value);
                                 set_project_unit_id(value);
-                                set_project_owner_assignment_id((props.directory || []).find(person => String(person.unitId) === String(value))?.id || "");
+                                set_project_owner_assignment_id(people[0]?.id || "");
+                                set_project_people_ids(people.map(person => person.id));
                             }} options={(props.units || []).map(unit => ({ value: unit.id, label: unit.name }))} /></label>
                             <label>Responsable<TaskSelect aria_label="Responsable del proyecto" name="project_owner_assignment" value={project_owner_assignment_id} on_change={set_project_owner_assignment_id} options={unit_people.map(person => ({ value: person.id, label: person.name, description: person.job_role_title }))} /></label>
                         </div>
@@ -3998,6 +4000,7 @@ function render_project_modal(props) {
                     <section className="project_create_step">
                         <span><strong>5</strong> Personas relacionadas al proyecto</span>
                         <CollaboratorsSelector
+                            members={unit_people}
                             selected_ids={project_people_ids}
                             on_change={set_project_people_ids}
                             label="Personas relacionadas"
@@ -4211,7 +4214,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [project_status, set_project_status] = use_state("Activo");
     const [project_priority, set_project_priority] = use_state("Media");
     const [project_color, set_project_color] = use_state(project_color_options[0]);
-    const [project_people_ids, set_project_people_ids] = use_state(team_members.map((member_item) => member_item.id));
+    const [project_people_ids, set_project_people_ids] = use_state([]);
     const [project_unit_id, set_project_unit_id] = use_state(session.activeUnit?.id || "");
     const [project_owner_assignment_id, set_project_owner_assignment_id] = use_state(session.activeAssignment?.id || "");
     const [mock_sections_by_project, set_mock_sections_by_project] = use_state(() => Object.fromEntries(project_items.map(project => [project.id, default_board_columns])));
@@ -4368,13 +4371,17 @@ function TaskAppContent({ externalModules = {} }) {
         if (active_modal === "project") {
             const project = projects.find(project => project.id === editing_project_id);
             const unitId = project?.unitId || project?.unit || session.activeUnit?.id || "";
+            const unitPeople = membersForUnit(session.directory, unitId);
             set_project_avatar_data_url(project?.avatar_data_url || "");
             set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
             set_project_priority(project?.priority || "Media");
             set_project_unit_id(unitId);
             set_project_owner_assignment_id(project?.owner_assignment || (String(session.activeAssignment?.unitId) === String(unitId) ? session.activeAssignment?.id : session.directory?.find(person => String(person.unitId) === String(unitId))?.id) || "");
+            set_project_people_ids(project
+                ? (project.member_ids || []).filter(id => unitPeople.some(person => person.id === id))
+                : unitPeople.map(person => person.id));
         }
-    }, [active_modal, editing_project_id, projects, session.activeAssignment?.id, session.activeUnit?.id]);
+    }, [active_modal, editing_project_id, projects, session.activeAssignment?.id, session.activeUnit?.id, session.directory]);
 
     function handle_create_project(event) {
         event.preventDefault();
@@ -4436,7 +4443,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (!editing_project_id) remember_project(project_payload.id, [project_payload.id, ...projects.map(project => project.id)]);
         set_selected_project_id(project_payload.id);
         set_project_color(project_color_options[0]);
-        set_project_people_ids(team_members.map((member_item) => member_item.id));
+        set_project_people_ids([]);
         set_editing_project_id(null);
         set_active_modal(null);
     }
@@ -4471,7 +4478,7 @@ function TaskAppContent({ externalModules = {} }) {
             const project_item = projects.find((item) => item.id === project_id);
             set_editing_project_id(project_id);
             set_project_color(project_item?.color || project_color_options[0]);
-            set_project_people_ids(project_item?.member_ids || team_members.map((member_item) => member_item.id));
+            set_project_people_ids(project_item?.member_ids || []);
             set_active_project_menu_id(null);
             set_active_modal("project");
             return;
@@ -5611,7 +5618,7 @@ function TaskAppContent({ externalModules = {} }) {
         }
 
         if (active_modal === "share") {
-            return <ShareProjectModal project={selected_project} pending={pending} onClose={() => set_active_modal(null)} onSave={handle_save_project_members} onError={set_api_error} />;
+            return <ShareProjectModal project={selected_project} members={membersForUnit(session.directory, selected_project?.unitId || selected_project?.unit)} pending={pending} onClose={() => set_active_modal(null)} onSave={handle_save_project_members} onError={set_api_error} />;
         }
 
         if (active_modal === "project") {
@@ -5675,7 +5682,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
-            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
+            overlays={<>{render_active_modal()}{render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}{project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}{workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}</>}
         >
                 <div className="module_transition" key={active_module}>
                 {externalModules[active_module] || (active_module === "home" ? <HomeModule

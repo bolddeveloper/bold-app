@@ -15,7 +15,7 @@ from boldApp.core.models import (
     PositionAssignment,
     UserAccount,
 )
-from boldApp.tareas.models import Project, Section, Task, TaskProject, TaskStatus
+from boldApp.tareas.models import Project, ProjectMember, Section, Task, TaskProject, TaskStatus
 from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
 
@@ -127,6 +127,107 @@ class TasksV2ApiTests(TransactionTestCase):
             format="json",
         )
         self.assertEqual(edited.status_code, 200, edited.data)
+
+    def test_project_members_must_belong_to_project_unit(self):
+        ProjectMember.objects.filter(
+            project=self.ops_project,
+            assignment=self.david_assignment,
+        ).delete()
+        valid = self.client.post(
+            "/api/v2/project-members/",
+            {
+                "project": str(self.ops_project.id),
+                "assignment": str(self.david_assignment.id),
+                "member_role": "member",
+                "status": "active",
+            },
+            format="json",
+        )
+        self.assertEqual(valid.status_code, 201, valid.data)
+
+        invalid = self.client.post(
+            "/api/v2/project-members/",
+            {
+                "project": str(self.ops_project.id),
+                "assignment": str(self.ana_assignment.id),
+                "member_role": "member",
+                "status": "active",
+            },
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400, invalid.data)
+        self.assertIn("assignment", invalid.data)
+        self.assertFalse(
+            ProjectMember.objects.filter(
+                project=self.ops_project,
+                assignment=self.ana_assignment,
+            ).exists()
+        )
+
+    def test_task_creator_can_list_required_statuses_without_catalog_permission(self):
+        role = self.ana_assignment.position.job_role
+        JobRolePermission.objects.filter(
+            job_role=role,
+            permission__code="tasks.catalog.read",
+        ).delete()
+        self.assertTrue(
+            JobRolePermission.objects.filter(
+                job_role=role,
+                permission__code="tasks.task.create",
+                effect=JobRolePermission.EFFECT_ALLOW,
+            ).exists()
+        )
+
+        _, session = create_session(
+            self.ana,
+            RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"),
+        )
+        client = APIClient()
+        client.force_authenticate(self.ana, session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id))
+
+        response = client.get(f"/api/v2/task-statuses/?unit={self.marketing.id}")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertGreater(len(response.data["results"]), 0)
+
+    def test_owner_can_create_tasks_in_a_newly_created_unit(self):
+        owner = UserAccount.objects.get(email="luis@bold.gt")
+        owner_assignment = PositionAssignment.objects.get(
+            employee=owner.employee,
+            is_active=True,
+            released_at__isnull=True,
+        )
+        new_unit = OrganizationalUnit.objects.create(
+            name="Finanzas",
+            unit_type=self.marketing.unit_type,
+            sensitivity_level=self.marketing.sensitivity_level,
+        )
+        statuses = TaskStatus.objects.filter(unit=new_unit)
+        self.assertEqual(statuses.count(), 3)
+        initial_status = statuses.get(category="todo")
+
+        _, owner_session = create_session(
+            owner,
+            RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"),
+        )
+        client = APIClient()
+        client.force_authenticate(owner, owner_session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(owner_assignment.id))
+
+        listed = client.get(f"/api/v2/task-statuses/?unit={new_unit.id}")
+        self.assertEqual(listed.status_code, 200, listed.data)
+        self.assertEqual(len(listed.data["results"]), 3)
+        created = client.post(
+            "/api/v2/tasks/",
+            {
+                "unit": str(new_unit.id),
+                "status": str(initial_status.id),
+                "title": "Preparar cierre financiero",
+                "priority": "high",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
 
     def test_collaborator_can_mutate_only_tasks_created_by_its_assignment(self):
         collaborator_role = self.ana_assignment.position.job_role

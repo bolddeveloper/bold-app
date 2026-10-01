@@ -89,7 +89,7 @@ class Section(UUIDPrimaryKeyModel):
 class TaskStatus(UUIDPrimaryKeyModel):
     unit = models.ForeignKey(
         OrganizationalUnit,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="task_statuses",

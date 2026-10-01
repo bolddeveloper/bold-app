@@ -213,7 +213,13 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         unit_id = self.request.query_params.get("unit") or self.request.assignment.position.unit_id
-        allowed = {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}
+        # Los estados son obligatorios al crear una tarea. Un cargo con permiso
+        # de creacion no debe quedar bloqueado por carecer del catalogo general.
+        allowed = {
+            str(value)
+            for code in ("tasks.catalog.read", "tasks.task.create")
+            for value in self.allowed_unit_ids(code)
+        }
         if str(unit_id) not in allowed:
             return TaskStatus.objects.none()
         return TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True))

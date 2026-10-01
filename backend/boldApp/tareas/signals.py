@@ -4,6 +4,9 @@ from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
+from boldApp.core.models import OrganizationalUnit
+
+from .catalog import ensure_default_task_statuses
 from .models import Comment, Task, TaskProject
 from .webhook_events import (
     COMMENT_CREATED,
@@ -14,6 +17,12 @@ from .webhook_events import (
     dispatch_task_event,
 )
 from .serializers import CommentSerializer, TaskSerializer
+
+
+@receiver(post_save, sender=OrganizationalUnit)
+def provision_task_statuses_for_new_unit(sender, instance, created, raw=False, **kwargs):
+    if created and not raw:
+        ensure_default_task_statuses(instance)
 
 
 # Guarda el estado previo de status/unit/deleted_at de la tarea antes de guardarla,

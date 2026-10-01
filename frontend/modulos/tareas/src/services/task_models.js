@@ -48,6 +48,9 @@ export function groupProjectsByUnit(projects, units) {
     }
     return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name, "es"));
 }
+export function membersForUnit(members, unitId) {
+    return (members || []).filter(member => String(member.unitId) === String(unitId));
+}
 export const isMyTask = (task, assignmentId) => task.assignee_id === assignmentId || task.collaborator_ids?.includes(assignmentId);
 export const normalizeProject = dto => ({ ...dto, label: dto.name, color: dto.color_hex || "#ef1f2d", unitId: dto.unit });
 
