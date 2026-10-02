@@ -73,9 +73,12 @@ export function createTaskDataLoader(context, { catalogCache, client = api, noti
         if (version !== generation) throw new DOMException("Contexto de tareas invalidado", "AbortError");
         // A moved/deleted task must not leave relations from its previous scope.
         const taskIds = new Set(next.tasks.keys());
+        const projectIds = new Set(next.projects.keys());
         for (const resource of Object.keys(RELATIONS)) {
-            next[resource] = new Map([...next[resource]].filter(([, row]) => taskIds.has(String(row.task))));
+            next[resource] = new Map([...next[resource]].filter(([, row]) => taskIds.has(String(row.task)) && (resource !== "links" || projectIds.has(String(row.project)))));
         }
+        for (const resource of ["members", "sections"])
+            next[resource] = new Map([...next[resource]].filter(([, row]) => projectIds.has(String(row.project))));
         const rows = resource => [...next[resource].values()];
         const statuses = rows("statuses").map(normalizeStatus);
         const data = assembleTaskData({ ...context,

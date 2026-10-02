@@ -431,11 +431,15 @@ El arranque, acciones, comprobaciones adicionales, tickets y reconexiones quedan
 fuera del presupuesto periódico y deben medirse aparte. No es tráfico medido
 en Cloudflare ni prueba de capacidad de 25 usuarios.
 
-Pruebas: 110 frontend, 4 Worker, 150 Django; sin migraciones pendientes. Build
+Pruebas: 111 frontend, 4 Worker, 151 Django; sin migraciones pendientes. Build
 correcto; persiste el aviso previo de tamaño del bundle. Se prueban filtros
 sin ampliar visibilidad, creación sin permiso de catálogo, borrado de
 relaciones, dos receptores, rollback sin emitir eventos, IDs acotados,
 respuestas de otro contexto, rondas atómicas y consistencia de subtareas.
+La comprobación en PostgreSQL real encontró listados sin orden determinista:
+se añadió orden por PK como desempate (sin migraciones) para evitar saltos o
+duplicados entre páginas estables. Una modificación concurrente entre páginas
+todavía requiere reconciliación; no se afirma disponer de snapshots/cursors.
 
 ### Activación y reversión
 

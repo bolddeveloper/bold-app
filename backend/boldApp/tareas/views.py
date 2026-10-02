@@ -73,7 +73,12 @@ class AssignmentScopedViewSetMixin:
 
     def filter_task_relations(self, queryset):
         task_ids = self.query_ids("tasks")
-        return queryset.filter(task_id__in=task_ids) if task_ids is not None else queryset
+        queryset = queryset.filter(task_id__in=task_ids) if task_ids is not None else queryset
+        return self.stable_order(queryset)
+
+    def stable_order(self, queryset):
+        ordering = queryset.query.order_by or queryset.model._meta.ordering or ()
+        return queryset.order_by(*ordering, "pk")
 
     def require_permission(self, code, unit, resource_id=None):
         result = check_and_log(
@@ -154,7 +159,7 @@ class ProjectViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        queryset = self.visible_projects()
+        queryset = self.stable_order(self.visible_projects())
         unit_id = self.request.query_params.get("unit")
         return queryset.filter(unit_id=unit_id) if unit_id else queryset
 
@@ -181,7 +186,7 @@ class ProjectMemberViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = ProjectMemberSerializer
 
     def get_queryset(self):
-        return ProjectMember.objects.filter(project__in=self.visible_projects())
+        return self.stable_order(ProjectMember.objects.filter(project__in=self.visible_projects()))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.project.manage", serializer.validated_data["project"].unit)
@@ -204,7 +209,7 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = SectionSerializer
 
     def get_queryset(self):
-        queryset = Section.objects.filter(project__in=self.visible_projects())
+        queryset = self.stable_order(Section.objects.filter(project__in=self.visible_projects()))
         project_id = self.request.query_params.get("project")
         return queryset.filter(project_id=project_id) if project_id else queryset
 
@@ -240,10 +245,10 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         }
         if unit_ids is not None:
             requested = [value for value in unit_ids if str(value) in allowed]
-            return TaskStatus.objects.filter(Q(unit_id__in=requested) | Q(unit__isnull=True)) if requested else TaskStatus.objects.none()
+            return self.stable_order(TaskStatus.objects.filter(Q(unit_id__in=requested) | Q(unit__isnull=True))) if requested else TaskStatus.objects.none()
         if str(unit_id) not in allowed:
             return TaskStatus.objects.none()
-        return TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True))
+        return self.stable_order(TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True)))
 
     def perform_create(self, serializer):
         unit = serializer.validated_data.get("unit") or self.request.assignment.position.unit
@@ -272,7 +277,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
     serializer_class = TaskSerializer
 
     def get_queryset(self):
-        queryset = self.visible_tasks().select_related(
+        queryset = self.stable_order(self.visible_tasks()).select_related(
             "unit",
             "status",
             "created_by_assignment",
@@ -588,10 +593,10 @@ class TagViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         allowed = {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}
         unit_ids = self.query_ids("units")
         if unit_ids is not None:
-            return Tag.objects.filter(unit_id__in=[value for value in unit_ids if str(value) in allowed])
+            return self.stable_order(Tag.objects.filter(unit_id__in=[value for value in unit_ids if str(value) in allowed]))
         if str(unit_id) not in allowed:
             return Tag.objects.none()
-        return Tag.objects.filter(unit_id=unit_id)
+        return self.stable_order(Tag.objects.filter(unit_id=unit_id))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.project.manage", serializer.validated_data["unit"])

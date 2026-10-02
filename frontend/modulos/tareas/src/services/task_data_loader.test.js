@@ -81,6 +81,12 @@ test("a removed or no-longer-visible task is pruned with its old relations", asy
     assert.deepEqual(calls.map(call => call.resource).sort(), ["task-projects", "tasks"]);
     assert.deepEqual(next.tasks.map(task => task.id), ["t2"]); assert.deepEqual(next.links, []); assert.deepEqual(next.followers, []);
 });
+test("project deletion prunes stale links without deleting tasks or their totals", async () => {
+    const { rows, loader } = fixture(); await loader.load(); rows.projects = [];
+    const next = await loader.load(["projects"]);
+    assert.equal(next.tasks.length, 2); assert.deepEqual(next.links, []);
+    assert.deepEqual(next.tasks[0].taskProjects, []);
+});
 test("coalesced status/update events query one task and its links without catalogs", async () => {
     const { rows, calls, loader } = fixture(); await loader.load(); calls.length = 0;
     rows.tasks[0].title = "Último estado";

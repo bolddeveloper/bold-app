@@ -136,6 +136,15 @@ class TasksV2ApiTests(TransactionTestCase):
                 pass
             self.assertFalse(dispatch.called)
 
+    def test_incremental_querysets_have_a_unique_pagination_tiebreaker(self):
+        from boldApp.tareas.views import AssignmentScopedViewSetMixin
+
+        helper = AssignmentScopedViewSetMixin()
+        for model in (Project, ProjectMember, Section, Task, TaskStatus, TaskFollower, TaskProject, Comment, Attachment, Tag, TaskTag):
+            queryset = helper.stable_order(model.objects.all())
+            self.assertTrue(queryset.ordered)
+            self.assertEqual(queryset.query.order_by[-1], "pk")
+
     def test_seed_includes_idempotent_samuel_authentication_account(self):
         samuel = UserAccount.objects.get(email="samuel@bold.gt")
         assignment = PositionAssignment.objects.get(employee=samuel.employee, is_active=True, released_at__isnull=True)
