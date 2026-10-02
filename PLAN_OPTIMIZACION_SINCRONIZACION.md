@@ -1,6 +1,6 @@
 # Plan de optimización de peticiones y sincronización
 
-Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas, fase 3 parcial y primera entrega de fase 4 publicadas; primera verificación de conexiones de fase 5 en curso. Ver avance al final.
+Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas, fase 3 parcial y primera entrega de fase 4 publicadas; primera verificación de conexiones de fase 5 publicada. Ver avance al final.
 
 Base: `ANALISIS_PETICIONES_CLOUDFLARE.md`, revisión de `Develop` en `4c38c852` y comprobación adicional de los consumidores, emisión de revisiones, caché y pruebas existentes.
 
@@ -633,3 +633,28 @@ Para la medición nueva: actualizar todas las pestañas/PWA, comprobar
 No ejecutar escrituras desde la consola; solo se consultan contadores agregados.
 No sumar `http`, `http-result` y `duration`. Comparar Inicio/Tareas y un módulo
 hermano por separado, además del arranque y las acciones.
+
+## 16. Fase 5 — primera entrega de conexiones y verificación acotada
+
+Informe reproducible: `VERIFICACION_CONEXIONES_FASE_5.md`.
+
+- Handshake WebSocket limitado a 15 s; recuperación de Internet no adelanta
+  Retry-After/backoff. Pruebas de 5/10/25 pestañas con transporte/reloj simulados,
+  limpieza completa y revocación en varias pestañas.
+- ASGI aislado: 5/10/25 cuentas sintéticas, dos sockets por cliente, broadcast,
+  revocación selectiva y limpieza de grupos. No consume cuota ni acredita
+  capacidad PostgreSQL/Redis/Cloudflare de producción.
+- Sonda pública de salud de hasta 40 GET por ejecución, sin cookies/escrituras
+  ni retries. Se distinguieron fallos TCP del instrumento local de errores HTTP.
+  Con el plazo TCP explícito de 2 s en la sonda, 40/40 lecturas saludables;
+  p95 con 25 simultáneas 2.284 s. No es p95 de tareas ni de acciones autenticadas.
+- Código `2ab05cba`, Cloudflare `dfaf90e9-db1f-4db6-a537-99ae373e7428`, cliente
+  actualizado verificado. Oracle checkout actualizado sin reiniciar backend,
+  cuyo runtime no cambió. 137 frontend, 158 Django, 4 Worker; Develop intacta.
+- Cloudflare, lectura final alrededor de 11:33 UTC: 793/100,000 peticiones hoy,
+  99,207 restantes según panel. No confundir con contador mensual/últimas 24 h.
+
+**No se declara completa la fase 5 ni el plan.** Falta paginación/arranque de
+fase 3, ventana autenticada controlada por versión/rol y carga representativa
+con datos sintéticos en entorno aislado. Liderazgo entre pestañas queda
+condicionado a evidencia de ahorro y diseño que conserve el control de seguridad.

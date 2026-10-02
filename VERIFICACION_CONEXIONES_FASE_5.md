@@ -29,6 +29,10 @@ Panel de cuenta → Workers & Pages → Usage → View limits:
   de las últimas 24 horas tampoco equivalen al día de cuota. No restarlas de 100k.
 - Consultar nuevamente al terminar; puede haber retraso de agregación y tráfico
   de usuarios/otros Workers. No calcular la cuota restante a partir de logs Oracle.
+- Lectura final del panel alrededor de **11:33 UTC**: **793 / 100,000 hoy**;
+  quedan **99,207** según el contador disponible. El aumento de 212 desde la
+  lectura inicial incluye sondas, arranque/navegación y tráfico existente;
+  no se atribuye íntegramente al test ni equivale a una tasa por hora.
 
 ## 2. Simulación determinista del frontend
 
@@ -158,3 +162,25 @@ guardados, colaboración, notificaciones o autorización de una jornada completa
 
 Recomendación: seguir primero con paginación/arranque y una medición autenticada
 reproducible. No aumentar polling ni desactivar el control para ahorrar cuota.
+
+## Publicación y verificación
+
+- Código `2ab05cba`, publicado en `perf/sincronizacion-trafico`; Develop intacta.
+- Cloudflare versión `dfaf90e9-db1f-4db6-a537-99ae373e7428`, bundle
+  `index-JLvn4_tm.js`, `buildVersion=2ab05cba`. CSS sin cambios. Diagnósticos,
+  backend real, mismo origen, control y sincronización incremental activos.
+- Raíz y bundle HTTP 200; versión y marcador de timeout comprobados en el
+  bundle público; salud pública OK. La pestaña existente de Samuel recargó
+  el nuevo bundle, restauró sesión/vista de proyecto y no mostró errores de
+  consola. No se crearon tareas ni se manipularon permisos para esta prueba.
+- Checkout Oracle actualizado al código publicado. Backend/worker continúan
+  con imagen `56d1b0d14b5d`: ningún cambio de runtime backend en esta fase,
+  solo tests; no se reiniciaron DB, Redis, túnel ni servicios autenticados.
+- Validación: 137 frontend, 158 Django y 4 Worker; build correcto, permanece
+  el aviso previo del bundle >500 kB. Herramientas de prueba no se importan
+  en el bundle de la aplicación; no hay nueva dependencia ni tarea periódica.
+- Reversión solo del frontend: versión anterior
+  `2462be0e-63f9-4d95-bf58-ef122bdaa54d` (fase 4). No requiere restaurar DB.
+- Otras pestañas/PWA deben actualizarse para recibir el nuevo cliente; no
+  interrumpir borradores abiertos. Los números de cuota son la lectura
+  disponible del panel y pueden tener retraso; no son un contador en vivo.
