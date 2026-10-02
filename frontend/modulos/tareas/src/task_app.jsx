@@ -1,3 +1,4 @@
+import { projectHasTasks } from "./services/project_deletion.js";
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
@@ -4168,7 +4169,7 @@ function render_project_modal(props) {
 function render_project_menu(handle_request_delete_project, is_open) {
     return (
         <div className={`project_menu_popover animated_overflow_menu ${is_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_open}>
-            <button className="danger_menu_item" type="button" onClick={handle_request_delete_project}>Eliminar proyecto</button>
+            <button className="danger_menu_item" type="button" onClick={() => handle_request_delete_project()}>Eliminar proyecto</button>
         </div>
     );
 }
@@ -4668,9 +4669,8 @@ function TaskAppContent({ externalModules = {} }) {
         }
 
         if (action === "delete") {
-            set_delete_target({ type: "project", id: project_id });
             set_active_project_menu_id(null);
-            set_active_modal("delete_confirm");
+            handle_request_delete_project(project_id);
             return;
         }
 
@@ -5898,8 +5898,16 @@ function TaskAppContent({ externalModules = {} }) {
         set_active_modal("delete_confirm");
     }
 
-    function handle_request_delete_project() {
-        set_delete_target({ type: "project", id: selected_project_id });
+    async function can_delete_project(project_id) {
+        try {
+            if (!await projectHasTasks(project_id, all_workspace_tasks, real ? api.listTaskProjectLinks : null)) return true;
+            await Swal.fire({ icon: "info", title: "Proyecto con tareas", text: "No puedes eliminar este proyecto mientras tenga tareas. Mueve o elimina sus tareas primero.", confirmButtonText: "Entendido" });
+        } catch { set_api_error("No se pudo verificar si el proyecto tiene tareas. No se eliminó el proyecto; inténtalo de nuevo."); }
+        return false;
+    }
+    async function handle_request_delete_project(project_id = selected_project_id) {
+        if (!await can_delete_project(project_id)) return;
+        set_delete_target({ type: "project", id: project_id });
         set_active_modal("delete_confirm");
     }
 
@@ -5947,7 +5955,8 @@ function TaskAppContent({ externalModules = {} }) {
             });
     }
 
-    function handle_confirm_delete_project(project_id) {
+    async function handle_confirm_delete_project(project_id) {
+        if (!await can_delete_project(project_id)) { set_active_modal(null); set_delete_target(null); return; }
         if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }, undefined, undefined, PROJECT_RESOURCES); return; }
         const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
         set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_id));
