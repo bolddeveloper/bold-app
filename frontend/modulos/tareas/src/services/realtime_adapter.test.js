@@ -19,15 +19,29 @@ test("reconnect obtains a fresh ticket, refetches REST and cancels timers", asyn
         emit(name, event = {}) { this.handlers[name]?.(event); }
         close() { this.emit("close"); }
     }
-    const adapter = createRealtimeAdapter({ WebSocketImpl: Socket, setTimer: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimer: id => { if (id) timers[id - 1].cancelled = true; } });
+    const adapter = createRealtimeAdapter({ WebSocketImpl: Socket, random: () => 0, setTimer: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimer: id => { if (id) timers[id - 1].cancelled = true; } });
     let tickets = 0;
     adapter.connect({ unitId: "u", assignmentId: "a", getTicket: async () => ({ ticket: `t${++tickets}` }), onReconnect: () => refetches++, onEvent: () => events++ });
-    await Promise.resolve();
+    await new Promise(resolve => setImmediate(resolve));
     sockets[0].emit("open"); sockets[0].emit("message", { data: "bad json" });
     for (let i = 0; i < 2; i++) sockets[0].emit("message", { data: '{"event_id":"e","event_version":2}' });
     assert.equal(events, 1);
-    sockets[0].emit("close"); assert.equal(timers[0].delay, 1000); timers[0].fn(); await Promise.resolve(); sockets[1].emit("open");
-    assert.equal(refetches, 2);
-    sockets[1].emit("close"); adapter.disconnect(); assert.equal(timers[1].cancelled, true);
-    timers[1].fn(); assert.equal(sockets.length, 2);
+    assert.equal(refetches, 0);
+    sockets[0].emit("close"); assert.equal(timers.at(-1).delay, 1000); timers.at(-1).fn(); await new Promise(resolve => setImmediate(resolve)); sockets[1].emit("open");
+    assert.equal(refetches, 1);
+    sockets[1].emit("close"); const retry = timers.at(-1); adapter.disconnect(); assert.equal(retry.cancelled, true);
+    retry.fn(); assert.equal(sockets.length, 2);
+});
+
+test("retaining units preserves authorized connections instead of reopening every socket", async () => {
+    const sockets = [];
+    class Socket { constructor() { this.listeners = {}; sockets.push(this); } addEventListener(name, fn) { this.listeners[name] = fn; } close() { this.closed = true; } }
+    const adapter = createRealtimeAdapter({ WebSocketImpl: Socket });
+    const options = unitId => ({ unitId, assignmentId: "a", getTicket: async () => ({ ticket: "once" }) });
+    const one = adapter.connect(options("one")); adapter.connect(options("two"));
+    await new Promise(resolve => setImmediate(resolve));
+    adapter.retain(["one"]);
+    assert.equal(adapter.connect(options("one")), one);
+    assert.equal(sockets.length, 2); assert.equal(sockets[0].closed, undefined); assert.equal(sockets[1].closed, true);
+    adapter.disconnect();
 });

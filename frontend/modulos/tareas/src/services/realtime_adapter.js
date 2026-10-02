@@ -1,4 +1,5 @@
 import { api_base_url } from "../../../core/http_client.js";
+import { createRealtimeChannel } from "../../../core/realtime_channel.js";
 
 export function createEventDeduplicator(limit = 1000) {
     const seen = new Set();
@@ -12,52 +13,29 @@ export function createEventDeduplicator(limit = 1000) {
 export function websocketURL({ unitId, ticket, baseUrl = api_base_url }) {
     const url = new URL(`/ws/unit/${encodeURIComponent(unitId)}/`, baseUrl);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.search = new URLSearchParams({ ticket });
-    return url.href;
+    url.search = new URLSearchParams({ ticket }); return url.href;
 }
-export function createRealtimeAdapter({ WebSocketImpl = globalThis.WebSocket, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
-    const connections = new Map();
-    let accept = createEventDeduplicator();
-    function connect({ unitId, assignmentId, getTicket, onEvent = () => {}, onReconnect = () => {}, onError = () => {}, baseUrl }) {
+export function createRealtimeAdapter(dependencies = {}) {
+    const connections = new Map(); let accept = createEventDeduplicator();
+    function connect({ unitId, assignmentId, getTicket, onEvent = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, baseUrl }) {
         if (!unitId || !assignmentId || !getTicket) throw new Error("Falta el contexto de la conexión en vivo.");
-        if (connections.has(unitId)) return;
-        const state = { stopped: false, attempt: 0, socket: null, timer: null };
-        connections.set(unitId, state);
-        async function open() {
-            if (state.stopped) return;
-            let ticket;
-            try { ticket = await getTicket({ unit: unitId, assignment: assignmentId, channel: "tasks" }); }
-            catch { if (!state.stopped) state.timer = setTimer(open, Math.min(30000, 1000 * 2 ** Math.min(state.attempt++, 5))); return; }
-            if (state.stopped) return;
-            const socket = new WebSocketImpl(websocketURL({ unitId, ticket: ticket.ticket, baseUrl }));
-            state.socket = socket;
-            socket.addEventListener("open", () => {
-                if (state.stopped) return;
-                state.attempt = 0;
-                // Includes the first connection: REST may have changed during the handshake.
-                onReconnect();
-            });
-            socket.addEventListener("message", message => {
-                if (state.stopped) return;
-                try { const event = JSON.parse(message.data); if (accept(event)) onEvent(event); } catch { /* Ignore malformed envelopes. */ }
-            });
-            socket.addEventListener("error", () => onError("No se pudo conectar en vivo. Reintentando…"));
-            socket.addEventListener("close", event => {
-                if (state.stopped) return;
-                if ([4401, 4403].includes(event.code)) { onError("Sin permiso para observar esta unidad."); return; }
-                state.timer = setTimer(open, Math.min(30000, 1000 * 2 ** Math.min(state.attempt++, 5)));
-            });
-        }
-        open();
+        if (connections.has(unitId)) return connections.get(unitId).ready;
+        const channel = createRealtimeChannel({ ...dependencies,
+            getTicket: () => getTicket({ unit: unitId, assignment: assignmentId, channel: "tasks" }),
+            urlForTicket: ticket => websocketURL({ unitId, ticket: ticket.ticket, baseUrl }),
+            onConnected, onReconnect, onError,
+            onTerminal: () => { connections.delete(unitId); onError("El canal perdió autorización. Se revisará cuando cambien los permisos."); },
+            onMessage: message => { try { const event = JSON.parse(message.data); if (accept(event)) onEvent(event); } catch { /* Invalid envelope */ } },
+        });
+        connections.set(unitId, channel); return channel.ready;
     }
-    function disconnect() {
-        for (const state of connections.values()) { state.stopped = true; clearTimer(state.timer); state.socket?.close(); }
-        connections.clear(); accept = createEventDeduplicator();
-    }
-    return { connect, disconnect };
+    function disconnectUnit(unitId) { const channel = connections.get(unitId); if (channel) { connections.delete(unitId); channel.stop(); } }
+    function retain(unitIds) { const wanted = new Set(unitIds); for (const unitId of connections.keys()) if (!wanted.has(unitId)) disconnectUnit(unitId); }
+    function disconnect() { retain([]); accept = createEventDeduplicator(); }
+    return { connect, disconnect, retain };
 }
 const realtime = createRealtimeAdapter();
 export const connect_realtime_stream = options => realtime.connect(options);
 export const disconnect_realtime_stream = () => realtime.disconnect();
-// Template events never enter the server's V2 event stream.
+export const retain_realtime_streams = unitIds => realtime.retain(unitIds);
 export const publish_task_event = () => Promise.resolve();

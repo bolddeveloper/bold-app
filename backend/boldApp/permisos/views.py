@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, NotAuthenticated, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -68,6 +68,19 @@ class ControlPlaneAccessView(DirectionControlPlaneView):
 
 class PolicyRevisionView(APIView):
     def get(self, request):
+        # Legacy clients without an assignment keep the original revision contract.
+        # New clients also recover temporal changes after missing a control event.
+        from boldApp.autenticacion.models import AuthSession
+        from boldApp.core.security_control import security_snapshot
+
+        if isinstance(request.auth, AuthSession) and request.headers.get("X-Assignment-Id"):
+            assignment = get_request_assignment(request)
+            snapshot = security_snapshot(request.auth.id, assignment.id)
+            if snapshot.get("close_code") == 4401:
+                raise NotAuthenticated("La sesión ha vencido.")
+            if snapshot.get("close_code"):
+                raise PermissionDenied("La plaza ya no está activa.")
+            return Response(snapshot)
         return Response({"revision": PermissionPolicyState.current_revision()})
 
 

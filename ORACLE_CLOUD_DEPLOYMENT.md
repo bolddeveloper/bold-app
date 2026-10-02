@@ -330,12 +330,52 @@ npm run build
 npx wrangler deploy
 ```
 
-No definas `VITE_API_BASE_URL`: el cliente usa `location.origin`. La unica
-variable publica requerida es:
+No definas `VITE_API_BASE_URL`: el cliente usa `location.origin`. El backend
+real requiere `VITE_USE_REAL_BACKEND=true`. Para conservar las optimizaciones
+publicadas el 2 de octubre de 2026, define también los siguientes flags **antes
+del build**, no como variables de ejecución del Worker. Primero publica el
+backend compatible; de lo contrario, mantén el historial paginado desactivado.
 
 ```text
 VITE_USE_REAL_BACKEND=true
+VITE_PERMISSION_CONTROL_ENABLED=true
+VITE_TASK_INCREMENTAL_SYNC=true
+VITE_TASK_PAGED_COMMENTS=true
+VITE_TASK_PAGED_ATTACHMENTS=true
+VITE_TASK_RECONCILE_MS=300000
+VITE_SYNC_DIAGNOSTICS=true
+VITE_APP_VERSION=<commit-del-codigo-compilado>
 ```
+
+En PowerShell, por ejemplo (desde `frontend/modulos/core`):
+
+```powershell
+$env:VITE_USE_REAL_BACKEND='true'
+$env:VITE_API_BASE_URL=''
+$env:VITE_PERMISSION_CONTROL_ENABLED='true'
+$env:VITE_TASK_INCREMENTAL_SYNC='true'
+$env:VITE_TASK_PAGED_COMMENTS='true'
+$env:VITE_TASK_PAGED_ATTACHMENTS='true'
+$env:VITE_TASK_RECONCILE_MS='300000'
+$env:VITE_SYNC_DIAGNOSTICS='true'
+$env:VITE_APP_VERSION=(git rev-parse --short=8 HEAD).Trim()
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'Build fallido: no publicar' }
+npx wrangler deploy
+```
+
+La lectura anterior de comentarios sigue disponible para revertir el flag.
+Para activar `VITE_TASK_PAGED_ATTACHMENTS`, el backend debe ofrecer primero
+`attachment_count` en tareas y `attachments?recent=1` con cursor compuesto.
+Sin ese contrato el cliente falla explícitamente, en vez de inventar conteos.
+`false` revierte los adjuntos a la carga anterior; no requiere migración ni
+restaurar la base de datos. Editar carga todos los adjuntos de una sola tarea
+para preservar la comparación de archivos; visualizarla solo carga una página.
+Consulta `VERIFICACION_HISTORIAL_PAGINADO.md` y
+`VERIFICACION_CONEXIONES_FASE_5.md` para pruebas, límites y reversión. Sin estos
+flags, un build posterior puede volver al comportamiento anterior aunque el
+backend esté actualizado. Diagnósticos son agregados locales, no un servicio
+externo de telemetría; pueden desactivarse una vez terminada la medición.
 
 La primera publicacion asigna una direccion estable bajo `workers.dev`. Anotala
 y actualiza `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` en Oracle;
@@ -398,6 +438,31 @@ Para probar restauracion usa una base o VM separada. No ejecutes `pg_restore
 --clean` sobre el entorno activo sin mantenimiento y un backup verificado.
 
 ## 14. Actualizaciones
+
+**Despliegue de prueba actualizado el 2 de octubre de 2026:** durante la optimización del
+tráfico, Oracle está temporalmente en `perf/sincronizacion-trafico`, fuentes
+`11961822` (fase 4 y limpieza de contexto; imagen backend basada en `8259da57`,
+sin diferencias de backend entre ambos commits), no en
+Develop. Develop no se fusionó ni modificó. No aplicar la receta
+de retorno a Develop hasta integrar y validar esta entrega; cambiar la rama y
+reconstruir ahora volvería a una versión anterior. Estado, pruebas y reversión en
+`PLAN_OPTIMIZACION_SINCRONIZACION.md`, secciones 13–15. La sincronización
+incremental requiere el backend compatible antes del frontend; para volver a
+fase 2, revertir primero el cliente como indica la sección 14 del plan.
+
+El clon remoto está limitado por defecto al fetch de Develop. Para actualizar
+la rama de prueba (sin upstream) mientras dure esta etapa:
+
+```bash
+cd /opt/bold-app
+git status --short  # detenerse si hay cambios ajenos
+git fetch origin refs/heads/perf/sincronizacion-trafico:refs/remotes/origin/perf/sincronizacion-trafico
+git switch perf/sincronizacion-trafico
+git merge --ff-only origin/perf/sincronizacion-trafico
+```
+
+Después siguen el respaldo, build y `up -d` indicados abajo. La receta habitual
+para cuando la entrega esté integrada en Develop es:
 
 ```bash
 cd /opt/bold-app

@@ -4,6 +4,7 @@ import { useShell } from "../core/app_shell.jsx";
 import { useCore } from "../core/core_provider.jsx";
 import { CalendarDateField } from "../tareas/src/task_app.jsx";
 import { calendarApi } from "./calendar_api.js";
+import { createDraftSync } from "./draft_sync.js";
 import { addDays, dayKey, eventDay, fromDay, guestSuggestions, matchesDay, selectedTimeRange, timedEventLayout, weekStart } from "./calendar_data.js";
 import "./calendar.css";
 
@@ -157,6 +158,10 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
     const [expanded, setExpanded] = useState(!quick);
     const [scope, setScope] = useState("instance");
     const [busy, setBusy] = useState(false), [error, setError] = useState("");
+    const [meetWarning, setMeetWarning] = useState("");
+    const draftSync = useRef(null), needsMeet = useRef(false);
+    needsMeet.current = !meetLink && form.meet;
+    useEffect(() => { if (meetLink) setMeetWarning(""); }, [meetLink]);
     const editable = !event || (!event.locked && (!event.eventType || event.eventType === "default"));
     async function close() {
         if (busy) return;
@@ -170,22 +175,26 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
     useEffect(() => { const escape = key => { if (key.key === "Escape") close(); }; window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape); }, [draft, busy, onClose]);
     useEffect(() => {
         if (!draft) return;
-        const heartbeat = setInterval(() => calendarApi.draftAction(draft.draft_id, { action: "heartbeat" }).catch(() => {}), 60000);
-        const poll = setInterval(() => {
-            if (!meetLink && form.meet) calendarApi.draftGet(draft.draft_id).then(setDraftEvent).catch(() => {});
-        }, 2500);
+        const sync = createDraftSync({
+            heartbeat: options => calendarApi.draftAction(draft.draft_id, { action: "heartbeat" }, options),
+            poll: options => calendarApi.draftGet(draft.draft_id, options), needsMeet: () => needsMeet.current,
+            onEvent: setDraftEvent, onWarning: setMeetWarning,
+            onExpired: message => { setMeetWarning(message); setDraft(null); setDraftEvent(null); setForm(current => ({ ...current, meet: false })); },
+        });
+        draftSync.current = sync;
         const leaving = () => { calendarApi.draftCancel(draft.draft_id, { keepalive: true }).catch(() => {}); };
         window.addEventListener("pagehide", leaving);
-        return () => { clearInterval(heartbeat); clearInterval(poll); window.removeEventListener("pagehide", leaving); };
-    }, [draft, meetLink, form.meet]);
+        return () => { sync.stop(); if (draftSync.current === sync) draftSync.current = null; window.removeEventListener("pagehide", leaving); };
+    }, [draft?.draft_id]);
     useEffect(() => () => { if (draft) calendarApi.draftCancel(draft.draft_id).catch(() => {}); }, [draft]);
     async function toggleMeet() {
         if (event) { set("meet", !form.meet); return; }
-        setError(""); setBusy(true);
+        setError(""); setMeetWarning(""); setBusy(true);
         try {
             if (draft) {
                 const updated = await calendarApi.draftAction(draft.draft_id, { action: form.meet ? "remove_meet" : "add_meet" });
                 setDraftEvent(updated); set("meet", !form.meet);
+                if (!form.meet) draftSync.current?.retry();
             } else {
                 const result = await calendarApi.draft({ start: { dateTime: `${form.start}:00`, timeZone: zone }, end: { dateTime: `${form.end}:00`, timeZone: zone } });
                 setDraft(result); setDraftEvent(result.event); set("meet", true);
@@ -242,6 +251,7 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
         catch (problem) { setError(problem.message); setBusy(false); }
     }
     const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+    const meetNotice = meetWarning && <p className="bold_calendar_error" role="status">{meetWarning} {draft && form.meet && !meetLink && <button type="button" disabled={busy} onClick={() => { setMeetWarning(""); draftSync.current?.retry(); }}>Reintentar consulta de Meet</button>}</p>;
     if (!expanded && !event) {
         return <div className="bold_calendar_backdrop is_quick" onMouseDown={click => click.target === click.currentTarget && close()}><section className="bold_calendar_editor is_quick" role="dialog" aria-modal="true" aria-label="Crear evento"><header><span>Evento nuevo</span><button type="button" aria-label="Cerrar" onClick={close} disabled={busy}><X size={19} /></button></header>{error && <p className="bold_calendar_error" role="alert">{error}</p>}<form onSubmit={save}>
             <input className="bold_calendar_quick_title" autoFocus required maxLength="200" placeholder="Añade un título" aria-label="Título del evento" value={form.summary} onChange={change => set("summary", change.target.value)} />
@@ -251,10 +261,12 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
             <div className="bold_calendar_quick_field"><Video size={18} />{meetLink ? <div className="bold_calendar_meet_link"><a href={meetLink} target="_blank" rel="noreferrer">{meetLink}</a><button type="button" aria-label="Copiar enlace de Meet" onClick={copyMeet}>{copied ? <Check size={16} /> : <Copy size={16} />}</button><button type="button" aria-label="Quitar Google Meet" disabled={busy} onClick={toggleMeet}><Trash2 size={16} /></button></div> : <button type="button" className={form.meet ? "is_selected" : ""} disabled={busy} onClick={toggleMeet}>{busy ? "Preparando enlace…" : form.meet ? "Generando enlace de Google Meet…" : "Añadir videoconferencia de Google Meet"}</button>}</div>
             <div className="bold_calendar_quick_field"><MapPin size={18} /><input aria-label="Ubicación" placeholder="Añadir ubicación" value={form.location} onChange={change => set("location", change.target.value)} /></div>
             <div className="bold_calendar_quick_field"><AlignLeft size={18} /><textarea aria-label="Descripción" rows="2" placeholder="Añadir descripción" value={form.description} onChange={change => set("description", change.target.value)} /></div>
+            {meetNotice}
             <footer><button type="button" onClick={() => setExpanded(true)}>Más opciones</button><button className="is_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Guardar"}</button></footer>
         </form></section></div>;
     }
     return <div className="bold_calendar_backdrop" onMouseDown={click => click.target === click.currentTarget && close()}><section className="bold_calendar_editor" role="dialog" aria-modal="true" aria-label={event ? "Detalle del evento" : "Nuevo evento"}><header><div><span>{event ? "GOOGLE CALENDAR" : "NUEVO EVENTO"}</span><h2>{event ? "Detalle del evento" : "Crear evento"}</h2></div><button type="button" aria-label="Cerrar" onClick={close} disabled={busy}><X size={20} /></button></header>{error && <p className="bold_calendar_error" role="alert">{error}</p>}{meetLink && <div className="bold_calendar_meet_link is_full"><a href={meetLink} target="_blank" rel="noreferrer">{meetLink}</a><button type="button" aria-label="Copiar enlace de Meet" onClick={copyMeet}>{copied ? <Check size={16} /> : <Copy size={16} />}</button><button type="button" aria-label="Quitar Google Meet" disabled={busy} onClick={async () => { setBusy(true); try { if (draft) { setDraftEvent(await calendarApi.draftAction(draft.draft_id, { action: "remove_meet" })); set("meet", false); } else if (event) { await calendarApi.update(event.id, "instance", { removeMeet: true }); onSaved(); } } catch (problem) { setError(problem.message); } finally { setBusy(false); } }}><Trash2 size={16} /></button></div>}
+        {meetNotice}
         {!editable && <div className="bold_calendar_readonly_summary"><h3>{event.summary || "Sin título"}</h3><p>{eventTime(event, zone)} · {eventDay(event, zone)}</p>{event.location && <p>{event.location}</p>}</div>}
         {!editable ? <div className="bold_calendar_readonly"><p>Este tipo de evento solo puede modificarse en Google Calendar.</p>{event.htmlLink && <a href={event.htmlLink} target="_blank" rel="noreferrer">Abrir en Google <ExternalLink size={15} /></a>}</div> : <form onSubmit={save}><label>Título<input autoFocus required maxLength="200" value={form.summary} onChange={change => set("summary", change.target.value)} /></label><label className="bold_calendar_check"><input type="checkbox" checked={form.allDay} onChange={change => setForm(current => ({ ...current, allDay: change.target.checked, start: change.target.checked ? current.start.slice(0, 10) : `${current.start.slice(0, 10)}T09:00`, end: change.target.checked ? current.end.slice(0, 10) : `${current.end.slice(0, 10)}T10:00` }))} /> Todo el día</label><div className="bold_calendar_form_row"><label>Inicio<CalendarDateTimeField required withTime={!form.allDay} value={form.start} onChange={value => set("start", value)} /></label><label>Fin<CalendarDateTimeField required withTime={!form.allDay} value={form.end} onChange={value => set("end", value)} /></label></div><p className="bold_calendar_zone">Zona horaria: {zone}. En eventos de todo el día, el fin indicado se incluye.</p><button type="button" className="bold_calendar_meet_action" disabled={Boolean(meetLink || event?.conferenceData)} onClick={() => set("meet", !form.meet)}><Video size={17} />{meetLink ? "Google Meet añadido" : event?.conferenceData ? "Google Meet en preparación" : form.meet ? "Google Meet se añadirá al guardar" : "Añadir videoconferencia de Google Meet"}</button>{meetLink && <a href={meetLink} target="_blank" rel="noreferrer">Unirse a Google Meet</a>}<label>Ubicación<input value={form.location} onChange={change => set("location", change.target.value)} /></label><label>Descripción<textarea rows="3" value={form.description} onChange={change => set("description", change.target.value)} /></label><label>Invitados <small>(escribe un correo completo o busca en las sugerencias)</small><GuestField value={form.guests} onChange={value => set("guests", value)} contacts={contacts} google={googleContacts} /></label><div className="bold_calendar_form_row"><label>Recordatorio<select value={form.reminder} onChange={change => set("reminder", change.target.value)}><option value="default">Predeterminado</option><option value="none">Ninguno</option><option value="5">5 minutos antes</option><option value="10">10 minutos antes</option><option value="30">30 minutos antes</option><option value="60">1 hora antes</option></select></label><label>Repetir<select value={form.repeat} onChange={change => set("repeat", change.target.value)} disabled={Boolean(event?.recurringEventId && scope === "instance")}><option value="none">No se repite</option><option value="DAILY">Cada día</option><option value="WEEKLY">Cada semana</option><option value="MONTHLY">Cada mes</option><option value="YEARLY">Cada año</option></select></label></div><label>Color<select value={form.colorId} onChange={change => set("colorId", change.target.value)}><option value="">Predeterminado</option>{googleColors.map((color, index) => <option value={String(index + 1)} key={color}>Color {index + 1}</option>)}</select></label>{event?.recurringEventId && <fieldset><legend>Aplicar cambios a</legend><label><input type="radio" checked={scope === "instance"} onChange={() => changeScope("instance")} /> Solo este evento</label><label><input type="radio" checked={scope === "series"} onChange={() => changeScope("series")} /> Toda la serie</label></fieldset>}<footer>{event && <button type="button" className="is_danger" disabled={busy} onClick={remove}>Eliminar</button>}{event?.htmlLink && <a href={event.htmlLink} target="_blank" rel="noreferrer">Ver en Google</a>}<button type="button" onClick={onClose}>Cancelar</button><button className="is_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Guardar"}</button></footer></form>}</section></div>;
 }

@@ -849,10 +849,11 @@ export default function AdministrationModule() {
     const [error, setError] = useState("");
     const [notice, setNoticeState] = useState(null);
     const [auditLoading, setAuditLoading] = useState(false);
+    const generation = useRef(0);
     const setNotice = (message, isError = false) => { setNoticeState({ message, isError }); setTimeout(() => setNoticeState(null), 6000); };
-    async function load() { setError(""); try { const [dashboard, employees, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.organization()]); setData({ dashboard, employees, audit: null, organization }); } catch (loadError) { setError(loadError.message); } }
-    async function loadAudit(page = 1) { setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); setData(current => ({ ...current, audit: { ...audit, page } })); } catch (loadError) { setNotice(loadError.message, true); } finally { setAuditLoading(false); } }
-    useEffect(() => { load(); }, []);
+    async function load() { const gen = ++generation.current; if (core.securityUncertain) return; setError(""); try { const [dashboard, employees, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.organization()]); if (gen === generation.current) setData({ dashboard, employees, audit: null, organization }); } catch (loadError) { if (gen === generation.current) setError(loadError.message); } }
+    async function loadAudit(page = 1) { const gen = generation.current; if (core.securityUncertain) return; setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); if (gen === generation.current) setData(current => current ? ({ ...current, audit: { ...audit, page } }) : current); } catch (loadError) { if (gen === generation.current) setNotice(loadError.message, true); } finally { if (gen === generation.current) setAuditLoading(false); } }
+    useEffect(() => { setData(null); setAuditLoading(false); load(); return () => { generation.current++; }; }, [core.authorizationRevision, core.securityUncertain, core.activeAssignment?.id]);
     useEffect(() => { if (active === "audit" && data && !data.audit && !auditLoading) loadAudit(); }, [active, data?.audit]);
     useEffect(() => {
         const navigate = event => {
@@ -863,6 +864,7 @@ export default function AdministrationModule() {
         return () => globalThis.removeEventListener("bold:global-search:navigate", navigate);
     }, []);
     const title = useMemo(() => tabs.find(([id]) => id === active)?.[1] || "Administración", [active]);
+    if (core.securityUncertain) return <div className="admin_state"><p role="status">Verificando permisos. Las acciones sensibles están pausadas temporalmente.</p></div>;
     if (!core.activeUnit?.is_control_plane) return <div className="admin_state"><p>El módulo Administrativo está reservado a la unidad de Dirección.</p></div>;
     if (!core.account?.is_superuser) return <div className="admin_state"><p>El módulo Administrativo está reservado al dueño de la empresa.</p></div>;
     if (!data) return <Loading error={error} onRetry={load} />;

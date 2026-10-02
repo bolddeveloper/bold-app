@@ -49,6 +49,23 @@ def build_event_envelope(event_type, entity_type, entity_id, payload):
     }
 
 
+def dispatch_resource_invalidation(unit_ids, event_type, entity_type, entity_id, payload):
+    """Realtime-only hints, not new outgoing webhook subscriptions.
+
+    Keep payloads to identifiers. Clients must fetch data through the authorized
+    REST endpoints rather than treating a unit broadcast as resource permission.
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    envelope = build_event_envelope(event_type, entity_type, entity_id, payload)
+    channel_layer = get_channel_layer()
+    if channel_layer is not None:
+        for unit_id in dict.fromkeys(str(value) for value in unit_ids if value):
+            async_to_sync(channel_layer.group_send)(f"unit_{unit_id}", {"type": "task.event", "envelope": envelope})
+    return envelope
+
+
 # Encola la entrega del evento hacia cada WebhookEndpoint activo del workspace
 # que este suscrito a ese event_type (o a todos, si event_types esta vacio),
 # y lo transmite en vivo por WebSocket a los clientes conectados al mismo

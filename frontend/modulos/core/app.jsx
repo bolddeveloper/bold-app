@@ -35,7 +35,7 @@ function ApplicationWorkspace() {
         ...(core.account?.is_superuser ? { administration: <AdministrationModule /> } : {}),
         } : {}),
     };
-    return <ShellProvider navigation={navigation}>
+    return <ShellProvider key={core.activeAssignment?.id || "demo"} contextId={core.activeAssignment?.id || "demo"} navigation={navigation}>
         <TasksModule externalModules={externalModules} />
     </ShellProvider>;
 }

@@ -3,16 +3,23 @@ import { notificationsApi } from "../../../notificaciones/notifications_api.js";
 import { is_using_real_backend } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
-export async function loadTaskData({ directory, units }) {
+export async function loadTaskData({ directory, units }, { catalogCache, notificationClient = notificationsApi } = {}) {
+    const catalog = (key, load) => catalogCache ? catalogCache.get(key, load) : load();
     const projects = (await api.listProjects()).map(normalizeProject);
     const sections = (await api.listSections()).map(normalizeSection);
-    const statuses = [...new Map((await Promise.all(units.map(unit => api.listStatuses(unit.id)))).flat().map(dto => [dto.id, normalizeStatus(dto)])).values()];
+    const statuses = [...new Map((await Promise.all(units.map(unit => catalog(`statuses:${unit.id}`, () => api.listStatuses(unit.id))))).flat().map(dto => [dto.id, normalizeStatus(dto)])).values()];
     const tasks = (await api.listTasks()).map(dto => normalizeTask(dto, statuses));
     const links = (await api.listTaskProjectLinks()).map(normalizeTaskProject);
     const [comments, followers, members, attachments, notifications, taskTags, tags] = await Promise.all([
-        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationsApi.list(), api.list("task-tags"),
-        Promise.all(units.map(unit => api.list("tags", { unit: unit.id }))).then(rows => rows.flat())
+        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationClient.list(), api.list("task-tags"),
+        Promise.all(units.map(unit => catalog(`tags:${unit.id}`, () => api.list("tags", { unit: unit.id })))).then(rows => rows.flat())
     ]);
+    return assembleTaskData({ directory, units, projects, sections, statuses, tasks, links, comments, followers, members, attachments, notifications, taskTags, tags });
+}
+
+// Transitional presentation adapter: totals/search/calendar still receive every
+// authorized task, even when only one resource was refreshed.
+export function assembleTaskData({ directory, units, projects, sections, statuses, tasks, links, comments, followers, members, attachments, deferAttachments = false, notifications, taskTags, tags }) {
     const by = (rows, key) => { const result = new Map(); for (const row of rows) { const id = row[key]; if (!result.has(id)) result.set(id, []); result.get(id).push(row); } return result; };
     const linksByTask = by(links, "taskId"), commentsByTask = by(comments, "task"), childrenByParent = by(tasks.filter(item => item.parentTaskId), "parentTaskId");
     const followersByTask = by(followers, "task"), attachmentsByTask = by(attachments, "task"), tagsByTask = by(taskTags, "task"), membersByProject = by(members, "project");
@@ -27,6 +34,8 @@ export async function loadTaskData({ directory, units }) {
         task.collaborator_ids = (followersByTask.get(task.id) || []).map(item => item.assignment);
         task.attachments = (attachmentsByTask.get(task.id) || []).filter(item => !item.deleted_at).map(item => ({ ...item, name: item.file_name, url: item.file_url }));
         task.attachment_name = task.attachments[0]?.name || null;
+        task.attachmentCount = deferAttachments ? task.attachment_count : task.attachments.length;
+        task.attachmentsLoaded = !deferAttachments;
         task.tags = (tagsByTask.get(task.id) || []).map(item => tagById.get(item.tag)?.name).filter(Boolean);
     }
     return { directory, projects, units, sections, statuses, tasks, links, members, followers,
@@ -68,7 +77,11 @@ export async function saveSubtasks(parent, drafts, data) {
     for (const old of existing) if (!drafts.some(item => item.id === old.id)) await api.deleteTask(old.id);
 }
 export async function saveTaskDraft(draft, data, original = null, { onCreated } = {}) {
+    // An unloaded list is not an empty baseline. Fail before any write.
+    if (original?.attachmentsLoaded === false && !Array.isArray(draft.attachmentBaseline))
+        throw new Error("Carga los adjuntos completos antes de editar esta tarea. No se guardó ningún cambio.");
     draft = { ...draft, subtasks: (draft.subtasks || []).map(item => ({ ...item })), attachments: (draft.attachments || []).map(item => ({ ...item })) };
+    draft.attachmentBaseline = (draft.attachmentBaseline || original?.attachments || []).map(item => ({ ...item }));
     const unitId = draft.unitId || original?.unitId;
     const payload = taskPayload(draft, data.statuses, { create: !original, unitId });
     if (original && original.unitId !== unitId) {
@@ -88,15 +101,19 @@ export async function saveTaskDraft(draft, data, original = null, { onCreated } 
         await saveSubtasks({ id: dto.id, unitId: dto.unit }, draft.subtasks || [], data);
         await saveFollowers(dto.id, draft.collaborator_ids || [], data,
             !original && draft.follow_creator ? [draft.created_by_assignment] : []);
-        const existingAttachments = original?.attachments || [];
+        const existingAttachments = [...draft.attachmentBaseline];
         for (const item of draft.attachments || []) {
             if (existingAttachments.some(old => old.id === item.id)) continue;
             const url = new URL(item.url);
             if (!["http:", "https:"].includes(url.protocol)) throw new Error("El archivo requiere un enlace HTTP o HTTPS.");
             const saved = await api.create("attachments", { task: dto.id, file_name: item.name, file_url: url.href, mime_type: "application/octet-stream", size_bytes: 0 });
             item.id = saved.id;
+            draft.attachmentBaseline.push({ ...item });
         }
-        for (const old of existingAttachments) if (!(draft.attachments || []).some(item => item.id === old.id)) await api.remove("attachments", old.id);
+        for (const old of existingAttachments) if (!(draft.attachments || []).some(item => item.id === old.id)) {
+            await api.remove("attachments", old.id);
+            draft.attachmentBaseline = draft.attachmentBaseline.filter(item => item.id !== old.id);
+        }
         return dto;
     } catch (error) { error.partialDraft = draft; throw error; }
 }

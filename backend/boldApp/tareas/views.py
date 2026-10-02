@@ -1,5 +1,6 @@
 from django.db import transaction
-from django.db.models import Q
+from django.core.exceptions import EmptyResultSet
+from django.db.models import Q, Count
 from django.utils import timezone
 from uuid import UUID
 from rest_framework import status, viewsets
@@ -14,6 +15,7 @@ from boldApp.core.authorization import (
     resolve_access,
 )
 from boldApp.core.models import OrganizationalUnit, Permission
+from boldApp.core.authorization_units import load_authorization_units
 
 from .models import (
     ActivityLog,
@@ -33,6 +35,7 @@ from .models import (
     WebhookEndpoint,
 )
 from .permissions import HasActiveAssignment
+from .pagination import RecentCommentPagination, RecentAttachmentPagination
 from .serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
@@ -58,6 +61,34 @@ from .webhook_tasks import deliver_webhook
 class AssignmentScopedViewSetMixin:
     permission_classes = [HasActiveAssignment]
 
+    def query_ids(self, name, limit=50):
+        """Bounded optional filters; never a substitute for resource authorization."""
+        value = self.request.query_params.get(name)
+        if value is None:
+            return None
+        parts = value.split(",")
+        if not parts or len(parts) > limit:
+            raise ValidationError({name: f"Indica entre 1 y {limit} identificadores."})
+        try:
+            return list(dict.fromkeys(UUID(part.strip()) for part in parts))
+        except (ValueError, AttributeError):
+            raise ValidationError({name: "Los identificadores deben ser UUID válidos."})
+
+    def filter_task_relations(self, queryset):
+        task_ids = self.query_ids("tasks")
+        queryset = queryset.filter(task_id__in=task_ids) if task_ids is not None else queryset
+        candidates = Task.objects.filter(id__in=queryset.values("task_id"))
+        return self.stable_order(queryset.filter(task__in=self.visible_tasks(candidates)))
+
+    def authorization_units(self):
+        if not hasattr(self, "_authorization_units"):
+            self._authorization_units = load_authorization_units(self.request.assignment)
+        return self._authorization_units
+
+    def stable_order(self, queryset):
+        ordering = queryset.query.order_by or queryset.model._meta.ordering or ()
+        return queryset.order_by(*ordering, "pk")
+
     def require_permission(self, code, unit, resource_id=None):
         result = check_and_log(
             assignment=self.request.assignment,
@@ -79,15 +110,22 @@ class AssignmentScopedViewSetMixin:
         context = build_authorization_context(self.request.assignment, permission)
         return [
             unit.id
-            for unit in OrganizationalUnit.objects.select_related("parent_unit")
+            for unit in self.authorization_units().values()
             if resolve_access(self.request.assignment, permission, unit, context=context).allowed
         ]
 
     def _visible_resource_ids(self, queryset, code, resource_type):
+        if queryset.query.is_empty():
+            return []
         cache = getattr(self, "_permission_visible_ids", None)
         if cache is None:
             cache = self._permission_visible_ids = {}
-        key = (code, resource_type)
+        # A narrower candidate query cannot reuse a different query's visibility.
+        # This cache exists only on this view instance, for this HTTP request.
+        try:
+            key = (code, resource_type, str(queryset.query))
+        except EmptyResultSet:
+            return []
         if key in cache:
             return cache[key]
         try:
@@ -99,22 +137,23 @@ class AssignmentScopedViewSetMixin:
             cache[key] = []
             return []
         context = build_authorization_context(self.request.assignment, permission)
-        rows = queryset.select_related("unit", "unit__parent_unit")
+        units = self.authorization_units()
+        rows = queryset.select_related("unit")
         cache[key] = [
             row.id
             for row in rows
             if resolve_access(
                 self.request.assignment,
                 permission,
-                row.unit,
+                units.get(row.unit_id, row.unit),
                 resource_id=row.id,
                 context=context,
             ).allowed
         ]
         return cache[key]
 
-    def visible_tasks(self):
-        ids = self._visible_resource_ids(Task.objects.all(), "tasks.task.read", "task")
+    def visible_tasks(self, candidates=None):
+        ids = self._visible_resource_ids(Task.objects.all() if candidates is None else candidates, "tasks.task.read", "task")
         return Task.objects.filter(id__in=ids)
 
     def visible_projects(self):
@@ -137,7 +176,7 @@ class ProjectViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        queryset = self.visible_projects()
+        queryset = self.stable_order(self.visible_projects())
         unit_id = self.request.query_params.get("unit")
         return queryset.filter(unit_id=unit_id) if unit_id else queryset
 
@@ -164,7 +203,7 @@ class ProjectMemberViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = ProjectMemberSerializer
 
     def get_queryset(self):
-        return ProjectMember.objects.filter(project__in=self.visible_projects())
+        return self.stable_order(ProjectMember.objects.filter(project__in=self.visible_projects()))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.project.manage", serializer.validated_data["project"].unit)
@@ -187,7 +226,7 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = SectionSerializer
 
     def get_queryset(self):
-        queryset = Section.objects.filter(project__in=self.visible_projects())
+        queryset = self.stable_order(Section.objects.filter(project__in=self.visible_projects()))
         project_id = self.request.query_params.get("project")
         return queryset.filter(project_id=project_id) if project_id else queryset
 
@@ -213,6 +252,7 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         unit_id = self.request.query_params.get("unit") or self.request.assignment.position.unit_id
+        unit_ids = self.query_ids("units")
         # Los estados son obligatorios al crear una tarea. Un cargo con permiso
         # de creacion no debe quedar bloqueado por carecer del catalogo general.
         allowed = {
@@ -220,9 +260,12 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
             for code in ("tasks.catalog.read", "tasks.task.create")
             for value in self.allowed_unit_ids(code)
         }
+        if unit_ids is not None:
+            requested = [value for value in unit_ids if str(value) in allowed]
+            return self.stable_order(TaskStatus.objects.filter(Q(unit_id__in=requested) | Q(unit__isnull=True))) if requested else TaskStatus.objects.none()
         if str(unit_id) not in allowed:
             return TaskStatus.objects.none()
-        return TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True))
+        return self.stable_order(TaskStatus.objects.filter(Q(unit_id=unit_id) | Q(unit__isnull=True)))
 
     def perform_create(self, serializer):
         unit = serializer.validated_data.get("unit") or self.request.assignment.position.unit
@@ -251,14 +294,20 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
     serializer_class = TaskSerializer
 
     def get_queryset(self):
-        queryset = self.visible_tasks().select_related(
+        candidates = Task.objects.all()
+        ids = self.query_ids("ids")
+        if ids is not None:
+            candidates = candidates.filter(id__in=ids)
+        unit_id = self.request.query_params.get("unit")
+        if unit_id:
+            candidates = candidates.filter(unit_id=unit_id)
+        queryset = self.stable_order(self.visible_tasks(candidates)).select_related(
             "unit",
             "status",
             "created_by_assignment",
             "assignee_assignment",
         )
-        unit_id = self.request.query_params.get("unit")
-        return queryset.filter(unit_id=unit_id) if unit_id else queryset
+        return queryset.annotate(attachment_count=Count("attachments", filter=Q(attachments__deleted_at__isnull=True)))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.task.create", serializer.validated_data["unit"])
@@ -417,7 +466,7 @@ class TaskProjectViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TaskProjectSerializer
 
     def get_queryset(self):
-        queryset = TaskProject.objects.filter(task__in=self.visible_tasks())
+        queryset = self.filter_task_relations(TaskProject.objects.all())
         project_id = self.request.query_params.get("project")
         return queryset.filter(project_id=project_id) if project_id else queryset
 
@@ -476,7 +525,27 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = CommentSerializer
 
     def get_queryset(self):
-        return Comment.objects.filter(task__in=self.visible_tasks())
+        queryset = Comment.objects.all()
+        recent = self.request.query_params.get("recent")
+        mine = self.request.query_params.get("mine")
+        if recent not in (None, "1") or mine not in (None, "1"):
+            raise ValidationError({"scope": "recent y mine solo admiten 1."})
+        project_ids = self.query_ids("project", limit=1)
+        if project_ids is not None:
+            # Project membership is a filter, never a grant to read its tasks.
+            projects = self.visible_projects().filter(pk__in=project_ids)
+            queryset = queryset.filter(task_id__in=TaskProject.objects.filter(project__in=projects).values("task_id"))
+        if mine == "1":
+            assignment = self.request.assignment
+            queryset = queryset.filter(Q(task__created_by_assignment=assignment)
+                | Q(task__assignee_assignment=assignment)
+                | Q(task_id__in=TaskFollower.objects.filter(assignment=assignment).values("task_id")))
+        return self.filter_task_relations(queryset)
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get("recent") == "1":
+            self.pagination_class = RecentCommentPagination
+        return super().paginate_queryset(queryset)
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]
@@ -504,7 +573,14 @@ class AttachmentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, vi
     serializer_class = AttachmentSerializer
 
     def get_queryset(self):
-        return Attachment.objects.filter(task__in=self.visible_tasks(), deleted_at__isnull=True)
+        if self.request.query_params.get("recent") not in (None, "1"):
+            raise ValidationError({"recent": "recent solo admite 1."})
+        return self.filter_task_relations(Attachment.objects.filter(deleted_at__isnull=True))
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get("recent") == "1":
+            self.pagination_class = RecentAttachmentPagination
+        return super().paginate_queryset(queryset)
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]
@@ -529,7 +605,7 @@ class TaskFollowerViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TaskFollowerSerializer
 
     def get_queryset(self):
-        return TaskFollower.objects.filter(task__in=self.visible_tasks())
+        return self.filter_task_relations(TaskFollower.objects.all())
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]
@@ -561,9 +637,13 @@ class TagViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         unit_id = self.request.query_params.get("unit") or self.request.assignment.position.unit_id
-        if str(unit_id) not in {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}:
+        allowed = {str(value) for value in self.allowed_unit_ids("tasks.catalog.read")}
+        unit_ids = self.query_ids("units")
+        if unit_ids is not None:
+            return self.stable_order(Tag.objects.filter(unit_id__in=[value for value in unit_ids if str(value) in allowed]))
+        if str(unit_id) not in allowed:
             return Tag.objects.none()
-        return Tag.objects.filter(unit_id=unit_id)
+        return self.stable_order(Tag.objects.filter(unit_id=unit_id))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.project.manage", serializer.validated_data["unit"])
@@ -586,7 +666,7 @@ class TaskTagViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TaskTagSerializer
 
     def get_queryset(self):
-        return TaskTag.objects.filter(task__in=self.visible_tasks())
+        return self.filter_task_relations(TaskTag.objects.all())
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]

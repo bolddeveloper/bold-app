@@ -42,7 +42,11 @@ import { AppShell, useShell } from "../../core/app_shell.jsx";
 import { OnboardingTour } from "../../core/onboarding_tour.jsx";
 import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
+import { createRefreshCoordinator, contentCanRefresh } from "../../core/refresh_coordinator.js";
+import { createContextCache } from "../../core/context_cache.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
+import { createTaskDataLoader, resourcesForTaskEvent, TASK_RESOURCES, PROJECT_RESOURCES } from "./services/task_data_loader.js";
+import { settleCommittedTaskChanges } from "./services/task_models.js";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
@@ -61,11 +65,15 @@ import {
 import {
     connect_realtime_stream,
     disconnect_realtime_stream,
+    retain_realtime_streams,
     publish_task_event
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
-import { notificationsApi } from "../../notificaciones/notifications_api.js";
-import { connectNotificationStream, disconnectNotificationStream } from "../../notificaciones/notification_realtime.js";
+import { requiresTaskData } from "./services/task_activity.js";
+import { PagedComments } from "./paged_comments.jsx";
+import { PagedAttachments } from "./paged_attachments.jsx";
+import { pagedAttachmentsEnabled, notifyAttachmentViews, createTaskEditLoader } from "./services/task_attachments.js";
+import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./services/paged_comments.js";
 
 
 const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
@@ -1809,8 +1817,8 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                     </div>
                 </div>
 
-            {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
-            {show_comments ? <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
+            {is_using_real_backend() && (pagedAttachmentsEnabled() ? <PagedAttachments taskId={selected_task.id} /> : selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>))}
+            {show_comments ? <>{pagedCommentsEnabled() ? <PagedComments queries={commentQueries({ taskIds: [selected_task.id] })} /> : <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
                         <div className="detail_comment_item" key={comment_item.id}>
@@ -1829,7 +1837,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
             ) : (
                 <p className="detail_comments_empty">Aun no hay comentarios.</p>
-            )}
+            )}</>}
 
             {comment_images.length ? (
                 <div className="detail_comment_image_previews">
@@ -2585,7 +2593,7 @@ function render_tasks_module(props) {
                         type="button"
                         role="tab"
                         aria-selected={active_section === "timeline"}
-                        onClick={() => { set_active_section("timeline"); handle_close_task_tool(); set_active_quick_popover(null); }}
+                        onClick={() => { set_active_section("timeline"); handle_close_task_tool(); handle_toggle_quick_popover(null); }}
                     >
                         Cronograma
                     </button>
@@ -2643,7 +2651,7 @@ function render_tasks_module(props) {
                         </div>
 
                         {/* Botón de visualización Lista ↔ Columnas al lado derecho de Personalizar */}
-                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); set_active_quick_popover(null); })}
+                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); handle_toggle_quick_popover(null); })}
                     </div>
                 ) : null}
 
@@ -2784,7 +2792,7 @@ function render_tasks_module(props) {
                 <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
                     <div className="tasks_main_area timeline_view_wrapper">
                         {render_timeline_view(project_tasks, handle_task_select)}
-                        <TimelineComments comments={timeline_comments} on_add_comment={handle_add_timeline_comment} />
+                        <TimelineComments comments={timeline_comments} queries={props.comment_queries} on_add_comment={handle_add_timeline_comment} />
                     </div>
                     <TaskDetailSidebar
                         on_workspace={on_workspace}
@@ -3787,13 +3795,14 @@ function render_empty_tasks_state(set_active_modal = () => {}) {
 }
 
 
-function TimelineComments({ comments, on_add_comment }) {
+function TimelineComments({ comments, queries, on_add_comment }) {
     const [comment_text, set_comment_text] = use_state("");
     const [comment_images, set_comment_images] = use_state([]);
 
     async function submit_comment() {
         if (!comment_text.trim() && !comment_images.length) return;
-        on_add_comment(comment_text, comment_images);
+        const saved = await on_add_comment(comment_text, comment_images);
+        if (saved === false) return;
         set_comment_text("");
         set_comment_images([]);
     }
@@ -3810,10 +3819,10 @@ function TimelineComments({ comments, on_add_comment }) {
                     <p>CONVERSACION DEL PROYECTO</p>
                     <h2 id="timeline_comments_title">Comentarios del cronograma</h2>
                 </div>
-                <span>{comments.length}</span>
+                {!pagedCommentsEnabled() && <span>{comments.length}</span>}
             </header>
 
-            {comments.length ? (
+            {pagedCommentsEnabled() ? <PagedComments queries={queries || []} timeline /> : comments.length ? (
                 <div className="timeline_comments_list" tabIndex={0} role="region" aria-label="Historial de comentarios del cronograma">
                     {comments.map((comment_item) => (
                         <article className="detail_comment_item" key={comment_item.id}>
@@ -4273,6 +4282,10 @@ function TaskAppContent({ externalModules = {} }) {
     const [project_preview, set_project_preview] = use_state(null);
     const session = useCore();
     const { active_module, set_active_module, set_is_sidebar_open } = useShell();
+    const task_content_active = requiresTaskData(active_module);
+    const task_activity = use_ref(task_content_active);
+    task_activity.current = task_content_active;
+    const switch_task_activity = use_ref(() => {});
     const real = is_using_real_backend();
     const [data, set_data] = use_state(null);
     const [intro_finished, set_intro_finished] = use_state(false);
@@ -4283,6 +4296,12 @@ function TaskAppContent({ externalModules = {} }) {
     const [api_error, set_api_error] = use_state("");
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
+    const mutation_generation = use_ref(0);
+    const edit_loader = use_ref(null);
+    if (!edit_loader.current) edit_loader.current = createTaskEditLoader(api);
+    const edit_open_generation = use_ref(0);
+    const [opening_edit, set_opening_edit] = use_state(false);
+    const task_commit_revision = use_ref(0);
     const task_crud_mutations = use_ref(new Map());
     const [syncing_task_count, set_syncing_task_count] = use_state(0);
     use_effect(() => {
@@ -4310,10 +4329,13 @@ function TaskAppContent({ externalModules = {} }) {
         try { sessionStorage.setItem(failed_drafts_key, JSON.stringify(failed_task_state.items)); } catch { /* La recuperación sigue disponible en esta pestaña. */ }
     }, [failed_drafts_key, failed_task_state]);
     const task_status_mutations = use_ref(new Map());
-    const notification_read_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
     const [active_view, set_active_view] = use_state("list");
-    const [active_modal, set_active_modal] = use_state(null);
+    const [active_modal, set_raw_active_modal] = use_state(null);
+    function set_active_modal(value) {
+        if (["task", "edit_task", "project"].includes(value) && !task_activity.current) set_active_module("tasks");
+        set_raw_active_modal(value);
+    }
     const [inbox_detail_open, set_inbox_detail_open] = use_state(false);
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
@@ -4598,7 +4620,7 @@ function TaskAppContent({ externalModules = {} }) {
             }, () => {
                 if (!editing_project_id) remember_project(created_project_id, [created_project_id, ...projects.map(project => project.id)]);
                 set_active_modal(null); set_editing_project_id(null);
-            });
+            }, "Cambios guardados", () => {}, PROJECT_RESOURCES);
             return;
         }
         set_projects((current_projects) => (
@@ -4683,12 +4705,12 @@ function TaskAppContent({ externalModules = {} }) {
             const members = data.members.filter(item => item.project === project_id);
             for (const member of members) if (!member_ids.includes(member.assignment)) await api.remove("project-members", member.id);
             for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: project_id, assignment: id, member_role: "member", status: "active" });
-        }, () => { if (close_modal) set_active_modal(null); });
+        }, () => { if (close_modal) set_active_modal(null); }, "Cambios guardados", () => {}, ["members"]);
     }
 
     function handle_update_project(project_id, changes) {
         if (!real) return set_projects(items => items.map(project => project.id === project_id ? { ...project, ...changes } : project));
-        mutate(() => api.update("projects", project_id, changes));
+        mutate(() => api.update("projects", project_id, changes), undefined, undefined, undefined, ["projects"]);
     }
 
     function handle_drag_start(task_id, event) {
@@ -4783,7 +4805,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             const positions = new Map(real_next.map((section, index) => [section.id, (index + 1) * 1000]));
             set_data(current => ({ ...current, sections: current.sections.map(section => positions.has(section.id) ? { ...section, position: String(positions.get(section.id)) } : section).sort((a, b) => Number(a.position) - Number(b.position)) }));
-            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado");
+            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado", undefined, ["sections"]);
         } else {
             set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: real_next }));
         }
@@ -4819,7 +4841,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_add_column() {
-        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }); return; }
+        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }, undefined, undefined, ["sections"]); return; }
         const trimmed_name = new_column_name.trim();
         if (!trimmed_name) return;
 
@@ -4843,7 +4865,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_editing_column_name("");
             return;
         }
-        if (real) { mutate(() => api.update("sections", editing_column_id, { name: label }), () => set_editing_column_id(null)); return; }
+        if (real) { mutate(() => api.update("sections", editing_column_id, { name: label }), () => set_editing_column_id(null), undefined, undefined, ["sections"]); return; }
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).map(column_item => column_item.id === editing_column_id ? { ...column_item, label, status: label } : column_item) }));
         set_editing_column_id(null);
         set_editing_column_name("");
@@ -4859,7 +4881,7 @@ function TaskAppContent({ externalModules = {} }) {
                     const existing = data.sections.find(section => section.projectId === selected_project_id);
                     const target = existing || await api.create("sections", { project: selected_project_id, name: "General", position: "1000" });
                     for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: target.id, position: String((index + 1) * 1000) });
-                }, hide);
+                }, hide, undefined, undefined, ["sections", "links"]);
                 return;
             }
             const sections = mock_sections_by_project[selected_project_id] || [];
@@ -4869,7 +4891,7 @@ function TaskAppContent({ externalModules = {} }) {
             hide();
             return;
         }
-        if (real) { mutate(() => api.remove("sections", column_id)); return; }
+        if (real) { mutate(() => api.remove("sections", column_id), undefined, undefined, undefined, ["sections", "links"]); return; }
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).filter(column_item => column_item.id !== column_id) }));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: "unsectioned", status: "Pend.", completed: false } : task_item
@@ -4884,7 +4906,8 @@ function TaskAppContent({ externalModules = {} }) {
         ));
     }
 
-    const [notifications, set_notifications] = use_state(real ? [] : notification_items);
+    const [template_notifications, set_notifications] = use_state(notification_items);
+    const notifications = use_memo(() => real ? session.notifications.rows.map(item => ({ ...item, task_id: item.task, time_label: new Date(item.created_at).toLocaleString("es"), message: item.body || item.title })) : template_notifications, [real, session.notifications.rows, template_notifications]);
 
     function select_workspace(id) {
         try { localStorage.setItem(activeWorkspaceStorageKey(workspace_unit_id), id); }
@@ -4963,34 +4986,42 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
-        let mounted = true, running = null, dirty = false;
-        refresh.current = () => {
-            dirty = true;
-            if (running) return running;
-            running = (async () => {
-                while (dirty && mounted) {
-                    dirty = false;
-                    const next = await loadTaskData(session);
-                    if (!mounted) return;
+        let mounted = true, dataGeneration = 0, securityUncertain = Boolean(session.securityUncertain);
+        const catalogCache = createContextCache();
+        const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
+        const deferComments = pagedCommentsEnabled();
+        const deferAttachments = pagedAttachmentsEnabled();
+        const notificationClient = { list: () => Promise.resolve(session.notifications.getRows()) };
+        const loader = createTaskDataLoader(session, { catalogCache, notificationClient, deferComments, deferAttachments });
+        const canRefresh = () => task_activity.current && contentCanRefresh();
+        const coordinator = createRefreshCoordinator({ canRun: canRefresh, run: async batch => {
+                    if (securityUncertain || !task_activity.current) return;
+                    const version = dataGeneration;
+                    const writeRevision = task_commit_revision.current;
+                    const next = incremental ? await loader.load(batch.resources) : await loadTaskData(session, { catalogCache, notificationClient });
+                    if (!mounted || version !== dataGeneration) return;
+                    // Only a successful round started after the write can retire
+                    // a committed optimistic change. Unrelated/failed reads cannot.
+                    settleCommittedTaskChanges(task_crud_mutations.current, { startedRevision: writeRevision, currentRevision: task_commit_revision.current,
+                        reconciled: !incremental || batch.resources.includes("all") || TASK_RESOURCES.every(resource => batch.resources.includes(resource)) });
+                    set_syncing_task_count(task_crud_mutations.current.size);
+                    for (const [id, mutation] of task_status_mutations.current)
+                        if (!mutation.running && next.tasks.some(task => String(task.id) === id && String(task.statusId) === String(mutation.desired.id))) task_status_mutations.current.delete(id);
                     let next_tasks = applyPendingTaskChanges(next.tasks, task_crud_mutations.current);
                     for (const [task_id, mutation] of task_status_mutations.current) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
                     }
-                    const next_notifications = next.notifications.map(notification => {
-                        const mutation = notification_read_mutations.current.get(String(notification.id));
-                        return mutation ? { ...notification, is_read: mutation.desired } : notification;
-                    });
-                    const presented = { ...next, tasks: next_tasks, notifications: next_notifications };
+                    const presented = { ...next, tasks: next_tasks };
                     setPresentationData(presented);
                     set_data(presented); set_projects(next.projects);
                     set_tasks(next_tasks.filter(item => !item.parentTaskId || !next_tasks.some(parent => parent.id === item.parentTaskId)));
-                    set_notifications(next_notifications);
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
-                }
-            })().finally(() => { running = null; });
-            return running;
-        };
+                    // Recovery also refreshes only mounted histories, never the full collection.
+                    if (deferComments && batch.resources.includes("all")) notifyCommentViews();
+                    if (deferAttachments && (batch.resources.includes("all") || batch.resources.some(resource => resource.split("@")[0] === "attachments"))) notifyAttachmentViews();
+        } });
+        refresh.current = (resources = TASK_RESOURCES) => coordinator.request({ reason: "mutation", resources, force: true });
         const report = error => {
             if (!mounted || error.name === "AbortError") return;
             set_api_error(error.message);
@@ -5010,48 +5041,110 @@ function TaskAppContent({ externalModules = {} }) {
             });
         };
         let streamGeneration = 0;
+        const scheduleContent = (reason, resources = ["all"]) => {
+            // Hidden events only imply recovery on focus; do not accumulate promises.
+            if (canRefresh()) coordinator.request({ reason, resources }).catch(report);
+        };
         const syncRealtime = async () => {
             const currentGeneration = ++streamGeneration;
-            disconnect_realtime_stream();
             const units = session.units;
+            const allowedUnits = [];
             for (const unit of units) {
-                if (!mounted || currentGeneration !== streamGeneration) return;
+                if (!mounted || !task_activity.current || securityUncertain || currentGeneration !== streamGeneration) return;
                 const allowed = await session.permissions.can("tasks.task.read", unit.id);
-                if (mounted && currentGeneration === streamGeneration && allowed) connect_realtime_stream({ unitId: unit.id, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket, onEvent: () => refresh.current().catch(report), onReconnect: () => refresh.current().catch(report), onError: message => mounted && set_api_error(message) });
+                if (allowed) allowedUnits.push(unit.id);
             }
+            if (!mounted || !task_activity.current || securityUncertain || currentGeneration !== streamGeneration) return;
+            retain_realtime_streams(allowedUnits);
+            const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
+                onEvent: event => {
+                    if (deferComments && ["comment.created", "comment.changed"].includes(event.event_type)) {
+                        notifyCommentViews(event.payload?.tasks || (event.payload?.task ? [event.payload.task] : null));
+                        return;
+                    }
+                    if (deferComments && ["task.updated", "task.deleted", "project.changed", "task_link.changed"].includes(event.event_type)) notifyCommentViews(null, true);
+                    if (deferAttachments && event.event_type === "attachment.changed") {
+                        notifyAttachmentViews(event.payload?.tasks || null);
+                        scheduleContent("attachment-count", resourcesForTaskEvent(event).map(resource => resource.replace(/^attachments/, "tasks")));
+                        return;
+                    }
+                    if (deferAttachments && ["task.updated", "task.deleted", "project.changed", "task_link.changed"].includes(event.event_type)) notifyAttachmentViews(null, true);
+                    if (event.event_type === "catalog.changed") catalogCache.clear();
+                    scheduleContent("task-event", resourcesForTaskEvent(event));
+                },
+                onReconnect: () => scheduleContent("socket-reconnect"),
+                onError: message => mounted && set_api_error(message) }));
+            await Promise.all(connections);
         };
-        const syncNotifications = () => connectNotificationStream({
-            assignmentId: session.activeAssignment.id,
-            getTicket: session.websocketTicket,
-            onNotification: () => refresh.current().catch(report),
-            onReconnect: () => refresh.current().catch(report),
-            onError: message => mounted && set_api_error(message),
-        });
-        refresh.current().then(() => { syncRealtime(); syncNotifications(); }).catch(report);
+        const activate = () => {
+            if (!mounted || !task_activity.current || securityUncertain) return;
+            coordinator.request({ reason: "task-view-activate", resources: ["all"], immediate: true }).then(async () => {
+                if (!mounted || !task_activity.current || securityUncertain) return;
+                await syncRealtime();
+                if (mounted) scheduleContent("socket-bootstrap");
+            }).catch(report);
+        };
+        switch_task_activity.current = active => {
+            dataGeneration++;
+            if (active) activate();
+            else { streamGeneration++; retain_realtime_streams([]); }
+        };
         // Secondary resources have no event stream; focus and polling reconcile them too.
-        const reconcile = () => refresh.current().catch(report);
-        const reconcilePermissions = () => {
+        const reconcile = () => {
+            if (canRefresh()) coordinator.request({ reason: "focus-or-poll" }).catch(report);
+        };
+        const reconcilePermissions = event => {
+            securityUncertain = Boolean(event.detail?.uncertain);
+            dataGeneration++;
+            mutation_generation.current++;
+            edit_open_generation.current++; edit_loader.current.cancel(); set_opening_edit(false);
+            catalogCache.clear(); loader.clear(); api.cancelRequests();
+            task_crud_mutations.current.clear(); task_status_mutations.current.clear();
+            set_syncing_task_count(0); set_selected_task_id(null);
+            set_edit_draft(null);
+            set_active_modal(current => current === "edit_task" ? null : current);
+            // Hide old-scope data before any asynchronous authorization or reload.
+            set_tasks([]); set_projects([]);
+            setPresentationData(null);
+            set_data(current => current ? { ...current, tasks: [], projects: [], sections: [], statuses: [], links: [], members: [], followers: [], notifications: [] } : current);
+            if (event.detail?.uncertain || !task_activity.current) {
+                retain_realtime_streams([]);
+                return;
+            }
             syncRealtime().catch(report);
-            reconcile();
+            coordinator.request({ reason: "permissions", security: true }).catch(report);
         };
         window.addEventListener("focus", reconcile);
+        window.addEventListener("online", reconcile);
+        document.addEventListener("visibilitychange", reconcile);
         window.addEventListener("bold:permissions-revision", reconcilePermissions);
-        const timer = setInterval(reconcile, 30000);
-        return () => { mounted = false; streamGeneration++; clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        const configuredInterval = Number(import.meta.env?.VITE_TASK_RECONCILE_MS);
+        const interval = Number.isFinite(configuredInterval) && configuredInterval >= 60_000 ? configuredInterval : 300_000;
+        const timer = setInterval(reconcile, interval);
+        return () => { mounted = false; dataGeneration++; streamGeneration++; switch_task_activity.current = () => {}; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
+    use_effect(() => { switch_task_activity.current(task_content_active); }, [task_content_active]);
+    use_effect(() => {
+        set_opening_edit(false);
+        return () => { edit_open_generation.current++; edit_loader.current.cancel(); };
+    }, [task_content_active, selected_project_id, active_module, task_scope, active_section]);
 
-    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}) {
+    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}, resources = TASK_RESOURCES) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
+        const version = mutation_generation.current;
         try {
-            await operation(); await refresh.current(); on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
+            await operation(); if (version !== mutation_generation.current) return false;
+            await refresh.current(resources); if (version !== mutation_generation.current) return false;
+            on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
         } catch (error) {
+            if (version !== mutation_generation.current) return false;
             if (error.name !== "AbortError") {
                 try { on_failure(error); } catch (rollback_error) { console.warn("No se pudo revertir el cambio optimista.", rollback_error); }
                 if (error.status !== 403) set_api_error(error.message);
                 if (error.status === 404) { set_selected_task_id(null); set_active_modal(null); }
                 // Reconcile partial multi-resource saves as well as rejected writes.
-                await refresh.current().catch(() => {});
+                await refresh.current(resources).catch(() => {});
                 if (error.status === 403) {
                     const detail = typeof error.fields?.detail === "string" ? error.fields.detail : "";
                     await show_task_permission_denied(detail);
@@ -5082,6 +5175,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function start_task_crud(changes, operation, { on_success = () => {}, on_failure = () => {}, success_title } = {}) {
+        const version = mutation_generation.current;
         const mutations = Array.isArray(changes) ? changes : [changes];
         if (mutations.some(mutation => task_crud_mutations.current.has(String(mutation.id)) || task_status_mutations.current.has(String(mutation.id)))) {
             set_api_error("Esta tarea aún se está sincronizando. Espera a que termine para volver a modificarla.");
@@ -5098,6 +5192,7 @@ function TaskAppContent({ externalModules = {} }) {
             try {
                 result = await operation();
             } catch (error) {
+                if (version !== mutation_generation.current) return;
                 for (const key of batch.keys()) task_crud_mutations.current.delete(key);
                 set_syncing_task_count(task_crud_mutations.current.size);
                 const rollback = (tasks, flat) => mutations.reduce((rows, mutation) => rollbackPendingTaskChange(rows, mutation, { flat }), tasks);
@@ -5116,16 +5211,27 @@ function TaskAppContent({ externalModules = {} }) {
                 }
                 return;
             }
-            for (const key of batch.keys()) task_crud_mutations.current.delete(key);
-            set_syncing_task_count(task_crud_mutations.current.size);
+            if (version !== mutation_generation.current) return;
+            task_commit_revision.current++;
             const createdIds = result?.created || (result?.id ? [result.id] : []);
             if (createdIds.length) {
                 const idMap = new Map(mutations.filter(mutation => mutation.kind === "create").map((mutation, index) => [String(mutation.id), createdIds[index]]));
+                for (const [key, mutation] of batch) {
+                    const serverId = idMap.get(key);
+                    if (serverId) {
+                        task_crud_mutations.current.delete(key);
+                        mutation.id = serverId; mutation.serverId = serverId;
+                        mutation.task = { ...mutation.task, id: serverId };
+                        task_crud_mutations.current.set(String(serverId), mutation);
+                    }
+                }
                 const confirm = tasks => replaceTemporaryTaskIds(tasks, idMap);
                 set_data(current => current ? { ...current, tasks: confirm(current.tasks) } : current);
                 set_tasks(confirm);
                 set_selected_task_id(id => idMap.get(String(id)) || id);
             }
+            for (const mutation of mutations) mutation.committed = true;
+            set_syncing_task_count(task_crud_mutations.current.size);
             on_success(result);
             try { await refresh.current(); }
             catch { set_api_error("El cambio se guardó, pero no se pudo actualizar la vista. Vuelve a cargar la página."); }
@@ -5191,13 +5297,14 @@ function TaskAppContent({ externalModules = {} }) {
                         if (task_status_mutations.current.get(task_id) === mutation) {
                             task_status_mutations.current.delete(task_id);
                             apply_optimistic_task_status(task_id, mutation.confirmed);
-                            await refresh.current().catch(() => {});
+                            await refresh.current([`tasks@${task_id}`]).catch(() => {});
                         }
                         await report_background_mutation_error(error);
                         return;
                     }
                 }
-                await refresh.current().catch(() => {});
+                try { await refresh.current([`tasks@${task_id}`]); }
+                catch { set_api_error("El estado se guardó; la confirmación visual se recuperará al volver a sincronizar."); return; }
                 if (task_status_mutations.current.get(task_id) !== mutation) return;
                 if (String(mutation.confirmed.id) !== String(mutation.desired.id)) continue;
                 task_status_mutations.current.delete(task_id);
@@ -5208,63 +5315,11 @@ function TaskAppContent({ externalModules = {} }) {
         }
     }
 
-    function apply_optimistic_notification_read(notification_id, is_read) {
-        set_notifications(current => current.map(notification => (
-            String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
-        )));
-        set_data(current => current ? {
-            ...current,
-            notifications: current.notifications.map(notification => (
-                String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
-            )),
-        } : current);
-    }
-
     function queue_notification_read(notification_id, is_read) {
-        const key = String(notification_id);
-        let mutation = notification_read_mutations.current.get(key);
-        if (!mutation) {
-            const notification = notifications.find(item => String(item.id) === key);
-            if (!notification) return false;
-            mutation = { confirmed: Boolean(notification.is_read), desired: Boolean(is_read), running: false };
-            notification_read_mutations.current.set(key, mutation);
-        } else {
-            mutation.desired = Boolean(is_read);
-        }
-        apply_optimistic_notification_read(notification_id, Boolean(is_read));
-        if (!mutation.running) void flush_notification_read(key, mutation);
+        session.notifications.setRead(notification_id, Boolean(is_read)).catch(error => {
+            if (error.name !== "AbortError") set_api_error(error.message || "No se pudo sincronizar la notificación.");
+        });
         return true;
-    }
-
-    async function flush_notification_read(notification_id, mutation) {
-        mutation.running = true;
-        try {
-            while (notification_read_mutations.current.get(notification_id) === mutation
-                && mutation.confirmed !== mutation.desired) {
-                const requested = mutation.desired;
-                try {
-                    await (requested
-                        ? notificationsApi.markRead(notification_id)
-                        : notificationsApi.markUnread(notification_id));
-                    mutation.confirmed = requested;
-                } catch (error) {
-                    if (notification_read_mutations.current.get(notification_id) === mutation) {
-                        notification_read_mutations.current.delete(notification_id);
-                        apply_optimistic_notification_read(notification_id, mutation.confirmed);
-                    }
-                    if (error?.name !== "AbortError") {
-                        set_api_error(error?.message || "No se pudo sincronizar la notificación.");
-                    }
-                    return;
-                }
-            }
-            if (notification_read_mutations.current.get(notification_id) === mutation
-                && mutation.confirmed === mutation.desired) {
-                notification_read_mutations.current.delete(notification_id);
-            }
-        } finally {
-            mutation.running = false;
-        }
     }
 
     async function handle_workspace_bulk(operation, ids = [], values = {}) {
@@ -5655,8 +5710,9 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Opens the "Editar tarea" modal and seeds the draft.
     async function handle_open_edit_task(task_id) {
-        const task_item = tasks.find((t) => t.id === task_id);
+        let task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
+        const version = mutation_generation.current, attempt = ++edit_open_generation.current;
         if (real && task_crud_mutations.current.has(String(task_id))) {
             set_api_error("Esta tarea aún se está sincronizando. Podrás editarla al terminar.");
             return;
@@ -5667,11 +5723,19 @@ function TaskAppContent({ externalModules = {} }) {
                     await show_task_permission_denied();
                     return;
                 }
+                if (version !== mutation_generation.current || attempt !== edit_open_generation.current || !task_activity.current) return;
+                if (pagedAttachmentsEnabled()) {
+                    set_opening_edit(true);
+                    task_item = await edit_loader.current.load(task_item);
+                }
             } catch (error) {
-                set_api_error(error.message);
+                if (error.name !== "AbortError" && attempt === edit_open_generation.current) set_api_error(error.message);
                 return;
+            } finally {
+                if (attempt === edit_open_generation.current) set_opening_edit(false);
             }
         }
+        if (version !== mutation_generation.current || attempt !== edit_open_generation.current) return;
         set_editing_subtask_parent_id(null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
@@ -5713,7 +5777,7 @@ function TaskAppContent({ externalModules = {} }) {
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
         if (field === "collaborator_ids") {
-            if (real) { mutate(() => saveFollowers(task_id, value, data)); return; }
+            if (real) { mutate(() => saveFollowers(task_id, value, data), undefined, undefined, undefined, [`followers@${task_id}`]); return; }
             set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: value } : task));
             return;
         }
@@ -5757,7 +5821,11 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             if (task_crud_mutations.current.has(String(task_id))) { set_api_error("Espera a que se sincronice la tarea antes de comentarla."); return Promise.resolve(false); }
             if (images.length) { set_api_error("Los comentarios admiten texto. A?ade los archivos como enlaces adjuntos a la tarea."); return Promise.resolve(false); }
-            return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim())) : Promise.resolve(false);
+            return comment_text.trim() ? mutate(async () => {
+                const saved = await api.createComment(task_id, comment_text.trim());
+                if (pagedCommentsEnabled()) notifyCommentViews([task_id]);
+                return saved;
+            }, undefined, undefined, undefined, [`comments@${task_id}`]) : Promise.resolve(false);
         }
         const body = comment_text.trim();
         if (!body && !images.length) return;
@@ -5886,7 +5954,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_confirm_delete_project(project_id) {
-        if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }); return; }
+        if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }, undefined, undefined, PROJECT_RESOURCES); return; }
         const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
         set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_id));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
@@ -6077,6 +6145,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Renders the active modal requested by the application state.
     function render_active_modal() {
+        if (real && !data && ["task", "edit_task", "project"].includes(active_modal)) return null;
         const drawer = { width: task_detail_width, on_resize_key_down: handle_detail_resize_key_down, on_resize_start: handle_detail_resize_start };
         // New Master-Plan Crear modal
         if (active_modal === "task") {
@@ -6211,8 +6280,8 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && (!data || !intro_finished) && !api_error) return <LoginIntro />;
-    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current().catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
+    if (real && task_content_active && (!data || !intro_finished) && !api_error) return <LoginIntro />;
+    if (real && task_content_active && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (
@@ -6230,7 +6299,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     <span>No se pudo confirmar el guardado de {failed_task_creates.length} {failed_task_creates.length === 1 ? "tarea" : "tareas"}. Comprueba si ya aparecen antes de reintentarlo.</span>
                     {failed_task_creates.map(failed => <button key={failed.id} type="button" onClick={() => restore_failed_task_draft(failed)}>Recuperar «{failed.title}»</button>)}
                 </div>}
-                {(pending || syncing_task_count > 0) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
+                {(pending || syncing_task_count > 0 || opening_edit) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {opening_edit ? "Cargando adjuntos para editar…" : syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
             </>}
         >
                 <div className="module_transition" key={active_module}>
@@ -6336,6 +6405,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     selected_task_id,
                     task_detail_width,
                     timeline_comments,
+                    comment_queries: commentQueries({ scope: task_scope, projectId: selected_project_id, taskIds: workspace_tasks.map(task => task.id) }),
                     set_active_modal,
                     set_active_section,
                     set_active_view,
