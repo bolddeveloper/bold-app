@@ -2558,13 +2558,10 @@ function render_tasks_module(props) {
                 <div className="project_actions">
                     <div className="avatar_stack" aria-label="Miembros del proyecto">
                         {(is_using_real_backend() ? team_members.filter(item => selected_project.member_ids?.includes(item.id) || selected_project.owner_assignment === item.id).slice(0, 3) : team_members.slice(0, 3)).map((member_item) => (
-                            <span
-                                className="avatar_medium"
-                                key={member_item.id}
-                                style={{ "--avatar_color": member_item.color }}
-                            >
-                                {member_item.initials}
-                            </span>
+                            <details className="project_profile_hint" key={member_item.id} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }} onKeyDown={event => { if (event.key === "Escape") event.currentTarget.open = false; }}>
+                                <summary className="avatar_medium" aria-label={`Perfil de ${member_item.name}`} style={{ "--avatar_color": member_item.color }}>{member_item.initials}</summary>
+                                <span className="project_profile_tooltip" role="tooltip">Perfiles próximamente</span>
+                            </details>
                         ))}
                         {!is_using_real_backend() && <span className="avatar_more">+2</span>}
                     </div>
@@ -2572,7 +2569,7 @@ function render_tasks_module(props) {
                         {render_icon(plus_icon, 17)}
                         Agregar tarea
                     </button>
-                    <button className="icon_button" type="button" aria-label="Más opciones" onClick={() => set_active_modal("project_menu")}>
+                    <button className="icon_button project_menu_toggle" type="button" aria-label="Más opciones" aria-expanded={active_modal === "project_menu"} onClick={() => set_active_modal(current => current === "project_menu" ? null : "project_menu")}>
                         {render_icon(more_horizontal_icon, 22)}
                     </button>
                 </div>
@@ -4168,14 +4165,9 @@ function render_project_modal(props) {
 
 
 // Renders the project overflow menu from the desktop reference.
-function render_project_menu(set_active_modal, handle_request_delete_project, is_open) {
+function render_project_menu(handle_request_delete_project, is_open) {
     return (
         <div className={`project_menu_popover animated_overflow_menu ${is_open ? "overflow_menu_open" : "overflow_menu_closed"}`} aria-hidden={!is_open}>
-            <button type="button">Editar detalles del proyecto <span>Ctrl+E</span></button>
-            <button type="button">Duplicar proyecto <span>Ctrl+D</span></button>
-            <button type="button">Guardar como plantilla</button>
-            <button type="button">Exportar como CSV <span>CSV</span></button>
-            <button type="button">Archivar proyecto</button>
             <button className="danger_menu_item" type="button" onClick={handle_request_delete_project}>Eliminar proyecto</button>
         </div>
     );
@@ -4969,7 +4961,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         function handle_pointer_down(event) {
-            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .quick_people_popover, .project_menu_popover, .project_item_wrap, .sidebar_project_menu_floating")) {
+            if (event.target.closest(".task_tool_anchor, .inbox_dropdown, .task_options_panel, .mobile_more_button, .quick_popover_container, .quick_people_popover, .project_menu_popover, .project_menu_toggle, .project_item_wrap, .sidebar_project_menu_floating")) {
                 return;
             }
 
@@ -5378,7 +5370,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_tasks(current => {
                 const next = [...current];
                 values.items.forEach(item => {
-                    const created = normalize_task({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: item.section || "unsectioned" });
+                    const created = normalize_task({ ...item, collaborator_ids: [...new Set([...(item.collaborator_ids || []), current_user_id])], id: crypto.randomUUID(), created_at: new Date().toISOString(), parentTaskId: item.parentTaskId || null, assignee_id: item.assignee_id || "", priority: item.priority || "Media", status: "Pend.", completed: false, due_label: item.due_date || "", project_id: item.project_id || "", section: item.section || "unsectioned" });
                     const parentIndex = next.findIndex(task => String(task.id) === String(item.parentTaskId));
                     if (parentIndex >= 0) next[parentIndex] = { ...next[parentIndex], subtasks: [...(next[parentIndex].subtasks || []), created] };
                     else next.push(created);
@@ -6294,7 +6286,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             feedback={null}
             overlays={<>
                 {render_active_modal()}
-                {render_project_menu(set_active_modal, handle_request_delete_project, active_modal === "project_menu")}
+                {render_project_menu(handle_request_delete_project, active_modal === "project_menu")}
                 {project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}
                 {workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}
                 {failed_task_creates.length > 0 && <div className="task_failed_drafts" role="alert">

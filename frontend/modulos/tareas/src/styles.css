@@ -1487,7 +1487,7 @@ button {
     font-weight: 900;
 }
 
-.board_column header span {
+.board_column header > span {
     display: inline-flex;
     min-width: 30px;
     height: 28px;
@@ -9953,9 +9953,12 @@ button {
 .board_view::-webkit-scrollbar-thumb { border-radius: 999px; background: #c9c4bd; }
 .board_column,
 .board_column_new { width: 310px; min-width: 310px; scroll-snap-align: start; }
-.board_column { display: flex; max-height: calc(100dvh - 245px); flex-direction: column; overflow: hidden; border-color: var(--task-border); border-radius: 14px; box-shadow: 0 7px 22px rgba(31, 36, 44, .06); }
+.board_column { display: flex; height: max(300px, calc(100dvh - 245px)); max-height: max(300px, calc(100dvh - 245px)); flex-direction: column; overflow: hidden; border-color: var(--task-border); border-radius: 14px; box-shadow: 0 7px 22px rgba(31, 36, 44, .06); }
 .board_column > header { position: sticky; top: 0; z-index: 2; min-height: 48px; padding: 10px 12px; background: var(--task-panel); }
-.board_card_stack { min-height: 72px; overflow-y: auto; padding: 9px; }
+.board_card_stack { flex: 1; min-height: 0; overflow-y: auto; padding: 9px; }
+.board_column > header, .board_column > .board_quick_add_button, .board_column > .board_quick_task_form { flex-shrink: 0; }
+.theme_dark .board_column_title_input { background: var(--bold_surface); border-color: var(--bold_line); color: var(--bold_text); }
+.theme_dark .board_column header > span { background: var(--bold_surface_soft); color: var(--bold_muted); }
 .board_card { border-radius: 11px; box-shadow: 0 2px 8px rgba(31, 36, 44, .05); transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
 .board_card:hover { border-color: #d6aeb2; box-shadow: 0 8px 20px rgba(31, 36, 44, .1); transform: translateY(-1px); }
 .board_card[data-dragging="true"] { transform: scale(.98); opacity: .55; }
@@ -10097,3 +10100,9 @@ button {
     .task_quick_actions { opacity: 1; }
     .detail_comments_list { max-height: none; }
 }
+
+.project_profile_hint { position: relative; }
+.project_profile_hint summary { list-style: none; cursor: pointer; }
+.project_profile_hint summary::-webkit-details-marker { display: none; }
+.project_profile_hint summary:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
+.project_profile_tooltip { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 10; width: max-content; padding: 8px 10px; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); font-size: 12px; box-shadow: 0 4px 12px #0002; }
