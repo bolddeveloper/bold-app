@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import EmptyResultSet
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
 from uuid import UUID
 from rest_framework import status, viewsets
@@ -35,7 +35,7 @@ from .models import (
     WebhookEndpoint,
 )
 from .permissions import HasActiveAssignment
-from .pagination import RecentCommentPagination
+from .pagination import RecentCommentPagination, RecentAttachmentPagination
 from .serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
@@ -307,7 +307,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
             "created_by_assignment",
             "assignee_assignment",
         )
-        return queryset
+        return queryset.annotate(attachment_count=Count("attachments", filter=Q(attachments__deleted_at__isnull=True)))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.task.create", serializer.validated_data["unit"])
@@ -573,7 +573,14 @@ class AttachmentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, vi
     serializer_class = AttachmentSerializer
 
     def get_queryset(self):
+        if self.request.query_params.get("recent") not in (None, "1"):
+            raise ValidationError({"recent": "recent solo admite 1."})
         return self.filter_task_relations(Attachment.objects.filter(deleted_at__isnull=True))
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get("recent") == "1":
+            self.pagination_class = RecentAttachmentPagination
+        return super().paginate_queryset(queryset)
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]

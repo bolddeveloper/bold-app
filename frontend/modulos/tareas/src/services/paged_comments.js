@@ -11,6 +11,7 @@ export function notifyCommentViews(tasks = null, purge = false) {
 
 // One page per disjoint scope, at most two reads in flight; no automatic traversal.
 export function createPagedComments({ queries, listPage, emit = () => {}, canRun = () => true,
+    resource = "comments", errorMessage = "No se pudieron cargar los comentarios. Puedes reintentar sin perder el texto escrito.",
     now = () => Date.now(), setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
     let groups = [], generation = 0, disposed = false, inFlight = null, timer = null, pending = false, controller = new AbortController(), retryAt = 0, updatedAt = -Infinity;
     let state = { rows: [], count: 0, loading: false, error: "", hasMore: false, dirty: true };
@@ -46,7 +47,7 @@ export function createPagedComments({ queries, listPage, emit = () => {}, canRun
                     const i = indices[cursor++], previous = append ? groups[i] : null;
                     const path = previous?.next || "first";
                     if (previous?.seen.has(path)) throw new Error("Paginación circular del servidor.");
-                    const page = await listPage("comments", queries[i], { next: previous?.next || null, signal });
+                    const page = await listPage(resource, queries[i], { next: previous?.next || null, signal });
                     const rows = new Map((previous?.rows || []).map(row => [String(row.id), row]));
                     page.results.forEach(row => rows.set(String(row.id), row));
                     nextGroups[i] = { rows: [...rows.values()], count: page.count, next: page.next,
@@ -67,7 +68,7 @@ export function createPagedComments({ queries, listPage, emit = () => {}, canRun
             controller.abort(); controller = new AbortController(); // stop sibling batch reads after a failed round
             retryAt = now() + Math.max(0, error.retryAfterMs || 0);
             if ([401, 403].includes(error.status)) { groups = []; publish({ rows: [], count: 0, hasMore: false }); }
-            publish({ error: "No se pudieron cargar los comentarios. Puedes reintentar sin perder el texto escrito.", dirty: true });
+            publish({ error: errorMessage, dirty: true });
         } finally {
             if (!disposed && epoch === generation) {
                 inFlight = null; publish({ loading: false });

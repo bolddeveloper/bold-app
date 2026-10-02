@@ -71,6 +71,8 @@ import {
 import { create_task_event, task_event_types } from "./services/task_events.js";
 import { requiresTaskData } from "./services/task_activity.js";
 import { PagedComments } from "./paged_comments.jsx";
+import { PagedAttachments } from "./paged_attachments.jsx";
+import { pagedAttachmentsEnabled, notifyAttachmentViews, createTaskEditLoader } from "./services/task_attachments.js";
 import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./services/paged_comments.js";
 
 
@@ -1815,7 +1817,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                     </div>
                 </div>
 
-            {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
+            {is_using_real_backend() && (pagedAttachmentsEnabled() ? <PagedAttachments taskId={selected_task.id} /> : selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>))}
             {show_comments ? <>{pagedCommentsEnabled() ? <PagedComments queries={commentQueries({ taskIds: [selected_task.id] })} /> : <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
@@ -4295,6 +4297,10 @@ function TaskAppContent({ externalModules = {} }) {
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
     const mutation_generation = use_ref(0);
+    const edit_loader = use_ref(null);
+    if (!edit_loader.current) edit_loader.current = createTaskEditLoader(api);
+    const edit_open_generation = use_ref(0);
+    const [opening_edit, set_opening_edit] = use_state(false);
     const task_commit_revision = use_ref(0);
     const task_crud_mutations = use_ref(new Map());
     const [syncing_task_count, set_syncing_task_count] = use_state(0);
@@ -4984,8 +4990,9 @@ function TaskAppContent({ externalModules = {} }) {
         const catalogCache = createContextCache();
         const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
         const deferComments = pagedCommentsEnabled();
+        const deferAttachments = pagedAttachmentsEnabled();
         const notificationClient = { list: () => Promise.resolve(session.notifications.getRows()) };
-        const loader = createTaskDataLoader(session, { catalogCache, notificationClient, deferComments });
+        const loader = createTaskDataLoader(session, { catalogCache, notificationClient, deferComments, deferAttachments });
         const canRefresh = () => task_activity.current && contentCanRefresh();
         const coordinator = createRefreshCoordinator({ canRun: canRefresh, run: async batch => {
                     if (securityUncertain || !task_activity.current) return;
@@ -5012,6 +5019,7 @@ function TaskAppContent({ externalModules = {} }) {
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
                     // Recovery also refreshes only mounted histories, never the full collection.
                     if (deferComments && batch.resources.includes("all")) notifyCommentViews();
+                    if (deferAttachments && (batch.resources.includes("all") || batch.resources.some(resource => resource.split("@")[0] === "attachments"))) notifyAttachmentViews();
         } });
         refresh.current = (resources = TASK_RESOURCES) => coordinator.request({ reason: "mutation", resources, force: true });
         const report = error => {
@@ -5055,6 +5063,12 @@ function TaskAppContent({ externalModules = {} }) {
                         return;
                     }
                     if (deferComments && ["task.updated", "task.deleted", "project.changed", "task_link.changed"].includes(event.event_type)) notifyCommentViews(null, true);
+                    if (deferAttachments && event.event_type === "attachment.changed") {
+                        notifyAttachmentViews(event.payload?.tasks || null);
+                        scheduleContent("attachment-count", resourcesForTaskEvent(event).map(resource => resource.replace(/^attachments/, "tasks")));
+                        return;
+                    }
+                    if (deferAttachments && ["task.updated", "task.deleted", "project.changed", "task_link.changed"].includes(event.event_type)) notifyAttachmentViews(null, true);
                     if (event.event_type === "catalog.changed") catalogCache.clear();
                     scheduleContent("task-event", resourcesForTaskEvent(event));
                 },
@@ -5083,6 +5097,7 @@ function TaskAppContent({ externalModules = {} }) {
             securityUncertain = Boolean(event.detail?.uncertain);
             dataGeneration++;
             mutation_generation.current++;
+            edit_open_generation.current++; edit_loader.current.cancel(); set_opening_edit(false);
             catalogCache.clear(); loader.clear(); api.cancelRequests();
             task_crud_mutations.current.clear(); task_status_mutations.current.clear();
             set_syncing_task_count(0); set_selected_task_id(null);
@@ -5109,6 +5124,10 @@ function TaskAppContent({ externalModules = {} }) {
         return () => { mounted = false; dataGeneration++; streamGeneration++; switch_task_activity.current = () => {}; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
     use_effect(() => { switch_task_activity.current(task_content_active); }, [task_content_active]);
+    use_effect(() => {
+        set_opening_edit(false);
+        return () => { edit_open_generation.current++; edit_loader.current.cancel(); };
+    }, [task_content_active, selected_project_id, active_module, task_scope, active_section]);
 
     async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}, resources = TASK_RESOURCES) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
@@ -5691,8 +5710,9 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Opens the "Editar tarea" modal and seeds the draft.
     async function handle_open_edit_task(task_id) {
-        const task_item = tasks.find((t) => t.id === task_id);
+        let task_item = tasks.find((t) => t.id === task_id);
         if (!task_item) return;
+        const version = mutation_generation.current, attempt = ++edit_open_generation.current;
         if (real && task_crud_mutations.current.has(String(task_id))) {
             set_api_error("Esta tarea aún se está sincronizando. Podrás editarla al terminar.");
             return;
@@ -5703,11 +5723,19 @@ function TaskAppContent({ externalModules = {} }) {
                     await show_task_permission_denied();
                     return;
                 }
+                if (version !== mutation_generation.current || attempt !== edit_open_generation.current || !task_activity.current) return;
+                if (pagedAttachmentsEnabled()) {
+                    set_opening_edit(true);
+                    task_item = await edit_loader.current.load(task_item);
+                }
             } catch (error) {
-                set_api_error(error.message);
+                if (error.name !== "AbortError" && attempt === edit_open_generation.current) set_api_error(error.message);
                 return;
+            } finally {
+                if (attempt === edit_open_generation.current) set_opening_edit(false);
             }
         }
+        if (version !== mutation_generation.current || attempt !== edit_open_generation.current) return;
         set_editing_subtask_parent_id(null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
@@ -6271,7 +6299,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     <span>No se pudo confirmar el guardado de {failed_task_creates.length} {failed_task_creates.length === 1 ? "tarea" : "tareas"}. Comprueba si ya aparecen antes de reintentarlo.</span>
                     {failed_task_creates.map(failed => <button key={failed.id} type="button" onClick={() => restore_failed_task_draft(failed)}>Recuperar «{failed.title}»</button>)}
                 </div>}
-                {(pending || syncing_task_count > 0) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
+                {(pending || syncing_task_count > 0 || opening_edit) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {opening_edit ? "Cargando adjuntos para editar…" : syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
             </>}
         >
                 <div className="module_transition" key={active_module}>

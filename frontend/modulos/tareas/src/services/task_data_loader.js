@@ -32,7 +32,7 @@ export function resourcesForTaskEvent(event) {
     return TASK_RESOURCES;
 }
 
-export function createTaskDataLoader(context, { catalogCache, client = api, notificationClient = notificationsApi, deferComments = false } = {}) {
+export function createTaskDataLoader(context, { catalogCache, client = api, notificationClient = notificationsApi, deferComments = false, deferAttachments = false } = {}) {
     let snapshot = null, generation = 0, presentation = null;
     const catalog = (key, load) => catalogCache ? catalogCache.get(key, load) : load();
     const allCatalogs = (resource, units) => Promise.all(chunks(units.map(unit => String(unit.id))).map(ids =>
@@ -56,10 +56,13 @@ export function createTaskDataLoader(context, { catalogCache, client = api, noti
             const params = ids ? { [resource === "tasks" ? "ids" : "tasks"]: [...ids].join(",") } : undefined;
             let rows;
             if (resource === "comments" && deferComments) rows = [];
+            else if (resource === "attachments" && deferAttachments) rows = [];
             else if (resource === "statuses" || resource === "tags") rows = await allCatalogs(resource === "statuses" ? "task-statuses" : "tags", ids ? context.units.filter(unit => ids.has(String(unit.id))) : context.units);
             else if (resource === "notifications") rows = await notificationClient.list();
             else if (ids) rows = (await Promise.all(chunks([...ids]).map(batch => client.list(resource === "tasks" ? "tasks" : RELATIONS[resource], { ...params, [resource === "tasks" ? "ids" : "tasks"]: batch.join(",") })))).flat();
             else rows = await client.list(ENDPOINTS[resource] || resource);
+            if (resource === "tasks" && deferAttachments && rows.some(row => !Number.isSafeInteger(row.attachment_count) || row.attachment_count < 0))
+                throw new Error("El servidor no ofrece conteos de adjuntos compatibles. Actualiza el backend antes de activar esta opción.");
             const previous = snapshot?.[resource] || new Map();
             const map = ids ? new Map(previous) : new Map();
             const received = new Set(rows.map(row => String(row.id)));
@@ -86,7 +89,7 @@ export function createTaskDataLoader(context, { catalogCache, client = api, noti
             projects: rows("projects").map(normalizeProject), sections: rows("sections").map(normalizeSection),
             statuses, tasks: rows("tasks").map(dto => normalizeTask(dto, statuses)), links: rows("links").map(normalizeTaskProject),
             comments: rows("comments"), followers: rows("followers"), members: rows("members"),
-            attachments: rows("attachments"), notifications: rows("notifications"), taskTags: rows("taskTags"), tags: rows("tags"),
+            attachments: rows("attachments"), deferAttachments, notifications: rows("notifications"), taskTags: rows("taskTags"), tags: rows("tags"),
         });
         // Publish only a completely successful round. Failed partial reads cannot
         // silently corrupt the next round or discard an optimistic draft.

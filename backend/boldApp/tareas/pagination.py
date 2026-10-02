@@ -12,6 +12,7 @@ class RecentCommentPagination(BasePagination):
     """Signed composite keyset; authorization and count are re-evaluated per page."""
     page_size = 25
     salt = "bold.comments.recent.v1"
+    invalid_cursor_message = "Cursor de comentarios no válido."
 
     def paginate_queryset(self, queryset, request, view=None):
         self.request = request
@@ -26,7 +27,7 @@ class RecentCommentPagination(BasePagination):
                 if date is None or date.tzinfo is None:
                     raise ValueError()
             except (signing.BadSignature, ValueError, TypeError):
-                raise NotFound("Cursor de comentarios no válido.")
+                raise NotFound(self.invalid_cursor_message)
             queryset = queryset.filter(Q(created_at__lt=date) | Q(created_at=date, pk__lt=identifier))
         rows = list(queryset.order_by("-created_at", "-pk")[:self.page_size + 1])
         self.has_more = len(rows) > self.page_size
@@ -41,3 +42,8 @@ class RecentCommentPagination(BasePagination):
             next_link = replace_query_param(self.request.build_absolute_uri(), "cursor", cursor)
         return Response({"count": self.total, "next": next_link,
                          "previous": None, "results": data})
+
+
+class RecentAttachmentPagination(RecentCommentPagination):
+    salt = "bold.attachments.recent.v1"
+    invalid_cursor_message = "Cursor de adjuntos no válido."

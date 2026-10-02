@@ -117,6 +117,11 @@ class SecurityControlTests(TransactionTestCase):
 
     def test_grant_start_expiry_and_parent_authority_change_temporal_state(self):
         now = timezone.now()
+        # This test advances time by 11 min to expire a grant, not the session.
+        # Running near 07:00 Guatemala previously hit daily logout instead and
+        # returned a closed-session snapshot without "state". Daily expiry has
+        # its own test above; do not weaken the production session deadline.
+        AuthSession.objects.filter(pk=self.session.id).update(expires_at=now + timedelta(hours=1), idle_expires_at=None)
         parent = GrantAuthority.objects.create(assignment=self.assignment, granted_by_assignment=self.assignment,
             scope_type="own_unit", valid_from=now - timedelta(minutes=1), valid_until=now + timedelta(seconds=5))
         child = GrantAuthority.objects.create(assignment=self.assignment, granted_by_assignment=self.assignment,

@@ -341,6 +341,7 @@ VITE_USE_REAL_BACKEND=true
 VITE_PERMISSION_CONTROL_ENABLED=true
 VITE_TASK_INCREMENTAL_SYNC=true
 VITE_TASK_PAGED_COMMENTS=true
+VITE_TASK_PAGED_ATTACHMENTS=true
 VITE_TASK_RECONCILE_MS=300000
 VITE_SYNC_DIAGNOSTICS=true
 VITE_APP_VERSION=<commit-del-codigo-compilado>
@@ -354,6 +355,7 @@ $env:VITE_API_BASE_URL=''
 $env:VITE_PERMISSION_CONTROL_ENABLED='true'
 $env:VITE_TASK_INCREMENTAL_SYNC='true'
 $env:VITE_TASK_PAGED_COMMENTS='true'
+$env:VITE_TASK_PAGED_ATTACHMENTS='true'
 $env:VITE_TASK_RECONCILE_MS='300000'
 $env:VITE_SYNC_DIAGNOSTICS='true'
 $env:VITE_APP_VERSION=(git rev-parse --short=8 HEAD).Trim()
@@ -363,6 +365,12 @@ npx wrangler deploy
 ```
 
 La lectura anterior de comentarios sigue disponible para revertir el flag.
+Para activar `VITE_TASK_PAGED_ATTACHMENTS`, el backend debe ofrecer primero
+`attachment_count` en tareas y `attachments?recent=1` con cursor compuesto.
+Sin ese contrato el cliente falla explícitamente, en vez de inventar conteos.
+`false` revierte los adjuntos a la carga anterior; no requiere migración ni
+restaurar la base de datos. Editar carga todos los adjuntos de una sola tarea
+para preservar la comparación de archivos; visualizarla solo carga una página.
 Consulta `VERIFICACION_HISTORIAL_PAGINADO.md` y
 `VERIFICACION_CONEXIONES_FASE_5.md` para pruebas, límites y reversión. Sin estos
 flags, un build posterior puede volver al comportamiento anterior aunque el

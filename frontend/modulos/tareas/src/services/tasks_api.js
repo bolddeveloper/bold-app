@@ -3,7 +3,7 @@ export function createTasksApi(client = http) {
     let controller = new AbortController();
     const scoped = (options = {}) => ({ ...options, signal: AbortSignal.any([controller.signal, options.signal || controller.signal]) });
     const request = (path, options = {}) => client.request(path, scoped(options));
-    const list = (resource, params) => client.list(resource, params, { signal: controller.signal });
+    const list = (resource, params, options) => client.list(resource, params, scoped(options));
     const create = (resource, body) => client.create(resource, body, { signal: controller.signal });
     const update = (resource, id, body) => client.update(resource, id, body, { signal: controller.signal });
     const remove = (resource, id) => client.remove(resource, id, { signal: controller.signal });

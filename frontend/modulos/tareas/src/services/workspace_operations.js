@@ -47,7 +47,7 @@ export function filterWorkspaceTasks(tasks, filters, search = "", today = new Da
             && (!filters.createdTo || (created && created <= filters.createdTo))
             && (!filters.completed || String(!!task.completed) === filters.completed)
             && (!filters.subtasks || String(children.length > 0) === filters.subtasks)
-            && (!filters.attachments || String((task.attachments || []).length > 0) === filters.attachments);
+            && (!filters.attachments || String((task.attachmentCount ?? task.attachments?.length ?? 0) > 0) === filters.attachments);
     });
 }
 

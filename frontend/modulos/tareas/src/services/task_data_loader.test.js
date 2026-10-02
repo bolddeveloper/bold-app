@@ -3,8 +3,32 @@ import assert from "node:assert/strict";
 import { createTaskDataLoader, resourcesForTaskEvent, TASK_RESOURCES } from "./task_data_loader.js";
 import { createContextCache } from "../../../core/context_cache.js";
 import { settleCommittedTaskChanges } from "./task_models.js";
+import { emptyWorkspaceFilters, filterWorkspaceTasks } from "./workspace_operations.js";
 
 const context = { directory: [{ id: "a", name: "Persona" }], units: [{ id: "u" }] };
+test("deferred attachment reads preserve count, filters, descriptions and all tasks", async () => {
+    const { rows, client, calls } = fixture();
+    rows.tasks[0].attachment_count = 5000; rows.tasks[0].description = "Unique description";
+    rows.tasks[1].attachment_count = 0; rows.tasks[1].parent_task = "t1";
+    rows.attachments = Array.from({ length: 5000 }, (_, i) => ({ id: `f${i}`, task: "t1" }));
+    const loader = createTaskDataLoader(context, { client, deferAttachments: true, notificationClient: { list: async () => [] } });
+    const first = await loader.load();
+    for (let poll = 0; poll < 12; poll++) await loader.load();
+    await loader.load(["attachments@t1"]);
+    assert.equal(calls.filter(call => call.resource === "attachments").length, 0);
+    assert.equal(first.tasks.length, 2); assert.equal(first.tasks[0].attachmentCount, 5000);
+    assert.equal(first.tasks[0].attachmentsLoaded, false); assert.deepEqual(first.tasks[0].attachments, []);
+    assert.equal(first.tasks[0].subtasks[0].id, "t2");
+    assert.equal(filterWorkspaceTasks(first.tasks, { ...emptyWorkspaceFilters(), attachments: "true" })[0].id, "t1");
+    assert.equal(filterWorkspaceTasks(first.tasks, emptyWorkspaceFilters(), "Unique description")[0].id, "t1");
+    rows.tasks[0].attachment_count = 4999;
+    const next = await loader.load(["tasks@t1"]); assert.equal(next.tasks[0].attachmentCount, 4999);
+});
+test("deferred attachments fail closed against an incompatible backend", async () => {
+    const { client } = fixture();
+    const loader = createTaskDataLoader(context, { client, deferAttachments: true, notificationClient: { list: async () => [] } });
+    await assert.rejects(loader.load(), /conteos de adjuntos compatibles/);
+});
 test("unrelated, failed or pre-write reads cannot retire committed optimistic changes", () => {
     const mutations = new Map([["written", { committed: true }], ["saving", { committed: false }]]);
     settleCommittedTaskChanges(mutations, { reconciled: false, startedRevision: 2, currentRevision: 2 });

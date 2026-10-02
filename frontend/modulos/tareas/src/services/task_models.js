@@ -81,6 +81,7 @@ export function previewTaskDraft(draft, original, statuses) {
         subtasks: (draft.subtasks || original?.subtasks || []).map(item => ({ ...item, parentTaskId: original?.id || draft.id })),
         collaborator_ids: draft.collaborator_ids || original?.collaborator_ids || [],
         attachments: draft.attachments || original?.attachments || [],
+        attachmentCount: Array.isArray(draft.attachments) && draft.attachmentsLoaded !== false ? draft.attachments.length : original?.attachmentCount ?? original?.attachments?.length ?? 0,
     };
 }
 function removeTaskFromTree(tasks, id) {

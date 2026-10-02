@@ -5,6 +5,43 @@ import { loadTaskData, saveTaskDraft } from "./task_service.js";
 import { createContextCache } from "../../../core/context_cache.js";
 const statuses = [{ id: "s1", unitId: "u1", label: "Pendiente", isFinal: false }, { id: "s2", unitId: "u2", label: "Destino", isFinal: false }];
 const data = { statuses, tasks: [], followers: [] };
+test("an unloaded attachment list cannot be saved before baseline is loaded", async () => {
+    const old = api.updateTask; let writes = 0;
+    api.updateTask = async () => { writes++; };
+    try {
+        await assert.rejects(saveTaskDraft({ title: "Task", unitId: "u1", status: "Pendiente", attachments: [] }, data,
+            { id: "t", unitId: "u1", attachments: [], attachmentsLoaded: false }), /Carga los adjuntos completos/);
+        assert.equal(writes, 0);
+    } finally { api.updateTask = old; }
+});
+test("editing deferred attachments deletes only explicitly removed baseline files", async () => {
+    const old = { updateTask: api.updateTask, create: api.create, remove: api.remove }, removed = [];
+    api.updateTask = async () => ({ id: "t", unit: "u1" });
+    api.create = async () => { throw new Error("Kept files must not be recreated"); };
+    api.remove = async (resource, id) => removed.push([resource, id]);
+    try {
+        await saveTaskDraft({ title: "Task", unitId: "u1", status: "Pendiente",
+            attachmentBaseline: [{ id: "keep" }, { id: "remove" }], attachments: [{ id: "keep" }] }, data,
+            { id: "t", unitId: "u1", attachmentsLoaded: false, attachments: [] });
+        assert.deepEqual(removed, [["attachments", "remove"]]); // unseen concurrent files are not deletion candidates
+    } finally { Object.assign(api, old); }
+});
+test("acknowledged attachment creates and deletions are not repeated after partial failure", async () => {
+    const old = { updateTask: api.updateTask, create: api.create, remove: api.remove }, removed = [], created = [];
+    api.updateTask = async () => ({ id: "t", unit: "u1" });
+    api.create = async (_, body) => { created.push(body.file_name); return { id: "server-new" }; };
+    let fail = true;
+    api.remove = async (_, id) => { if (id === "remove2" && fail) { fail = false; throw new Error("Temporary failure"); } removed.push(id); };
+    const original = { id: "t", unitId: "u1", attachmentsLoaded: false, attachments: [] };
+    let retry;
+    try {
+        await assert.rejects(saveTaskDraft({ title: "Task", unitId: "u1", status: "Pendiente", attachmentBaseline: [{ id: "remove1" }, { id: "remove2" }],
+            attachments: [{ id: "local-new", name: "New", url: "https://example.com/file" }] }, data, original), error => { retry = error.partialDraft; return true; });
+        assert.deepEqual(retry.attachmentBaseline.map(item => item.id).sort(), ["remove2", "server-new"]);
+        await saveTaskDraft(retry, data, original);
+        assert.deepEqual(created, ["New"]); assert.deepEqual(removed, ["remove1", "remove2"]);
+    } finally { Object.assign(api, old); }
+});
 test("reference bootstrap with 13 units and 29 project members costs 37 requests", async () => {
     const previousFetch = globalThis.fetch;
     const calls = [];
