@@ -151,3 +151,15 @@ test("payload creates atomic project link and patches only editable fields", () 
     tasks[0].completed = false;
     assert.equal(tasksBySection(tasks, "a")[0].id, "done1");
 });
+
+test("optimistic section move survives stale data and restores original on failure", () => {
+    const original = { id: "moving", taskProjects: [{ id: "link", projectId: "project", sectionId: "before", position: "1" }] };
+    const preview = { ...original, taskProjects: [{ ...original.taskProjects[0], sectionId: "after", position: "2" }] };
+    const mutation = { kind: "update", id: original.id, original, originalIndex: 0, task: preview };
+    const pending = new Map([[original.id, mutation]]);
+    const visible = applyPendingTaskChanges([original], pending);
+    assert.equal(projectTask(visible[0], "project").section, "after");
+    assert.equal(projectTask(applyPendingTaskChanges([original], pending)[0], "project").section, "after");
+    assert.equal(projectTask(rollbackPendingTaskChange(visible, mutation)[0], "project").section, "before");
+    assert.equal(original.taskProjects[0].sectionId, "before");
+});

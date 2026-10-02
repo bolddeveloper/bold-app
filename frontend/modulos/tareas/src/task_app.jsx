@@ -3465,8 +3465,9 @@ function render_board_view(props) {
                         className={`board_column${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
                         data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
                         key={section_item.id}
-                        onDragOver={event => dragged_section_id ? handle_section_drag_over(event, section_item.id, "board") : handle_column_drop && event.preventDefault()}
-                        onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else handle_column_drop?.(section_item.id); }}
+                        onDragOver={event => { if (dragged_section_id) handle_section_drag_over(event, section_item.id, "board"); else if (handle_column_drop) { event.preventDefault(); event.currentTarget.dataset.taskDrop = "true"; } }}
+                        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.taskDrop; }}
+                        onDrop={event => { event.preventDefault(); delete event.currentTarget.dataset.taskDrop; if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else handle_column_drop?.(section_item.id); }}
                     >
                         <header>
                             {editing_column_id === section_item.id ? (
@@ -4728,7 +4729,21 @@ function TaskAppContent({ externalModules = {} }) {
             set_dragged_task_id(null);
             set_dragged_task_ids([]);
             set_selected_task_ids([]);
-            if (links.length) mutate(async () => { const start = Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === column_id).map(item => Number(item.position))); for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: column_id === "unsectioned" ? null : column_id, position: String(start + (index + 1) * 1000) }); });
+            if (links.length) {
+                const section = column_id === "unsectioned" ? null : column_id;
+                const start = Math.max(0, ...data.links.filter(item => item.projectId === selected_project_id && item.sectionId === section).map(item => Number(item.position)));
+                const changes = links.map((link, index) => {
+                    const original = data.tasks.find(task => task.id === link.taskId || task.taskProjects.some(item => item.id === link.id));
+                    const moved = { ...link, sectionId: section, position: String(start + (index + 1) * 1000) };
+                    return { kind: "update", id: original.id, original, originalIndex: data.tasks.indexOf(original), task: { ...original, taskProjects: original.taskProjects.map(item => item.id === link.id ? moved : item) } };
+                });
+                start_task_crud(changes, async () => {
+                    for (const change of changes) {
+                        const link = change.task.taskProjects.find(item => item.projectId === selected_project_id);
+                        await api.updateTaskProjectLink(link.id, { section, position: link.position });
+                    }
+                });
+            }
             return;
         }
         if (!task_ids.length) return;

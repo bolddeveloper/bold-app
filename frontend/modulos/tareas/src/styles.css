@@ -10109,3 +10109,9 @@ button {
 
 .board_card_completed .board_title_button,
 .task_card_completed .task_card_title_text { text-decoration: line-through; color: var(--bold_muted); }
+
+.board_card { animation: board_task_drop 220ms ease-out both; }
+.board_card[data-dragging="true"] { transform: scale(.96) rotate(-1deg); opacity: .55; box-shadow: 0 12px 28px #0003; }
+.board_column[data-task-drop="true"] { outline: 2px solid var(--bold_red); outline-offset: -2px; background: color-mix(in srgb, var(--bold_red) 6%, var(--bold_surface)); }
+@keyframes board_task_drop { from { opacity: .45; transform: translateY(-10px) scale(.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .board_card { animation: none; transition: none; } .board_card[data-dragging="true"] { transform: none; } }
