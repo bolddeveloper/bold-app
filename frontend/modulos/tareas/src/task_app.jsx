@@ -45,6 +45,8 @@ import { is_using_real_backend } from "../../core/http_client.js";
 import { createRefreshCoordinator, contentCanRefresh } from "../../core/refresh_coordinator.js";
 import { createContextCache } from "../../core/context_cache.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
+import { createTaskDataLoader, resourcesForTaskEvent, TASK_RESOURCES, PROJECT_RESOURCES } from "./services/task_data_loader.js";
+import { settleCommittedTaskChanges } from "./services/task_models.js";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
@@ -4287,6 +4289,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
     const mutation_generation = use_ref(0);
+    const task_commit_revision = use_ref(0);
     const task_crud_mutations = use_ref(new Map());
     const [syncing_task_count, set_syncing_task_count] = use_state(0);
     use_effect(() => {
@@ -4602,7 +4605,7 @@ function TaskAppContent({ externalModules = {} }) {
             }, () => {
                 if (!editing_project_id) remember_project(created_project_id, [created_project_id, ...projects.map(project => project.id)]);
                 set_active_modal(null); set_editing_project_id(null);
-            });
+            }, "Cambios guardados", () => {}, PROJECT_RESOURCES);
             return;
         }
         set_projects((current_projects) => (
@@ -4687,12 +4690,12 @@ function TaskAppContent({ externalModules = {} }) {
             const members = data.members.filter(item => item.project === project_id);
             for (const member of members) if (!member_ids.includes(member.assignment)) await api.remove("project-members", member.id);
             for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: project_id, assignment: id, member_role: "member", status: "active" });
-        }, () => { if (close_modal) set_active_modal(null); });
+        }, () => { if (close_modal) set_active_modal(null); }, "Cambios guardados", () => {}, ["members"]);
     }
 
     function handle_update_project(project_id, changes) {
         if (!real) return set_projects(items => items.map(project => project.id === project_id ? { ...project, ...changes } : project));
-        mutate(() => api.update("projects", project_id, changes));
+        mutate(() => api.update("projects", project_id, changes), undefined, undefined, undefined, ["projects"]);
     }
 
     function handle_drag_start(task_id, event) {
@@ -4787,7 +4790,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             const positions = new Map(real_next.map((section, index) => [section.id, (index + 1) * 1000]));
             set_data(current => ({ ...current, sections: current.sections.map(section => positions.has(section.id) ? { ...section, position: String(positions.get(section.id)) } : section).sort((a, b) => Number(a.position) - Number(b.position)) }));
-            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado");
+            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado", undefined, ["sections"]);
         } else {
             set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: real_next }));
         }
@@ -4823,7 +4826,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_add_column() {
-        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }); return; }
+        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }, undefined, undefined, ["sections"]); return; }
         const trimmed_name = new_column_name.trim();
         if (!trimmed_name) return;
 
@@ -4847,7 +4850,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_editing_column_name("");
             return;
         }
-        if (real) { mutate(() => api.update("sections", editing_column_id, { name: label }), () => set_editing_column_id(null)); return; }
+        if (real) { mutate(() => api.update("sections", editing_column_id, { name: label }), () => set_editing_column_id(null), undefined, undefined, ["sections"]); return; }
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).map(column_item => column_item.id === editing_column_id ? { ...column_item, label, status: label } : column_item) }));
         set_editing_column_id(null);
         set_editing_column_name("");
@@ -4863,7 +4866,7 @@ function TaskAppContent({ externalModules = {} }) {
                     const existing = data.sections.find(section => section.projectId === selected_project_id);
                     const target = existing || await api.create("sections", { project: selected_project_id, name: "General", position: "1000" });
                     for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: target.id, position: String((index + 1) * 1000) });
-                }, hide);
+                }, hide, undefined, undefined, ["sections", "links"]);
                 return;
             }
             const sections = mock_sections_by_project[selected_project_id] || [];
@@ -4873,7 +4876,7 @@ function TaskAppContent({ externalModules = {} }) {
             hide();
             return;
         }
-        if (real) { mutate(() => api.remove("sections", column_id)); return; }
+        if (real) { mutate(() => api.remove("sections", column_id), undefined, undefined, undefined, ["sections", "links"]); return; }
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).filter(column_item => column_item.id !== column_id) }));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
             task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: "unsectioned", status: "Pend.", completed: false } : task_item
@@ -4969,11 +4972,23 @@ function TaskAppContent({ externalModules = {} }) {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
         let mounted = true, dataGeneration = 0, securityUncertain = false;
         const catalogCache = createContextCache();
-        const coordinator = createRefreshCoordinator({ canRun: contentCanRefresh, run: async () => {
+        const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
+        const loader = createTaskDataLoader(session, { catalogCache });
+        const coordinator = createRefreshCoordinator({ canRun: contentCanRefresh, run: async batch => {
                     if (securityUncertain) return;
                     const version = dataGeneration;
-                    const next = await loadTaskData(session, { catalogCache });
+                    const writeRevision = task_commit_revision.current;
+                    const next = incremental ? await loader.load(batch.resources) : await loadTaskData(session, { catalogCache });
                     if (!mounted || version !== dataGeneration) return;
+                    // Only a successful round started after the write can retire
+                    // a committed optimistic change. Unrelated/failed reads cannot.
+                    settleCommittedTaskChanges(task_crud_mutations.current, { startedRevision: writeRevision, currentRevision: task_commit_revision.current,
+                        reconciled: !incremental || batch.resources.includes("all") || TASK_RESOURCES.every(resource => batch.resources.includes(resource)) });
+                    set_syncing_task_count(task_crud_mutations.current.size);
+                    for (const [id, mutation] of task_status_mutations.current)
+                        if (!mutation.running && next.tasks.some(task => String(task.id) === id && String(task.statusId) === String(mutation.desired.id))) task_status_mutations.current.delete(id);
+                    for (const [id, mutation] of notification_read_mutations.current)
+                        if (!mutation.running && next.notifications.some(item => String(item.id) === id && Boolean(item.is_read) === mutation.desired)) notification_read_mutations.current.delete(id);
                     let next_tasks = applyPendingTaskChanges(next.tasks, task_crud_mutations.current);
                     for (const [task_id, mutation] of task_status_mutations.current) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
@@ -4990,7 +5005,7 @@ function TaskAppContent({ externalModules = {} }) {
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
         } });
-        refresh.current = () => coordinator.request({ reason: "mutation", force: true });
+        refresh.current = (resources = TASK_RESOURCES) => coordinator.request({ reason: "mutation", resources, force: true });
         const report = error => {
             if (!mounted || error.name === "AbortError") return;
             set_api_error(error.message);
@@ -5010,9 +5025,9 @@ function TaskAppContent({ externalModules = {} }) {
             });
         };
         let streamGeneration = 0;
-        const scheduleContent = reason => {
+        const scheduleContent = (reason, resources = ["all"]) => {
             // Hidden events only imply recovery on focus; do not accumulate promises.
-            if (contentCanRefresh()) coordinator.request({ reason }).catch(report);
+            if (contentCanRefresh()) coordinator.request({ reason, resources }).catch(report);
         };
         const syncRealtime = async () => {
             const currentGeneration = ++streamGeneration;
@@ -5026,7 +5041,10 @@ function TaskAppContent({ externalModules = {} }) {
             if (!mounted || currentGeneration !== streamGeneration) return;
             retain_realtime_streams(allowedUnits);
             const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
-                onEvent: () => scheduleContent("task-event"),
+                onEvent: event => {
+                    if (event.event_type === "catalog.changed") catalogCache.clear();
+                    scheduleContent("task-event", resourcesForTaskEvent(event));
+                },
                 onReconnect: () => scheduleContent("socket-reconnect"),
                 onError: message => mounted && set_api_error(message) }));
             await Promise.all(connections);
@@ -5034,8 +5052,8 @@ function TaskAppContent({ externalModules = {} }) {
         const syncNotifications = () => connectNotificationStream({
             assignmentId: session.activeAssignment.id,
             getTicket: session.websocketTicket,
-            onNotification: () => scheduleContent("notification-event"),
-            onReconnect: () => scheduleContent("socket-reconnect"),
+            onNotification: () => scheduleContent("notification-event", ["notifications"]),
+            onReconnect: () => scheduleContent("notification-reconnect", ["notifications"]),
             onError: message => mounted && set_api_error(message),
             onControl: envelope => {
                 if (mounted) window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
@@ -5062,7 +5080,7 @@ function TaskAppContent({ externalModules = {} }) {
             securityUncertain = Boolean(event.detail?.uncertain);
             dataGeneration++;
             mutation_generation.current++;
-            catalogCache.clear(); api.cancelRequests();
+            catalogCache.clear(); loader.clear(); api.cancelRequests();
             task_crud_mutations.current.clear(); task_status_mutations.current.clear(); notification_read_mutations.current.clear();
             set_syncing_task_count(0); set_selected_task_id(null);
             set_edit_draft(null);
@@ -5085,16 +5103,16 @@ function TaskAppContent({ externalModules = {} }) {
         const configuredInterval = Number(import.meta.env?.VITE_TASK_RECONCILE_MS);
         const interval = Number.isFinite(configuredInterval) && configuredInterval >= 60_000 ? configuredInterval : 300_000;
         const timer = setInterval(reconcile, interval);
-        return () => { mounted = false; dataGeneration++; streamGeneration++; coordinator.dispose(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        return () => { mounted = false; dataGeneration++; streamGeneration++; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
 
-    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}) {
+    async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}, resources = TASK_RESOURCES) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
         mutation_pending.current = true; set_pending(true); set_api_error("");
         const version = mutation_generation.current;
         try {
             await operation(); if (version !== mutation_generation.current) return false;
-            await refresh.current(); if (version !== mutation_generation.current) return false;
+            await refresh.current(resources); if (version !== mutation_generation.current) return false;
             on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
         } catch (error) {
             if (version !== mutation_generation.current) return false;
@@ -5103,7 +5121,7 @@ function TaskAppContent({ externalModules = {} }) {
                 if (error.status !== 403) set_api_error(error.message);
                 if (error.status === 404) { set_selected_task_id(null); set_active_modal(null); }
                 // Reconcile partial multi-resource saves as well as rejected writes.
-                await refresh.current().catch(() => {});
+                await refresh.current(resources).catch(() => {});
                 if (error.status === 403) {
                     const detail = typeof error.fields?.detail === "string" ? error.fields.detail : "";
                     await show_task_permission_denied(detail);
@@ -5171,16 +5189,26 @@ function TaskAppContent({ externalModules = {} }) {
                 return;
             }
             if (version !== mutation_generation.current) return;
-            for (const key of batch.keys()) task_crud_mutations.current.delete(key);
-            set_syncing_task_count(task_crud_mutations.current.size);
+            task_commit_revision.current++;
             const createdIds = result?.created || (result?.id ? [result.id] : []);
             if (createdIds.length) {
                 const idMap = new Map(mutations.filter(mutation => mutation.kind === "create").map((mutation, index) => [String(mutation.id), createdIds[index]]));
+                for (const [key, mutation] of batch) {
+                    const serverId = idMap.get(key);
+                    if (serverId) {
+                        task_crud_mutations.current.delete(key);
+                        mutation.id = serverId; mutation.serverId = serverId;
+                        mutation.task = { ...mutation.task, id: serverId };
+                        task_crud_mutations.current.set(String(serverId), mutation);
+                    }
+                }
                 const confirm = tasks => replaceTemporaryTaskIds(tasks, idMap);
                 set_data(current => current ? { ...current, tasks: confirm(current.tasks) } : current);
                 set_tasks(confirm);
                 set_selected_task_id(id => idMap.get(String(id)) || id);
             }
+            for (const mutation of mutations) mutation.committed = true;
+            set_syncing_task_count(task_crud_mutations.current.size);
             on_success(result);
             try { await refresh.current(); }
             catch { set_api_error("El cambio se guardó, pero no se pudo actualizar la vista. Vuelve a cargar la página."); }
@@ -5246,13 +5274,14 @@ function TaskAppContent({ externalModules = {} }) {
                         if (task_status_mutations.current.get(task_id) === mutation) {
                             task_status_mutations.current.delete(task_id);
                             apply_optimistic_task_status(task_id, mutation.confirmed);
-                            await refresh.current().catch(() => {});
+                            await refresh.current([`tasks@${task_id}`]).catch(() => {});
                         }
                         await report_background_mutation_error(error);
                         return;
                     }
                 }
-                await refresh.current().catch(() => {});
+                try { await refresh.current([`tasks@${task_id}`]); }
+                catch { set_api_error("El estado se guardó; la confirmación visual se recuperará al volver a sincronizar."); return; }
                 if (task_status_mutations.current.get(task_id) !== mutation) return;
                 if (String(mutation.confirmed.id) !== String(mutation.desired.id)) continue;
                 task_status_mutations.current.delete(task_id);
@@ -5294,8 +5323,15 @@ function TaskAppContent({ externalModules = {} }) {
     async function flush_notification_read(notification_id, mutation) {
         mutation.running = true;
         try {
-            while (notification_read_mutations.current.get(notification_id) === mutation
-                && mutation.confirmed !== mutation.desired) {
+            while (notification_read_mutations.current.get(notification_id) === mutation) {
+                if (mutation.confirmed === mutation.desired) {
+                    try { await refresh.current(["notifications"]); }
+                    catch { set_api_error("La notificación se guardó; su confirmación se recuperará al volver a sincronizar."); return; }
+                    if (notification_read_mutations.current.get(notification_id) !== mutation) return;
+                    if (mutation.confirmed !== mutation.desired) continue;
+                    notification_read_mutations.current.delete(notification_id);
+                    return;
+                }
                 const requested = mutation.desired;
                 try {
                     await (requested
@@ -5768,7 +5804,7 @@ function TaskAppContent({ externalModules = {} }) {
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
         if (field === "collaborator_ids") {
-            if (real) { mutate(() => saveFollowers(task_id, value, data)); return; }
+            if (real) { mutate(() => saveFollowers(task_id, value, data), undefined, undefined, undefined, [`followers@${task_id}`]); return; }
             set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: value } : task));
             return;
         }
@@ -5812,7 +5848,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             if (task_crud_mutations.current.has(String(task_id))) { set_api_error("Espera a que se sincronice la tarea antes de comentarla."); return Promise.resolve(false); }
             if (images.length) { set_api_error("Los comentarios admiten texto. A?ade los archivos como enlaces adjuntos a la tarea."); return Promise.resolve(false); }
-            return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim())) : Promise.resolve(false);
+            return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim()), undefined, undefined, undefined, [`comments@${task_id}`]) : Promise.resolve(false);
         }
         const body = comment_text.trim();
         if (!body && !images.length) return;
@@ -5941,7 +5977,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_confirm_delete_project(project_id) {
-        if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }); return; }
+        if (real) { mutate(() => api.remove("projects", project_id), () => { set_active_modal(null); set_delete_target(null); }, undefined, undefined, PROJECT_RESOURCES); return; }
         const fallback_project = projects.find((project_item) => project_item.id !== project_id) || project_items[0] || { id: "", label: "Sin proyecto", color: "#9ca3af" };
         set_projects((current_projects) => current_projects.filter((project_item) => project_item.id !== project_id));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
@@ -6267,7 +6303,7 @@ function TaskAppContent({ externalModules = {} }) {
 
 
     if (real && (!data || !intro_finished) && !api_error) return <LoginIntro />;
-    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current().catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
+    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (

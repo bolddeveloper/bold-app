@@ -385,3 +385,77 @@ El checkout puede seguir en la rama de prueba aunque el runtime use la imagen de
 rollback: comprobar ambas versiones. Tras aceptar/integrar el cambio en Develop,
 retomar la rama normal del servidor; no fusionarla automáticamente antes de la
 validación de los clientes limitados y los vencimientos en la web.
+## 14. Fase 3 — primera entrega de sincronización parcial
+
+Esta entrega implementa el almacenamiento por recurso y la matriz de invalidación;
+**no declara terminada toda la fase 3**. El arranque y el respaldo general todavía
+leen las listas completas autorizadas. La paginación visible y la carga inicial
+por vista requieren otra entrega con resúmenes/búsqueda equivalentes; no se deben
+falsear los totales de Inicio, calendario ni progreso tomando solo una página.
+
+### Cambios
+
+- Nuevo cargador con mapas por ID para tareas, proyectos, relaciones, catálogos
+  y notificaciones. Una ronda fallida no publica un estado parcial; la generación
+  de autorización descarta lecturas antiguas. Se conserva el adaptador de la UI.
+- Los avisos son invalidaciones, no datos confiables: se consulta el endpoint
+  autorizado actual. Comentario: solo comentarios de su tarea; tarea: tarea y
+  vínculos; notificación: solo bandeja; relación: solo esa relación. Una creación
+  recupera la tarea y sus relaciones; movimientos/borrados retiran relaciones
+  que quedaron fuera de visibilidad. Se conserva el orden de las filas.
+- Backend compatible con clientes anteriores: `tasks?ids=…`, relaciones
+  `?tasks=…` y catálogos `?units=…`, con UUID válidos y máximo 50 IDs por lote.
+  Los filtros reducen resultados, nunca reemplazan autorización. Los catálogos
+  mantienen la excepción de estados requeridos por quien puede crear tareas.
+- Estados/etiquetas por lotes, manteniendo TTL de 15 minutos y paginación HTTP;
+  un evento de catálogo consulta solo las unidades indicadas. Cambios de
+  proyectos, secciones, miembros, seguidores, etiquetas, comentarios y adjuntos
+  emiten invalidaciones mínimas después del commit, también al eliminarlos.
+  Estos avisos nuevos no se envían como nuevos webhooks salientes.
+- Guardados locales invalidan su grupo en lugar de todo el grafo. El estado de
+  una tarea se confirma con su lectura individual. Las actualizaciones
+  optimistas confirmadas siguen protegidas si falla la lectura posterior;
+  una consulta iniciada antes del guardado no puede retirarlas.
+- Se mantienen respaldo de cinco minutos, recuperación al foco/reconexión,
+  ausencia de polling de contenido oculto/offline e invalidación inmediata
+  de seguridad. No se cambia sesión, MFA, permisos ni datos de empleados.
+
+### Pruebas y límites
+
+Referencia determinista con 13 unidades, 65 estados (5 por unidad), 29 miembros
+de proyectos, páginas de 25 y otros recursos vacíos: **15 solicitudes de
+arranque y 148 de contenido periódico/hora**. Con 60 lecturas de permisos en
+control saludable: **208/hora**, debajo del objetivo de 250. La referencia
+anterior costaba 296/hora con igual cantidad de páginas por catálogo individual.
+El arranque, acciones, comprobaciones adicionales, tickets y reconexiones quedan
+fuera del presupuesto periódico y deben medirse aparte. No es tráfico medido
+en Cloudflare ni prueba de capacidad de 25 usuarios.
+
+Pruebas: 110 frontend, 4 Worker, 150 Django; sin migraciones pendientes. Build
+correcto; persiste el aviso previo de tamaño del bundle. Se prueban filtros
+sin ampliar visibilidad, creación sin permiso de catálogo, borrado de
+relaciones, dos receptores, rollback sin emitir eventos, IDs acotados,
+respuestas de otro contexto, rondas atómicas y consistencia de subtareas.
+
+### Activación y reversión
+
+Primero desplegar el backend compatible; después compilar el frontend con
+`VITE_TASK_INCREMENTAL_SYNC=true`. Con `false`, el cliente conserva el cargador
+de fase 2 sin los filtros nuevos ni la reducción de catálogos por lotes. El
+backend nuevo admite ambas versiones. No mezclar el cliente incremental con
+el backend anterior, que ignoraría filtros y daría resultados incorrectos.
+
+### Siguiente tramo obligatorio
+
+1. Medir una ventana autenticada real (propietario y cargo limitado), dos
+   clientes editando/comentando y recuperación de foco/red/alcance. Verificar
+   versión del cliente antes de comparar tasas.
+2. Acotar el arranque y la paginación de comentarios, adjuntos, historial y
+   listas por vista, manteniendo resúmenes y búsqueda autorizados.
+3. Medir CPU/SQL y costo del adaptador, que aún recompone el conjunto en
+   memoria aunque reutiliza objetos iguales. Las lecturas acotadas todavía
+   usan la evaluación de visibilidad general existente; optimizarla con
+   evidencia, no añadir índices ni cachés de permisos indiscriminadamente.
+
+No avanzar a declarar completa la optimización ni fusionar Develop únicamente
+por el resultado simulado de 208/hora.

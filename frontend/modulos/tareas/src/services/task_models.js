@@ -111,6 +111,10 @@ export function applyPendingTaskChanges(tasks, mutations) {
     }
     return visible;
 }
+export function settleCommittedTaskChanges(mutations, { reconciled, startedRevision, currentRevision }) {
+    if (!reconciled || startedRevision !== currentRevision) return;
+    for (const [key, mutation] of mutations) if (mutation.committed) mutations.delete(key);
+}
 export function rollbackPendingTaskChange(tasks, mutation, { flat = false } = {}) {
     const withoutPreview = removeTaskFromTree(tasks, mutation.id);
     if (mutation.kind === "create" || !mutation.original) return withoutPreview;

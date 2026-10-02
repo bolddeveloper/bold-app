@@ -14,6 +14,12 @@ export async function loadTaskData({ directory, units }, { catalogCache } = {}) 
         api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationsApi.list(), api.list("task-tags"),
         Promise.all(units.map(unit => catalog(`tags:${unit.id}`, () => api.list("tags", { unit: unit.id })))).then(rows => rows.flat())
     ]);
+    return assembleTaskData({ directory, units, projects, sections, statuses, tasks, links, comments, followers, members, attachments, notifications, taskTags, tags });
+}
+
+// Transitional presentation adapter: totals/search/calendar still receive every
+// authorized task, even when only one resource was refreshed.
+export function assembleTaskData({ directory, units, projects, sections, statuses, tasks, links, comments, followers, members, attachments, notifications, taskTags, tags }) {
     const by = (rows, key) => { const result = new Map(); for (const row of rows) { const id = row[key]; if (!result.has(id)) result.set(id, []); result.get(id).push(row); } return result; };
     const linksByTask = by(links, "taskId"), commentsByTask = by(comments, "task"), childrenByParent = by(tasks.filter(item => item.parentTaskId), "parentTaskId");
     const followersByTask = by(followers, "task"), attachmentsByTask = by(attachments, "task"), tagsByTask = by(taskTags, "task"), membersByProject = by(members, "project");

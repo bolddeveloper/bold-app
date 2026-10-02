@@ -1,13 +1,13 @@
 from functools import partial
 
 from django.db import transaction
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from boldApp.core.models import OrganizationalUnit
 
 from .catalog import ensure_default_task_statuses
-from .models import Comment, Task, TaskProject
+from .models import Attachment, Comment, Project, ProjectMember, Section, Tag, Task, TaskFollower, TaskProject, TaskStatus, TaskTag
 from .webhook_events import (
     COMMENT_CREATED,
     TASK_CREATED,
@@ -15,6 +15,7 @@ from .webhook_events import (
     TASK_STATUS_CHANGED,
     TASK_UPDATED,
     dispatch_task_event,
+    dispatch_resource_invalidation,
 )
 from .serializers import CommentSerializer, TaskSerializer
 
@@ -98,3 +99,43 @@ def dispatch_board_move(sender, instance, created, **kwargs):
         partial(dispatch_task_event, task.unit_id, TASK_UPDATED, "task", task.id,
                 TaskSerializer(task).data)
     )
+
+
+TASK_RELATION_EVENTS = {
+    Comment: "comment.changed", Attachment: "attachment.changed",
+    TaskFollower: "follower.changed", TaskTag: "task_tag.changed", TaskProject: "task_link.changed",
+}
+PROJECT_RELATIONS = (Section, ProjectMember)
+
+
+def capture_previous_resource_scope(sender, instance, raw=False, **kwargs):
+    if raw or not instance.pk:
+        return
+    manager = getattr(sender, "all_objects", sender.objects)
+    fields = ("unit_id",) if sender in (Project, Tag, TaskStatus) else ("project_id",) if sender in PROJECT_RELATIONS else ("task_id",)
+    instance._previous_resource_scope = manager.filter(pk=instance.pk).values(*fields).first() or {}
+
+
+def dispatch_resource_changed(sender, instance, created=False, raw=False, **kwargs):
+    if raw or (sender is Comment and created):
+        return  # comment.created already carries this invalidation
+    previous = getattr(instance, "_previous_resource_scope", {})
+    if sender in TASK_RELATION_EVENTS:
+        task_ids = list(dict.fromkeys(value for value in (instance.task_id, previous.get("task_id")) if value))
+        units = list(Task.all_objects.filter(pk__in=task_ids).values_list("unit_id", flat=True))
+        event_type, entity_type = TASK_RELATION_EVENTS[sender], "task_relation"
+        payload = {"tasks": [str(value) for value in task_ids]}
+    elif sender is Project or sender in PROJECT_RELATIONS:
+        project_ids = [instance.pk] if sender is Project else list(dict.fromkeys(value for value in (instance.project_id, previous.get("project_id")) if value))
+        units = [instance.unit_id, previous.get("unit_id")] if sender is Project else list(Project.all_objects.filter(pk__in=project_ids).values_list("unit_id", flat=True))
+        event_type, entity_type, payload = "project.changed", "project", {}
+    else:
+        units = [instance.unit_id, previous.get("unit_id")]
+        event_type, entity_type, payload = "catalog.changed", "catalog", {"units": [str(value) for value in units if value]}
+    transaction.on_commit(partial(dispatch_resource_invalidation, units, event_type, entity_type, instance.pk, payload))
+
+
+for model in (*TASK_RELATION_EVENTS, Project, *PROJECT_RELATIONS, Tag, TaskStatus):
+    pre_save.connect(capture_previous_resource_scope, sender=model, dispatch_uid=f"tasks_previous_scope_{model.__name__}")
+    post_save.connect(dispatch_resource_changed, sender=model, dispatch_uid=f"tasks_resource_saved_{model.__name__}")
+    post_delete.connect(dispatch_resource_changed, sender=model, dispatch_uid=f"tasks_resource_deleted_{model.__name__}")

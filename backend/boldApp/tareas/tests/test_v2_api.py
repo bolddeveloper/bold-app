@@ -15,7 +15,7 @@ from boldApp.core.models import (
     PositionAssignment,
     UserAccount,
 )
-from boldApp.tareas.models import Project, ProjectMember, Section, Task, TaskFollower, TaskProject, TaskStatus
+from boldApp.tareas.models import Attachment, Comment, Project, ProjectMember, Section, Tag, Task, TaskFollower, TaskProject, TaskStatus, TaskTag
 from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
 
@@ -56,6 +56,85 @@ class TasksV2ApiTests(TransactionTestCase):
             "section": str(self.ops_section.id),
             "project_position": "1.0000000000",
         }
+
+    def test_incremental_task_and_relation_filters_do_not_expand_visibility(self):
+        task = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Tarea visible", priority="medium", created_by_assignment=self.ana_assignment)
+        other = Task.objects.create(unit=self.operations, status=self.ops_status, title="Tarea de otra unidad", priority="medium", created_by_assignment=self.david_assignment)
+        comment = Comment.objects.create(task=task, author_assignment=self.ana_assignment, body="Solo esta tarea")
+        foreign_comment = Comment.objects.create(task=other, author_assignment=self.david_assignment, body="Otra unidad")
+        attachment = Attachment.objects.create(task=task, uploaded_by_assignment=self.ana_assignment,
+            file_name="Prueba", file_url="https://example.com/file", mime_type="text/plain", size_bytes=1)
+        tag = Tag.objects.create(unit=self.marketing, name="Filtro incremental")
+        task_tag = TaskTag.objects.create(task=task, tag=tag, added_by_assignment=self.ana_assignment)
+        _, session = create_session(self.ana, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        client = APIClient()
+        client.force_authenticate(self.ana, session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id))
+        listed = client.get("/api/v2/tasks/", {"ids": f"{task.id},{other.id}"})
+        self.assertEqual(listed.status_code, 200, listed.data)
+        self.assertEqual({str(row["id"]) for row in listed.data["results"]}, {str(task.id)})
+        for endpoint, expected in (("comments", comment.id), ("attachments", attachment.id), ("task-tags", task_tag.id)):
+            response = client.get(f"/api/v2/{endpoint}/", {"tasks": f"{task.id},{other.id}"})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual({str(row["task"]) for row in response.data["results"]}, {str(task.id)})
+            self.assertIn(str(expected), {str(row["id"]) for row in response.data["results"]})
+        response = client.get("/api/v2/comments/", {"tasks": str(other.id)})
+        self.assertEqual(response.data["results"], [])
+        self.assertNotIn(str(foreign_comment.id), {str(row["id"]) for row in response.data["results"]})
+        for endpoint in ("task-followers", "task-projects"):
+            response = self.client.get(f"/api/v2/{endpoint}/", {"tasks": str(task.id)})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertTrue(all(str(row["task"]) == str(task.id) for row in response.data["results"]))
+
+    def test_catalog_batch_matches_single_unit_authorization(self):
+        JobRolePermission.objects.filter(job_role=self.ana_assignment.position.job_role,
+            permission__code="tasks.catalog.read").delete()
+        _, session = create_session(self.ana, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        client = APIClient()
+        client.force_authenticate(self.ana, session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id))
+        units = f"{self.marketing.id},{self.operations.id}"
+        response = client.get("/api/v2/task-statuses/", {"units": units})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertGreater(len(response.data["results"]), 0)
+        self.assertTrue(all(row["unit"] is None or str(row["unit"]) == str(self.marketing.id) for row in response.data["results"]))
+        response = client.get("/api/v2/tags/", {"units": units})
+        self.assertEqual(response.data["results"], [])
+
+    def test_incremental_filters_reject_invalid_or_oversized_ids(self):
+        for endpoint, param in (("tasks", "ids"), ("comments", "tasks"), ("task-statuses", "units"), ("tags", "units")):
+            for value in ("", "not-a-uuid", ",".join([str(self.marketing.id)] * 51)):
+                response = self.client.get(f"/api/v2/{endpoint}/", {param: value})
+                self.assertEqual(response.status_code, 400, response.data)
+
+    def test_relation_invalidations_reach_two_clients_with_identifiers_only(self):
+        task = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Evento privado", priority="medium", created_by_assignment=self.ana_assignment)
+        layer = get_channel_layer()
+        clients = [async_to_sync(layer.new_channel)() for _ in range(2)]
+        for channel in clients:
+            async_to_sync(layer.group_add)(f"unit_{task.unit_id}", channel)
+        attachment = Attachment.objects.create(task=task, uploaded_by_assignment=self.ana_assignment,
+            file_name="No difundir", file_url="https://example.com/private", mime_type="text/plain", size_bytes=1)
+        envelopes = [async_to_sync(layer.receive)(channel)["envelope"] for channel in clients]
+        self.assertEqual(envelopes[0]["event_id"], envelopes[1]["event_id"])
+        self.assertEqual(envelopes[0]["event_type"], "attachment.changed")
+        self.assertEqual(envelopes[0]["payload"], {"tasks": [str(task.id)]})
+        attachment.delete()
+        self.assertEqual(async_to_sync(layer.receive)(clients[0])["envelope"]["event_type"], "attachment.changed")
+
+    def test_resource_invalidations_are_discarded_on_rollback(self):
+        from django.db import transaction
+        from unittest.mock import patch
+
+        with patch("boldApp.tareas.signals.dispatch_resource_invalidation") as dispatch:
+            try:
+                with transaction.atomic():
+                    Section.objects.create(project=self.ops_project, name="No guardar", position=9999)
+                    self.assertFalse(dispatch.called)
+                    raise RuntimeError("rollback")
+            except RuntimeError:
+                pass
+            self.assertFalse(dispatch.called)
 
     def test_seed_includes_idempotent_samuel_authentication_account(self):
         samuel = UserAccount.objects.get(email="samuel@bold.gt")
@@ -236,6 +315,7 @@ class TasksV2ApiTests(TransactionTestCase):
             "tasks.task.delete",
             "tasks.task.assign",
         }
+
         JobRolePermission.objects.filter(
             job_role=collaborator_role,
             permission__code__in=managed_codes,
