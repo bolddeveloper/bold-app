@@ -439,30 +439,26 @@ Para probar restauracion usa una base o VM separada. No ejecutes `pg_restore
 
 ## 14. Actualizaciones
 
-**Despliegue de prueba actualizado el 2 de octubre de 2026:** durante la optimización del
-tráfico, Oracle está temporalmente en `perf/sincronizacion-trafico`, fuentes
-`11961822` (fase 4 y limpieza de contexto; imagen backend basada en `8259da57`,
-sin diferencias de backend entre ambos commits), no en
-Develop. Develop no se fusionó ni modificó. No aplicar la receta
-de retorno a Develop hasta integrar y validar esta entrega; cambiar la rama y
-reconstruir ahora volvería a una versión anterior. Estado, pruebas y reversión en
-`PLAN_OPTIMIZACION_SINCRONIZACION.md`, secciones 13–15. La sincronización
-incremental requiere el backend compatible antes del frontend; para volver a
-fase 2, revertir primero el cliente como indica la sección 14 del plan.
+**Actualización del 2 de octubre de 2026:** la optimización se integró en
+`Develop` mediante el merge `ced728ba`, autorizado para el piloto supervisado.
+Oracle volvió a `Develop`. No se reiniciaron los servicios porque el backend
+es idéntico al publicado previamente en `2b8c0711`. La comprobación concurrente
+con 4–6 empleados continúa pendiente; el merge no certifica esa capacidad.
+Pruebas y límites en `VERIFICACION_ACEPTACION_DEMO.md`.
 
-El clon remoto está limitado por defecto al fetch de Develop. Para actualizar
-la rama de prueba (sin upstream) mientras dure esta etapa:
+La rama de optimización se conserva como referencia histórica. La rama de
+actualización vuelve a ser `Develop`:
 
 ```bash
 cd /opt/bold-app
 git status --short  # detenerse si hay cambios ajenos
-git fetch origin refs/heads/perf/sincronizacion-trafico:refs/remotes/origin/perf/sincronizacion-trafico
-git switch perf/sincronizacion-trafico
-git merge --ff-only origin/perf/sincronizacion-trafico
+git fetch origin
+git switch Develop
+git merge --ff-only origin/Develop
 ```
 
-Después siguen el respaldo, build y `up -d` indicados abajo. La receta habitual
-para cuando la entrega esté integrada en Develop es:
+Solo cuando cambie el backend siguen el respaldo, build y actualización de sus
+contenedores. Un cambio exclusivamente de frontend no requiere este reinicio:
 
 ```bash
 cd /opt/bold-app
@@ -471,13 +467,34 @@ git switch Develop
 git pull --ff-only
 cd deploy/oracle
 ./backup_postgres.sh
-docker compose --env-file .env.oracle -f compose.oracle.yaml build --pull
-docker compose --env-file .env.oracle -f compose.oracle.yaml up -d
+docker compose --env-file .env.oracle -f compose.oracle.yaml build --pull backend worker
+docker compose --env-file .env.oracle -f compose.oracle.yaml up -d --no-deps backend worker
 docker compose --env-file .env.oracle -f compose.oracle.yaml ps
 ```
 
 El backend aplica migraciones antes de arrancar Daphne y el worker espera a que
 el healthcheck sea satisfactorio. Revisa logs después de cada actualizacion.
+
+El sitio activo `boldapp.boldapp-93b.workers.dev` se publica con Wrangler desde
+`frontend/modulos/core` en la copia local de `Develop`; no tiene un enlace Git
+automático que despliegue cada push. El proyecto Pages antiguo no es este sitio.
+Conserva las variables de optimización al compilar:
+
+```powershell
+$env:VITE_USE_REAL_BACKEND = 'true'
+$env:VITE_API_BASE_URL = ''
+$env:VITE_SYNC_DIAGNOSTICS = 'true'
+$env:VITE_PERMISSION_CONTROL_ENABLED = 'true'
+$env:VITE_TASK_INCREMENTAL_SYNC = 'true'
+$env:VITE_TASK_PAGED_COMMENTS = 'true'
+$env:VITE_TASK_PAGED_ATTACHMENTS = 'true'
+$env:VITE_TASK_RECONCILE_MS = '300000'
+$env:VITE_APP_VERSION = (git rev-parse --short HEAD).Trim()
+npm run build
+npx wrangler deploy
+```
+
+Comprueba build y despliegue por separado y detente ante cualquier error.
 
 ## 15. Operacion y recuperacion
 

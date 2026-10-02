@@ -46,7 +46,7 @@
 }
 
 .bold_onboarding_popover .driver-popover-footer {
-    display: block;
+    display: block !important;
     padding: 16px 20px 18px;
     border-top: 1px solid #ebe8e4;
     background: #faf9f7;
@@ -78,6 +78,9 @@
     color: #4f5560;
     background: #ebe8e4;
 }
+
+.bold_onboarding_popover .driver-popover-navigation-btns { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: center; }
+.driver-popover.bold_onboarding_popover { max-height: calc(100dvh - 24px); overflow-y: auto; }
 
 .bold_onboarding_popover .driver-popover-next-btn {
     color: #fff;
@@ -111,7 +114,8 @@
     z-index: 999999999;
     box-sizing: border-box;
     border: 3px solid #ef1f2d;
-    border-radius: 10px;
+    border-radius: 12px;
+    box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgb(17 21 29 / 85%), 0 0 24px rgb(239 31 45 / 30%);
     pointer-events: none;
 }
 .bold_tour_highlight[hidden] { display: none; }
@@ -121,6 +125,7 @@
     align-items: center;
     justify-content: center;
 }
+.tour_help_button:disabled { opacity: 0.45; cursor: default; }
 
 @media (max-width: 760px) {
     .driver-popover.bold_onboarding_popover { width: min(320px, calc(100vw - 20px)); max-width: 320px; border-radius: 14px; }
@@ -130,6 +135,11 @@
     .bold_onboarding_popover .driver-popover-footer { padding: 10px 12px 12px; }
     .bold_onboarding_popover .driver-popover-progress-text { margin-bottom: 8px; font-size: 10px; }
     .bold_onboarding_popover .driver-popover-footer button { min-height: 34px; padding: 6px 9px; font-size: 11px; }
+}
+
+@media (max-width: 1023px) {
+    .mobile_header .mobile_header_row { grid-template-columns: 44px minmax(0, 1fr) 96px; }
+    .mobile_tour_actions { display: flex; gap: 8px; }
 }
 
 html.theme_dark .driver-popover.bold_onboarding_popover {

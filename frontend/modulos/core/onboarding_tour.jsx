@@ -5,214 +5,145 @@ import "./onboarding_tour.css";
 import { useCore } from "./core_provider.jsx";
 import { useShell } from "./app_shell.jsx";
 import { readOnboardingState, writeOnboardingState } from "./onboarding_state.js";
+import { ONBOARDING_GUIDES, onboardingGuideId } from "./onboarding_guides.js";
 
-const pause = (callback, milliseconds = 320) => window.setTimeout(callback, milliseconds);
-
-function availableSteps(steps) {
-    return steps.filter(step => !step.element || document.querySelector(step.element));
+function visibleElement(selector) {
+    return [...document.querySelectorAll(selector)].find(element => {
+        if (element.closest('[inert], [aria-hidden="true"]')) return false;
+        const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth
+            && style.visibility !== "hidden" && style.display !== "none";
+    });
 }
 
-function createSteps({ compact, openSidebar, closeSidebar, moveNext }) {
-    const welcome = {
-        popover: {
-            title: "Bienvenido a Bold",
-            description: "En unos minutos conocerás las áreas esenciales para organizar tu trabajo. Puedes avanzar con los botones o las flechas del teclado y omitir el recorrido cuando quieras.",
-            side: "bottom",
-            align: "center",
-            ...(compact ? { onNextClick: () => { openSidebar(); pause(moveNext); } } : {}),
-        },
-    };
-    const navigation = [
-        {
-            element: '[data-tour="sidebar"]',
-            popover: { title: "Tu espacio de trabajo", description: "La barra lateral reúne las herramientas disponibles para tu rol. En pantallas pequeñas puedes abrirla desde el botón de menú.", side: "right", align: "start" },
-        },
-        {
-            element: '[data-tour="nav-home"]',
-            popover: { title: "Inicio", description: "Este es tu resumen diario: prioridades, indicadores, proyectos y actividad reciente en una sola vista.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="nav-tasks"]',
-            popover: { title: "Tareas y proyectos", description: "Aquí puedes consultar tus tareas, entrar a un proyecto y alternar entre lista, tablero y cronograma. El menú desplegable mantiene a mano tus espacios recientes.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="nav-inbox"]',
-            popover: { title: "Bandeja de entrada", description: "Revisa menciones, cambios y actividad del equipo sin perder el contexto de cada tarea o proyecto.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="nav-reports"]',
-            popover: { title: "Informes", description: "Consulta el avance general, las tareas completadas, el trabajo en curso y el progreso de cada proyecto.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="nav-permissions"]',
-            popover: { title: "Permisos", description: "Si tu rol lo permite, desde aquí administras quién puede ver o modificar cada parte del espacio de trabajo.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="nav-administration"]',
-            popover: { title: "Administración", description: "Los administradores pueden gestionar personas, estructura organizativa, catálogos y configuración general desde este módulo.", side: "right", align: "center" },
-        },
-        {
-            element: '[data-tour="profile"]',
-            popover: {
-                title: "Tu perfil y seguridad",
-                description: "Consulta tu identidad y rol activo. El menú de perfil también permite administrar MFA y cerrar la sesión de forma segura.",
-                side: "right",
-                align: "end",
-                ...(compact ? { onNextClick: () => { closeSidebar(); pause(moveNext); } } : {}),
-            },
-        },
-    ];
-    const workspace = [
-        {
-            element: compact ? '[data-tour="mobile-header"]' : '[data-tour="home-header"]',
-            popover: { title: "Tu día de un vistazo", description: "Bold reúne lo que requiere atención hoy. La información cambia con tus proyectos, tareas y fechas de vencimiento.", side: compact ? "bottom" : "bottom", align: "start" },
-        },
-        {
-            element: '[data-tour="home-toolbar"]',
-            popover: { title: "Un inicio a tu medida", description: "Agrega, elimina, mueve o cambia el tamaño de los widgets. Si quieres volver al diseño original, usa Restaurar.", side: "bottom", align: "end" },
-        },
-        {
-            element: '[data-tour="home-dashboard"]',
-            popover: { title: "Widgets interactivos", description: "Cada tarjeta resume una parte del trabajo. Puedes abrir tareas y proyectos directamente, cambiar pestañas y usar atajos sin abandonar Inicio.", side: "top", align: "center" },
-        },
-        {
-            element: '[data-tour="search"]',
-            popover: { title: "Búsqueda contextual", description: "Busca tareas, proyectos o personas. Los resultados y el texto de ayuda se adaptan al módulo que estés utilizando.", side: "bottom", align: "start" },
-        },
-        {
-            element: '[data-tour="theme"]',
-            popover: { title: "Modo claro u oscuro", description: "Cambia el tema visual cuando lo necesites. Bold recordará tu preferencia en este dispositivo.", side: "bottom", align: "center" },
-        },
-        {
-            element: '[data-tour="notifications"]',
-            popover: { title: "Notificaciones", description: "El punto indicador avisa cuando hay novedades. Desde aquí puedes revisar la actividad y marcarla como leída.", side: "bottom", align: "center" },
-        },
-        {
-            element: '[data-tour="help"]',
-            popover: { title: "Vuelve cuando quieras", description: "Este botón reinicia el tutorial completo. Puedes repetirlo después de una pausa o usarlo para orientar a otra persona.", side: "bottom", align: "end" },
-        },
-        {
-            popover: { title: "Todo listo para comenzar", description: "Empieza desde Inicio, abre un proyecto o crea tu primera tarea. El tutorial no modificó ningún dato y siempre podrás volver a consultarlo.", side: "bottom", align: "center" },
-        },
-    ];
-    return availableSteps([welcome, ...navigation, ...workspace]);
-}
-
-export function OnboardingTour() {
-    const core = useCore();
-    const shell = useShell();
-    const tourRef = useRef(null);
-    const autoStartedForRef = useRef("");
-    const closingRef = useRef(false);
+export function OnboardingTour({ modal = null, detail = false }) {
+    const core = useCore(), shell = useShell();
+    const attempted = useRef(new Set());
     const identity = core.activeAssignment || core.account;
     const identityKey = identity?.id || identity?.personId || "demo";
+    const guideId = onboardingGuideId(shell.active_module, { modal, detail });
+    const sidebarOpen = shell.is_sidebar_open;
 
     useEffect(() => {
+        if (!guideId || sidebarOpen) return;
+        const guide = ONBOARDING_GUIDES[guideId], visitKey = `${identityKey}:${guideId}`;
+        let disposed = false, closing = false, tour, timer, waitObserver, waitDeadline;
+        let highlight, resizeObserver, frame, geometryTimer;
+        const storage = () => { try { return window.localStorage; } catch { return null; } };
+        const stopWaiting = () => {
+            clearTimeout(timer); clearTimeout(waitDeadline); waitObserver?.disconnect(); waitObserver = null;
+        };
+        const updateHighlight = () => {
+            frame = null;
+            if (!highlight) return;
+            const element = tour?.getActiveElement();
+            highlight.hidden = !element || !element.isConnected;
+            if (!highlight.hidden) {
+                const rect = element.getBoundingClientRect();
+                Object.assign(highlight.style, {
+                    left: `${rect.left - 6}px`, top: `${rect.top - 6}px`,
+                    width: `${rect.width + 12}px`, height: `${rect.height + 12}px`,
+                });
+            }
+        };
+        const scheduleHighlight = () => {
+            if (!frame) frame = requestAnimationFrame(updateHighlight);
+        };
+        const cleanHighlight = () => {
+            cancelAnimationFrame(frame); clearTimeout(geometryTimer); resizeObserver?.disconnect();
+            window.removeEventListener("resize", scheduleHighlight);
+            document.removeEventListener("scroll", scheduleHighlight, true);
+            highlight?.remove(); highlight = null;
+        };
+        const destroy = () => {
+            closing = true;
+            tour?.destroy(); tour = null;
+            cleanHighlight();
+        };
         const finish = status => {
-            writeOnboardingState(localStorage, identity, status);
-            closingRef.current = true;
-            tourRef.current?.destroy();
-            tourRef.current = null;
+            if (disposed || closing) return;
+            writeOnboardingState(storage(), { id: identityKey }, status, guideId);
+            attempted.current.add(visitKey);
+            destroy();
         };
-        const start = ({ manual = false } = {}) => {
-            if (tourRef.current?.isActive()) tourRef.current.destroy();
-            closingRef.current = false;
-            shell.set_active_module("home");
-            shell.set_is_sidebar_open(false);
-            pause(() => {
-                const compact = window.matchMedia("(max-width: 1023px)").matches;
-                const steps = createSteps({
-                    compact,
-                    openSidebar: () => shell.set_is_sidebar_open(true),
-                    closeSidebar: () => shell.set_is_sidebar_open(false),
-                    moveNext: () => tourRef.current?.moveNext(),
-                });
-                let tour;
-                const highlight = document.createElement("div");
-                highlight.className = "bold_tour_highlight";
-                highlight.setAttribute("aria-hidden", "true");
-                document.body.append(highlight);
-                let highlightFrame;
-                const updateHighlight = () => {
-                    const element = document.querySelector(".driver-active-element");
-                    highlight.hidden = !element;
-                    if (element) {
-                        const rect = element.getBoundingClientRect();
-                        Object.assign(highlight.style, {
-                            left: `${rect.left}px`, top: `${rect.top}px`,
-                            width: `${rect.width}px`, height: `${rect.height}px`,
-                        });
-                    }
-                    highlightFrame = requestAnimationFrame(updateHighlight);
-                };
-                updateHighlight();
-                tour = driver({
-                    steps,
-                    animate: true,
-                    duration: 280,
-                    smoothScroll: true,
-                    allowClose: true,
-                    allowScroll: true,
-                    allowKeyboardControl: true,
-                    overlayColor: "#20242b",
-                    overlayOpacity: 0.68,
-                    stagePadding: 10,
-                    stageRadius: 14,
-                    popoverOffset: 14,
-                    popoverClass: "bold_onboarding_popover",
-                    showProgress: true,
-                    progressText: "Paso {{current}} de {{total}}",
-                    nextBtnText: "Siguiente",
-                    prevBtnText: "Anterior",
-                    doneBtnText: "Comenzar",
-                    skipMissingElement: true,
-                    waitForElement: 2500,
-                    onPopoverRender: popover => {
-                        if (popover.footerButtons.querySelector(".bold_tour_skip")) return;
-                        const skip = document.createElement("button");
-                        skip.type = "button";
-                        skip.className = "bold_tour_skip";
-                        skip.textContent = "Omitir tutorial";
-                        skip.addEventListener("click", () => finish("skipped"));
-                        popover.footerButtons.prepend(skip);
-                    },
-                    onCloseClick: () => finish("skipped"),
-                    onDoneClick: () => finish("completed"),
-                    onDestroyStarted: () => {
-                        if (!closingRef.current) finish("skipped");
-                    },
-                    onDestroyed: () => {
-                        cancelAnimationFrame(highlightFrame);
-                        highlight.remove();
-                        shell.set_is_sidebar_open(false);
-                        tourRef.current = null;
-                        closingRef.current = false;
-                    },
-                });
-                tourRef.current = tour;
-                tour.drive();
-                if (manual) document.querySelector('[data-tour="help"]')?.blur();
+        const start = (manual = false, waiting = false) => {
+            clearTimeout(timer);
+            if (!waiting) stopWaiting();
+            if (disposed) return;
+            const root = visibleElement(guide.root);
+            const blockingDialog = [...document.querySelectorAll('[role="dialog"][aria-modal="true"], .swal2-container')]
+                .some(element => element.getClientRects().length && element !== root && !root?.contains(element) && !element.contains(root));
+            if (!root || blockingDialog) {
+                if (!waitObserver) {
+                    // Bounded, mutation-driven readiness: no idle polling or requests.
+                    waitObserver = new MutationObserver(() => {
+                        clearTimeout(timer); timer = setTimeout(() => start(manual, true), 300);
+                    });
+                    waitObserver.observe(document.body, { childList: true, subtree: true });
+                    waitDeadline = setTimeout(stopWaiting, 10000);
+                }
+                return;
+            }
+            stopWaiting(); waitObserver = null;
+            if (tour?.isActive()) return;
+            closing = false;
+            const steps = guide.steps.flatMap(step => {
+                const element = visibleElement(step.element);
+                return element ? [{ ...step, element }] : [];
             });
+            steps.unshift({ popover: { title: `Conoce ${guide.title}`, description: "Recorre esta vista paso a paso. Siguiente y Anterior permiten avanzar a tu ritmo; puedes cerrar u omitir cuando quieras. La guía no guarda ni cambia datos." } });
+            steps.push({ popover: { title: "Ahora puedes probarlo", description: "El recorrido terminó sin modificar registros. Usa el botón de ayuda para repetir esta guía. Las opciones disponibles siguen dependiendo de tu cargo y tus permisos." } });
+            highlight = document.createElement("div");
+            highlight.className = "bold_tour_highlight";
+            highlight.setAttribute("aria-hidden", "true"); highlight.hidden = true;
+            document.body.append(highlight);
+            resizeObserver = new ResizeObserver(scheduleHighlight);
+            window.addEventListener("resize", scheduleHighlight);
+            document.addEventListener("scroll", scheduleHighlight, true);
+            const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const previousFocus = document.activeElement;
+            tour = driver({
+                steps, animate: !reduced, duration: 240, smoothScroll: !reduced,
+                allowClose: true, allowScroll: true, allowKeyboardControl: true,
+                disableActiveInteraction: true,
+                overlayColor: "#11151d", overlayOpacity: 0.78,
+                stagePadding: 8, stageRadius: 12, popoverOffset: 16,
+                popoverClass: "bold_onboarding_popover", showProgress: true,
+                progressText: "Paso {{current}} de {{total}}",
+                nextBtnText: "Siguiente", prevBtnText: "Anterior", doneBtnText: "Finalizar",
+                onHighlighted: element => {
+                    resizeObserver.disconnect();
+                    if (element) resizeObserver.observe(element);
+                    scheduleHighlight(); clearTimeout(geometryTimer);
+                    geometryTimer = setTimeout(scheduleHighlight, 280);
+                },
+                onPopoverRender: popover => {
+                    popover.closeButton.setAttribute("aria-label", "Cerrar tutorial");
+                    const skip = document.createElement("button");
+                    skip.type = "button"; skip.className = "bold_tour_skip";
+                    skip.textContent = "Omitir guía";
+                    skip.addEventListener("click", () => finish("skipped"));
+                    popover.footerButtons.prepend(skip);
+                },
+                onCloseClick: () => finish("skipped"), onDoneClick: () => finish("completed"),
+                onDestroyStarted: () => { if (!closing) finish("skipped"); },
+                onDestroyed: () => {
+                    cleanHighlight();
+                    if (!disposed && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+                },
+            });
+            tour.drive();
         };
-        const handleStart = () => start({ manual: true });
+        const handleStart = () => start(true);
         window.addEventListener("bold:onboarding:start", handleStart);
-        if (autoStartedForRef.current !== identityKey && !readOnboardingState(localStorage, identity)) {
-            const timer = pause(() => {
-                if (autoStartedForRef.current === identityKey) return;
-                autoStartedForRef.current = identityKey;
-                start();
-            }, 850);
-            return () => {
-                window.clearTimeout(timer);
-                window.removeEventListener("bold:onboarding:start", handleStart);
-                tourRef.current?.destroy();
-            };
+        if (!attempted.current.has(visitKey) && !readOnboardingState(storage(), { id: identityKey }, guideId)) {
+            timer = setTimeout(() => start(), 850);
         }
         return () => {
+            disposed = true; stopWaiting(); destroy();
             window.removeEventListener("bold:onboarding:start", handleStart);
-            tourRef.current?.destroy();
+            // Navigation/unmount is not a completed or deliberately skipped guide.
         };
-    }, [identityKey]);
-
+    }, [identityKey, guideId, sidebarOpen]);
     return null;
 }

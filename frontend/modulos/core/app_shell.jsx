@@ -291,8 +291,9 @@ function TopBar(props) {
                     className="theme_toggle_button tour_help_button"
                     data-tour="help"
                     type="button"
-                    aria-label="Abrir tutorial de Bold"
-                    title="Tutorial y ayuda"
+                    aria-label="Abrir tutorial de este módulo"
+                    title={["permissions", "administration"].includes(props.active_module) ? "Este módulo tendrá una guía en video" : "Tutorial de esta vista"}
+                    disabled={["permissions", "administration"].includes(props.active_module)}
                     onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}
                 >
                     <span className="theme_toggle_icon">{render_icon(circle_help_icon, 18)}</span>
@@ -352,10 +353,13 @@ function render_mobile_header(props) {
                     {detailOpen ? render_icon(arrow_left_icon, 24) : render_icon(menu_icon, 24)}
                 </button>
                 {detailOpen ? <h1>{title}</h1> : active_item?.brand ? render_logo() : <h1>{title}</h1>}
-                <button className="mobile_more_button" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
+                <div className="mobile_tour_actions">
+                <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
+                <button className="mobile_more_button" data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
                     {render_icon(bell_icon, 22)}
                     {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
                 </button>
+                </div>
             </div>
         </header>
     );
