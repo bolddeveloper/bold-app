@@ -1,4 +1,5 @@
 import { projectHasTasks } from "./services/project_deletion.js";
+import { tasksBySection } from "./services/task_models.js";
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
@@ -362,7 +363,7 @@ function get_sorted_tasks(tasks, sort_field, sort_direction) {
 
 // Returns the tasks that belong to a workflow section.
 function get_tasks_by_section(tasks, section_id) {
-    return tasks.filter((task_item) => task_item.section === section_id);
+    return tasksBySection(tasks, section_id);
 }
 
 
@@ -3371,7 +3372,7 @@ function render_task_card(props) {
 
     return (
         <article
-            className={`task_card ${task_item.priority === "Alta" && !task_item.completed ? "task_card_alert" : ""}`}
+            className={`task_card ${task_item.priority === "Alta" && !task_item.completed ? "task_card_alert" : ""} ${task_item.completed ? "task_card_completed" : ""}`}
             key={task_item.id}
             onClick={() => handle_task_select(task_item.id)}
             style={{ cursor: "pointer" }}
@@ -3572,7 +3573,7 @@ function render_board_card(props) {
 
     return (
         <article
-            className="board_card"
+            className={`board_card ${task_item.completed ? "board_card_completed" : ""}`}
             data-dragging={is_dragging ? "true" : "false"}
             key={task_item.id}
             draggable={Boolean(handle_drag_start)}

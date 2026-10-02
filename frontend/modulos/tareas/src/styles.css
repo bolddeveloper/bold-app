@@ -9955,7 +9955,7 @@ button {
 .board_column_new { width: 310px; min-width: 310px; scroll-snap-align: start; }
 .board_column { display: flex; height: max(300px, calc(100dvh - 245px)); max-height: max(300px, calc(100dvh - 245px)); flex-direction: column; overflow: hidden; border-color: var(--task-border); border-radius: 14px; box-shadow: 0 7px 22px rgba(31, 36, 44, .06); }
 .board_column > header { position: sticky; top: 0; z-index: 2; min-height: 48px; padding: 10px 12px; background: var(--task-panel); }
-.board_card_stack { flex: 1; min-height: 0; overflow-y: auto; padding: 9px; }
+.board_card_stack { flex: 1; min-height: 0; align-content: start; overflow-y: auto; padding: 9px; }
 .board_column > header, .board_column > .board_quick_add_button, .board_column > .board_quick_task_form { flex-shrink: 0; }
 .theme_dark .board_column_title_input { background: var(--bold_surface); border-color: var(--bold_line); color: var(--bold_text); }
 .theme_dark .board_column header > span { background: var(--bold_surface_soft); color: var(--bold_muted); }
@@ -10106,3 +10106,6 @@ button {
 .project_profile_hint summary::-webkit-details-marker { display: none; }
 .project_profile_hint summary:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
 .project_profile_tooltip { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 10; width: max-content; padding: 8px 10px; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); font-size: 12px; box-shadow: 0 4px 12px #0002; }
+
+.board_card_completed .board_title_button,
+.task_card_completed .task_card_title_text { text-decoration: line-through; color: var(--bold_muted); }

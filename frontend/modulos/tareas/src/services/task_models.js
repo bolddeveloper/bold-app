@@ -184,3 +184,7 @@ export function taskPayload(task, statuses, { create = false, unitId } = {}) {
     }
     return payload;
 }
+export function tasksBySection(tasks, sectionId) {
+    return tasks.filter(task => task.section === sectionId)
+        .sort((a, b) => Number(Boolean(a.completed)) - Number(Boolean(b.completed)));
+}

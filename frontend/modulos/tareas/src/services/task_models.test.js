@@ -141,3 +141,13 @@ test("payload creates atomic project link and patches only editable fields", () 
     assert.deepEqual(patch, { title: "Editada", due_date: null });
     assert.throws(() => taskPayload({ unitId: "other", status: "Pendiente" }, statuses), /compatible/);
 });
+
+ test("completed tasks follow pending tasks within each section, preserving order and input", async () => {
+    const { tasksBySection } = await import("./task_models.js");
+    const tasks = [{ id: "done1", section: "a", completed: true }, { id: "pending1", section: "a", completed: false }, { id: "other", section: "b" }, { id: "done2", section: "a", completed: true }, { id: "pending2", section: "a" }];
+    const before = structuredClone(tasks);
+    assert.deepEqual(tasksBySection(tasks, "a").map(task => task.id), ["pending1", "pending2", "done1", "done2"]);
+    assert.deepEqual(tasks, before);
+    tasks[0].completed = false;
+    assert.equal(tasksBySection(tasks, "a")[0].id, "done1");
+});
