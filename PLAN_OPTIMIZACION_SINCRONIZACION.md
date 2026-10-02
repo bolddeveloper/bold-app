@@ -1,6 +1,6 @@
 # Plan de optimización de peticiones y sincronización
 
-Fecha: 1 de octubre de 2026. Estado: en ejecución; primera entrega de medición local y contención implementada. Ver avance al final.
+Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas y primera entrega parcial de fase 3 publicada. Ver avance al final.
 
 Base: `ANALISIS_PETICIONES_CLOUDFLARE.md`, revisión de `Develop` en `4c38c852` y comprobación adicional de los consumidores, emisión de revisiones, caché y pruebas existentes.
 
@@ -463,3 +463,43 @@ el backend anterior, que ignoraría filtros y daría resultados incorrectos.
 
 No avanzar a declarar completa la optimización ni fusionar Develop únicamente
 por el resultado simulado de 208/hora.
+
+### Publicación y comprobación — 2 de octubre, 01:20 UTC
+
+- Commits publicados: `ad569d6c` (cargas parciales) y `60b44cfc` (orden de
+  paginación y vínculos de proyectos retirados). Rama `perf/sincronizacion-trafico`;
+  Develop intacta. Oracle ejecuta código `60b44cfc` en backend y worker.
+- Cloudflare: versión `e5c47e3e-ae30-45a5-bc71-41a2745f3a85`, bundle
+  `index-Cb10UZdv.js`, `buildVersion=60b44cfc`, modo real, mismo origen,
+  diagnóstico y control de permisos habilitados, sincronización incremental
+  activada. Raíz/bundle disponibles y salud pública HTTP 200 con DB/Redis OK.
+- La cuota que impedía verificar la API en fase 2 ya no bloqueó estas
+  comprobaciones. No se modificó el plan de Cloudflare ni se atribuye el
+  restablecimiento del servicio al redeploy.
+- Prueba interna de lectura sobre PostgreSQL real con una sesión no propietaria
+  existente: 7 tareas visibles y 1 al filtrar su ID; consultas de comentarios,
+  adjuntos, seguidores, etiquetas y vínculos acotadas a esa tarea; estados por
+  lote devueltos dentro del alcance autorizado. No se crearon cuentas/sesiones,
+  cambiaron credenciales/permisos ni se escribieron tareas para probar.
+- No había sesión activa del propietario. Su escenario pasó en la base
+  aislada, pero falta comprobarlo en nube, así como dos navegadores/PWA,
+  latencia de eventos, vencimientos y una ventana real de tráfico. El estado
+  saludable y los tests no sustituyen esas comprobaciones.
+- Imagen actual: `1d6f97cecf84`; reversión backend conservada como
+  `bold-app-backend:rollback-before-incremental-20261002` (`776d7a608196`).
+  Backup: `/opt/bold-app/deploy/oracle/backups/boldapp-20261002T011138Z.dump`;
+  no se eliminaron respaldos. Sin migraciones nuevas; PostgreSQL, Redis y
+  cloudflared continuaron con sus contenedores existentes.
+- Reversión frontend a fase 2: `d7200883-ea63-49f6-ad0c-f3b5fbe0fb8a`.
+  Si fuera necesario volver también el backend, revertir **primero el cliente**
+  (o recompilar con incremental `false`); luego usar la imagen conservada con
+  `BOLD_APP_IMAGE_TAG=rollback-before-incremental-20261002` y `up -d --no-build
+  --no-deps backend worker`. No restaurar ni borrar la DB para revertir código.
+
+Para la medición manual, actualizar la pestaña/PWA y confirmar
+`window.boldSyncDiagnostics.snapshot().buildVersion === "60b44cfc"`. Después
+`reset()`, dejar una ventana visible 30–60 minutos y guardar `snapshot()`;
+medir acciones aparte. No sumar los contadores `http`, `http-result` y
+`duration`: representan distintas observaciones de las mismas solicitudes.
+Comparar GET periódicos por hora y cliente, separando arranque, actividad y
+reconexión. No dejar clientes antiguos de la demo abiertos en paralelo.
