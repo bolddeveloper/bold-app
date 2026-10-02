@@ -93,7 +93,7 @@ textarea { max-height: min(40dvh, 24rem); resize: vertical; }
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 :is(.form_field, .bold_field_group, .edit_form_field, .project_create_step, .admin_form label, .admin_offboarding label) { min-width: 0; }
-:is(.form_field, .bold_field_group, .edit_form_field, .project_create_step, .admin_form, .admin_offboarding, .workspace_modal, .folder_dialog) :is(input, textarea, select) {
+:is(.form_field, .bold_field_group, .edit_form_field, .project_create_step, .admin_form, .admin_offboarding, .workspace_modal, .folder_dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), textarea, select) {
     width: 100%;
     min-width: 0;
     max-width: 100%;

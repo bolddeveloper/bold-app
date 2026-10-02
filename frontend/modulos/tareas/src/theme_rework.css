@@ -38,6 +38,8 @@
 .theme_dark .project_summary_title .project_info_button:hover { background: var(--bold_hover); }
 .theme_dark .project_summary_card .project_action_danger { border-color: #6a424a; background: var(--bold_red_tint); color: #ff9aa1; }
 .theme_dark .project_summary_card::before { background: var(--bold_line); }
+.theme_dark .folder_module .folder_card { border-left-color: var(--folder-color); }
+.theme_dark .folder_module .folder_card::before { background: var(--folder-color); }
 .theme_dark :is(.project_summary_badges > span, .project_summary_badges > [data-status="inactivo"], .project_summary_badges > [data-status="inactive"]) { background: var(--bold_surface_soft); color: var(--bold_muted); }
 .theme_dark :is(.filter_menu, .sort_menu, .customize_menu, .inbox_dropdown, .quick_popover_bubble, .collaborator_picker_dropdown, .task_select_menu, .row_subtask_popover, .custom_datepicker_popover, .project_preview) {
     border-color: var(--bold_line);

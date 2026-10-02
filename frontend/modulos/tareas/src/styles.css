@@ -5436,7 +5436,8 @@ button {
     font-weight: 900;
 }
 
-.quick_people_popover { box-sizing: border-box; width: min(260px, calc(100vw - 32px)); max-height: 260px; overflow-y: auto; }
+.quick_popover_bubble.quick_people_popover { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; box-sizing: border-box; width: min(260px, calc(100vw - 32px)); max-height: 260px; overflow: hidden; }
+.quick_people_list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .quick_people_popover::before { display: none; }
 .quick_people_popover { border-color: var(--bold_line); background: var(--bold_surface); color: var(--bold_text); }
 .quick_people_search { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_muted); }

@@ -1496,11 +1496,13 @@ function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, sel
     }, [anchor, visible.length]);
     return createPortal(<div ref={popover} className="quick_popover_bubble quick_people_popover" style={position} role="dialog" aria-label={multiple ? "Cambiar colaboradores" : "Cambiar responsable"} onClick={event => event.stopPropagation()}>
         <label className="quick_people_search">{render_icon(search_icon, 14)}<input autoFocus type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar persona…" /></label>
+        <div className="quick_people_list">
         {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => set_draft_ids([])}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!draft_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
         {visible.map(member => <button type="button" className="quick_popover_item_btn" key={member.id} onClick={() => {
             set_draft_ids(current => multiple ? current.includes(member.id) ? current.filter(id => id !== member.id) : [...current, member.id] : [member.id]);
         }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{draft_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
         {!visible.length && <p className="quick_people_empty">No se encontraron personas.</p>}
+        </div>
         <button type="button" className="quick_people_done" onClick={() => { on_change(multiple ? draft_ids : draft_ids[0] || ""); on_close(); }}>Listo</button>
     </div>, document.body);
 }
