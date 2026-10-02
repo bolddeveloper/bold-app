@@ -1,6 +1,6 @@
 # Plan de optimización de peticiones y sincronización
 
-Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas y primera entrega parcial de fase 3 publicada. Ver avance al final.
+Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas, fase 3 parcial publicada y fase 4 en validación. Ver avance al final.
 
 Base: `ANALISIS_PETICIONES_CLOUDFLARE.md`, revisión de `Develop` en `4c38c852` y comprobación adicional de los consumidores, emisión de revisiones, caché y pruebas existentes.
 
@@ -503,3 +503,81 @@ medir acciones aparte. No sumar los contadores `http`, `http-result` y
 `duration`: representan distintas observaciones de las mismas solicitudes.
 Comparar GET periódicos por hora y cliente, separando arranque, actividad y
 reconexión. No dejar clientes antiguos de la demo abiertos en paralelo.
+
+## 15. Fase 4 — ciclo de sesión independiente y consultas medidas
+
+Entrega del 2 de octubre de 2026. Esta entrega no cierra el plan: siguen
+pendientes la paginación por vista/relaciones de fase 3 y la medición de capacidad.
+
+### Cambios implementados
+
+- CoreProvider posee un único canal autenticado de control/notificaciones por
+  asignación. Sigue activo en módulos hermanos y aunque Tareas no pueda cargar.
+  Cambiar de cargo/cerrar sesión cancela el contexto anterior. Core no importa
+  internals de Notificaciones ni Tareas; se conserva un export de compatibilidad.
+- La lista de notificaciones y su estado optimista pertenecen a Core. Marcar
+  leído/no leído utiliza la respuesta autorizada del POST, sin otro GET por
+  clic. Escrituras rápidas se serializan; fallos revierten el indicador;
+  respuestas antiguas no deshacen cambios confirmados ni mezclan asignaciones.
+  Una revisión de seguridad purga datos incluso ocultos; la incertidumbre
+  impide lecturas/escrituras de contenido hasta verificar de nuevo.
+- Administración, Permisos, Sugerencias y Calendario no descargan ni mantienen
+  los canales de unidades de Tareas mientras están activos. Al volver a Tareas
+  se reconcilia el contenido. La sesión/control permanece independiente.
+  Esto es una separación del ciclo de datos, no una extracción completa del
+  shell visual ni una división del bundle en chunks.
+- El último módulo principal se recuerda en sessionStorage por asignación y
+  solo se restaura si sigue presente en la navegación autorizada. Esto permite
+  reabrir un módulo hermano sin arrancar el grafo de tareas. Las preferencias
+  no son autorizaciones y no contienen credenciales.
+- Se estabilizan callbacks de identidad y sesión. La actualización tardía del
+  directorio después de cambiar contexto ya no publica una proyección antigua.
+- El backend filtra candidatos antes de autorizar tareas/relaciones acotadas.
+  Cada candidato aún pasa por el motor deny-first; dueño, MFA, revocaciones,
+  scopes y límites de jerarquía no se relajan. La caché de visibilidad es solo
+  de la solicitud actual y distingue el conjunto consultado.
+- El árbol de unidades se materializa una vez por solicitud de Tareas o
+  Notificaciones y conserva la validación de ciclos/profundidad del motor.
+  No se añadió una caché compartida de permisos ni índices sin evidencia.
+- La consulta de detalle de notificación restringe primero el destinatario y
+  el ID; su paginación tiene desempate por PK.
+- Meet consulta cada 5 segundos durante un máximo de 60 segundos/12 intentos,
+  sin solaparse; tres errores detienen la espera con reintento explícito.
+  Poll y heartbeat se pausan ocultos/offline. El heartbeat mantiene el borrador
+  visible cada minuto, con límite de 30 minutos. Si el backend elimina el
+  borrador por su TTL de cuatro minutos mientras está oculto, se informa y se
+  conservan los campos locales para volver a generar el enlace. No se cambió
+  la caducidad ni la limpieza del backend.
+
+### Evidencia aislada, no cifras de producción
+
+En la base SQLite de tests, con una tarea seleccionada y 30 ajenas:
+
+- Lectura `tasks?ids=...` y `comments?tasks=...`: 31 evaluaciones de recurso
+  antes, 1 después. El total de consultas pasa de 8 a 9 por materializar el
+  árbol; la mejora aquí es el trabajo/filas evaluados, no menos consultas.
+- Catálogo con doce niveles adicionales: 80 consultas de unidades antes,
+  1 después. Es una prueba determinista de N+1, no un p95 de PostgreSQL.
+- Pruebas cubren consultas acotadas sin ampliar visibilidad, caché aislada
+  por candidatos y rechazo de jerarquías cíclicas también para el dueño;
+  canales, revocación, notificaciones optimistas y temporizadores acotados.
+- Validación local: 126 tests frontend, 154 Django y 4 Worker; build real
+  correcto, sin migraciones pendientes. Se añadió una comprobación de scopes
+  JSX de Core/Calendario, porque compilar no detecta variables fuera de su
+  componente. Permanece el aviso previo de tamaño del bundle (>500 kB).
+
+El número de peticiones en Inicio/Tareas depende todavía del volumen y páginas
+del conjunto completo. La cifra simulada de 208/hora de fase 3 no se convierte
+en una garantía para todos los módulos ni para 25 usuarios.
+
+### Verificación manual pendiente y siguiente paso
+
+1. Confirmar versión nueva en diagnóstico; abrir Sugerencias/Administración/
+   Permisos y comprobar que sus ventanas inactivas no descargan recursos de
+   Tareas. Volver a Tareas debe rehidratar y recibir eventos, sin perder drafts.
+2. Revisar propietario y empleado limitado en dos navegadores/PWA: notificaciones,
+   creación/edición, revocación y cambio de asignación. No generar cuentas,
+   concesiones ni contenido real solo para pruebas sin acordar sus datos.
+3. Registrar 30–60 minutos de tráfico por versión, arranque y actividad por
+   separado; usar el mismo tamaño de dataset al comparar. Después resolver la
+   carga inicial/relaciones por vista y pasar a pruebas escalonadas de capacidad.

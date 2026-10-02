@@ -7,12 +7,23 @@ import { useCore } from "./core_provider.jsx";
 import { is_using_real_backend } from "./http_client.js";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
+import { entranceModule } from "./shell_navigation_state.js";
 const icon_map = { home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
 export const useShell = () => useContext(ShellContext);
-export function ShellProvider({ children, navigation }) {
-    const [active_module, set_active_module] = useState(navigation.find(item => item.default)?.id || navigation[0]?.id);
+export function ShellProvider({ children, navigation, contextId = "demo" }) {
+    const storageKey = `bold_shell_module:${contextId}`;
+    const [active_module, set_active_module] = useState(() => {
+        let saved;
+        try { saved = sessionStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
+        return entranceModule(navigation, saved);
+    });
+    useEffect(() => {
+        if (navigation.some(item => item.id === active_module)) {
+            try { sessionStorage.setItem(storageKey, active_module); } catch { /* No authorization is stored here. */ }
+        }
+    }, [active_module, storageKey, navigation]);
     const [is_sidebar_open, set_is_sidebar_open] = useState(false);
     const [is_dark_mode, set_is_dark_mode] = useState(() => {
         try { const theme = localStorage.getItem("bold_color_theme"); return theme ? theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; } catch { return false; }

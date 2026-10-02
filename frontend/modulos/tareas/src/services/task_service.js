@@ -3,7 +3,7 @@ import { notificationsApi } from "../../../notificaciones/notifications_api.js";
 import { is_using_real_backend } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
-export async function loadTaskData({ directory, units }, { catalogCache } = {}) {
+export async function loadTaskData({ directory, units }, { catalogCache, notificationClient = notificationsApi } = {}) {
     const catalog = (key, load) => catalogCache ? catalogCache.get(key, load) : load();
     const projects = (await api.listProjects()).map(normalizeProject);
     const sections = (await api.listSections()).map(normalizeSection);
@@ -11,7 +11,7 @@ export async function loadTaskData({ directory, units }, { catalogCache } = {}) 
     const tasks = (await api.listTasks()).map(dto => normalizeTask(dto, statuses));
     const links = (await api.listTaskProjectLinks()).map(normalizeTaskProject);
     const [comments, followers, members, attachments, notifications, taskTags, tags] = await Promise.all([
-        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationsApi.list(), api.list("task-tags"),
+        api.listComments(), api.list("task-followers"), api.list("project-members"), api.list("attachments"), notificationClient.list(), api.list("task-tags"),
         Promise.all(units.map(unit => catalog(`tags:${unit.id}`, () => api.list("tags", { unit: unit.id })))).then(rows => rows.flat())
     ]);
     return assembleTaskData({ directory, units, projects, sections, statuses, tasks, links, comments, followers, members, attachments, notifications, taskTags, tags });

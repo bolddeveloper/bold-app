@@ -6,6 +6,10 @@ from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from django.test import RequestFactory
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+from unittest.mock import patch
+from types import SimpleNamespace
 
 from boldApp.autenticacion.services import create_session, issue_ws_ticket
 from boldApp.core.models import (
@@ -18,6 +22,7 @@ from boldApp.core.models import (
 from boldApp.tareas.models import Attachment, Comment, Project, ProjectMember, Section, Tag, Task, TaskFollower, TaskProject, TaskStatus, TaskTag
 from boldApp.tareas.management.commands.seed_demo_data import DEMO_PEOPLE
 from config.asgi import application
+from boldApp.tareas.views import AssignmentScopedViewSetMixin, resolve_access
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, DEBUG=True)
@@ -56,6 +61,48 @@ class TasksV2ApiTests(TransactionTestCase):
             "section": str(self.ops_section.id),
             "project_position": "1.0000000000",
         }
+
+    def test_scoped_read_authorizes_only_candidate_tasks(self):
+        task = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Consulta medida", priority="medium", created_by_assignment=self.ana_assignment)
+        Task.objects.bulk_create([Task(unit=self.operations, status=self.ops_status, title=f"Otra tarea {index}", priority="medium", created_by_assignment=self.david_assignment) for index in range(30)])
+        comment = Comment.objects.create(task=task, author_assignment=self.ana_assignment, body="Comentario medido")
+        candidate_counts = []
+        for endpoint, param in (("tasks", "ids"), ("comments", "tasks")):
+            with patch("boldApp.tareas.views.resolve_access", wraps=resolve_access) as resolver, CaptureQueriesContext(connection) as queries:
+                response = self.client.get(f"/api/v2/{endpoint}/", {param: str(task.id)})
+            self.assertEqual(response.status_code, 200, response.data)
+            print(f"SQL scoped {endpoint}: {len(queries)} queries; {resolver.call_count} authorization candidates")
+            candidate_counts.append(resolver.call_count)
+            self.assertEqual(len(response.data["results"]), 1)
+            if endpoint == "comments":
+                self.assertEqual(str(response.data["results"][0]["id"]), str(comment.id))
+        self.assertEqual(candidate_counts, [1, 1])
+
+    def test_catalog_hierarchy_does_not_query_each_ancestor(self):
+        root = self.operations
+        for index in range(12):
+            root = OrganizationalUnit.objects.create(name=f"Profundidad {index}", parent_unit=root)
+        view = AssignmentScopedViewSetMixin()
+        view.request = SimpleNamespace(assignment=self.actor_assignment)
+        with CaptureQueriesContext(connection) as queries:
+            view.allowed_unit_ids("tasks.catalog.read")
+        hierarchy_reads = [query for query in queries if 'FROM "organizational_units"' in query["sql"]]
+        print(f"SQL catalog hierarchy: {len(hierarchy_reads)} organizational-unit queries")
+        self.assertLessEqual(len(hierarchy_reads), 2)
+
+    def test_request_visibility_cache_is_isolated_by_candidates_and_rejects_cycles(self):
+        first = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Primera", priority="medium", created_by_assignment=self.ana_assignment)
+        second = Task.objects.create(unit=self.operations, status=self.ops_status, title="Segunda", priority="medium", created_by_assignment=self.david_assignment)
+        view = AssignmentScopedViewSetMixin()
+        view.request = SimpleNamespace(assignment=self.actor_assignment)
+        self.assertEqual(list(view.visible_tasks(Task.objects.filter(pk=first.id)).values_list("id", flat=True)), [first.id])
+        self.assertEqual(list(view.visible_tasks(Task.objects.filter(pk=second.id)).values_list("id", flat=True)), [second.id])
+        child = OrganizationalUnit.objects.create(name="Ciclo de prueba", parent_unit=self.operations)
+        OrganizationalUnit.objects.filter(pk=self.operations.id).update(parent_unit=child)
+        owner = PositionAssignment.objects.get(employee__user_account__email="luis@bold.gt", is_active=True)
+        view = AssignmentScopedViewSetMixin()
+        view.request = SimpleNamespace(assignment=owner)
+        self.assertEqual(list(view.visible_tasks(Task.objects.filter(pk=second.id))), [])
 
     def test_incremental_task_and_relation_filters_do_not_expand_visibility(self):
         task = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Tarea visible", priority="medium", created_by_assignment=self.ana_assignment)

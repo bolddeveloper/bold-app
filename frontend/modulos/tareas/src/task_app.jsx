@@ -69,8 +69,7 @@ import {
     publish_task_event
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
-import { notificationsApi } from "../../notificaciones/notifications_api.js";
-import { connectNotificationStream, disconnectNotificationStream } from "../../notificaciones/notification_realtime.js";
+import { requiresTaskData } from "./services/task_activity.js";
 
 
 const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
@@ -4278,6 +4277,10 @@ function TaskAppContent({ externalModules = {} }) {
     const [project_preview, set_project_preview] = use_state(null);
     const session = useCore();
     const { active_module, set_active_module, set_is_sidebar_open } = useShell();
+    const task_content_active = requiresTaskData(active_module);
+    const task_activity = use_ref(task_content_active);
+    task_activity.current = task_content_active;
+    const switch_task_activity = use_ref(() => {});
     const real = is_using_real_backend();
     const [data, set_data] = use_state(null);
     const [intro_finished, set_intro_finished] = use_state(false);
@@ -4317,10 +4320,13 @@ function TaskAppContent({ externalModules = {} }) {
         try { sessionStorage.setItem(failed_drafts_key, JSON.stringify(failed_task_state.items)); } catch { /* La recuperación sigue disponible en esta pestaña. */ }
     }, [failed_drafts_key, failed_task_state]);
     const task_status_mutations = use_ref(new Map());
-    const notification_read_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
     const [active_view, set_active_view] = use_state("list");
-    const [active_modal, set_active_modal] = use_state(null);
+    const [active_modal, set_raw_active_modal] = use_state(null);
+    function set_active_modal(value) {
+        if (["task", "edit_task", "project"].includes(value) && !task_activity.current) set_active_module("tasks");
+        set_raw_active_modal(value);
+    }
     const [inbox_detail_open, set_inbox_detail_open] = use_state(false);
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
@@ -4891,7 +4897,8 @@ function TaskAppContent({ externalModules = {} }) {
         ));
     }
 
-    const [notifications, set_notifications] = use_state(real ? [] : notification_items);
+    const [template_notifications, set_notifications] = use_state(notification_items);
+    const notifications = use_memo(() => real ? session.notifications.rows.map(item => ({ ...item, task_id: item.task, time_label: new Date(item.created_at).toLocaleString("es"), message: item.body || item.title })) : template_notifications, [real, session.notifications.rows, template_notifications]);
 
     function select_workspace(id) {
         try { localStorage.setItem(activeWorkspaceStorageKey(workspace_unit_id), id); }
@@ -4970,15 +4977,17 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
-        let mounted = true, dataGeneration = 0, securityUncertain = false;
+        let mounted = true, dataGeneration = 0, securityUncertain = Boolean(session.securityUncertain);
         const catalogCache = createContextCache();
         const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
-        const loader = createTaskDataLoader(session, { catalogCache });
-        const coordinator = createRefreshCoordinator({ canRun: contentCanRefresh, run: async batch => {
-                    if (securityUncertain) return;
+        const notificationClient = { list: () => Promise.resolve(session.notifications.getRows()) };
+        const loader = createTaskDataLoader(session, { catalogCache, notificationClient });
+        const canRefresh = () => task_activity.current && contentCanRefresh();
+        const coordinator = createRefreshCoordinator({ canRun: canRefresh, run: async batch => {
+                    if (securityUncertain || !task_activity.current) return;
                     const version = dataGeneration;
                     const writeRevision = task_commit_revision.current;
-                    const next = incremental ? await loader.load(batch.resources) : await loadTaskData(session, { catalogCache });
+                    const next = incremental ? await loader.load(batch.resources) : await loadTaskData(session, { catalogCache, notificationClient });
                     if (!mounted || version !== dataGeneration) return;
                     // Only a successful round started after the write can retire
                     // a committed optimistic change. Unrelated/failed reads cannot.
@@ -4987,21 +4996,14 @@ function TaskAppContent({ externalModules = {} }) {
                     set_syncing_task_count(task_crud_mutations.current.size);
                     for (const [id, mutation] of task_status_mutations.current)
                         if (!mutation.running && next.tasks.some(task => String(task.id) === id && String(task.statusId) === String(mutation.desired.id))) task_status_mutations.current.delete(id);
-                    for (const [id, mutation] of notification_read_mutations.current)
-                        if (!mutation.running && next.notifications.some(item => String(item.id) === id && Boolean(item.is_read) === mutation.desired)) notification_read_mutations.current.delete(id);
                     let next_tasks = applyPendingTaskChanges(next.tasks, task_crud_mutations.current);
                     for (const [task_id, mutation] of task_status_mutations.current) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
                     }
-                    const next_notifications = next.notifications.map(notification => {
-                        const mutation = notification_read_mutations.current.get(String(notification.id));
-                        return mutation ? { ...notification, is_read: mutation.desired } : notification;
-                    });
-                    const presented = { ...next, tasks: next_tasks, notifications: next_notifications };
+                    const presented = { ...next, tasks: next_tasks };
                     setPresentationData(presented);
                     set_data(presented); set_projects(next.projects);
                     set_tasks(next_tasks.filter(item => !item.parentTaskId || !next_tasks.some(parent => parent.id === item.parentTaskId)));
-                    set_notifications(next_notifications);
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
         } });
@@ -5027,18 +5029,18 @@ function TaskAppContent({ externalModules = {} }) {
         let streamGeneration = 0;
         const scheduleContent = (reason, resources = ["all"]) => {
             // Hidden events only imply recovery on focus; do not accumulate promises.
-            if (contentCanRefresh()) coordinator.request({ reason, resources }).catch(report);
+            if (canRefresh()) coordinator.request({ reason, resources }).catch(report);
         };
         const syncRealtime = async () => {
             const currentGeneration = ++streamGeneration;
             const units = session.units;
             const allowedUnits = [];
             for (const unit of units) {
-                if (!mounted || currentGeneration !== streamGeneration) return;
+                if (!mounted || !task_activity.current || securityUncertain || currentGeneration !== streamGeneration) return;
                 const allowed = await session.permissions.can("tasks.task.read", unit.id);
                 if (allowed) allowedUnits.push(unit.id);
             }
-            if (!mounted || currentGeneration !== streamGeneration) return;
+            if (!mounted || !task_activity.current || securityUncertain || currentGeneration !== streamGeneration) return;
             retain_realtime_streams(allowedUnits);
             const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
                 onEvent: event => {
@@ -5049,47 +5051,37 @@ function TaskAppContent({ externalModules = {} }) {
                 onError: message => mounted && set_api_error(message) }));
             await Promise.all(connections);
         };
-        const syncNotifications = () => connectNotificationStream({
-            assignmentId: session.activeAssignment.id,
-            getTicket: session.websocketTicket,
-            onNotification: () => scheduleContent("notification-event", ["notifications"]),
-            onReconnect: () => scheduleContent("notification-reconnect", ["notifications"]),
-            onError: message => mounted && set_api_error(message),
-            onControl: envelope => {
-                if (mounted) window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
-            },
-            onState: state => {
-                if (mounted && state !== "open") window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId: session.activeAssignment.id } }));
-            },
-            onTerminal: error => {
-                if (mounted && [401, 403].includes(error?.status)) window.dispatchEvent(new Event("bold:unauthorized"));
-            },
-        });
-        // Security control must not depend on a successful download of Tareas.
-        const notificationReady = syncNotifications().catch(report);
-        coordinator.request({ reason: "bootstrap", immediate: true, force: true }).then(async () => {
-            if (!mounted) return;
-            await Promise.all([syncRealtime(), notificationReady]);
-            if (mounted) scheduleContent("socket-bootstrap");
-        }).catch(report);
+        const activate = () => {
+            if (!mounted || !task_activity.current || securityUncertain) return;
+            coordinator.request({ reason: "task-view-activate", resources: ["all"], immediate: true }).then(async () => {
+                if (!mounted || !task_activity.current || securityUncertain) return;
+                await syncRealtime();
+                if (mounted) scheduleContent("socket-bootstrap");
+            }).catch(report);
+        };
+        switch_task_activity.current = active => {
+            dataGeneration++;
+            if (active) activate();
+            else { streamGeneration++; retain_realtime_streams([]); }
+        };
         // Secondary resources have no event stream; focus and polling reconcile them too.
         const reconcile = () => {
-            if (contentCanRefresh()) coordinator.request({ reason: "focus-or-poll" }).catch(report);
+            if (canRefresh()) coordinator.request({ reason: "focus-or-poll" }).catch(report);
         };
         const reconcilePermissions = event => {
             securityUncertain = Boolean(event.detail?.uncertain);
             dataGeneration++;
             mutation_generation.current++;
             catalogCache.clear(); loader.clear(); api.cancelRequests();
-            task_crud_mutations.current.clear(); task_status_mutations.current.clear(); notification_read_mutations.current.clear();
+            task_crud_mutations.current.clear(); task_status_mutations.current.clear();
             set_syncing_task_count(0); set_selected_task_id(null);
             set_edit_draft(null);
             set_active_modal(current => current === "edit_task" ? null : current);
             // Hide old-scope data before any asynchronous authorization or reload.
-            set_tasks([]); set_projects([]); set_notifications([]);
+            set_tasks([]); set_projects([]);
             setPresentationData(null);
             set_data(current => current ? { ...current, tasks: [], projects: [], sections: [], statuses: [], links: [], members: [], followers: [], notifications: [] } : current);
-            if (event.detail?.uncertain) {
+            if (event.detail?.uncertain || !task_activity.current) {
                 retain_realtime_streams([]);
                 return;
             }
@@ -5103,8 +5095,9 @@ function TaskAppContent({ externalModules = {} }) {
         const configuredInterval = Number(import.meta.env?.VITE_TASK_RECONCILE_MS);
         const interval = Number.isFinite(configuredInterval) && configuredInterval >= 60_000 ? configuredInterval : 300_000;
         const timer = setInterval(reconcile, interval);
-        return () => { mounted = false; dataGeneration++; streamGeneration++; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnectNotificationStream(); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        return () => { mounted = false; dataGeneration++; streamGeneration++; switch_task_activity.current = () => {}; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
+    use_effect(() => { switch_task_activity.current(task_content_active); }, [task_content_active]);
 
     async function mutate(operation, on_success = () => {}, success_title = "Cambios guardados", on_failure = () => {}, resources = TASK_RESOURCES) {
         if (mutation_pending.current) { set_api_error("Espera a que termine el guardado actual e inténtalo de nuevo."); return false; }
@@ -5292,70 +5285,11 @@ function TaskAppContent({ externalModules = {} }) {
         }
     }
 
-    function apply_optimistic_notification_read(notification_id, is_read) {
-        set_notifications(current => current.map(notification => (
-            String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
-        )));
-        set_data(current => current ? {
-            ...current,
-            notifications: current.notifications.map(notification => (
-                String(notification.id) === String(notification_id) ? { ...notification, is_read } : notification
-            )),
-        } : current);
-    }
-
     function queue_notification_read(notification_id, is_read) {
-        const key = String(notification_id);
-        let mutation = notification_read_mutations.current.get(key);
-        if (!mutation) {
-            const notification = notifications.find(item => String(item.id) === key);
-            if (!notification) return false;
-            mutation = { confirmed: Boolean(notification.is_read), desired: Boolean(is_read), running: false };
-            notification_read_mutations.current.set(key, mutation);
-        } else {
-            mutation.desired = Boolean(is_read);
-        }
-        apply_optimistic_notification_read(notification_id, Boolean(is_read));
-        if (!mutation.running) void flush_notification_read(key, mutation);
+        session.notifications.setRead(notification_id, Boolean(is_read)).catch(error => {
+            if (error.name !== "AbortError") set_api_error(error.message || "No se pudo sincronizar la notificación.");
+        });
         return true;
-    }
-
-    async function flush_notification_read(notification_id, mutation) {
-        mutation.running = true;
-        try {
-            while (notification_read_mutations.current.get(notification_id) === mutation) {
-                if (mutation.confirmed === mutation.desired) {
-                    try { await refresh.current(["notifications"]); }
-                    catch { set_api_error("La notificación se guardó; su confirmación se recuperará al volver a sincronizar."); return; }
-                    if (notification_read_mutations.current.get(notification_id) !== mutation) return;
-                    if (mutation.confirmed !== mutation.desired) continue;
-                    notification_read_mutations.current.delete(notification_id);
-                    return;
-                }
-                const requested = mutation.desired;
-                try {
-                    await (requested
-                        ? notificationsApi.markRead(notification_id)
-                        : notificationsApi.markUnread(notification_id));
-                    mutation.confirmed = requested;
-                } catch (error) {
-                    if (notification_read_mutations.current.get(notification_id) === mutation) {
-                        notification_read_mutations.current.delete(notification_id);
-                        apply_optimistic_notification_read(notification_id, mutation.confirmed);
-                    }
-                    if (error?.name !== "AbortError") {
-                        set_api_error(error?.message || "No se pudo sincronizar la notificación.");
-                    }
-                    return;
-                }
-            }
-            if (notification_read_mutations.current.get(notification_id) === mutation
-                && mutation.confirmed === mutation.desired) {
-                notification_read_mutations.current.delete(notification_id);
-            }
-        } finally {
-            mutation.running = false;
-        }
     }
 
     async function handle_workspace_bulk(operation, ids = [], values = {}) {
@@ -6168,6 +6102,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Renders the active modal requested by the application state.
     function render_active_modal() {
+        if (real && !data && ["task", "edit_task", "project"].includes(active_modal)) return null;
         const drawer = { width: task_detail_width, on_resize_key_down: handle_detail_resize_key_down, on_resize_start: handle_detail_resize_start };
         // New Master-Plan Crear modal
         if (active_modal === "task") {
@@ -6302,8 +6237,8 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && (!data || !intro_finished) && !api_error) return <LoginIntro />;
-    if (real && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
+    if (real && task_content_active && (!data || !intro_finished) && !api_error) return <LoginIntro />;
+    if (real && task_content_active && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from boldApp.core.authorization import build_authorization_context, request_has_recent_strong_mfa, resolve_access
 from boldApp.core.models import OrganizationalUnit, Permission
 from boldApp.core.permissions import HasActiveAssignment
+from boldApp.core.authorization_units import load_authorization_units
 from boldApp.tareas.models import Project, Task
 
 from .models import Notification
@@ -22,12 +23,14 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         if not permission or (permission.requires_step_up_mfa and not request_has_recent_strong_mfa(self.request)):
             return []
         context = build_authorization_context(self.request.assignment, permission)
+        if not hasattr(self, "_authorization_units"):
+            self._authorization_units = load_authorization_units(self.request.assignment)
         return [
-            row.id for row in queryset.select_related("unit", "unit__parent_unit")
+            row.id for row in queryset.select_related("unit")
             if resolve_access(
                 self.request.assignment,
                 permission,
-                row.unit,
+                self._authorization_units.get(row.unit_id, row.unit),
                 resource_id=row.id,
                 context=context,
             ).allowed
@@ -35,6 +38,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         base = Notification.objects.filter(recipient_assignment=self.request.assignment)
+        if self.kwargs.get("pk"):
+            base = base.filter(pk=self.kwargs["pk"])
         task_ids = base.exclude(task_id__isnull=True).values_list("task_id", flat=True)
         project_ids = base.exclude(project_id__isnull=True).values_list("project_id", flat=True)
         visible_tasks = self._visible_ids(Task.objects.filter(id__in=task_ids), "tasks.task.read")
@@ -45,7 +50,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             Q(task__isnull=True) | Q(task_id__in=visible_tasks),
         ).filter(
             Q(project__isnull=True) | Q(project_id__in=visible_projects),
-        )
+        ).order_by("-created_at", "pk")
 
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):

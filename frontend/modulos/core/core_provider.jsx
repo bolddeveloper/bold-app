@@ -7,6 +7,9 @@ import { LoginScreen } from "./login_screen.jsx";
 import { MfaManagementDialog } from "./mfa_management.jsx";
 import { createPermissionCache } from "./permission_cache.js";
 import { createPermissionMonitor } from "./permission_monitor.js";
+import { createNotificationRealtime } from "./session_realtime.js";
+import { createSessionNotifications } from "./session_notifications.js";
+import { contentCanRefresh } from "./refresh_coordinator.js";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -20,6 +23,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const generation = useRef(0);
     const permissionCache = useRef(null);
     const enteredFromLogin = useRef(false);
+    const notificationController = useRef(null);
+    const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
+    const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
+    const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
     const [mfaChallenge, setMfaChallenge] = useState("");
     const [pendingEmail, setPendingEmail] = useState("");
     const [recoveryMessage, setRecoveryMessage] = useState("");
@@ -46,7 +53,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             }),
         });
     }
-    function clearLocalSession() {
+    const clearLocalSession = useCallback(() => {
         generation.current++;
         enteredFromLogin.current = false;
         setMfaChallenge("");
@@ -66,19 +73,19 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         sessionStorage.removeItem("bold_v2_context");
         clearCore();
         updateCore({ sessionStatus: "anonymous" });
-    }
-    async function logout() {
+    }, []);
+    const logout = useCallback(async () => {
         await coreApi.logout().catch(() => {});
         clearLocalSession();
-    }
-    function setActiveAssignment(id) {
+    }, [clearLocalSession]);
+    const setActiveAssignment = useCallback(id => {
         generation.current++;
         const assignment = getCoreState().assignments.find(item => item.id === id) || null;
         http.setAssignment(assignment?.id || null);
         permissionCache.current.clear();
         updateCore({ activeAssignment: assignment, error: "", securityUncertain: false, sessionStatus: assignment ? "ready" : "selecting" });
         persistSession();
-    }
+    }, []);
     async function restore(savedId) {
         const version = generation.current;
         const account = await coreApi.getCurrentAccount();
@@ -101,11 +108,12 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         if (!assignment) return false;
         return permissionCache.current.can({ assignmentId: assignment, permissionCode, unitId, resourceId });
     }, [real]);
-    async function refreshDirectory() {
+    const refreshDirectory = useCallback(async () => {
+        const version = generation.current;
         const directory = (await coreApi.listAssignmentDirectory()).map(normalizeAssignment);
-        updateCore({ directory });
+        if (version === generation.current) updateCore({ directory });
         return directory;
-    }
+    }, []);
     useEffect(() => {
         if (!real) { updateCore({ ...mockIdentity, sessionStatus: "ready" }); return () => clearCore(); }
         let mounted = true;
@@ -173,6 +181,51 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             window.removeEventListener("online", recover);
             window.removeEventListener("offline", recover);
             document.removeEventListener("visibilitychange", visibility);
+        };
+    }, [real, state.sessionStatus, state.activeAssignment?.id]);
+    useEffect(() => {
+        if (!real || state.sessionStatus !== "ready" || !state.activeAssignment?.id) return undefined;
+        const assignmentId = state.activeAssignment.id;
+        let mounted = true;
+        const report = error => {
+            if (mounted && error?.name !== "AbortError") setNotificationSnapshot(current => ({ assignmentId, rows: current.assignmentId === assignmentId ? current.rows : [], error: error?.message || String(error) }));
+        };
+        const store = createSessionNotifications({ onChange: rows => {
+            if (mounted) setNotificationSnapshot({ assignmentId, rows, error: "" });
+        } });
+        notificationController.current = store;
+        if (getCoreState().securityUncertain) store.invalidate({ uncertain: true }).catch(report);
+        const realtime = createNotificationRealtime();
+        const reconcile = reason => {
+            if (contentCanRefresh()) store.refresh({ reason }).catch(report);
+        };
+        const recover = () => reconcile("notification-focus-or-poll");
+        const invalidate = event => store.invalidate(event.detail || {}).catch(report);
+        window.addEventListener("bold:permissions-revision", invalidate);
+        window.addEventListener("focus", recover);
+        window.addEventListener("online", recover);
+        document.addEventListener("visibilitychange", recover);
+        realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
+            onNotification: () => reconcile("notification-event"),
+            onConnected: () => reconcile("notification-connected"),
+            onReconnect: () => reconcile("notification-reconnect"),
+            onControl: envelope => mounted && window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } })),
+            onState: status => {
+                if (mounted && status !== "open") window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId } }));
+            },
+            onTerminal: error => {
+                if (mounted && [401, 403].includes(error?.status)) window.dispatchEvent(new Event("bold:unauthorized"));
+            },
+            onError: report,
+        }).catch(report);
+        store.refresh({ reason: "notification-bootstrap", immediate: true }).catch(report);
+        const timer = setInterval(recover, 300_000);
+        return () => {
+            mounted = false; realtime.disconnect(); store.dispose(); clearInterval(timer);
+            if (notificationController.current === store) notificationController.current = null;
+            window.removeEventListener("bold:permissions-revision", invalidate);
+            window.removeEventListener("focus", recover); window.removeEventListener("online", recover);
+            document.removeEventListener("visibilitychange", recover);
         };
     }, [real, state.sessionStatus, state.activeAssignment?.id]);
     async function login(event) {
@@ -256,7 +309,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         updateCore({ sessionStatus: "loading", error: "" });
         try { await restore(); } catch (error) { if (error.name !== "AbortError") updateCore({ error: error.message, sessionStatus: "anonymous" }); }
     }
-    function openMfaManagement() { setMfaDialogOpen(true); setMfaManageError(""); }
+    const openMfaManagement = useCallback(() => { setMfaDialogOpen(true); setMfaManageError(""); }, []);
     function closeMfaManagement() {
         if (mfaManageBusy) return;
         setMfaDialogOpen(false); setMfaManageSetup(null); setMfaManageCodes([]); setMfaManageError("");
@@ -299,7 +352,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const value = { ...state, ...http.getSession(), sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", getRows: notificationRows, setRead: setNotificationRead };
+    const value = { ...state, ...http.getSession(), notifications, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}
