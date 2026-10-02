@@ -399,13 +399,14 @@ Para probar restauracion usa una base o VM separada. No ejecutes `pg_restore
 
 ## 14. Actualizaciones
 
-**Despliegue de prueba del 1 de octubre de 2026:** durante la optimización del
-tráfico, Oracle está temporalmente en `perf/sincronizacion-trafico`, commit
-`60b44cfc` (fase 3 parcial, publicada el 2 de octubre a las 01:20 UTC), no en
+**Despliegue de prueba actualizado el 2 de octubre de 2026:** durante la optimización del
+tráfico, Oracle está temporalmente en `perf/sincronizacion-trafico`, fuentes
+`11961822` (fase 4 y limpieza de contexto; imagen backend basada en `8259da57`,
+sin diferencias de backend entre ambos commits), no en
 Develop. Develop no se fusionó ni modificó. No aplicar la receta
 de retorno a Develop hasta integrar y validar esta entrega; cambiar la rama y
 reconstruir ahora volvería a una versión anterior. Estado, pruebas y reversión en
-`PLAN_OPTIMIZACION_SINCRONIZACION.md`, secciones 13 y 14. La sincronización
+`PLAN_OPTIMIZACION_SINCRONIZACION.md`, secciones 13–15. La sincronización
 incremental requiere el backend compatible antes del frontend; para volver a
 fase 2, revertir primero el cliente como indica la sección 14 del plan.
 

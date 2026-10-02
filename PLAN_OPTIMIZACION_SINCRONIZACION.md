@@ -1,6 +1,6 @@
 # Plan de optimización de peticiones y sincronización
 
-Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas, fase 3 parcial publicada y fase 4 en validación. Ver avance al final.
+Fecha: 1 de octubre de 2026. Estado: en ejecución; fases 1–2 publicadas, fase 3 parcial y primera entrega de fase 4 publicadas. Ver avance al final.
 
 Base: `ANALISIS_PETICIONES_CLOUDFLARE.md`, revisión de `Develop` en `4c38c852` y comprobación adicional de los consumidores, emisión de revisiones, caché y pruebas existentes.
 
@@ -581,3 +581,55 @@ en una garantía para todos los módulos ni para 25 usuarios.
 3. Registrar 30–60 minutos de tráfico por versión, arranque y actividad por
    separado; usar el mismo tamaño de dataset al comparar. Después resolver la
    carga inicial/relaciones por vista y pasar a pruebas escalonadas de capacidad.
+
+### Publicación y comprobaciones — 2 de octubre de 2026
+
+- Código publicado: `8259da57` (fase 4) y `11961822` (purga inmediata del estado
+  de notificaciones antes de cambiar identidad/cerrar sesión). Rama
+  `perf/sincronizacion-trafico`; Develop sigue en `4c38c852`, sin merge.
+- Oracle: fuentes `11961822`; backend/worker ejecutan imagen `56d1b0d14b5d`
+  construida con `8259da57` (el siguiente commit cambia solo frontend).
+  Ambos contenedores arrancaron correctamente y backend está healthy.
+  PostgreSQL, Redis y cloudflared mantienen sus contenedores originales.
+- Cloudflare: versión `2462be0e-63f9-4d95-bf58-ef122bdaa54d`, bundle
+  `index-DpENSHwC.js`, `buildVersion=11961822`, mismo origen, backend real,
+  sincronización incremental, control y diagnósticos activos. Raíz y bundle
+  HTTP 200, salud pública OK con DB/Redis disponibles.
+- Usando computer-use se comprobó la sesión existente no propietaria de
+  Samuel: Inicio cargó los datos, Sugerencias reabrió directamente al recargar
+  con Tareas sin hidratar; la campana recibió notificaciones de Core en esa
+  vista. Volver a Mis tareas cargó la lista; no se observaron errores de consola
+  en esos pasos. No se escribieron tareas/sugerencias ni cambiaron permisos.
+  Calendario abrió sin errores, pero la integración Google no está configurada
+  en este entorno: Meet se validó con pruebas aisladas, no contra Google real.
+  La segunda pestaña seguía en el bundle de fase 3; ambas se actualizaron al
+  nuevo cliente sin formularios abiertos. No confundir estos pasos con una
+  auditoría completa de móvil/PWA ni una medición de hora estable.
+- La herramienta de navegador no expone Performance/contadores de red en su
+  evaluación de solo lectura. Se consultó un resumen redaccionado de logs del
+  backend de dos minutos: hubo arranques/recargas y navegación; **no se extrapola
+  esa ventana a una tasa inactiva por hora**. Falta recoger el snapshot de
+  diagnósticos por versión durante 30–60 minutos, separado de actividad.
+- Se solicitó abrir una sesión de Dirección/propietario para completar pruebas
+  manuales administrativas, sin compartir contraseña/MFA por chat. La cobertura
+  automatizada del dueño y de permisos pasó, pero no sustituye esa revisión.
+- Backup conservado: `/opt/bold-app/deploy/oracle/backups/boldapp-20261002T104628Z.dump`.
+  Reversión de imagen: `bold-app-backend:rollback-before-core-lifecycle-20261002`
+  (`1d6f97cecf84`). No se borraron respaldos ni se modificó el esquema.
+- `check --deploy` no encontró errores; conserva los avisos existentes por no
+  activar HSTS en todos los subdominios ni preload. No se habilitaron durante
+  esta optimización porque requieren decidir el alcance de dominios.
+
+Para volver a fase 3, restaurar primero el frontend
+`e5c47e3e-ae30-45a5-bc71-41a2745f3a85`; si también se necesita volver el backend,
+usar `BOLD_APP_IMAGE_TAG=rollback-before-core-lifecycle-20261002` con
+`docker compose --env-file .env.oracle -f compose.oracle.yaml up -d --no-build
+--no-deps backend worker`. No borrar volúmenes ni restaurar la DB para revertir
+código. Confirmar versión/health después de cualquier reversión.
+
+Para la medición nueva: actualizar todas las pestañas/PWA, comprobar
+`window.boldSyncDiagnostics.snapshot().buildVersion === "11961822"`, ejecutar
+`reset()` en la consola y recoger `snapshot()` tras 30–60 minutos visibles.
+No ejecutar escrituras desde la consola; solo se consultan contadores agregados.
+No sumar `http`, `http-result` y `duration`. Comparar Inicio/Tareas y un módulo
+hermano por separado, además del arranque y las acciones.
