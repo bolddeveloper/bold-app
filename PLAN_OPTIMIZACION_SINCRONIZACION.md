@@ -685,3 +685,36 @@ la fase 3, no se renumera el plan ni se declara terminada la validación de capa
   medición de hora estable por versión/rol y carga 5/10/25 en Postgres/Redis aislados.
   Workspace todavía requiere una página por grupo de hasta 50 tareas, y refrescar
   historial reinicia su ventana reciente. Límites y reversión detallados en informe.
+
+## 18. Adjuntos por vista y criterio de salida a demo de 4–6 usuarios
+
+Informe y checklist: `VERIFICACION_ADJUNTOS_POR_VISTA.md`.
+
+- Código `2b8c0711` en la rama de optimización: adjuntos fuera de arranque/poll,
+  conteos SQL autorizados, detalle 25 por página y edición con baseline completo
+  de una sola tarea. Cursor compuesto aislado de comentarios, purga/cancelación
+  por contexto y permisos. Los filtros no dependen de archivos precargados.
+- Fixture HTTP de 5.000 archivos: 200 GET de arranque a cero; 2.400 GET de doce
+  rondas cerradas a cero; abiertas a 12. Es ahorro de adjuntos, no de todo HTTP.
+  Editar esa tarea aún recorre sus 200 páginas explícitamente, nunca todo el área.
+- Las tareas y descripciones siguen completas para Inicio/totales/búsqueda y
+  Bandeja de entrada. No se proclama terminada la paginación general de tareas.
+- 158 pruebas frontend, 167 Django y 4 Worker pasan; 9 SQL por página sintética
+  SQLite, sin conteo por cada tarea. Se aisló un test de grants dependiente de
+  cruzar las 07:00 Guatemala; no se cambió el vencimiento real de sesiones.
+- Oracle backend/worker actualizados y saludables, DB/Redis/túnel intactos.
+  Cloudflare `a6d110cb-53a1-414c-b18f-4222e6b91b51`, JS `index-D0U3PpTV.js`,
+  SHA256 igual al build real. Develop permanece en `4c38c852`, sin merge.
+- A las 13:00 UTC aproximadamente, panel: 1.252 usadas/100.000, 98.748 restantes.
+  Sesiones del navegador cerradas al coincidir con el vencimiento diario;
+  comprobación autenticada nueva pendiente de recarga/login del usuario.
+
+**Estimación: tres pasos / 2–3 sesiones de validación**, sujetos a hallazgos:
+aceptación por roles y móvil/PWA; 30–60 min con 4–6 usuarios con consumo/latencia
+medidos por versión; revisión/merge/publicación desde Develop con rollback.
+Se propone proyectar <50k solicitudes de cuenta/día para conservar margen del
+free tier; no se considera cumplido hasta medirlo con horario/dataset acordados.
+La prueba de 25 usuarios deja de ser una condición para la demo pequeña, no
+una garantía futura: paginación/búsqueda/agregados y Postgres/Redis se revisarán
+según evidencia. El plan de pago aporta 10M solicitudes **mensuales** incluidas,
+con CPU/excedentes aparte; no remedia redundancias ni aumenta por sí mismo Oracle.
