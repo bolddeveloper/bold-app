@@ -27,6 +27,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
     const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
+    const clearNotifications = useCallback(() => {
+        notificationController.current?.dispose(); notificationController.current = null;
+        setNotificationSnapshot({ assignmentId: null, rows: [], error: "" });
+    }, []);
     const [mfaChallenge, setMfaChallenge] = useState("");
     const [pendingEmail, setPendingEmail] = useState("");
     const [recoveryMessage, setRecoveryMessage] = useState("");
@@ -55,6 +59,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const clearLocalSession = useCallback(() => {
         generation.current++;
+        clearNotifications();
         enteredFromLogin.current = false;
         setMfaChallenge("");
         setPasswordChangeRequired(false);
@@ -73,19 +78,20 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         sessionStorage.removeItem("bold_v2_context");
         clearCore();
         updateCore({ sessionStatus: "anonymous" });
-    }, []);
+    }, [clearNotifications]);
     const logout = useCallback(async () => {
         await coreApi.logout().catch(() => {});
         clearLocalSession();
     }, [clearLocalSession]);
     const setActiveAssignment = useCallback(id => {
         generation.current++;
+        clearNotifications();
         const assignment = getCoreState().assignments.find(item => item.id === id) || null;
         http.setAssignment(assignment?.id || null);
         permissionCache.current.clear();
         updateCore({ activeAssignment: assignment, error: "", securityUncertain: false, sessionStatus: assignment ? "ready" : "selecting" });
         persistSession();
-    }, []);
+    }, [clearNotifications]);
     async function restore(savedId) {
         const version = generation.current;
         const account = await coreApi.getCurrentAccount();
