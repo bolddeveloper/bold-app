@@ -9,6 +9,8 @@
         "preview": "vite preview --configLoader runner --host 0.0.0.0",
         "test": "node --test ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js",
         "test:worker": "node --test worker/*.test.js",
+        "check:sync-capacity": "node tools/check_sync_capacity.mjs",
+        "probe:public-health": "node tools/probe_public_health.mjs",
         "deploy:cloudflare": "npm run build && wrangler deploy"
     },
     "dependencies": {

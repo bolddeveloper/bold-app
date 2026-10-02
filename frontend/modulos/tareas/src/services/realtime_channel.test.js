@@ -36,7 +36,43 @@ test("offline channels wake once online and flapping does not reset backoff", as
     await tick(); assert.equal(tickets, 0);
     online = true; target.dispatchEvent(new Event("online")); await tick();
     sockets[0].listeners.open(); sockets[0].listeners.close({ code: 1006 });
-    assert.equal(timers[0].delay, 1000); timers[0].fn(); await tick();
+    assert.equal(timers.at(-1).delay, 1000); timers.at(-1).fn(); await tick();
     sockets[1].listeners.open(); sockets[1].listeners.close({ code: 1006 });
-    assert.equal(timers[1].delay, 2000); channel.stop();
+    assert.equal(timers.at(-1).delay, 2000); channel.stop();
+});
+
+test("online events cannot shorten server Retry-After or reconnect backoff", async () => {
+    let time = 0, tickets = 0;
+    const target = new EventTarget(), timers = new Map(); let id = 0;
+    const channel = createRealtimeChannel({ eventTarget: target, now: () => time, random: () => 0,
+        getTicket: async () => { tickets++; throw { status: 429, retryAfterMs: 300000 }; },
+        setTimer: (fn, delay) => { timers.set(++id, { fn, delay }); return id; }, clearTimer: key => timers.delete(key) });
+    await channel.ready; await tick();
+    for (let i = 0; i < 50; i++) target.dispatchEvent(new Event("online"));
+    await tick(); assert.equal(tickets, 1); assert.equal(timers.size, 1);
+    time = 300000; target.dispatchEvent(new Event("online")); await tick();
+    assert.equal(tickets, 2); assert.equal(timers.size, 1);
+    channel.stop(); assert.equal(timers.size, 0);
+});
+
+test("silent handshake recovers once, ignores late events and stops all timers", async () => {
+    const timers = new Map(), sockets = []; let id = 0, connected = 0, recovered = 0;
+    class Socket {
+        constructor() { this.readyState = 0; this.handlers = {}; sockets.push(this); }
+        addEventListener(name, fn) { this.handlers[name] = fn; }
+        close() { this.readyState = 3; this.handlers.close?.({ code: 1006 }); }
+    }
+    const channel = createRealtimeChannel({ WebSocketImpl: Socket, eventTarget: new EventTarget(), random: () => 0,
+        getTicket: async () => ({}), urlForTicket: () => "ws://example.test",
+        onConnected: () => connected++, onReconnect: () => recovered++,
+        setTimer: (fn, delay) => { timers.set(++id, { fn, delay }); return id; }, clearTimer: key => timers.delete(key) });
+    await tick();
+    let [key, job] = [...timers][0]; assert.equal(job.delay, 15000); timers.delete(key); job.fn();
+    await channel.ready;
+    assert.equal(timers.size, 1); assert.equal([...timers.values()][0].delay, 1000);
+    sockets[0].handlers.open(); assert.equal(connected, 0); assert.equal(recovered, 0);
+    [key, job] = [...timers][0]; timers.delete(key); job.fn(); await tick();
+    sockets[1].readyState = 1; sockets[1].handlers.open();
+    assert.equal(connected, 0); assert.equal(recovered, 1); assert.equal(timers.size, 0);
+    channel.stop(); sockets[1].handlers.close({ code: 1006 }); assert.equal(timers.size, 0);
 });

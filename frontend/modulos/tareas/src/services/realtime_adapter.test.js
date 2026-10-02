@@ -27,10 +27,10 @@ test("reconnect obtains a fresh ticket, refetches REST and cancels timers", asyn
     for (let i = 0; i < 2; i++) sockets[0].emit("message", { data: '{"event_id":"e","event_version":2}' });
     assert.equal(events, 1);
     assert.equal(refetches, 0);
-    sockets[0].emit("close"); assert.equal(timers[0].delay, 1000); timers[0].fn(); await new Promise(resolve => setImmediate(resolve)); sockets[1].emit("open");
+    sockets[0].emit("close"); assert.equal(timers.at(-1).delay, 1000); timers.at(-1).fn(); await new Promise(resolve => setImmediate(resolve)); sockets[1].emit("open");
     assert.equal(refetches, 1);
-    sockets[1].emit("close"); adapter.disconnect(); assert.equal(timers[1].cancelled, true);
-    timers[1].fn(); assert.equal(sockets.length, 2);
+    sockets[1].emit("close"); const retry = timers.at(-1); adapter.disconnect(); assert.equal(retry.cancelled, true);
+    retry.fn(); assert.equal(sockets.length, 2);
 });
 
 test("retaining units preserves authorized connections instead of reopening every socket", async () => {
