@@ -658,3 +658,30 @@ Informe reproducible: `VERIFICACION_CONEXIONES_FASE_5.md`.
 fase 3, ventana autenticada controlada por versión/rol y carga representativa
 con datos sintéticos en entorno aislado. Liderazgo entre pestañas queda
 condicionado a evidencia de ahorro y diseño que conserve el control de seguridad.
+
+## 17. Siguiente entrega — historial diferido por vista
+
+Informe: `VERIFICACION_HISTORIAL_PAGINADO.md`. Se resuelve una parte pendiente de
+la fase 3, no se renumera el plan ni se declara terminada la validación de capacidad.
+
+- Comentarios fuera del loader general con flag optativo: primera página solo
+  al abrir detalle/Cronograma, 25 resultados y total autorizado, Cargar más
+  explícito. Cursor firmado compuesto, compatible con lectura anterior.
+- Mine/proyecto/workspace conservan su alcance; filtros no conceden acceso.
+  Páginas vuelven a comprobar permisos; cancelación y purga por contexto/revisión.
+  Eventos agrupados, sin nuevo polling propio ni recorrido automático del historial.
+- Fixture de 5.000 comentarios: arranque sin historial de 200 GET a cero;
+  doce reconciliaciones de 2.400 a cero cerradas, o a 12 con detalle abierto.
+  Ahorro del 99,5% de esas lecturas abiertas, **no del total de peticiones**.
+  SQLite aislado devuelve 25/5.000 con 9 queries; 147 frontend, 163 Django, 4 Worker.
+- Código `26f0a044`, Oracle backend/worker healthy/running, PostgreSQL/Redis/túnel
+  intactos; Cloudflare `dcb5cfe8-e347-4292-880a-3d10e4f69562`, bundle `index-DKsdAM6q.js`.
+  Sesión no propietaria, Cronograma y detalle comprobados sin crear contenido;
+  dos pestañas actualizadas. Los proyectos leídos tienen cero comentarios, por
+  lo que la paginación con contenido permanece validada en pruebas aisladas.
+- Panel diario actualizado alrededor de 12:24 UTC: 1.164 usadas de 100.000,
+  98.836 restantes. Es lectura de cuenta, no estimación de consumo/hora.
+- Continúan pendientes tareas/adjuntos por vista con agregados autorizados,
+  medición de hora estable por versión/rol y carga 5/10/25 en Postgres/Redis aislados.
+  Workspace todavía requiere una página por grupo de hasta 50 tareas, y refrescar
+  historial reinicia su ventana reciente. Límites y reversión detallados en informe.

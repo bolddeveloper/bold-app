@@ -37,6 +37,10 @@ Completa una parte pendiente de la fase 3; **no certifica capacidad para 25 usua
 - Eventos del websocket invalidan la conversación abierta, no todo el grafo.
   Ráfagas se agrupan en 400 ms; solicitudes no se solapan por controlador.
   Reconciliación completa/reconexión actualiza solo conversaciones montadas.
+  Actualizar/evento empieza una ventana nueva de comentarios recientes: no
+  conserva las páginas antiguas previamente expandidas. El texto del compositor
+  sí permanece. Mantener expansión sin volver a mostrar comentarios eliminados
+  requiere una reconciliación histórica adicional; queda como mejora posterior.
 - Pestañas ocultas/offline no inician estas lecturas. Cambiar ámbito/asignación,
   desmontar o recibir una revisión de permisos cancela/purga la generación previa.
   Una respuesta tardía no repuebla el ámbito anterior. Retry-After impide reintentos
@@ -77,7 +81,48 @@ no cambia totales ni descarta el árbol para obtener ese ahorro.
   aislado; no es un p95 PostgreSQL ni una garantía de costo independiente del volumen.
 - La autorización todavía evalúa las tareas candidatas del alcance y el count
   debe contar sus comentarios. Reducir HTTP/payload no elimina todo el trabajo SQL.
-- Verificación completa, despliegue y lectura de cuota: registrar al finalizar.
+- Build real correcto; se conserva el aviso existente de bundle mayor de 500 kB.
+  `makemigrations --check --dry-run` local y Oracle no detectan cambios. `check
+  --deploy` sin errores; mantiene avisos existentes de HSTS subdominios/preload,
+  cuyo alcance no se modifica en esta optimización.
+
+## Publicación y comprobación real
+
+- Código: `26f0a044`, subido a `perf/sincronizacion-trafico`. Develop no se fusiona.
+- Oracle: imagen `a8671bd9a6ec06f62ec131aee5eaad51eab591189cbf6f70e86b32e584eefedb`,
+  backend healthy y worker running. PostgreSQL, Redis y cloudflared conservan IDs
+  y arranque del 28 de septiembre; no se recrearon ni modificaron volúmenes.
+- Backup: `/opt/bold-app/deploy/oracle/backups/boldapp-20261002T121234Z.dump`.
+  Imagen de reversión `bold-app-backend:rollback-before-paged-comments-20261002`
+  conserva `56d1b0d14b5dfe92127610533a3d5cb33671bb63eec5bdacae2b26389c9c468d`.
+  No se eliminan respaldos anteriores.
+- Cloudflare: `dcb5cfe8-e347-4292-880a-3d10e4f69562`; JS `index-DKsdAM6q.js`,
+  CSS sin cambios `index-77eQkRtb.css`, `buildVersion=26f0a044`. Mismo origen,
+  backend real y flags de incremental/control/diagnóstico/historial activos.
+  Raíz y bundle HTTP 200; `/health/` OK, database y redis true. Una sonda inicial
+  apuntó por error a `/api/v2/health/` (404); se corrigió la ruta del instrumento,
+  no se tomó ese 404 como fallo del servicio.
+- Navegador: sesión existente no propietaria de Samuel, proyecto test y proyecto
+  BOLD. Cronograma devuelve contador cero y estado vacío sin errores; abrir el
+  detalle y volver a la lista funciona. Ambos proyectos consultados no tienen
+  comentarios visibles: **Cargar más y recuperación entre páginas se validaron
+  con fixtures, no con mensajes reales en esos proyectos**. No se crearon/editaron
+  tareas, comentarios, cuentas ni políticas para producir la prueba.
+- Las dos pestañas conocidas cargan el bundle nuevo; Inicio conserva sus tarjetas
+  y la lista conserva sus totales. Sin errores de consola en esos pasos. No es
+  una auditoría completa móvil/PWA ni una prueba manual de revocación del dueño.
+- Resumen redaccionado de logs durante la navegación: cuatro lecturas legacy y
+  cuatro recent en una ventana con versiones mixtas, antes/después de recargar
+  la segunda pestaña. No se extrapola a una tasa inactiva ni se atribuye todo a
+  la versión nueva. La herramienta del navegador no expone contadores Performance;
+  la medición autenticada controlada de 30–60 minutos sigue pendiente.
+- Cloudflare, panel recargado alrededor de 12:24 UTC: **1.164 / 100.000 Requests
+  today; quedan 98.836**. Antes de publicar: 957 (alrededor de 12:11 UTC).
+  El incremento incluye otros usuarios, pestañas viejas y navegación; no acredita
+  ahorro por hora. No confundir el dato diario con el contador mensual 138,5k.
+- Evidencia visual local: `historial-paginado.jpg` en los artefactos de este chat.
+  La guía Oracle ahora incluye los flags de build para conservar estas mejoras
+  en despliegues posteriores, sin añadir secretos al frontend.
 
 ## Qué validar manualmente
 

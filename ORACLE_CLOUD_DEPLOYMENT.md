@@ -330,12 +330,44 @@ npm run build
 npx wrangler deploy
 ```
 
-No definas `VITE_API_BASE_URL`: el cliente usa `location.origin`. La unica
-variable publica requerida es:
+No definas `VITE_API_BASE_URL`: el cliente usa `location.origin`. El backend
+real requiere `VITE_USE_REAL_BACKEND=true`. Para conservar las optimizaciones
+publicadas el 2 de octubre de 2026, define también los siguientes flags **antes
+del build**, no como variables de ejecución del Worker. Primero publica el
+backend compatible; de lo contrario, mantén el historial paginado desactivado.
 
 ```text
 VITE_USE_REAL_BACKEND=true
+VITE_PERMISSION_CONTROL_ENABLED=true
+VITE_TASK_INCREMENTAL_SYNC=true
+VITE_TASK_PAGED_COMMENTS=true
+VITE_TASK_RECONCILE_MS=300000
+VITE_SYNC_DIAGNOSTICS=true
+VITE_APP_VERSION=<commit-del-codigo-compilado>
 ```
+
+En PowerShell, por ejemplo (desde `frontend/modulos/core`):
+
+```powershell
+$env:VITE_USE_REAL_BACKEND='true'
+$env:VITE_API_BASE_URL=''
+$env:VITE_PERMISSION_CONTROL_ENABLED='true'
+$env:VITE_TASK_INCREMENTAL_SYNC='true'
+$env:VITE_TASK_PAGED_COMMENTS='true'
+$env:VITE_TASK_RECONCILE_MS='300000'
+$env:VITE_SYNC_DIAGNOSTICS='true'
+$env:VITE_APP_VERSION=(git rev-parse --short=8 HEAD).Trim()
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'Build fallido: no publicar' }
+npx wrangler deploy
+```
+
+La lectura anterior de comentarios sigue disponible para revertir el flag.
+Consulta `VERIFICACION_HISTORIAL_PAGINADO.md` y
+`VERIFICACION_CONEXIONES_FASE_5.md` para pruebas, límites y reversión. Sin estos
+flags, un build posterior puede volver al comportamiento anterior aunque el
+backend esté actualizado. Diagnósticos son agregados locales, no un servicio
+externo de telemetría; pueden desactivarse una vez terminada la medición.
 
 La primera publicacion asigna una direccion estable bajo `workers.dev`. Anotala
 y actualiza `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` y `FRONTEND_URL` en Oracle;
