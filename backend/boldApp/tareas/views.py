@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.core.exceptions import EmptyResultSet
 from django.db.models import Q
 from django.utils import timezone
 from uuid import UUID
@@ -34,6 +35,7 @@ from .models import (
     WebhookEndpoint,
 )
 from .permissions import HasActiveAssignment
+from .pagination import RecentCommentPagination
 from .serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
@@ -113,12 +115,17 @@ class AssignmentScopedViewSetMixin:
         ]
 
     def _visible_resource_ids(self, queryset, code, resource_type):
+        if queryset.query.is_empty():
+            return []
         cache = getattr(self, "_permission_visible_ids", None)
         if cache is None:
             cache = self._permission_visible_ids = {}
         # A narrower candidate query cannot reuse a different query's visibility.
         # This cache exists only on this view instance, for this HTTP request.
-        key = (code, resource_type, str(queryset.query))
+        try:
+            key = (code, resource_type, str(queryset.query))
+        except EmptyResultSet:
+            return []
         if key in cache:
             return cache[key]
         try:
@@ -518,7 +525,27 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = CommentSerializer
 
     def get_queryset(self):
-        return self.filter_task_relations(Comment.objects.all())
+        queryset = Comment.objects.all()
+        recent = self.request.query_params.get("recent")
+        mine = self.request.query_params.get("mine")
+        if recent not in (None, "1") or mine not in (None, "1"):
+            raise ValidationError({"scope": "recent y mine solo admiten 1."})
+        project_ids = self.query_ids("project", limit=1)
+        if project_ids is not None:
+            # Project membership is a filter, never a grant to read its tasks.
+            projects = self.visible_projects().filter(pk__in=project_ids)
+            queryset = queryset.filter(task_id__in=TaskProject.objects.filter(project__in=projects).values("task_id"))
+        if mine == "1":
+            assignment = self.request.assignment
+            queryset = queryset.filter(Q(task__created_by_assignment=assignment)
+                | Q(task__assignee_assignment=assignment)
+                | Q(task_id__in=TaskFollower.objects.filter(assignment=assignment).values("task_id")))
+        return self.filter_task_relations(queryset)
+
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get("recent") == "1":
+            self.pagination_class = RecentCommentPagination
+        return super().paginate_queryset(queryset)
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]

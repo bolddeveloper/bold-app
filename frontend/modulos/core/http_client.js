@@ -74,6 +74,24 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         endpointPauses.delete(url.pathname);
         return data;
     }
+    async function listPage(resource, params = {}, { next = null, ...options } = {}) {
+        if (!/^[a-z][a-z0-9-]*$/.test(resource)) throw new Error("Recurso de API no permitido.");
+        const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
+        const collection = `/api/v2/${resource}/`;
+        let path = `${collection}?${query}`;
+        if (next) {
+            // Trusted API pagination can contain the private proxy hostname.
+            // Never follow it off-origin or into another collection/scope.
+            const nextUrl = new URL(next, baseUrl);
+            if (nextUrl.pathname !== collection) throw new Error("Ruta de paginación no permitida.");
+            for (const [key, value] of query) if (nextUrl.searchParams.get(key) !== value) throw new Error("El alcance de paginación cambió.");
+            path = `${collection}${nextUrl.search}`;
+        }
+        const page = await request(path, options);
+        if (Array.isArray(page)) return { results: page, count: page.length, next: null, previous: null };
+        if (!Array.isArray(page?.results) || !Number.isSafeInteger(page.count) || page.count < 0) throw new Error("Página del servidor no válida.");
+        return { results: page.results, count: page.count, next: page.next || null, previous: page.previous || null };
+    }
     async function list(resource, params = {}, options = {}) {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""));
         let path = `/api/v2/${resource}/?${query}`;
@@ -101,7 +119,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     const update = (resource, id, body, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "PATCH", body });
     const remove = (resource, id, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "DELETE" });
     return {
-        request, list, create, update, remove, cancelRequests,
+        request, list, listPage, create, update, remove, cancelRequests,
         setSession(value, accountEmail = null) { cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
         setAssignment(value) { cancelRequests(); assignmentId = value; },
         getSession: () => ({ authenticated, assignmentId, email }),

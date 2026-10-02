@@ -32,7 +32,7 @@ export function resourcesForTaskEvent(event) {
     return TASK_RESOURCES;
 }
 
-export function createTaskDataLoader(context, { catalogCache, client = api, notificationClient = notificationsApi } = {}) {
+export function createTaskDataLoader(context, { catalogCache, client = api, notificationClient = notificationsApi, deferComments = false } = {}) {
     let snapshot = null, generation = 0, presentation = null;
     const catalog = (key, load) => catalogCache ? catalogCache.get(key, load) : load();
     const allCatalogs = (resource, units) => Promise.all(chunks(units.map(unit => String(unit.id))).map(ids =>
@@ -55,7 +55,8 @@ export function createTaskDataLoader(context, { catalogCache, client = api, noti
         await Promise.all([...requested].map(async ([resource, ids]) => {
             const params = ids ? { [resource === "tasks" ? "ids" : "tasks"]: [...ids].join(",") } : undefined;
             let rows;
-            if (resource === "statuses" || resource === "tags") rows = await allCatalogs(resource === "statuses" ? "task-statuses" : "tags", ids ? context.units.filter(unit => ids.has(String(unit.id))) : context.units);
+            if (resource === "comments" && deferComments) rows = [];
+            else if (resource === "statuses" || resource === "tags") rows = await allCatalogs(resource === "statuses" ? "task-statuses" : "tags", ids ? context.units.filter(unit => ids.has(String(unit.id))) : context.units);
             else if (resource === "notifications") rows = await notificationClient.list();
             else if (ids) rows = (await Promise.all(chunks([...ids]).map(batch => client.list(resource === "tasks" ? "tasks" : RELATIONS[resource], { ...params, [resource === "tasks" ? "ids" : "tasks"]: batch.join(",") })))).flat();
             else rows = await client.list(ENDPOINTS[resource] || resource);

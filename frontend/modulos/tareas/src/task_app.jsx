@@ -70,6 +70,8 @@ import {
 } from "./services/realtime_adapter.js";
 import { create_task_event, task_event_types } from "./services/task_events.js";
 import { requiresTaskData } from "./services/task_activity.js";
+import { PagedComments } from "./paged_comments.jsx";
+import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./services/paged_comments.js";
 
 
 const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
@@ -1814,7 +1816,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
 
             {is_using_real_backend() && selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>)}
-            {show_comments ? <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
+            {show_comments ? <>{pagedCommentsEnabled() ? <PagedComments queries={commentQueries({ taskIds: [selected_task.id] })} /> : <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
                         <div className="detail_comment_item" key={comment_item.id}>
@@ -1833,7 +1835,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
             ) : (
                 <p className="detail_comments_empty">Aun no hay comentarios.</p>
-            )}
+            )}</>}
 
             {comment_images.length ? (
                 <div className="detail_comment_image_previews">
@@ -2589,7 +2591,7 @@ function render_tasks_module(props) {
                         type="button"
                         role="tab"
                         aria-selected={active_section === "timeline"}
-                        onClick={() => { set_active_section("timeline"); handle_close_task_tool(); set_active_quick_popover(null); }}
+                        onClick={() => { set_active_section("timeline"); handle_close_task_tool(); handle_toggle_quick_popover(null); }}
                     >
                         Cronograma
                     </button>
@@ -2647,7 +2649,7 @@ function render_tasks_module(props) {
                         </div>
 
                         {/* Botón de visualización Lista ↔ Columnas al lado derecho de Personalizar */}
-                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); set_active_quick_popover(null); })}
+                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); handle_toggle_quick_popover(null); })}
                     </div>
                 ) : null}
 
@@ -2788,7 +2790,7 @@ function render_tasks_module(props) {
                 <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
                     <div className="tasks_main_area timeline_view_wrapper">
                         {render_timeline_view(project_tasks, handle_task_select)}
-                        <TimelineComments comments={timeline_comments} on_add_comment={handle_add_timeline_comment} />
+                        <TimelineComments comments={timeline_comments} queries={props.comment_queries} on_add_comment={handle_add_timeline_comment} />
                     </div>
                     <TaskDetailSidebar
                         on_workspace={on_workspace}
@@ -3791,13 +3793,14 @@ function render_empty_tasks_state(set_active_modal = () => {}) {
 }
 
 
-function TimelineComments({ comments, on_add_comment }) {
+function TimelineComments({ comments, queries, on_add_comment }) {
     const [comment_text, set_comment_text] = use_state("");
     const [comment_images, set_comment_images] = use_state([]);
 
     async function submit_comment() {
         if (!comment_text.trim() && !comment_images.length) return;
-        on_add_comment(comment_text, comment_images);
+        const saved = await on_add_comment(comment_text, comment_images);
+        if (saved === false) return;
         set_comment_text("");
         set_comment_images([]);
     }
@@ -3814,10 +3817,10 @@ function TimelineComments({ comments, on_add_comment }) {
                     <p>CONVERSACION DEL PROYECTO</p>
                     <h2 id="timeline_comments_title">Comentarios del cronograma</h2>
                 </div>
-                <span>{comments.length}</span>
+                {!pagedCommentsEnabled() && <span>{comments.length}</span>}
             </header>
 
-            {comments.length ? (
+            {pagedCommentsEnabled() ? <PagedComments queries={queries || []} timeline /> : comments.length ? (
                 <div className="timeline_comments_list" tabIndex={0} role="region" aria-label="Historial de comentarios del cronograma">
                     {comments.map((comment_item) => (
                         <article className="detail_comment_item" key={comment_item.id}>
@@ -4980,8 +4983,9 @@ function TaskAppContent({ externalModules = {} }) {
         let mounted = true, dataGeneration = 0, securityUncertain = Boolean(session.securityUncertain);
         const catalogCache = createContextCache();
         const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
+        const deferComments = pagedCommentsEnabled();
         const notificationClient = { list: () => Promise.resolve(session.notifications.getRows()) };
-        const loader = createTaskDataLoader(session, { catalogCache, notificationClient });
+        const loader = createTaskDataLoader(session, { catalogCache, notificationClient, deferComments });
         const canRefresh = () => task_activity.current && contentCanRefresh();
         const coordinator = createRefreshCoordinator({ canRun: canRefresh, run: async batch => {
                     if (securityUncertain || !task_activity.current) return;
@@ -5006,6 +5010,8 @@ function TaskAppContent({ externalModules = {} }) {
                     set_tasks(next_tasks.filter(item => !item.parentTaskId || !next_tasks.some(parent => parent.id === item.parentTaskId)));
                     set_selected_project_id(id => next.projects.some(item => item.id === id) ? id : next.projects[0]?.id || "");
                     set_selected_task_id(id => next_tasks.some(item => item.id === id) ? id : null);
+                    // Recovery also refreshes only mounted histories, never the full collection.
+                    if (deferComments && batch.resources.includes("all")) notifyCommentViews();
         } });
         refresh.current = (resources = TASK_RESOURCES) => coordinator.request({ reason: "mutation", resources, force: true });
         const report = error => {
@@ -5044,6 +5050,11 @@ function TaskAppContent({ externalModules = {} }) {
             retain_realtime_streams(allowedUnits);
             const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
                 onEvent: event => {
+                    if (deferComments && ["comment.created", "comment.changed"].includes(event.event_type)) {
+                        notifyCommentViews(event.payload?.tasks || (event.payload?.task ? [event.payload.task] : null));
+                        return;
+                    }
+                    if (deferComments && ["task.updated", "task.deleted", "project.changed", "task_link.changed"].includes(event.event_type)) notifyCommentViews(null, true);
                     if (event.event_type === "catalog.changed") catalogCache.clear();
                     scheduleContent("task-event", resourcesForTaskEvent(event));
                 },
@@ -5782,7 +5793,11 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             if (task_crud_mutations.current.has(String(task_id))) { set_api_error("Espera a que se sincronice la tarea antes de comentarla."); return Promise.resolve(false); }
             if (images.length) { set_api_error("Los comentarios admiten texto. A?ade los archivos como enlaces adjuntos a la tarea."); return Promise.resolve(false); }
-            return comment_text.trim() ? mutate(() => api.createComment(task_id, comment_text.trim()), undefined, undefined, undefined, [`comments@${task_id}`]) : Promise.resolve(false);
+            return comment_text.trim() ? mutate(async () => {
+                const saved = await api.createComment(task_id, comment_text.trim());
+                if (pagedCommentsEnabled()) notifyCommentViews([task_id]);
+                return saved;
+            }, undefined, undefined, undefined, [`comments@${task_id}`]) : Promise.resolve(false);
         }
         const body = comment_text.trim();
         if (!body && !images.length) return;
@@ -6362,6 +6377,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     selected_task_id,
                     task_detail_width,
                     timeline_comments,
+                    comment_queries: commentQueries({ scope: task_scope, projectId: selected_project_id, taskIds: workspace_tasks.map(task => task.id) }),
                     set_active_modal,
                     set_active_section,
                     set_active_view,

@@ -42,6 +42,23 @@ test("a comment fetches only its authorized task comments and preserves unrelate
     assert.equal(next.tasks[1], first.tasks[1]); assert.equal(next.projects, first.projects);
     assert.equal(next.notifications, first.notifications);
 });
+test("deferred histories eliminate all startup/reconciliation comment pages without trimming tasks", async () => {
+    const { rows, client, calls } = fixture();
+    rows.comments = Array.from({ length: 5000 }, (_, i) => ({ id: `c${i}`, task: "t1", body: "History" }));
+    let pageReads = 0;
+    const previous = client.list;
+    client.list = (...args) => { if (args[0] === "comments") pageReads += Math.ceil(rows.comments.length / 25); return previous(...args); };
+    const legacy = createTaskDataLoader(context, { client, notificationClient: { list: async () => [] } });
+    const before = await legacy.load(); assert.equal(pageReads, 200); pageReads = 0; calls.length = 0;
+    const loader = createTaskDataLoader(context, { client, deferComments: true, notificationClient: { list: async () => [] } });
+    const after = await loader.load();
+    assert.deepEqual(after.tasks.map(({ comments, ...task }) => task), before.tasks.map(({ comments, ...task }) => task));
+    assert.deepEqual(after.projects, before.projects); assert.deepEqual(after.links, before.links);
+    for (let poll = 0; poll < 12; poll++) await loader.load();
+    await loader.load(["comments@t1"]);
+    assert.equal(pageReads, 0); assert.equal(calls.filter(call => call.resource === "comments").length, 0);
+    assert.equal(after.tasks[0].comments.length, 0); assert.equal(after.tasks.length, 2);
+});
 test("a notification does not load tasks, catalogs or project relations", async () => {
     const { rows, calls, loader } = fixture(); const first = await loader.load(); calls.length = 0;
     rows.notifications[0].is_read = true;
