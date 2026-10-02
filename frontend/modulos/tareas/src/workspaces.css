@@ -65,7 +65,19 @@
 .folder_dialog label { display: grid; gap: 6px; margin-top: 16px; }
 .folder_dialog input:not([type=checkbox]), .folder_dialog textarea, .folder_dialog select { width: 100%; box-sizing: border-box; min-height: 38px; border: 1px solid var(--bold_line); border-radius: 8px; padding: 8px; background: var(--bold_surface, #fff); color: inherit; }
 .folder_dialog button { border: 1px solid var(--bold_line); border-radius: 8px; padding: 8px 12px; }
-.folder_picker { max-height: 45vh; overflow-y: auto; }
+.folder_dialog:has(.folder_picker) { width: min(820px, calc(100vw - 24px)); }
+.folder_picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.folder_picker_column { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--bold_line); border-radius: 11px; padding: 14px; }
+.folder_picker_column h3 { margin: 0; font-size: 14px; }
+.folder_picker_column label { margin: 12px 0; }
+.folder_picker_list { min-height: 0; height: 340px; max-height: 40dvh; overflow-y: auto; }
+.folder_picker_row { border: 0; border-radius: 8px; padding: 4px; }
+.folder_picker_row:has(input:checked) { background: color-mix(in srgb, var(--bold_red) 9%, var(--bold_surface)); color: var(--bold_red); }
+.folder_picker_row > button { border: 0; background: transparent; font: inherit; min-height: 42px; }
+.folder_picker_row button strong { white-space: normal; overflow-wrap: anywhere; }
+.folder_dialog button:focus-visible, .folder_picker_column input:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
+.folder_dialog button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 600px) { .folder_picker { grid-template-columns: 1fr; } .folder_picker_list { height: 150px; max-height: 22dvh; } }
 .folder_dialog [role=alert] { color: #c52232; }
 @media (max-width: 700px) { .folder_module .projects_grid { grid-template-columns: minmax(0, 1fr); } .folder_actions { width: 100%; } .folder_actions .folder_icon_action { flex: 0 0 44px; } .folder_task_meta { width: 100%; padding-left: 28px; justify-content: flex-start; } }
 
@@ -78,22 +90,12 @@
 @media (max-width: 760px) { .folder_module:has(.workspace_ops) { padding: 14px 10px; } }
 
 .folder_dialog input[type="color"] {
-    width: 42px;
-    height: 42px;
-    min-height: 42px;
-    padding: 3px;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
     border-radius: 50%;
-    overflow: hidden;
+    opacity: 0;
     cursor: pointer;
 }
-.folder_dialog input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-.folder_dialog input[type="color"]::-webkit-color-swatch {
-    border: 0;
-    border-radius: 50%;
-}
-.folder_dialog input[type="color"]::-moz-color-swatch {
-    border: 0;
-    border-radius: 50%;
-}
+.folder_dialog .project_color_custom:focus-within { outline: 2px solid var(--bold_red); outline-offset: 3px; }
