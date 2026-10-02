@@ -718,3 +718,24 @@ La prueba de 25 usuarios deja de ser una condición para la demo pequeña, no
 una garantía futura: paginación/búsqueda/agregados y Postgres/Redis se revisarán
 según evidencia. El plan de pago aporta 10M solicitudes **mensuales** incluidas,
 con CPU/excedentes aparte; no remedia redundancias ni aumenta por sí mismo Oracle.
+
+## 19. Aceptación autenticada, 2 de octubre
+
+Informe: `VERIFICACION_ACEPTACION_DEMO.md`. Luis y Samuel cargan el mismo bundle
+`index-D0U3PpTV.js`. Datos ficticios autorizados en Dirección: proyecto, tarea,
+subtarea y comentario. Se comprueban guardado/edición, borrador al cerrar,
+progreso persistente tras recarga y aviso de rechazo al editar una tarea ajena.
+Navegación/búsqueda de Samuel excluye Administración/Permisos y el proyecto nuevo.
+Vista de políticas de Luis sigue protegida por MFA; no se modificó seguridad.
+
+Aceptación parcial de escritorio/móvil (viewport, no PWA física). Adjuntos nuevos
+siguen pendientes en la UI; varias páginas y revocación/red quedan en pruebas
+aisladas o pendientes de aceptación manual. Suites repetidas: 158 frontend,
+167 Django y 4 Worker, sin fallos. No se cambia ni despliega código de runtime.
+
+Muestra backend sin acciones del agente de unos 3 min 45 s: 17 peticiones de
+aplicación y 8 sondas internas; cero comentarios/adjuntos/tickets/reconexiones.
+No es ventana concurrente de 4–6 personas ni equivalente al consumo del Worker.
+Panel alrededor de 15:58 UTC: 2.071/100.000 hoy, 97.929 restantes según lectura.
+Develop no fusionada: siguen vigentes los pasos de aceptación pendiente, medición
+de 30–60 min y revisión/integración con rollback.

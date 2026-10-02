@@ -118,6 +118,11 @@ será mucho menor; no se atribuyen las antiguas 137k solicitudes solo a archivos
 
 ## Reversión
 
+Actualización de aceptación del mismo 2 de octubre: el usuario abrió las sesiones
+de Luis y Samuel y autorizó datos ficticios en Dirección. Recorridos y límites
+documentados en `VERIFICACION_ACEPTACION_DEMO.md`; la limitación de login descrita
+arriba ya no impide esos recorridos. La prueba de 4–6 usuarios sigue pendiente.
+
 Recompilar/publicar con `VITE_TASK_PAGED_ATTACHMENTS=false` mantiene los demás
 flags y vuelve a la carga anterior de archivos. Si se revierte también backend,
 primero restaurar frontend Cloudflare `dcb5cfe8-e347-4292-880a-3d10e4f69562`, luego
