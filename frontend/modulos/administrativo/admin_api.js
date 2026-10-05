@@ -31,6 +31,7 @@ export const adminApi = {
     deleteUnit: (id, reason) => http.request(`/api/v2/administration/units/${id}/`, { method: "DELETE", body: { reason } }),
     createRole: body => http.request("/api/v2/administration/roles/", { method: "POST", body }),
     updateRole: (id, body) => http.request(`/api/v2/administration/roles/${id}/`, { method: "PATCH", body }),
+    setRoleModuleAccess: (id, body) => http.request(`/api/v2/administration/roles/${id}/module-access/`, { method: "POST", body }),
     deleteRole: (id, reason) => http.request(`/api/v2/administration/roles/${id}/`, { method: "DELETE", body: { reason } }),
     deleteRoleLevel: body => http.request("/api/v2/administration/roles/delete-level/", { method: "POST", body }),
     createPosition: body => http.request("/api/v2/administration/positions/", { method: "POST", body }),

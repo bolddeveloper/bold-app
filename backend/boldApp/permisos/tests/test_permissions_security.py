@@ -275,6 +275,9 @@ class PermissionControlPlaneSecurityTests(TestCase):
             self.root_unit,
         )
         direction_client = self._client(direction_member, direction_assignment)
+        self.assertEqual(direction_client.get("/api/v2/permissions/catalog/").status_code, 403)
+        self.manager_role.permissions_enabled = True
+        self.manager_role.save(update_fields=["permissions_enabled"])
         self.assertEqual(direction_client.get("/api/v2/permissions/catalog/").status_code, 200)
 
         # La revisión global no expone políticas y permanece disponible para
@@ -352,12 +355,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
         client = self._client(self.staff, self.staff_assignment)
 
         access = client.get("/api/v2/permissions/access/")
-        self.assertEqual(access.status_code, 200, getattr(access, "data", None))
-        self.assertFalse(access.data["is_owner"])
-        self.assertFalse(access.data["can_manage_role_policies"])
-        self.assertFalse(access.data["can_grant_access"])
-        self.assertFalse(access.data["can_delegate_authority"])
-        self.assertFalse(access.data["can_read_audit"])
+        self.assertEqual(access.status_code, 403, getattr(access, "data", None))
 
         policy_write = client.post(
             "/api/v2/permissions/role-policies/",
@@ -1253,8 +1251,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
         client = self._client(self.staff, self.staff_assignment)
 
         access = client.get("/api/v2/permissions/access/")
-        self.assertEqual(access.status_code, 200)
-        self.assertFalse(access.data["can_delegate_authority"])
+        self.assertEqual(access.status_code, 403)
 
         response = client.post(
             "/api/v2/permissions/authorities/",
@@ -1293,6 +1290,8 @@ class PermissionControlPlaneSecurityTests(TestCase):
         self.assertEqual(rejected.status_code, 400, getattr(rejected, "data", None))
 
     def test_critical_permission_requires_recent_strong_mfa_at_use_time(self):
+        self.manager_role.permissions_enabled = True
+        self.manager_role.save(update_fields=["permissions_enabled"])
         critical = Permission.objects.create(
             code="tasks.webhook.test-critical",
             module_code="tasks",

@@ -50,6 +50,60 @@ desactivado sigue siendo un interruptor global y las acciones sensibles
 mantienen su requisito de MFA reciente. Un usuario con `is_staff=True` e
 `is_superuser=False` no obtiene autoridad empresarial.
 
+## Delegación de módulos por cargo
+
+El propietario puede habilitar **Administración** y **Permisos** de manera
+independiente desde Administración → Organización → Catálogos → menú del
+cargo → Acceso a Administración y Permisos. Primero debe desbloquear la
+edición con MFA y registrar el motivo. Los nuevos campos de `JobRole`,
+`administration_enabled` y `permissions_enabled`, nacen desactivados; la
+migración `boldApp_core.0011_jobrole_control_plane_modules` no promueve cargos
+existentes automáticamente.
+
+Estos accesos solo funcionan desde una plaza activa en Dirección. Se aplican
+a todas las personas con ese cargo allí; no son excepciones individuales ni
+convierten al delegado en propietario. El propietario conserva su acceso
+implícito sin depender de los campos del cargo.
+
+- Administración permite gestionar empleados, cargos, plazas ordinarias,
+  sesiones y auditoría. Las escrituras del delegado exigen MFA reciente.
+- Permisos permite gestionar políticas de otros cargos, accesos individuales,
+  autoridades y auditoría de permisos, manteniendo los límites de vigencia,
+  riesgo, delegabilidad y MFA existentes.
+- Solo el propietario concede o retira estos accesos. El delegado no puede
+  modificar al propietario, su propio empleado/cargos ni empleados/cargos
+  administrativos protegidos, tampoco asignar plazas protegidas. Los
+  catálogos globales de tipos, sensibilidades y niveles siguen reservados al
+  propietario para evitar cambios indirectos sobre registros protegidos.
+- No se conceden automáticamente permisos operativos sobre tareas o
+  proyectos: estos siguen sus políticas ordinarias. `JobRole.level` es una
+  etiqueta, no una jerarquía numérica de autoridad.
+- Cada cambio registra `permissions.role_modules.changed` y
+  `administration.role_modules.changed`, incrementa la revisión y actualiza
+  el contexto de seguridad para refrescar la navegación de sesiones abiertas.
+- Las autoridades acotadas existentes (`GrantAuthority`) conservan sus
+  capacidades limitadas en la API, sin adquirir administración de políticas
+  por cargo. Para mostrar el módulo en la navegación se requiere que el
+  propietario habilite el acceso del cargo en Dirección.
+
+La API de concesión es `POST /api/v2/administration/roles/{id}/module-access/`
+con ambos booleanos y `reason` (8–1000 caracteres). Los serializadores
+ordinarios de cargos exponen estos campos como solo lectura.
+
+### Comprobación manual
+
+1. Como propietario desde Dirección, habilitar uno o ambos módulos para
+   Asistente operativo, con MFA reciente y un motivo.
+2. Entrar como asistente desde su plaza de Dirección: comprobar navegación,
+   creación de empleado/cargo ordinario y edición de políticas de otro cargo.
+3. Intentar modificar al propietario, el propio cargo o asignarse una plaza
+   administrativa: la API debe responder 403 sin guardar cambios.
+4. Revocar el acceso desde el propietario: comprobar que desaparece la
+   navegación y que las solicitudes directas quedan bloqueadas (salvo una
+   autoridad limitada preexistente, que debe revocarse aparte si corresponde).
+5. Probar el mismo cargo desde otra unidad y una escritura sin MFA reciente:
+   ambas deben ser rechazadas.
+
 ## Modelo de autorización
 
 ### Catálogo y reglas
@@ -59,7 +113,8 @@ mantienen su requisito de MFA reciente. Un usuario con `is_staff=True` e
   sistema se registran por migración/seed; la API no permite inventarlos ni
   eliminarlos.
 - Los códigos `permissions.*` quedan reservados e inactivos en esta versión.
-  El plano de control se protege con la raíz de dueño y `GrantAuthority`;
+  El plano de control se protege con la raíz de dueño, los accesos por cargo
+  que solo él habilita y las autoridades acotadas `GrantAuthority`;
   exponer esos códigos como políticas ordinarias permitiría guardar reglas
   sin efecto o crear una ruta ambigua de autoescalamiento.
 - `JobRolePermission`: regla base para un cargo. Puede ser `allow` o `deny` y

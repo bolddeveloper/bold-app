@@ -26,6 +26,7 @@ class JobRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobRole
         fields = "__all__"
+        read_only_fields = ["administration_enabled", "permissions_enabled"]
 
 
 class PositionSerializer(serializers.ModelSerializer):
@@ -77,12 +78,14 @@ class AssignmentDirectorySerializer(serializers.ModelSerializer):
     job_role = serializers.UUIDField(source="position.job_role_id", read_only=True)
     job_role_title = serializers.CharField(source="position.job_role.title", read_only=True)
     account_is_superuser = serializers.SerializerMethodField()
+    administration_enabled = serializers.BooleanField(source="position.job_role.administration_enabled", read_only=True)
+    permissions_enabled = serializers.BooleanField(source="position.job_role.permissions_enabled", read_only=True)
 
     class Meta:
         model = PositionAssignment
         fields = [
             "id", "employee", "employee_name", "employee_email", "unit", "unit_name",
-            "job_role", "job_role_title", "account_is_superuser",
+            "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled",
         ]
 
     def get_employee_email(self, assignment):

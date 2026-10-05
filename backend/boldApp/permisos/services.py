@@ -11,6 +11,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 
 from boldApp.autenticacion.services import request_ip
 from boldApp.core.access_context import get_request_assignment
+from boldApp.core.control_plane_roles import can_operate_module, assert_role_manageable, assert_employee_manageable
 from boldApp.core.authorization import (
     GRANT_CAPABILITY_DELEGATE,
     GRANT_CAPABILITY_GRANT,
@@ -174,8 +175,9 @@ def _scope_payload(row):
 def replace_role_policy(request, *, role, permission, rules, reason, expected_revision=None):
     reason = normalized_reason(reason)
     assignment = get_request_assignment(request, for_update=True)
-    if not request.user.is_superuser:
-        raise PermissionDenied("Solo el dueño puede modificar políticas base por cargo.")
+    if not can_operate_module(assignment, "permissions"):
+        raise PermissionDenied("Tu cargo no está autorizado para modificar políticas base por cargo.")
+    assert_role_manageable(request, role)
     require_recent_strong_mfa(request)
     if role.positions.filter(
         assignments__employee__user_account__is_superuser=True
@@ -227,8 +229,9 @@ def replace_role_policies_bulk(
     """Reemplaza varios permisos de un cargo como una sola operación auditable."""
     reason = normalized_reason(reason)
     assignment = get_request_assignment(request, for_update=True)
-    if not request.user.is_superuser:
-        raise PermissionDenied("Solo el dueño puede modificar políticas base por cargo.")
+    if not can_operate_module(assignment, "permissions"):
+        raise PermissionDenied("Tu cargo no está autorizado para modificar políticas base por cargo.")
+    assert_role_manageable(request, role)
     require_recent_strong_mfa(request)
     if role.positions.filter(
         assignments__employee__user_account__is_superuser=True
@@ -443,6 +446,7 @@ def create_access_rule(
     grantee_account = getattr(grantee_assignment.employee, "user_account", None)
     if grantee_account and grantee_account.is_superuser:
         raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
+    assert_employee_manageable(request, grantee_assignment.employee)
     if (
         not grantee_assignment.is_active
         or grantee_assignment.released_at is not None
@@ -474,7 +478,7 @@ def create_access_rule(
         raise ValidationError({"resource_id": "Indica el recurso específico o elimina resource_type."})
 
     authority = None
-    if not request.user.is_superuser:
+    if not can_operate_module(actor_assignment, "permissions"):
         capability = (
             GRANT_CAPABILITY_REVOKE
             if effect == AccessGrant.EFFECT_DENY
@@ -580,7 +584,8 @@ def revoke_access_rule(request, *, grant, reason, expected_revision=None):
     grantee_account = getattr(grant.grantee_assignment.employee, "user_account", None)
     if grantee_account and grantee_account.is_superuser:
         raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
-    if not request.user.is_superuser:
+    assert_employee_manageable(request, grant.grantee_assignment.employee)
+    if not can_operate_module(actor_assignment, "permissions"):
         capability = (
             GRANT_CAPABILITY_GRANT
             if grant.effect == AccessGrant.EFFECT_DENY
@@ -737,6 +742,7 @@ def create_grant_authority(
         raise ValidationError({"assignment": "La asignación destinataria no está activa."})
     if grantee_account.is_superuser:
         raise PermissionDenied("La autoridad del dueño no se modifica mediante delegaciones ordinarias.")
+    assert_employee_manageable(request, grantee_assignment.employee)
     if not permissions:
         raise ValidationError({"permissions": "Selecciona al menos un permiso delegable."})
     if any(not item.is_active or not item.is_delegable for item in permissions):
@@ -761,7 +767,7 @@ def create_grant_authority(
         raise ValidationError({"max_grant_duration_seconds": "El límite mínimo es de cinco minutos."})
 
     parent = None
-    if not request.user.is_superuser:
+    if not can_operate_module(actor_assignment, "permissions"):
         if scope_type in {GrantAuthority.SCOPE_GLOBAL, GrantAuthority.SCOPE_OWN_UNIT}:
             raise PermissionDenied("Una autoridad delegada solo puede subdelegar unidades explícitas.")
         parent = _find_parent_authority(
@@ -849,7 +855,8 @@ def revoke_grant_authority(request, *, authority, reason, expected_revision=None
     authority_account = getattr(authority.assignment.employee, "user_account", None)
     if authority_account and authority_account.is_superuser:
         raise PermissionDenied("Los permisos del propietario no se pueden modificar.")
-    if not request.user.is_superuser:
+    assert_employee_manageable(request, authority.assignment.employee)
+    if not can_operate_module(actor_assignment, "permissions"):
         now = timezone.now()
         actor_authorities = GrantAuthority.objects.filter(
             assignment=actor_assignment,
@@ -925,7 +932,8 @@ def control_plane_access(request, assignment=None):
         default=0,
     )
     owner = bool(request.user.is_superuser)
-    if owner:
+    manager = can_operate_module(assignment, "permissions")
+    if manager:
         delegation_valid_until = now + timedelta(
             seconds=getattr(settings, "PERMISSIONS_AUTHORITY_MAX_SECONDS", 90 * 24 * 60 * 60)
         )
@@ -952,15 +960,15 @@ def control_plane_access(request, assignment=None):
         mfa_valid_until = verified_at + timedelta(seconds=seconds)
     return {
         "is_owner": owner,
-        "can_manage_role_policies": owner,
-        "can_grant_access": owner or any(item.can_grant_access for item in active_authorities),
-        "can_revoke_access": owner or any(item.can_revoke_access for item in active_authorities),
-        "can_delegate_authority": owner or any(item.can_delegate_authority for item in active_authorities),
-        "max_delegation_depth_remaining": 5 if owner else maximum_delegation_depth,
+        "can_manage_role_policies": manager,
+        "can_grant_access": manager or any(item.can_grant_access for item in active_authorities),
+        "can_revoke_access": manager or any(item.can_revoke_access for item in active_authorities),
+        "can_delegate_authority": manager or any(item.can_delegate_authority for item in active_authorities),
+        "max_delegation_depth_remaining": 5 if manager else maximum_delegation_depth,
         "delegation_valid_until_ceiling": (
             delegation_valid_until.isoformat() if delegation_valid_until else None
         ),
-        "can_read_audit": owner,
+        "can_read_audit": manager,
         "mfa_recent": mfa_recent,
         "mfa_valid_until": mfa_valid_until,
         "policy_revision": PermissionPolicyState.current_revision(),

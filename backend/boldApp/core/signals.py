@@ -18,6 +18,7 @@ from .models import (
     GrantAuthority,
     GrantAuthorityPermission,
     JobRolePermission,
+    JobRole,
     OrganizationalUnit,
     Permission,
     PermissionAuditLog,
@@ -126,6 +127,7 @@ def dispatch_permission_audit_events(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=JobRolePermission)
+@receiver(post_save, sender=JobRole)
 @receiver(post_delete, sender=JobRolePermission)
 @receiver(post_save, sender=GrantAuthority)
 @receiver(post_delete, sender=GrantAuthority)

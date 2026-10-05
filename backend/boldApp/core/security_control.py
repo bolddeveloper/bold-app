@@ -25,7 +25,8 @@ def security_snapshot(session_id, assignment_id):
     assignment = PositionAssignment.objects.filter(
         id=assignment_id, employee_id=session.user_account.employee_id,
         employee__is_active=True, is_active=True, released_at__isnull=True,
-    ).values("position_id", "position__unit_id", "position__job_role_id", "position__job_role__title").first()
+    ).values("position_id", "position__unit_id", "position__job_role_id", "position__job_role__title",
+             "position__job_role__administration_enabled", "position__job_role__permissions_enabled").first()
     if not assignment:
         return {"close_code": 4403}
 

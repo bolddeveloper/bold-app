@@ -50,6 +50,8 @@ class JobRole(UUIDPrimaryKeyModel):
     title = models.CharField(max_length=120)
     level = models.CharField(max_length=30, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
+    administration_enabled = models.BooleanField(default=False)
+    permissions_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

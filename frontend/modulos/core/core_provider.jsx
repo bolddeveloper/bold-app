@@ -117,7 +117,15 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const refreshDirectory = useCallback(async () => {
         const version = generation.current;
         const directory = (await coreApi.listAssignmentDirectory()).map(normalizeAssignment);
-        if (version === generation.current) updateCore({ directory });
+        if (version === generation.current) {
+            const current = getCoreState();
+            const byId = new Map(directory.map(assignment => [assignment.id, assignment]));
+            updateCore({
+                directory,
+                assignments: current.assignments.map(assignment => byId.get(assignment.id) || assignment),
+                activeAssignment: byId.get(current.activeAssignment?.id) || current.activeAssignment,
+            });
+        }
         return directory;
     }, []);
     useEffect(() => {

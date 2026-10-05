@@ -14,6 +14,7 @@ from boldApp.core.models import (
     Permission,
 )
 from boldApp.core.permissions import IsControlPlaneMember
+from boldApp.core.control_plane_roles import can_operate_module, protected_roles
 
 from .models import PermissionPolicyEvent, PermissionPolicyState
 from .serializers import (
@@ -58,6 +59,22 @@ def _denied_audit(request, event_type, error, *, target_type="security", target_
 
 class DirectionControlPlaneView(APIView):
     permission_classes = [IsControlPlaneMember]
+    module_denied_event = "permissions.module.denied"
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        assignment = get_request_assignment(request)
+        if not can_operate_module(assignment, "permissions"):
+            # Existing, narrowly scoped authorities retain their original API
+            # capabilities; they do not acquire role-policy administration.
+            from boldApp.core.authorization import authority_is_effective
+            authorities = GrantAuthority.objects.filter(assignment=assignment, is_active=True, revoked_at__isnull=True).select_related(
+                "assignment__employee__user_account", "assignment__position__unit", "parent_authority",
+            )
+            if not any(authority_is_effective(authority) for authority in authorities):
+                error = PermissionDenied("El propietario no ha habilitado el módulo de Permisos para tu cargo.")
+                _denied_audit(request, self.module_denied_event, error)
+                raise error
 
 
 class ControlPlaneAccessView(DirectionControlPlaneView):
@@ -93,13 +110,15 @@ class PermissionCatalogView(DirectionControlPlaneView):
 class RolePolicyView(DirectionControlPlaneView):
     def get(self, request):
         assignment = get_request_assignment(request)
-        if request.user.is_superuser:
+        if can_operate_module(assignment, "permissions"):
             roles = JobRole.objects.exclude(
                 positions__assignments__employee__user_account__is_superuser=True
             ).distinct()
+            if not request.user.is_superuser:
+                roles = roles.exclude(pk__in=protected_roles()).exclude(positions__assignments__employee=request.user.employee)
             rules = JobRolePermission.objects.select_related(
                 "job_role", "permission", "target_unit", "created_by_account"
-            ).filter(permission__is_active=True)
+            ).filter(permission__is_active=True, job_role__in=roles)
         else:
             roles = JobRole.objects.filter(pk=assignment.position.job_role_id)
             rules = JobRolePermission.objects.select_related(
@@ -175,7 +194,7 @@ class AccessRuleListCreateView(DirectionControlPlaneView):
             "source_authority__target_unit",
             "source_authority__parent_authority",
         ).prefetch_related("source_authority__scoped_permissions")
-        if not request.user.is_superuser:
+        if not can_operate_module(assignment, "permissions"):
             queryset = queryset.filter(
                 Q(grantee_assignment=assignment)
                 | Q(granted_by_assignment=assignment)
@@ -235,7 +254,7 @@ class GrantAuthorityListCreateView(DirectionControlPlaneView):
             "revoked_by_account",
             "parent_authority",
         ).prefetch_related("scoped_permissions__permission")
-        if not request.user.is_superuser:
+        if not can_operate_module(assignment, "permissions"):
             queryset = queryset.filter(
                 Q(assignment=assignment) | Q(granted_by_assignment=assignment)
             )
@@ -310,11 +329,13 @@ class EffectiveAccessView(DirectionControlPlaneView):
 
 
 class PolicyAuditView(DirectionControlPlaneView):
+    module_denied_event = "permissions.audit.read_denied"
+
     def get(self, request):
         try:
-            get_request_assignment(request)
-            if not request.user.is_superuser:
-                raise PermissionDenied("La auditoría completa está reservada al dueño.")
+            assignment = get_request_assignment(request)
+            if not can_operate_module(assignment, "permissions"):
+                raise PermissionDenied("Tu cargo no está autorizado para consultar la auditoría completa de permisos.")
             require_recent_strong_mfa(request)
         except APIException as error:
             _denied_audit(request, "permissions.audit.read_denied", error, target_type="permission_audit")

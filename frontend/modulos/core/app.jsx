@@ -6,7 +6,7 @@ import PermissionsModule from "../permisos/permissions_module.jsx";
 import CalendarModule from "../calendario/calendar_module.jsx";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
-import { isControlPlaneContext } from "./core_models.js";
+import { canUseManagementModule } from "./core_models.js";
 
 const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
@@ -21,19 +21,18 @@ const mockIdentity = { directory: team_members, assignments: team_members, activ
 
 function ApplicationWorkspace() {
     const core = useCore();
-    const isDirection = isControlPlaneContext(core.activeUnit, core.activeAssignment);
+    const canAdminister = canUseManagementModule("administration", core.account, core.activeUnit, core.activeAssignment);
+    const canManagePermissions = canUseManagementModule("permissions", core.account, core.activeUnit, core.activeAssignment);
     const navigation = [
         ...baseNavigation,
-        ...(isDirection ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
-        ...(isDirection && core.account?.is_superuser ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
+        ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
+        ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
     const externalModules = {
         calendar: <CalendarModule />,
         suggestions: <SuggestionsModule />,
-        ...(isDirection ? {
-        permissions: <PermissionsModule />,
-        ...(core.account?.is_superuser ? { administration: <AdministrationModule /> } : {}),
-        } : {}),
+        ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
+        ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };
     return <ShellProvider key={core.activeAssignment?.id || "demo"} contextId={core.activeAssignment?.id || "demo"} navigation={navigation}>
         <TasksModule externalModules={externalModules} />

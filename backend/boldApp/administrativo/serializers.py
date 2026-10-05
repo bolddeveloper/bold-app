@@ -242,8 +242,8 @@ class JobRoleAdminSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = JobRole
-        fields = ["id", "title", "level", "description", "created_at", "reason"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "title", "level", "description", "created_at", "reason", "administration_enabled", "permissions_enabled"]
+        read_only_fields = ["id", "created_at", "administration_enabled", "permissions_enabled"]
 
     def create(self, validated_data):
         validated_data.pop("reason")
@@ -278,6 +278,12 @@ class LevelDeleteSerializer(serializers.Serializer):
         if not attrs["confirmed"] or attrs["confirmation"] != attrs["level"]:
             raise serializers.ValidationError("Escribe exactamente el nivel y confirma la eliminación.")
         return attrs
+
+
+class RoleModuleAccessSerializer(serializers.Serializer):
+    administration_enabled = serializers.BooleanField()
+    permissions_enabled = serializers.BooleanField()
+    reason = serializers.CharField(min_length=8, max_length=1000, trim_whitespace=True)
 
 class PositionAdminSerializer(serializers.ModelSerializer):
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)

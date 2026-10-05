@@ -19,7 +19,8 @@ from boldApp.autenticacion.services import create_challenge, record_event, revok
 from boldApp.core.models import AccessGrant, Employee, GrantAuthority, JobRole, OrganizationalUnit, PermissionAuditLog, Position, PositionAssignment, UserAccount
 
 from .models import AdministrativeAction, OffboardingCase, OrganizationCatalogOption, SystemAuditEvent
-from .permissions import HasRecentOwnerMFA, IsCompanyOwner
+from .permissions import HasRecentOperatorMFA, IsAdministrationOperator, HasRecentOwnerMFA
+from boldApp.core.control_plane_roles import assert_role_manageable, assert_position_manageable
 from .registry import administrative_modules
 from .serializers import (
     AdminEmployeeCreateSerializer,
@@ -182,7 +183,7 @@ def _filter_sessions(queryset, request):
 
 
 class DashboardView(APIView):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
 
     def _modules(self, request):
         return [provider.dashboard(request) for provider in administrative_modules.providers()]
@@ -235,7 +236,7 @@ class DashboardView(APIView):
 
 
 class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     serializer_class = AdminEmployeeSerializer
     queryset = Employee.objects.select_related("user_account").prefetch_related(
         "user_account__mfa_methods", "user_account__auth_sessions", "position_assignments__position__unit", "position_assignments__position__job_role"
@@ -244,7 +245,7 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         uses_temporary_password = self.action == "create" and bool(self.request.data.get("temporary_password"))
         changes_email = self.action == "partial_update" and "email" in self.request.data
-        permission = HasRecentOwnerMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS or uses_temporary_password or changes_email else IsCompanyOwner
+        permission = HasRecentOperatorMFA if self.action in SENSITIVE_EMPLOYEE_ACTIONS or uses_temporary_password or changes_email else IsAdministrationOperator
         return [permission()]
 
     def get_queryset(self):
@@ -264,6 +265,8 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = AdminEmployeeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if data.get("position"):
+            assert_position_manageable(request, data["position"])
         temporary_password = data.get("temporary_password")
         credential_mode = "temporary_password" if temporary_password else "email_invitation"
         with transaction.atomic():
@@ -393,6 +396,7 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             position = Position.objects.select_for_update().get(pk=serializer.validated_data["position"].pk)
+            assert_position_manageable(request, position)
             if not position.is_open:
                 raise ValidationError({"position": "La plaza seleccionada está cerrada."})
             if PositionAssignment.objects.filter(position=position, is_active=True, released_at__isnull=True).exists():
@@ -663,7 +667,7 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AdminSessionViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     serializer_class = AdminSessionSerializer
     pagination_class = AdminSessionPagination
     queryset = AuthSession.objects.select_related("user_account__employee").all()
@@ -676,8 +680,8 @@ class AdminSessionViewSet(viewsets.ReadOnlyModelViewSet):
         return _filter_sessions(queryset, self.request)
 
     def destroy(self, request, *args, **kwargs):
-        if not HasRecentOwnerMFA().has_permission(request, self):
-            return Response({"detail": HasRecentOwnerMFA.message}, status=status.HTTP_403_FORBIDDEN)
+        if not HasRecentOperatorMFA().has_permission(request, self):
+            return Response({"detail": HasRecentOperatorMFA.message}, status=status.HTTP_403_FORBIDDEN)
         session = self.get_object()
         serializer = AdministrativeReasonSerializer(data=request.data); serializer.is_valid(raise_exception=True)
         admin_action = create_administrative_action(request, "session_revoked", serializer.validated_data["reason"], session.user_account.employee, session.user_account, {"session_id": str(session.id)})
@@ -687,7 +691,7 @@ class AdminSessionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AuditEventListView(APIView):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
 
     def get(self, request):
         source_limit = 100
@@ -754,7 +758,7 @@ class AuditEventListView(APIView):
 
 
 class OrganizationOverviewView(APIView):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
 
     def get(self, request):
         for value in OrganizationalUnit.objects.values_list("unit_type", flat=True).distinct():
@@ -779,9 +783,15 @@ class OrganizationOverviewView(APIView):
                 "occupant_name": active_assignment.employee.full_name if active_assignment else None,
                 "is_protected": is_protected,
             })
+        owner_role_ids = set(PositionAssignment.objects.filter(
+            employee__user_account__is_superuser=True,
+        ).values_list("position__job_role_id", flat=True))
         return Response({
             "units": [{"id": row.id, "name": row.name, "unit_type": row.unit_type, "parent_unit": row.parent_unit_id, "sensitivity_level": row.sensitivity_level, "is_control_plane": row.is_control_plane, "positions": row.positions.count()} for row in OrganizationalUnit.objects.prefetch_related("positions")],
-            "roles": [{"id": row.id, "title": row.title, "level": row.level, "description": row.description} for row in JobRole.objects.all()],
+            "roles": [{"id": row.id, "title": row.title, "level": row.level, "description": row.description,
+                       "administration_enabled": row.administration_enabled, "permissions_enabled": row.permissions_enabled,
+                       "owner_protected": row.id in owner_role_ids}
+                      for row in JobRole.objects.all()],
             "positions": positions,
             "unit_types": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.UNIT_TYPE), many=True).data,
             "sensitivity_levels": OrganizationCatalogOptionSerializer(OrganizationCatalogOption.objects.filter(kind=OrganizationCatalogOption.SENSITIVITY), many=True).data,
@@ -796,7 +806,7 @@ class OrganizationCatalogViewSet(
     mixins.ListModelMixin,
     viewsets.GenericViewSet,
 ):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     audit_target_type = "organization_record"
 
     def perform_create(self, serializer):
@@ -830,7 +840,7 @@ class OrganizationalUnitAdminViewSet(mixins.DestroyModelMixin, OrganizationCatal
     audit_target_type = "organizational_unit"
 
     def get_permissions(self):
-        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update", "destroy"} else IsCompanyOwner
+        permission = HasRecentOperatorMFA if self.action in {"update", "partial_update", "destroy"} else IsAdministrationOperator
         return [permission()]
 
     def destroy(self, request, *args, **kwargs):
@@ -857,15 +867,13 @@ class OrganizationalUnitAdminViewSet(mixins.DestroyModelMixin, OrganizationCatal
 
 
 class OrganizationCatalogOptionViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     serializer_class = OrganizationCatalogOptionSerializer
     queryset = OrganizationCatalogOption.objects.all()
 
     def get_permissions(self):
-        if IsCompanyOwner().has_permission(self.request, self) and self.action in {"update", "partial_update", "destroy"}:
-            option = get_object_or_404(self.queryset, pk=self.kwargs["pk"])
-            if option.kind == OrganizationCatalogOption.ROLE_LEVEL:
-                return [HasRecentOwnerMFA()]
+        if self.request.method not in {"GET", "HEAD", "OPTIONS"}:
+            return [HasRecentOwnerMFA()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -900,8 +908,35 @@ class JobRoleAdminViewSet(mixins.DestroyModelMixin, OrganizationCatalogViewSet):
     audit_target_type = "job_role"
 
     def get_permissions(self):
-        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update", "destroy", "delete_level"} else IsCompanyOwner
+        if self.action in {"module_access", "delete_level"}:
+            return [HasRecentOwnerMFA()]
+        permission = HasRecentOperatorMFA if self.action in {"update", "partial_update", "destroy"} else IsAdministrationOperator
         return [permission()]
+
+    @action(detail=True, methods=["post"], url_path="module-access")
+    @transaction.atomic
+    def module_access(self, request, pk=None):
+        from .serializers import RoleModuleAccessSerializer
+        from boldApp.permisos.services import _lock_state, record_policy_change
+        state = _lock_state()
+        role = JobRole.objects.select_for_update().get(pk=self.get_object().pk)
+        if role.positions.filter(assignments__employee__user_account__is_superuser=True).exists():
+            raise PermissionDenied("El cargo del propietario está protegido y ya dispone de acceso completo.")
+        serializer = RoleModuleAccessSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        fields = ("administration_enabled", "permissions_enabled")
+        before = {field: getattr(role, field) for field in fields}
+        for field in fields:
+            setattr(role, field, data[field])
+        role.save(update_fields=list(fields))
+        after = {field: getattr(role, field) for field in fields}
+        record_policy_change(request, request.assignment, state,
+            event_type="permissions.role_modules.changed", target_type="job_role", target_id=role.pk,
+            reason=data["reason"], before=before, after=after)
+        record_system_event("administration.role_modules.changed", request, target_type="job_role", target_id=role.pk,
+                            changes={"before": before, "after": after}, metadata={"reason": data["reason"]})
+        return Response({"id": str(role.pk), **after, "revision": state.revision})
 
     def destroy(self, request, *args, **kwargs):
         reason_serializer = AdministrativeReasonSerializer(data=request.data)
@@ -936,22 +971,27 @@ class PositionAdminViewSet(OrganizationCatalogViewSet):
     audit_target_type = "position"
 
     def get_permissions(self):
-        permission = HasRecentOwnerMFA if self.action in {"update", "partial_update"} else IsCompanyOwner
+        permission = HasRecentOperatorMFA if self.action in {"update", "partial_update"} else IsAdministrationOperator
         return [permission()]
 
     def perform_update(self, serializer):
         if _position_is_owner_protected(serializer.instance):
             raise PermissionDenied("La plaza del propietario está protegida y no admite modificaciones.")
+        assert_role_manageable(self.request, serializer.validated_data.get("job_role", serializer.instance.job_role))
         super().perform_update(serializer)
+
+    def perform_create(self, serializer):
+        assert_role_manageable(self.request, serializer.validated_data["job_role"])
+        super().perform_create(serializer)
 
 
 class AdministrativeActionViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     serializer_class = AdministrativeActionSerializer
     queryset = AdministrativeAction.objects.select_related("actor_account", "target_employee", "target_account")
 
 
 class OffboardingCaseViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsAdministrationOperator]
     serializer_class = OffboardingCaseSerializer
     queryset = OffboardingCase.objects.select_related("employee", "initiated_by_account", "administrative_action").prefetch_related("transfers")

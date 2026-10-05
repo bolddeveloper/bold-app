@@ -194,12 +194,12 @@ class AccessRuleCreateSerializer(serializers.Serializer):
     effect = serializers.ChoiceField(choices=AccessGrant.EFFECT_CHOICES, default=AccessGrant.EFFECT_ALLOW)
     scope_type = serializers.ChoiceField(choices=AccessGrant.SCOPE_CHOICES, default=AccessGrant.SCOPE_SPECIFIC_UNIT)
     target_unit = serializers.PrimaryKeyRelatedField(
-        queryset=OrganizationalUnit.objects.all(), required=False, allow_null=True
+        queryset=OrganizationalUnit.objects.all(), required=False, allow_null=True, default=None
     )
     resource_type = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
     resource_id = serializers.CharField(max_length=120, required=False, allow_null=True, allow_blank=False)
     valid_from = serializers.DateTimeField(required=False)
-    valid_until = serializers.DateTimeField(required=False, allow_null=True)
+    valid_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
     reason = serializers.CharField(min_length=8, max_length=2000)
     expected_revision = serializers.IntegerField(min_value=0, required=False)
 
@@ -243,7 +243,7 @@ class GrantAuthorityCreateSerializer(serializers.Serializer):
     permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True)
     scope_type = serializers.ChoiceField(choices=GrantAuthority.SCOPE_CHOICES, default=GrantAuthority.SCOPE_SUB_TREE)
     target_unit = serializers.PrimaryKeyRelatedField(
-        queryset=OrganizationalUnit.objects.all(), required=False, allow_null=True
+        queryset=OrganizationalUnit.objects.all(), required=False, allow_null=True, default=None
     )
     max_sensitivity_level = serializers.ChoiceField(choices=Permission.RISK_CHOICES)
     valid_until = serializers.DateTimeField()
