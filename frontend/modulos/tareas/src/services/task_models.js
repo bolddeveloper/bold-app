@@ -152,7 +152,7 @@ export function normalizeTask(dto, statuses = []) {
     const status = statuses.find(item => item.id === dto.status);
     const due = dateFromISO(dto.due_date);
     return { ...dto, unitId: dto.unit, assigneeId: dto.assignee_assignment, assignee_id: dto.assignee_assignment || "", parentTaskId: dto.parent_task,
-        statusId: dto.status, status: status?.label || "", statusCategory: status?.category, completed: !!status?.isFinal,
+        statusId: dto.status, status: status?.label ?? dto.status_name ?? "", statusCategory: status?.category ?? dto.status_category, completed: Boolean(status?.isFinal ?? dto.status_is_final),
         priority: ({ high: "Alta", medium: "Media", low: "Baja" })[dto.priority] || dto.priority,
         description: dto.description || "", due_day: due?.getDate() || null,
         due_label: due?.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" }) || "",

@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from boldApp.core.models import OrganizationalUnit
+from boldApp.core.models import OrganizationalUnit, PositionAssignment
 
 from .catalog import ensure_default_task_statuses
 from .models import Attachment, Comment, Project, ProjectMember, Section, Tag, Task, TaskFollower, TaskProject, TaskStatus, TaskTag
@@ -49,6 +49,12 @@ def dispatch_task_events(sender, instance, created, **kwargs):
     unit_ids = [instance.unit_id]
     if instance._previous_unit_id and instance._previous_unit_id != instance.unit_id:
         unit_ids.insert(0, instance._previous_unit_id)
+    reader_units = list(TaskFollower.objects.filter(task=instance).values_list("assignment__position__unit_id", flat=True))
+    reader_units = list(set(reader_units) - set(unit_ids))
+    if reader_units:
+        # Cross-department readers receive identifiers only, then an authorized HTTP read.
+        transaction.on_commit(partial(dispatch_resource_invalidation, reader_units,
+            TASK_UPDATED, "task", instance.id, {}))
 
     def enqueue(event_type):
         transaction.on_commit(
@@ -113,6 +119,8 @@ def capture_previous_resource_scope(sender, instance, raw=False, **kwargs):
         return
     manager = getattr(sender, "all_objects", sender.objects)
     fields = ("unit_id",) if sender in (Project, Tag, TaskStatus) else ("project_id",) if sender in PROJECT_RELATIONS else ("task_id",)
+    if sender is TaskFollower:
+        fields = ("task_id", "assignment_id")
     instance._previous_resource_scope = manager.filter(pk=instance.pk).values(*fields).first() or {}
 
 
@@ -123,6 +131,9 @@ def dispatch_resource_changed(sender, instance, created=False, raw=False, **kwar
     if sender in TASK_RELATION_EVENTS:
         task_ids = list(dict.fromkeys(value for value in (instance.task_id, previous.get("task_id")) if value))
         units = list(Task.all_objects.filter(pk__in=task_ids).values_list("unit_id", flat=True))
+        if sender is TaskFollower:
+            units += list(PositionAssignment.objects.filter(pk__in=[instance.assignment_id, previous.get("assignment_id")])
+                .values_list("position__unit_id", flat=True))
         event_type, entity_type = TASK_RELATION_EVENTS[sender], "task_relation"
         payload = {"tasks": [str(value) for value in task_ids]}
     elif sender is Project or sender in PROJECT_RELATIONS:

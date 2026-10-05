@@ -22,7 +22,9 @@ export function resourcesForTaskEvent(event) {
     const relation = { "comment.changed": "comments", "attachment.changed": "attachments", "follower.changed": "followers", "task_tag.changed": "taskTags", "task_link.changed": "links" }[event?.event_type];
     if (relation) {
         const ids = (event.payload?.tasks || []).filter(id => /^[\w-]+$/.test(String(id))).slice(0, 50);
-        return ids.length ? [...new Set(ids)].map(id => `${relation}@${id}`) : [relation];
+        // A collaborator can gain or lose access to a task absent from this snapshot.
+        const resources = relation === "followers" ? ["tasks", "followers"] : [relation];
+        return ids.length ? [...new Set(ids)].flatMap(id => resources.map(resource => `${resource}@${id}`)) : resources;
     }
     const id = event?.entity_type === "comment" ? event.payload?.task : event?.entity_id;
     if (!id || !/^[\w-]+$/.test(String(id))) return TASK_RESOURCES;

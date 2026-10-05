@@ -106,6 +106,25 @@ test("relation and project invalidations use their own resource groups", () => {
     assert.deepEqual(resourcesForTaskEvent({ event_type: "attachment.changed", payload: { tasks: ["t1", "t2", "t1"] } }), ["attachments@t1", "attachments@t2"]);
     assert.deepEqual(resourcesForTaskEvent({ event_type: "project.changed" }), ["projects", "sections", "members", "links"]);
 });
+test("collaborator assignment loads an unseen task and removal prunes it", async () => {
+    const { rows, loader } = fixture();
+    rows.tasks = rows.tasks.filter(task => task.id !== "t1");
+    rows["task-followers"] = [];
+    await loader.load();
+    rows.tasks.push({ id: "t1", unit: "another-department", status: "external", title: "Compartida", status_name: "Terminada", status_category: "completed", status_is_final: true });
+    rows["task-followers"].push({ id: "f", task: "t1", assignment: "a" });
+    const event = { event_type: "follower.changed", payload: { tasks: ["t1"] } };
+    const next = await loader.load(resourcesForTaskEvent(event));
+    const task = next.tasks.find(task => task.id === "t1");
+    assert.deepEqual(task.collaborator_ids, ["a"]);
+    assert.equal(task.status, "Terminada");
+    assert.equal(task.completed, true);
+    rows.tasks = rows.tasks.filter(task => task.id !== "t1");
+    rows["task-followers"] = [];
+    const removed = await loader.load(resourcesForTaskEvent(event));
+    assert.equal(removed.tasks.some(task => task.id === "t1"), false);
+    assert.deepEqual(removed.followers, []);
+});
 test("updating a child preserves unaffected objects and updates its parent's subtree", async () => {
     const { rows, loader } = fixture(); rows.tasks[1].parent_task = "t1";
     const first = await loader.load(); rows.tasks[1].title = "Subtarea editada";

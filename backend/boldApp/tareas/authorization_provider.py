@@ -2,7 +2,7 @@ from boldApp.core.resource_context import register_resource_context, register_re
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
-from .models import Task, Project
+from .models import Task, Project, TaskFollower
 
 
 def participating_projects(assignment, queryset=None):
@@ -24,12 +24,18 @@ def project_participation_allows(assignment, resource_id):
 
 def task_authorization_context(resource_id):
     try:
-        row = Task.all_objects.filter(pk=resource_id).values("created_by_assignment_id").first()
+        row = Task.all_objects.filter(pk=resource_id).values("created_by_assignment_id", "assignee_assignment_id", "deleted_at").first()
     except (TypeError, ValueError, ValidationError):
         return {}
     if row is None:
         return {}
-    return {"resource_created_by_assignment_id": row["created_by_assignment_id"]}
+    return {
+        "resource_created_by_assignment_id": row["created_by_assignment_id"],
+        "task_reader_assignment_ids": set() if row["deleted_at"] else {
+            row["assignee_assignment_id"],
+            *TaskFollower.objects.filter(task_id=resource_id).values_list("assignment_id", flat=True),
+        },
+    }
 
 
 register_resource_context("tasks", "task", task_authorization_context)
