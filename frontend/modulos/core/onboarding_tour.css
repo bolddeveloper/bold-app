@@ -1,3 +1,4 @@
+/* Guías de introducción: ventanas, controles y resaltado de elementos. */
 :root {
     --driver-popover-font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -14,6 +15,7 @@
     box-shadow: 0 24px 70px rgba(31, 35, 41, 0.24);
 }
 
+/* Ventana y controles de la guía */
 .bold_onboarding_popover .driver-popover-title {
     padding: 24px 52px 0 24px;
     font-size: 20px;
@@ -79,8 +81,18 @@
     background: #ebe8e4;
 }
 
-.bold_onboarding_popover .driver-popover-navigation-btns { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: center; }
-.driver-popover.bold_onboarding_popover { max-height: calc(100dvh - 24px); overflow-y: auto; }
+.bold_onboarding_popover .driver-popover-navigation-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    align-items: center;
+}
+
+.driver-popover.bold_onboarding_popover {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+}
 
 .bold_onboarding_popover .driver-popover-next-btn {
     color: #fff;
@@ -100,15 +112,27 @@
     text-decoration: underline;
 }
 
-.bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: #fff; }
-.bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: #fff; }
-.bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: #fff; }
-.bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: #fff; }
+.bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow {
+    border-left-color: #fff;
+}
+
+.bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow {
+    border-right-color: #fff;
+}
+
+.bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow {
+    border-top-color: #fff;
+}
+
+.bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+    border-bottom-color: #fff;
+}
 
 .driver-active-element {
     scroll-margin: 90px;
 }
 
+/* Resaltado del elemento explicado */
 .bold_tour_highlight {
     position: fixed;
     z-index: 999999999;
@@ -118,44 +142,125 @@
     box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgb(17 21 29 / 85%), 0 0 24px rgb(239 31 45 / 30%);
     pointer-events: none;
 }
-.bold_tour_highlight[hidden] { display: none; }
+
+.bold_tour_highlight[hidden] {
+    display: none;
+}
 
 .tour_help_button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
-.tour_help_button:disabled { opacity: 0.45; cursor: default; }
 
+.tour_help_button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Adaptación de pantalla: (max-width: 760px) */
 @media (max-width: 760px) {
-    .driver-popover.bold_onboarding_popover { width: min(320px, calc(100vw - 20px)); max-width: 320px; border-radius: 14px; }
-    .bold_onboarding_popover .driver-popover-title { padding: 15px 42px 0 16px; font-size: 16px; }
-    .bold_onboarding_popover .driver-popover-description { padding: 7px 16px 11px; font-size: 12px; line-height: 1.4; }
-    .bold_onboarding_popover .driver-popover-close-btn { top: 8px; right: 9px; }
-    .bold_onboarding_popover .driver-popover-footer { padding: 10px 12px 12px; }
-    .bold_onboarding_popover .driver-popover-progress-text { margin-bottom: 8px; font-size: 10px; }
-    .bold_onboarding_popover .driver-popover-footer button { min-height: 34px; padding: 6px 9px; font-size: 11px; }
+
+    .driver-popover.bold_onboarding_popover {
+        width: min(320px, calc(100vw - 20px));
+        max-width: 320px;
+        border-radius: 14px;
+    }
+
+    .bold_onboarding_popover .driver-popover-title {
+        padding: 15px 42px 0 16px;
+        font-size: 16px;
+    }
+
+    .bold_onboarding_popover .driver-popover-description {
+        padding: 7px 16px 11px;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .bold_onboarding_popover .driver-popover-close-btn {
+        top: 8px;
+        right: 9px;
+    }
+
+    .bold_onboarding_popover .driver-popover-footer {
+        padding: 10px 12px 12px;
+    }
+
+    .bold_onboarding_popover .driver-popover-progress-text {
+        margin-bottom: 8px;
+        font-size: 10px;
+    }
+
+    .bold_onboarding_popover .driver-popover-footer button {
+        min-height: 34px;
+        padding: 6px 9px;
+        font-size: 11px;
+    }
 }
 
+/* Adaptación de pantalla: (max-width: 1023px) */
 @media (max-width: 1023px) {
-    .mobile_header .mobile_header_row { grid-template-columns: 44px minmax(0, 1fr) 96px; }
-    .mobile_tour_actions { display: flex; gap: 8px; }
+
+    .mobile_header .mobile_header_row {
+        grid-template-columns: 44px minmax(0, 1fr) 96px;
+    }
+
+    .mobile_tour_actions {
+        display: flex;
+        gap: 8px;
+    }
 }
 
+/* Guías en modo oscuro */
 html.theme_dark .driver-popover.bold_onboarding_popover {
     border-color: #46505e;
     color: #f2f4f7;
     background: #242932;
     box-shadow: 0 24px 70px rgb(0 0 0 / 55%);
 }
+
 html.theme_dark .bold_onboarding_popover .driver-popover-description,
-html.theme_dark .bold_onboarding_popover .driver-popover-progress-text { color: #aeb6c2; }
-html.theme_dark .bold_onboarding_popover .driver-popover-footer { border-color: #3b424d; background: #1d222a; }
-html.theme_dark .bold_onboarding_popover .driver-popover-prev-btn { color: #edf0f4; background: #353c47; }
-html.theme_dark .bold_onboarding_popover .bold_tour_skip { color: #b7bec8; background: transparent; }
-html.theme_dark .bold_onboarding_popover .driver-popover-close-btn { color: #b7bec8; }
-html.theme_dark .bold_onboarding_popover .driver-popover-close-btn:is(:hover, :focus-visible) { color: #fff; background: #353c47; }
-html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow { border-left-color: #242932; }
-html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow { border-right-color: #242932; }
-html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: #242932; }
-html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: #242932; }
+html.theme_dark .bold_onboarding_popover .driver-popover-progress-text {
+    color: #aeb6c2;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-footer {
+    border-color: #3b424d;
+    background: #1d222a;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-prev-btn {
+    color: #edf0f4;
+    background: #353c47;
+}
+
+html.theme_dark .bold_onboarding_popover .bold_tour_skip {
+    color: #b7bec8;
+    background: transparent;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-close-btn {
+    color: #b7bec8;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-close-btn:is(:hover, :focus-visible) {
+    color: #fff;
+    background: #353c47;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-left.driver-popover-arrow {
+    border-left-color: #242932;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-right.driver-popover-arrow {
+    border-right-color: #242932;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-top.driver-popover-arrow {
+    border-top-color: #242932;
+}
+
+html.theme_dark .bold_onboarding_popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+    border-bottom-color: #242932;
+}

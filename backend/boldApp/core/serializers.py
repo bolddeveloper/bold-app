@@ -50,6 +50,8 @@ class UserAccountSerializer(serializers.ModelSerializer):
             "employee",
             "email",
             "avatar_url",
+            "biography",
+            "banner_color",
             "is_active",
             "is_superuser",
             "email_verified_at",

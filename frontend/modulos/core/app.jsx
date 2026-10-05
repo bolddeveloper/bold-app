@@ -4,6 +4,8 @@ import TasksModule from "../tareas/src/task_app.jsx";
 import AdministrationModule from "../administrativo/admin_module.jsx";
 import PermissionsModule from "../permisos/permissions_module.jsx";
 import CalendarModule from "../calendario/calendar_module.jsx";
+import ProfileModule from "../perfil/profile_module.jsx";
+import WorkspaceModule from "../docs/workspace_module.jsx";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { isControlPlaneContext } from "./core_models.js";
@@ -13,6 +15,8 @@ const baseNavigation = [
     { id: "tasks", label: "Tareas", icon: "check", brand: true, group: "work" },
     { id: "inbox", label: "Bandeja de entrada", icon: "inbox", group: "work" },
     { id: "calendar", label: "Calendario", icon: "calendar", group: "work" },
+    { id: "docs", label: "Docs", icon: "docs", group: "work" },
+    { id: "drive", label: "Drive", icon: "drive", group: "work" },
     { id: "suggestions", label: "Sugerencias", icon: "suggestions", group: "work" },
     { id: "reports", label: "Informes", icon: "reports", group: "management" },
 ];
@@ -23,12 +27,16 @@ function ApplicationWorkspace() {
     const core = useCore();
     const isDirection = isControlPlaneContext(core.activeUnit, core.activeAssignment);
     const navigation = [
+        {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
         ...(isDirection ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(isDirection && core.account?.is_superuser ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
     const externalModules = {
+        profile: <ProfileModule/>,
         calendar: <CalendarModule />,
+        docs: <WorkspaceModule mode="docs" />,
+        drive: <WorkspaceModule mode="drive" />,
         suggestions: <SuggestionsModule />,
         ...(isDirection ? {
         permissions: <PermissionsModule />,

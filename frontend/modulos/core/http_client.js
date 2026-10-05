@@ -1,4 +1,5 @@
 import { syncDiagnostics } from "./sync_diagnostics.js";
+import { clearGoogleCache } from "./google_cache.js";
 export const is_using_real_backend = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true";
 export const api_base_url = import.meta.env?.VITE_API_BASE_URL || globalThis.location?.origin || "http://127.0.0.1:8000";
 
@@ -18,7 +19,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     let quotaPause = null;
     const endpointPauses = new Map();
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
-    async function request(path, { method = "GET", body, anonymous = false, signal = controller.signal, ...options } = {}) {
+    async function request(path, { method = "GET", body, responseType, anonymous = false, signal = controller.signal, ...options } = {}) {
         signal = AbortSignal.any([controller.signal, signal]);
         const base = new URL(baseUrl);
         let url = new URL(path, base);
@@ -30,13 +31,14 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         if (pause?.until > now()) { pause.error.retryAfterMs = pause.until - now(); throw pause.error; }
         let response;
         const unsafe = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase());
+        const multipart = typeof FormData !== "undefined" && body instanceof FormData;
         const csrf = csrfToken || globalThis.document?.cookie?.split("; ").find(item => item.startsWith("csrftoken="))?.split("=").slice(1).join("=");
         const finishDiagnostic = syncDiagnostics.beginHttp(url.pathname, method);
         try {
             response = await fetchImpl(url.href, {
                 ...options, method, signal, credentials: "include",
-                headers: { "Content-Type": "application/json", ...(unsafe && csrf ? { "X-CSRFToken": decodeURIComponent(csrf) } : {}), ...(!anonymous && assignmentId ? { "X-Assignment-ID": assignmentId } : {}), ...options.headers },
-                ...(body !== undefined ? { body: JSON.stringify(body) } : {})
+                headers: { ...(!multipart ? { "Content-Type": "application/json" } : {}), ...(unsafe && csrf ? { "X-CSRFToken": decodeURIComponent(csrf) } : {}), ...(!anonymous && assignmentId ? { "X-Assignment-ID": assignmentId } : {}), ...options.headers },
+                ...(body !== undefined ? { body: multipart ? body : JSON.stringify(body) } : {})
             });
         } catch (error) {
             finishDiagnostic(signal.aborted || error.name === "AbortError" ? "cancelled" : "network-error");
@@ -46,6 +48,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
         finishDiagnostic(response.status);
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         if (response.status === 204) return null;
+        if (response.ok && responseType === "blob") return response.blob();
         const raw = await response.text();
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         let data;
@@ -120,7 +123,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     const remove = (resource, id, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "DELETE" });
     return {
         request, list, listPage, create, update, remove, cancelRequests,
-        setSession(value, accountEmail = null) { cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
+        setSession(value, accountEmail = null) { if (!value || email && accountEmail !== email) clearGoogleCache(); cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
         setAssignment(value) { cancelRequests(); assignmentId = value; },
         getSession: () => ({ authenticated, assignmentId, email }),
     };

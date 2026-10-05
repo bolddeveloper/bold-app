@@ -1,7 +1,16 @@
+/* Tareas en tablet: distribución vertical y horizontal. */
 /* Tablet layout: portrait and landscape between the mobile and desktop shells. */
 @media (min-width: 761px) and (max-width: 1023px) {
-    .board_card_stack { overflow: visible; }
-    .board_card:has(.task_select_open) { position: relative; z-index: 2; }
+
+    .board_card_stack {
+        overflow: visible;
+    }
+
+    .board_card:has(.task_select_open) {
+        position: relative;
+        z-index: 2;
+    }
+
     .tasks_module,
     .inbox_module,
     .home_module,
@@ -400,7 +409,9 @@
     }
 }
 
+/* Adaptación de pantalla: (min-width: 761px) and (max-width: 899px) */
 @media (min-width: 761px) and (max-width: 899px) {
+
     .inbox_body {
         display: block;
     }
@@ -430,11 +441,17 @@
     }
 }
 
+/* Accesibilidad: movimiento reducido */
 @media (min-width: 761px) and (max-width: 899px) and (prefers-reduced-motion: reduce) {
-    .inbox_detail_panel_open { animation: none; }
+
+    .inbox_detail_panel_open {
+        animation: none;
+    }
 }
 
+/* Adaptación de pantalla: (min-width: 761px) and (max-width: 820px) */
 @media (min-width: 761px) and (max-width: 820px) {
+
     .task_project_header .project_title_group {
         flex: 1 1 100%;
     }
@@ -448,7 +465,9 @@
     }
 }
 
+/* Adaptación de pantalla: (min-width: 900px) and (max-width: 1023px) */
 @media (min-width: 900px) and (max-width: 1023px) {
+
     .inbox_body {
         grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
     }

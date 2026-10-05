@@ -66,7 +66,16 @@ export function createSessionNotifications({ client = http, onChange = () => {},
         })();
         return mutation.promise;
     }
-    return { getRows: () => rows, refresh, invalidate, setRead,
+    async function clear() {
+        if (disposed || uncertain) throw abort();
+        await Promise.allSettled([...mutations.values()].map(item => item.promise));
+        const version = epoch;
+        await client.request("/api/v2/notifications/clear/", {method: "POST", signal: controller.signal});
+        if (!valid(version)) throw abort();
+        epoch++; controller.abort(); controller = new AbortController(); committed.clear(); publish([]);
+        await refresh({reason: "notification-clear", immediate: true});
+    }
+    return { getRows: () => rows, refresh, invalidate, setRead, clear,
         dispose() { disposed = true; epoch++; controller.abort(); coordinator.dispose(); mutations.clear(); committed.clear(); rows = []; },
     };
 }

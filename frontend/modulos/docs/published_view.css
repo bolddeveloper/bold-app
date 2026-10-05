@@ -1,0 +1,166 @@
+/* Contenedor de Docs: pestañas internas y espacio del visor Google. */
+.google_docs_module {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 90px);
+    min-height: 480px;
+    min-width: 0;
+    color: var(--bold_text);
+    background: var(--bold_bg);
+}
+
+.google_docs_module > [role="tabpanel"] {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* Barra de pestañas: desplazamiento horizontal sin desbordar BOLD. */
+.google_internal_tabs,
+.google_internal_tabs > [role="tablist"],
+.google_file_tab {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.google_internal_tabs {
+    flex-shrink: 0;
+    padding: 8px;
+    gap: 8px;
+    border-bottom: 1px solid var(--bold_line);
+    background: var(--bold_surface);
+}
+
+.google_internal_tabs > [role="tablist"] {
+    flex: 1;
+    overflow-x: auto;
+    gap: 4px;
+}
+
+.google_file_tab {
+    flex-shrink: 0;
+}
+
+.google_internal_tabs button,
+.google_embed_viewer button,
+.google_embed_viewer .workspace_button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--bold_line);
+    border-radius: 8px;
+    background: var(--bold_surface_soft);
+    color: var(--bold_text);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 150ms, color 150ms;
+}
+
+.google_internal_tabs [role="tab"][aria-selected="true"] {
+    background: var(--bold_red_tint);
+    color: var(--bold_red);
+}
+
+.google_file_tab span {
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.google_docs_module button:focus-visible,
+.google_docs_module a:focus-visible,
+.google_docs_module textarea:focus-visible {
+    outline: 2px solid var(--bold_red);
+    outline-offset: 2px;
+}
+
+/* Visor de solo lectura y controles persistentes de Google. */
+.google_embed_viewer {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.google_embed_viewer > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+}
+
+.google_embed_viewer h1 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    overflow-wrap: anywhere;
+}
+
+.google_embed_viewer small,
+.google_embed_notice {
+    color: var(--bold_muted);
+}
+
+.google_embed_notice {
+    margin: 0;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+.google_embed_viewer iframe {
+    flex: 1;
+    width: 100%;
+    min-height: 300px;
+    border: 0;
+    background: white;
+}
+
+/* Asociación manual: guardar solo URL validada, nunca HTML. */
+.google_publish_help {
+    padding: 16px;
+    background: var(--bold_surface);
+    overflow: auto;
+}
+
+.google_publish_help label {
+    display: grid;
+    gap: 8px;
+}
+
+.google_publish_help textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 12px;
+    border: 1px solid var(--bold_line);
+    border-radius: 8px;
+    color: var(--bold_text);
+    background: var(--bold_surface_soft);
+    box-sizing: border-box;
+}
+
+.drive_module .drive_native_name {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: transparent;
+    color: inherit;
+    border: 0;
+    padding: 0;
+}
+
+/* Accesibilidad: respetar preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+    .google_docs_module * {
+        transition: none !important;
+        animation: none !important;
+    }
+}

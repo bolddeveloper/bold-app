@@ -1,6 +1,7 @@
-export const HOME_WIDGET_TYPES = ["metrics", "tasks", "projects", "activity", "shortcuts", "status", "deadlines"];
+export const HOME_WIDGET_TYPES = ["metrics", "tasks", "projects", "activity", "shortcuts", "status", "deadlines", "notes"];
 export const HOME_WIDGET_SIZES = { small: true, medium: true, large: true };
 export const HOME_WIDGET_COLUMNS = {
+    notes: { small: 3, medium: 6, large: 8 },
     metrics: { small: 4, medium: 6, large: 8 },
     projects: { small: 3, medium: 4, large: 6 },
     tasks: { small: 3, medium: 5, large: 8 },

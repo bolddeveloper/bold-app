@@ -34,7 +34,15 @@ export const selectedTimeRange = (first, last) => ({ start: Math.min(first, last
 
 export function guestSuggestions(query, previous, contacts) {
     if (!query) return [];
+    const fold = text => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const needle = fold(query);
     const used = new Set(previous.map(email => email.trim().toLowerCase()));
-    const known = [...new Map(contacts.filter(person => person.email && !used.has(person.email.toLowerCase()) && `${person.name} ${person.email}`.toLowerCase().includes(query)).map(person => [person.email.toLowerCase(), person])).values()];
+    const known = [...new Map(contacts.filter(person => person.email && !used.has(person.email.toLowerCase()) && (fold(`${person.name || ""} ${person.email}`).includes(needle) || fold(person.name).replace(/\s+/g, "").includes(needle.replace(/\s+/g, "")))).map(person => [person.email.toLowerCase(), person])).values()];
     return [...known.slice(0, 6), ...(/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(query) && !known.some(person => person.email.toLowerCase() === query) && !used.has(query) ? [{ email: query, name: "Invitar a este correo" }] : [])];
+}
+
+// Cambiar de ocurrencia a serie conserva cambios pendientes, pero usa las fechas originales de la serie.
+export function mergeEventScopeDraft(current, original, target) {
+    const changes = Object.fromEntries(Object.entries(current).filter(([key,value]) => key !== "originalRepeat" && value !== original[key]));
+    return {...target,...changes};
 }

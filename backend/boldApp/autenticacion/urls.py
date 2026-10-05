@@ -1,8 +1,14 @@
 from django.urls import path
+from .private_notes import PrivateNoteView
+from .profile import ProfileView
+from .notification_settings import NotificationSettingsView
 
 from .views import InvitationConfirmView, LoginView, LogoutView, MFADisableView, MFALoginVerifyView, MFAStepUpView, PasswordChangeView, RecoveryConfirmView, RecoveryRequestView, SessionListView, SessionView, TOTPConfirmView, TOTPSetupView, WebSocketTicketView
 
 urlpatterns = [
+    path("notification-settings/", NotificationSettingsView.as_view(), name="notification-settings"),
+    path("profile/", ProfileView.as_view(), name="auth-profile"),
+    path("private-note/", PrivateNoteView.as_view(), name="private-note"),
     path("session/", SessionView.as_view(), name="auth-session"),
     path("login/", LoginView.as_view(), name="auth-login"),
     path("mfa/verify/", MFALoginVerifyView.as_view(), name="auth-mfa-verify"),

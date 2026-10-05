@@ -1,0 +1,611 @@
+/* Editores Google en BOLD: estructura compartida, documentos, hojas y presentaciones. */
+.bold_editor {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 72px);
+    min-height: 480px;
+    min-width: 0;
+    background: var(--bold_bg, var(--bold_surface_soft));
+    color: var(--bold_text);
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.bold_editor *, .editor_presentation * {
+    box-sizing: border-box;
+}
+
+.bold_editor button, .bold_editor select, .bold_editor input, .bold_editor textarea {
+    font: inherit;
+    color: inherit;
+}
+
+.bold_editor button, .bold_editor a.editor_google, .editor_presentation button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 150ms ease, transform 100ms ease, border-color 150ms ease;
+}
+
+.bold_editor button:hover:not(:disabled), .bold_editor a.editor_google:hover {
+    background: var(--bold_surface_soft);
+    border-color: var(--bold_line);
+}
+
+.bold_editor button:active:not(:disabled) {
+    transform: scale(.97);
+}
+
+.bold_editor button:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.bold_editor :is(button, input, select, textarea, summary, a, [contenteditable]):focus-visible {
+    outline: 2px solid var(--bold_red);
+    outline-offset: 2px;
+}
+
+.bold_editor select, .bold_editor input:not([type=color]) {
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid var(--bold_line);
+    border-radius: 5px;
+    background: var(--bold_surface);
+}
+
+/* Encabezado: título editable, estado y acceso a Google. */
+.editor_header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    background: var(--bold_surface);
+}
+
+.editor_brand {
+    flex-shrink: 0;
+    color: var(--bold_red);
+}
+
+.editor_identity {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.editor_identity input {
+    width: min(100%, 480px);
+    border-color: transparent !important;
+    font-size: 18px !important;
+}
+
+.editor_identity span, .editor_account {
+    color: var(--bold_muted);
+    font-size: 11px;
+}
+
+.bold_editor .editor_save {
+    background: var(--bold_red);
+    color: #fff;
+}
+
+/* Menú de archivo y barra de herramientas. */
+.editor_menubar, .editor_toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 18px;
+    border-bottom: 1px solid var(--bold_line);
+    background: var(--bold_surface);
+}
+
+.editor_toolbar {
+    margin: 6px 12px;
+    border: 1px solid var(--bold_line);
+    border-radius: 12px;
+    background: var(--bold_surface_soft);
+}
+
+.editor_toolbar label, .editor_menubar label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.editor_toolbar input[type=color] {
+    width: 25px;
+    height: 25px;
+    padding: 1px;
+    border: 0;
+    background: transparent;
+}
+
+.editor_account {
+    margin-left: auto;
+}
+
+.editor_menubar details {
+    position: relative;
+}
+
+.editor_menubar summary {
+    padding: 7px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.editor_menubar details > div {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    width: min(245px, calc(100vw - 32px));
+    max-height: min(250px, 45dvh);
+    padding: 6px;
+    border: 1px solid var(--bold_line);
+    border-radius: 10px;
+    background: var(--bold_surface);
+    box-shadow: 0 8px 25px #0003;
+    overflow-y: auto;
+    animation: editor_appear 180ms ease;
+}
+
+.editor_menubar details > div button {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+/* Estados de carga, avisos y recuperación de errores. */
+.editor_error, .editor_notice {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 6px 12px;
+    padding: 9px 12px;
+    border: 1px solid var(--bold_line);
+    border-radius: 8px;
+    background: var(--bold_surface);
+}
+
+.editor_error {
+    border-color: var(--bold_red);
+}
+
+.editor_loading {
+    padding: 24px;
+    color: var(--bold_muted);
+}
+
+/* Docs: pestañas, regla, página y tablas. */
+.editor_document_layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor_document_outline {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 8px;
+    width: 190px;
+    padding: 18px 12px;
+    overflow-y: auto;
+}
+
+.editor_document_outline button {
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.editor_document_outline button[aria-pressed=true], .editor_sheet_footer button[aria-pressed=true] {
+    background: var(--bold_red_tint);
+    color: var(--bold_red);
+}
+
+.editor_document_scroll {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 24px 48px;
+    overflow: auto;
+}
+
+.editor_ruler {
+    width: 740px;
+    margin: 0 auto 12px;
+    color: var(--bold_muted);
+    text-align: center;
+    font-size: 10px;
+}
+
+.editor_document_page {
+    width: 794px;
+    min-height: 1123px;
+    margin: 0 auto;
+    padding: 72px;
+    border: 1px solid var(--bold_line);
+    /* Keep the document's paper colors independent of the surrounding interface theme. */
+    background: #fff;
+    color: #222;
+    box-shadow: 0 2px 12px #0001;
+    font-family: Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    animation: editor_appear 180ms ease;
+}
+
+.editor_document_paragraph {
+    position: relative;
+}
+
+.editor_document_paragraph p {
+    min-height: 1.5em;
+    margin: 0 0 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.editor_document_paragraph p[contenteditable=true]:focus {
+    outline: 1px dashed var(--bold_line);
+}
+
+.editor_document_paragraph img {
+    max-width: 100%;
+    height: auto;
+}
+
+.editor_bullet {
+    position: absolute;
+    left: -18px;
+}
+
+.editor_complex_label {
+    color: var(--bold_muted);
+    font-size: 10px;
+}
+
+.editor_document_table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.editor_document_table td {
+    padding: 7px;
+    border: 1px solid var(--bold_line);
+    vertical-align: top;
+}
+
+/* Sheets: barra de fórmulas, cuadrícula, pestañas y paginación. */
+.editor_formula_bar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--bold_line);
+    background: var(--bold_surface);
+}
+
+.editor_formula_bar span {
+    min-width: 70px;
+}
+
+.editor_formula_bar input {
+    flex: 1;
+}
+
+.editor_grid_scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.editor_sheet_grid {
+    width: max-content;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+    color: #222;
+}
+
+.editor_sheet_grid th, .editor_sheet_grid td {
+    padding: 0;
+    border-right: 1px solid var(--bold_line);
+    border-bottom: 1px solid var(--bold_line);
+}
+
+.editor_sheet_grid th {
+    min-width: 48px;
+    height: 28px;
+    background: var(--bold_surface_soft);
+    color: var(--bold_muted);
+    text-align: center;
+    font-weight: 500;
+}
+
+.editor_sheet_grid thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.editor_sheet_grid tbody th, .editor_sheet_grid thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+}
+
+.bold_editor .editor_sheet_grid input {
+    display: block;
+    width: 120px;
+    height: 28px;
+    padding: 3px 5px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #222;
+    outline-offset: -2px;
+}
+
+.editor_sheet_grid .editor_cell_selected {
+    box-shadow: inset 0 0 0 2px var(--bold_red);
+}
+
+.editor_sheet_footer, .editor_grid_pagination {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-top: 1px solid var(--bold_line);
+    background: var(--bold_surface);
+    overflow-x: auto;
+}
+
+.editor_sheet_footer button {
+    flex-shrink: 0;
+}
+
+.editor_grid_pagination small {
+    margin-left: auto;
+    color: var(--bold_muted);
+}
+
+/* Slides: tira de diapositivas, lienzo y propiedades de objetos. */
+.editor_slides_layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor_filmstrip {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 10px;
+    width: 185px;
+    padding: 14px 8px;
+    border-right: 1px solid var(--bold_line);
+    overflow-y: auto;
+}
+
+.editor_filmstrip > button {
+    flex-shrink: 0;
+    align-items: flex-start;
+    padding: 5px;
+}
+
+.editor_filmstrip > button[aria-pressed=true] {
+    border-color: var(--bold_red);
+}
+
+.editor_slide_thumbnail {
+    width: 150px;
+    height: 90px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.editor_slide_scroll {
+    flex: 1;
+    min-width: 0;
+    padding: 32px;
+    overflow: auto;
+}
+
+.editor_slide_canvas {
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid #d4d4d4;
+    box-shadow: 0 3px 14px #0002;
+    color: #222;
+    overflow: hidden;
+    animation: editor_appear 180ms ease;
+}
+
+.editor_slide_object {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+}
+
+.editor_object_selected {
+    outline: 2px solid var(--bold_red);
+}
+
+.editor_slide_object img, .editor_slide_object textarea {
+    width: 100%;
+    height: 100%;
+}
+
+.bold_editor .editor_slide_object textarea, .editor_presentation .editor_slide_object textarea {
+    display: block;
+    padding: 3px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #222;
+    resize: none;
+    overflow: hidden;
+    white-space: pre-wrap;
+}
+
+.bold_editor .editor_drag_handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 4px;
+    background: var(--bold_red);
+    color: #fff;
+    cursor: grab;
+    touch-action: none;
+}
+
+.editor_drag_handle:active {
+    cursor: grabbing;
+}
+
+.editor_slide_hint, .editor_object_properties small {
+    color: var(--bold_muted);
+    line-height: 1.5;
+}
+
+.editor_slide_advanced {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border: 1px dashed #888;
+    background: #eeeeee;
+    color: #555;
+}
+
+.editor_object_properties {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 14px;
+    width: 210px;
+    padding: 16px;
+    border-left: 1px solid var(--bold_line);
+    background: var(--bold_surface);
+    overflow-y: auto;
+}
+
+.editor_object_properties h3 {
+    margin: 0;
+}
+
+.editor_object_properties label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* Presentación en pantalla completa dentro de BOLD. */
+.editor_presentation {
+    position: fixed;
+    inset: 0;
+    z-index: 1600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: #111;
+    color: #fff;
+}
+
+.editor_presentation header, .editor_presentation footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+}
+
+.editor_presentation footer {
+    justify-content: center;
+}
+
+.editor_present_canvas {
+    max-width: 100%;
+    max-height: calc(100dvh - 110px);
+    overflow: auto;
+}
+
+/* Transiciones de vistas y adaptación a pantallas pequeñas. */
+@keyframes editor_appear {
+    from {
+        opacity: 0;
+        translate: 0 3px;
+    }
+    to {
+        opacity: 1;
+        translate: 0;
+    }
+}
+
+@media (max-width: 1100px) {
+    .editor_object_properties {
+        width: 170px;
+    }
+
+    .editor_document_outline {
+        width: 140px;
+    }
+}
+
+@media (max-width: 767px) {
+    .editor_header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .editor_document_outline, .editor_object_properties, .editor_account, .editor_grid_pagination small {
+        display: none;
+    }
+
+    .editor_filmstrip {
+        width: 110px;
+    }
+
+    .editor_slide_thumbnail {
+        width: 75px;
+        height: 60px;
+    }
+
+    .editor_document_scroll, .editor_slide_scroll {
+        padding: 10px;
+    }
+}
+
+/* Accesibilidad: respetar preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+    .bold_editor *, .editor_presentation * {
+        animation: none !important;
+        transition: none !important;
+    }
+}

@@ -1,3 +1,5 @@
+import ColorPicker from "../../core/shared/color_picker.jsx";
+import { cropAvatar as crop_project_avatar } from "../../core/shared/avatar_image.js";
 import { projectHasTasks } from "./services/project_deletion.js";
 import { tasksBySection } from "./services/task_models.js";
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
@@ -172,21 +174,6 @@ const default_status_items = ["Activa", "Pend.", "Lista", "Inactiva"];
 const projects_storage_key = "bold_task_projects";
 const project_color_options = ["#ef1f2d", "#f97316", "#facc15", "#22c55e", "#22b8c7", "#4f6bed", "#8e4fd1", "#e85d94", "#9ca3af"];
 
-function CustomProjectColor({ value, onChange }) {
-    const rgb = [1, 3, 5].map(index => Number.parseInt(value.slice(index, index + 2), 16));
-    const setChannel = (index, channel) => onChange(`#${rgb.map((item, itemIndex) => (itemIndex === index ? channel : item).toString(16).padStart(2, "0")).join("")}`);
-    const custom = !project_color_options.includes(value);
-    return <details className="project_color_picker">
-        <summary className={`project_color_option project_color_custom ${custom ? "project_color_option_active" : ""}`} aria-label="Elegir color personalizado" title="Color personalizado">
-            {custom ? render_icon(check_icon, 25) : null}
-        </summary>
-        <div className="project_color_panel">
-            <header><span style={{ background: value }} /><strong>Color personalizado</strong></header>
-            {[["R", 0], ["G", 1], ["B", 2]].map(([label, index]) => <label key={label}><span>{label}</span><input type="range" min="0" max="255" value={rgb[index]} onChange={event => setChannel(index, Number(event.target.value))} /><output>{rgb[index]}</output></label>)}
-            <label className="project_color_hex"><span>HEX</span><input key={value} defaultValue={value.toUpperCase()} maxLength="7" onBlur={event => /^#[\da-f]{6}$/i.test(event.target.value) ? onChange(event.target.value.toLowerCase()) : event.target.value = value.toUpperCase()} /></label>
-        </div>
-    </details>;
-}
 const comments_storage_key = "bold_task_comments_by_task";
 const timeline_comments_storage_key = "bold_timeline_comments_by_scope";
 const today_iso = () => {
@@ -606,31 +593,6 @@ function TaskDrawer({ children, class_name = "", label, on_close, on_resize_key_
         </section>
     </div>, document.body);
 }
-
-function crop_project_avatar(file) {
-    return new Promise((resolve, reject) => {
-        if (!file || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return reject(new Error("Selecciona una imagen PNG, JPEG o WebP."));
-        if (file.size > 10 * 1024 * 1024) return reject(new Error("La imagen no puede superar 10 MB."));
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
-        reader.onload = () => {
-            const image = new Image();
-            image.onerror = () => reject(new Error("La imagen está dañada o no es compatible."));
-            image.onload = () => {
-                const canvas = document.createElement("canvas");
-                canvas.width = 256; canvas.height = 256;
-                const side = Math.min(image.naturalWidth, image.naturalHeight);
-                canvas.getContext("2d").drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
-                const data_url = canvas.toDataURL("image/webp", .82);
-                if (Math.ceil((data_url.length - data_url.indexOf(",") - 1) * .75) > 300 * 1024) return reject(new Error("La imagen comprimida supera 300 KB."));
-                resolve(data_url);
-            };
-            image.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
 
 // Renders a colored project dot.
 const ProjectPreviewContext = createContext(null);
@@ -4105,7 +4067,7 @@ function render_project_modal(props) {
                                     {project_color === color_item ? render_icon(check_icon, 25) : null}
                                 </button>
                             ))}
-                            <CustomProjectColor value={project_color} onChange={set_project_color} />
+                            <ColorPicker value={project_color} onChange={set_project_color} label="Color del proyecto" />
                         </div>
                     </section>
 
@@ -4337,9 +4299,7 @@ function TaskAppContent({ externalModules = {} }) {
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
-    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(() => {
-        try { return localStorage.getItem("bold_sidebar_tasks_open") !== "false"; } catch { return true; }
-    });
+    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(false);
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => real ? [] : merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);
@@ -5638,11 +5598,7 @@ function TaskAppContent({ externalModules = {} }) {
         set_active_section("tasks");
         set_selected_task_id(null);
         set_active_modal(null);
-        set_is_tasks_menu_open((current_value) => {
-            const next = !current_value;
-            try { localStorage.setItem("bold_sidebar_tasks_open", String(next)); } catch {}
-            return next;
-        });
+        set_is_tasks_menu_open(current => !current);
     }
 
     function handle_my_tasks_select() {

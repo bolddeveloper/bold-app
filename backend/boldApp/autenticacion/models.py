@@ -4,6 +4,13 @@ from django.conf import settings
 from django.db import models
 
 
+class PrivateNote(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="private_note")
+    content = models.TextField(blank=True, default="")
+    version = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class AuthSession(models.Model):
     CLIENT_WEB = "web"
     CLIENT_PWA = "pwa"

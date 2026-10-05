@@ -59,6 +59,19 @@ class NotificationModuleTests(TransactionTestCase):
         self.assertEqual(listed.data["results"][0]["id"], str(notification.id))
         self.assertEqual(self.actor_client.get("/api/v2/notifications/").data["results"], [])
 
+    def test_clear_hides_only_authorized_current_recipient_notifications(self):
+        task = self.create_task("Aviso para limpiar")
+        notification = Notification.objects.get(recipient_assignment=self.recipient_assignment)
+        self.assertEqual(self.actor_client.post("/api/v2/notifications/clear/").data["updated"], 0)
+        result = self.recipient_client.post("/api/v2/notifications/clear/")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["updated"], 1)
+        self.assertEqual(self.recipient_client.get("/api/v2/notifications/").data["results"], [])
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.dismissed_at)
+        self.assertEqual(str(notification.task_id), task["id"])
+        self.assertEqual(self.recipient_client.post("/api/v2/notifications/clear/").data["updated"], 0)
+
     def test_read_state_supports_one_all_and_unread(self):
         self.create_task("Lectura reversible")
         notification = Notification.objects.get(recipient_assignment=self.recipient_assignment)
