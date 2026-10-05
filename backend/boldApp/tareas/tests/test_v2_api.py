@@ -66,6 +66,44 @@ class TasksV2ApiTests(TransactionTestCase):
             "project_position": "1.0000000000",
         }
 
+    def test_cross_department_collaborator_reads_only_assigned_task(self):
+        task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Colaboración entre áreas",
+            priority="medium", created_by_assignment=self.david_assignment)
+        other = Task.objects.create(unit=self.operations, status=self.ops_status, title="Privada",
+            priority="medium", created_by_assignment=self.david_assignment)
+        comment = Comment.objects.create(task=task, author_assignment=self.david_assignment, body="Detalle compartido")
+        with patch("boldApp.tareas.signals.dispatch_resource_invalidation") as invalidation:
+            follower = TaskFollower.objects.create(task=task, assignment=self.ana_assignment,
+                added_by_assignment=self.actor_assignment)
+        self.assertIn(self.marketing.id, invalidation.call_args.args[0])
+        self.assertEqual(invalidation.call_args.args[4], {"tasks": [str(task.id)]})
+        _, session = create_session(self.ana, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        client = APIClient()
+        client.force_authenticate(self.ana, session)
+        client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.id))
+        response = client.get("/api/v2/tasks/", {"ids": f"{task.id},{other.id}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({str(row["id"]) for row in response.data["results"]}, {str(task.id)})
+        self.assertEqual(client.get(f"/api/v2/tasks/{task.id}/").status_code, 200)
+        self.assertEqual(response.data["results"][0]["status_name"], self.ops_status.name)
+        comments = client.get("/api/v2/comments/", {"tasks": str(task.id)})
+        self.assertIn(str(comment.id), {str(row["id"]) for row in comments.data["results"]})
+        self.assertEqual(client.patch(f"/api/v2/tasks/{task.id}/", {"title": "No autorizado"}).status_code, 403)
+        rule = JobRolePermission.objects.create(job_role=self.ana_assignment.position.job_role,
+            permission=Permission.objects.get(code="tasks.task.read"), effect="deny",
+            scope_type="specific_unit", target_unit=self.operations)
+        self.assertEqual(client.get(f"/api/v2/tasks/{task.id}/").status_code, 404)
+        rule.delete()
+        own_rule = JobRolePermission.objects.get(job_role=self.ana_assignment.position.job_role,
+            permission__code="tasks.task.read", scope_type="own_unit")
+        own_rule.effect = "deny"
+        own_rule.save()
+        self.assertEqual(client.get(f"/api/v2/tasks/{task.id}/").status_code, 404)
+        own_rule.effect = "allow"
+        own_rule.save()
+        follower.delete()
+        self.assertEqual(client.get(f"/api/v2/tasks/{task.id}/").status_code, 404)
+
     def test_scoped_read_authorizes_only_candidate_tasks(self):
         task = Task.objects.create(unit=self.marketing, status=self.marketing_status, title="Consulta medida", priority="medium", created_by_assignment=self.ana_assignment)
         Task.objects.bulk_create([Task(unit=self.operations, status=self.ops_status, title=f"Otra tarea {index}", priority="medium", created_by_assignment=self.david_assignment) for index in range(30)])
@@ -164,6 +202,7 @@ class TasksV2ApiTests(TransactionTestCase):
         clients = [async_to_sync(layer.new_channel)() for _ in range(2)]
         for channel in clients:
             async_to_sync(layer.group_add)(f"unit_{task.unit_id}", channel)
+            self.addCleanup(async_to_sync(layer.group_discard), f"unit_{task.unit_id}", channel)
         attachment = Attachment.objects.create(task=task, uploaded_by_assignment=self.ana_assignment,
             file_name="No difundir", file_url="https://example.com/private", mime_type="text/plain", size_bytes=1)
         envelopes = [async_to_sync(layer.receive)(channel)["envelope"] for channel in clients]
@@ -663,6 +702,11 @@ class TasksV2ApiTests(TransactionTestCase):
         task = Task.objects.get(id=task_id)
         self.assertEqual(task.unit, self.operations)
         self.assertEqual(task.assignee_assignment, self.david_assignment)
+        _, recipient_session = create_session(self.david, RequestFactory().get("/", REMOTE_ADDR="127.0.0.1"))
+        recipient = APIClient()
+        recipient.force_authenticate(self.david, recipient_session)
+        recipient.credentials(HTTP_X_ASSIGNMENT_ID=str(self.david_assignment.id))
+        self.assertEqual(recipient.get(f"/api/v2/tasks/{task_id}/").status_code, 200)
 
     def test_websocket_requires_single_use_ticket_and_matching_assignment(self):
         valid_ticket = issue_ws_ticket(self.actor, self.auth_session, self.actor_assignment.id, self.operations.id)
@@ -695,6 +739,8 @@ class TasksV2ApiTests(TransactionTestCase):
         new_channel = async_to_sync(layer.new_channel)()
         async_to_sync(layer.group_add)(f"unit_{self.marketing.id}", old_channel)
         async_to_sync(layer.group_add)(f"unit_{self.operations.id}", new_channel)
+        self.addCleanup(async_to_sync(layer.group_discard), f"unit_{self.marketing.id}", old_channel)
+        self.addCleanup(async_to_sync(layer.group_discard), f"unit_{self.operations.id}", new_channel)
 
         response = self.client.post(
             f"/api/v2/tasks/{task_id}/move/",
@@ -720,6 +766,7 @@ class TasksV2ApiTests(TransactionTestCase):
         clients = [async_to_sync(layer.new_channel)() for _ in range(2)]
         for channel in clients:
             async_to_sync(layer.group_add)(f"unit_{task.unit_id}", channel)
+            self.addCleanup(async_to_sync(layer.group_discard), f"unit_{task.unit_id}", channel)
         response = self.client.patch(
             f"/api/v2/task-projects/{link.id}/",
             {"section": None, "position": "2000.0000000000"}, format="json",

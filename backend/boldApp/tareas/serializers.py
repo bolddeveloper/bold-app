@@ -176,6 +176,9 @@ class TaskStatusSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     attachment_count = serializers.IntegerField(read_only=True)
+    status_name = serializers.CharField(source="status.name", read_only=True)
+    status_category = serializers.CharField(source="status.category", read_only=True)
+    status_is_final = serializers.BooleanField(source="status.is_final", read_only=True)
     follow_creator = serializers.BooleanField(write_only=True, required=False, default=True)
     project = serializers.PrimaryKeyRelatedField(
         queryset=Project.objects.all(),

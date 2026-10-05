@@ -488,6 +488,23 @@ def resolve_access(
             policy_version=context.policy_version,
         )
 
+    # An assignment shares only this task's read access, not the source unit.
+    # Explicit target-unit denials above and the reader's own policies still apply.
+    if permission.code == "tasks.task.read" and resource_id is not None and own_unit.id != target_unit.id:
+        from .resource_context import resolve_resource_context
+
+        readers = resolve_resource_context(permission, resource_id).get("task_reader_assignment_ids", ())
+        if assignment.id in readers:
+            own_access = resolve_access(assignment, permission, own_unit, context=context)
+            if own_access.allowed:
+                return _decision(
+                    True,
+                    "Lectura de una tarea asignada como responsable o colaborador.",
+                    "assigned_task_read",
+                    "task_assignment",
+                    policy_version=context.policy_version,
+                )
+
     return _decision(
         False,
         "No existe una regla aplicable.",
