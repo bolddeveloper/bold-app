@@ -60,6 +60,23 @@ def notification_identity_is_active(session_id, assignment_id):
     ).exists())
 
 
+@database_sync_to_async
+def notification_resource_is_readable(assignment_id, notification_id):
+    from .models import Notification
+    from .services import _readable_assignments
+
+    notification = Notification.objects.select_related(
+        "recipient_assignment__employee__user_account", "recipient_assignment__position__unit",
+        "recipient_assignment__position__job_role", "task__unit", "project__unit",
+    ).filter(pk=notification_id, recipient_assignment_id=assignment_id).first()
+    if not notification:
+        return False
+    for resource, permission in ((notification.task, "tasks.task.read"), (notification.project, "tasks.project.read")):
+        if resource and (resource.deleted_at or not _readable_assignments([notification.recipient_assignment], permission, resource)):
+            return False
+    return True
+
+
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         query = parse_qs(self.scope.get("query_string", b"").decode("utf-8"))
@@ -155,6 +172,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def notification_created(self, event):
         if not await notification_identity_is_active(self.session_id, self.assignment_id):
             await self.close(code=4403)
+            return
+        if not await notification_resource_is_readable(self.assignment_id, event["envelope"].get("entity_id")):
             return
         await self.send_json(event["envelope"])
 

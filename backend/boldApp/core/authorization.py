@@ -387,6 +387,17 @@ def resolve_access(
             policy_version=context.policy_version,
         )
 
+    from .resource_context import resource_participation_allows
+
+    if not resource_participation_allows(assignment, permission, resource_id):
+        return _decision(
+            False,
+            "No participas en este proyecto.",
+            "resource_participation_required",
+            "system",
+            policy_version=context.policy_version,
+        )
+
     moment = context.at
     own_unit = assignment.position.unit
     role_rules = context.role_rules

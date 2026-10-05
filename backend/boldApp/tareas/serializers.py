@@ -3,6 +3,7 @@ import binascii
 
 from django.db import transaction
 from rest_framework import serializers
+from django.utils import timezone
 
 from boldApp.core.models import OrganizationalUnit, PositionAssignment
 
@@ -32,6 +33,10 @@ def validate_active_assignment(assignment, field_name="assignment"):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    member_ids = serializers.PrimaryKeyRelatedField(
+        queryset=PositionAssignment.objects.select_related("position", "employee"),
+        many=True, write_only=True, required=False,
+    )
     class Meta:
         model = Project
         fields = "__all__"
@@ -68,6 +73,12 @@ class ProjectSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"owner_assignment": "La asignacion propietaria debe pertenecer a la unidad del proyecto."}
             )
+        for member in attrs.get("member_ids", []):
+            validate_active_assignment(member, "member_ids")
+            if not member.employee.is_active or member.position.unit_id != unit.id:
+                raise serializers.ValidationError({"member_ids": "Selecciona plazas activas del departamento del proyecto."})
+        if self.instance and unit.id != self.instance.unit_id and "member_ids" not in attrs:
+            raise serializers.ValidationError({"member_ids": "Al cambiar de departamento, selecciona nuevamente sus participantes."})
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
         if start_date and end_date and start_date > end_date:
@@ -77,7 +88,32 @@ class ProjectSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"name": "Ya existe un proyecto con este nombre en el departamento."})
         return attrs
 
+    def _save_members(self, project, members, creating=False):
+        selected = {member.pk for member in members}
+        # Keep the participation history; removal does not delete the employee.
+        for old in project.members.select_for_update().filter(status="active", removed_at__isnull=True):
+            if old.assignment_id not in selected:
+                old.status = "inactive"
+                old.removed_at = timezone.now()
+                old.save(update_fields=["status", "removed_at"])
+        actor = self.context["request"].assignment
+        for assignment in {member.pk: member for member in members}.values():
+            member, _ = ProjectMember.objects.get_or_create(
+                project=project, assignment=assignment,
+                defaults={"member_role": "member", "status": "inactive", "added_by_assignment": actor},
+            )
+            if member.status != "active" or member.removed_at:
+                member._notification_actor_assignment_id = actor.pk
+                member._notification_skip = creating and assignment.pk == project.owner_assignment_id
+                member.status = "active"
+                member.removed_at = None
+                member.joined_at = timezone.now()
+                member.added_by_assignment = actor
+                member.save()
+
+    @transaction.atomic
     def create(self, validated_data):
+        members = validated_data.pop("member_ids", [])
         base_name = validated_data["name"]
         unit = validated_data["unit"]
         names = set(Project.objects.filter(unit=unit).values_list("name", flat=True))
@@ -89,7 +125,19 @@ class ProjectSerializer(serializers.ModelSerializer):
                 candidate = f"{base_name[:180 - len(marker)]}{marker}"
                 suffix += 1
             validated_data["name"] = candidate
-        return super().create(validated_data)
+        project = super().create(validated_data)
+        self._save_members(project, members, creating=True)
+        return project
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        members = validated_data.pop("member_ids", None)
+        locked = Project.objects.select_for_update().get(pk=instance.pk)
+        locked._notification_actor_assignment_id = self.context["request"].assignment.pk
+        project = super().update(locked, validated_data)
+        if members is not None:
+            self._save_members(project, members)
+        return project
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):

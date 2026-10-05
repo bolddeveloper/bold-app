@@ -2,6 +2,17 @@
 
 
 _providers = {}
+_access_guards = {}
+
+
+def register_resource_access_guard(module_code, resource, guard):
+    """Domain participation is an additional restriction, never a permission grant."""
+    _access_guards[(module_code, resource)] = guard
+
+
+def resource_participation_allows(assignment, permission, resource_id):
+    guard = _access_guards.get((permission.module_code, permission.resource))
+    return resource_id is None or guard is None or guard(assignment, resource_id)
 
 
 def register_resource_context(module_code, resource, provider):

@@ -35,6 +35,7 @@ from .models import (
     WebhookEndpoint,
 )
 from .permissions import HasActiveAssignment
+from .authorization_provider import participating_projects
 from .pagination import RecentCommentPagination, RecentAttachmentPagination
 from .serializers import (
     ActivityLogSerializer,
@@ -157,7 +158,7 @@ class AssignmentScopedViewSetMixin:
         return Task.objects.filter(id__in=ids)
 
     def visible_projects(self):
-        ids = self._visible_resource_ids(Project.objects.all(), "tasks.project.read", "project")
+        ids = self._visible_resource_ids(participating_projects(self.request.assignment), "tasks.project.read", "project")
         return Project.objects.filter(id__in=ids)
 
 
@@ -206,7 +207,8 @@ class ProjectMemberViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         return self.stable_order(ProjectMember.objects.filter(project__in=self.visible_projects()))
 
     def perform_create(self, serializer):
-        self.require_permission("tasks.project.manage", serializer.validated_data["project"].unit)
+        project = serializer.validated_data["project"]
+        self.require_permission("tasks.project.manage", project.unit, project.id)
         serializer.save(added_by_assignment=self.request.assignment)
 
     def perform_update(self, serializer):
@@ -215,6 +217,7 @@ class ProjectMemberViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         new_project = serializer.validated_data.get("project")
         if new_project and new_project.id != member.project_id:
             self.require_permission("tasks.project.manage", new_project.unit, new_project.id)
+        member._notification_actor_assignment_id = self.request.assignment.id
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -618,6 +621,7 @@ class TaskFollowerViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         new_task = serializer.validated_data.get("task")
         if new_task and new_task.id != follower.task_id:
             self.require_permission("tasks.task.update", new_task.unit, new_task.id)
+        follower._notification_actor_assignment_id = self.request.assignment.id
         serializer.save()
 
     def perform_destroy(self, instance):

@@ -46,6 +46,10 @@ class TasksV2ApiTests(TransactionTestCase):
         self.marketing = OrganizationalUnit.objects.get(name="Marketing")
         self.operations = OrganizationalUnit.objects.get(name="Operaciones")
         self.ops_project = Project.objects.get(name="Rediseno web")
+        # These tests exercise authorized cross-unit task links. The developer
+        # must participate explicitly rather than inherit every unit's projects.
+        Project.objects.filter(pk=self.ops_project.pk).update(created_by_assignment=self.actor_assignment)
+        self.ops_project.created_by_assignment = self.actor_assignment
         self.ops_section = Section.objects.get(project=self.ops_project, name="todo")
         self.marketing_status = TaskStatus.objects.get(unit=self.marketing, category="todo")
         self.ops_status = TaskStatus.objects.get(unit=self.operations, category="in_progress")

@@ -4,7 +4,7 @@ from django.db import transaction
 
 from boldApp.core.authorization import build_authorization_context, resolve_access
 from boldApp.core.models import Permission, PositionAssignment, UserAccount
-from boldApp.tareas.models import Comment, Project, ProjectMember, Task
+from boldApp.tareas.models import Comment, Project, ProjectMember, Task, TaskFollower
 
 from .events import dispatch_notification
 from .models import Notification
@@ -17,7 +17,7 @@ def _active_assignments(ids):
     return PositionAssignment.objects.select_related(
         "employee__user_account", "position__unit", "position__job_role"
     ).filter(
-        id__in=set(ids), employee__is_active=True, is_active=True, released_at__isnull=True
+        id__in=set(ids), employee__is_active=True, employee__user_account__is_active=True, is_active=True, released_at__isnull=True
     )
 
 
@@ -98,7 +98,7 @@ def _task_recipient_ids(task):
 def notify_task_created(task_id):
     task = Task.all_objects.select_related("created_by_assignment__employee", "unit").get(id=task_id)
     actor = task.created_by_assignment
-    recipients = _readable_assignments(_active_assignments(_task_recipient_ids(task)), "tasks.task.read", task)
+    recipients = _readable_assignments(_active_assignments([task.assignee_assignment_id]), "tasks.task.read", task)
     for recipient in recipients:
         create_notification(
             recipient=recipient, actor=actor, task=task, event_type="task.assigned",
@@ -134,10 +134,11 @@ def notify_task_updated(task_id, previous, actor_id=None):
     recipients = _readable_assignments(_active_assignments(_task_recipient_ids(task)), "tasks.task.read", task)
     change_text = ", ".join(changes)
     for recipient in recipients:
+        assigned = "responsable" in changes and recipient.id == task.assignee_assignment_id
         create_notification(
-            recipient=recipient, actor=actor, task=task, event_type=event_type,
-            title="Tarea actualizada",
-            body=f"{_actor_name(actor)} actualizó {change_text} de “{task.title}”.",
+            recipient=recipient, actor=actor, task=task, event_type="task.assigned" if assigned else event_type,
+            title="Te asignaron una tarea" if assigned else "Tarea actualizada",
+            body=f"{_actor_name(actor)} te asignó como responsable de “{task.title}”." if assigned else f"{_actor_name(actor)} actualizó {change_text} de “{task.title}”.",
             route={"module": "tasks", "target": "tasks", "task_id": str(task.id)},
             dedupe_key=f"task.updated:{task.id}:{task.updated_at.isoformat()}",
             metadata={"changed_fields": changes},
@@ -186,12 +187,12 @@ def _project_recipient_ids(project):
 def notify_project_created(project_id):
     project = Project.all_objects.select_related("created_by_assignment__employee", "unit").get(id=project_id)
     actor = project.created_by_assignment
-    recipients = _readable_assignments(_active_assignments(_project_recipient_ids(project)), "tasks.project.read", project)
+    recipients = _readable_assignments(_active_assignments({project.owner_assignment_id, *list(_owner_assignment_ids())}), "tasks.project.read", project)
     for recipient in recipients:
         create_notification(
             recipient=recipient, actor=actor, project=project, event_type="project.created",
-            title="Nuevo proyecto",
-            body=f"{_actor_name(actor)} creó “{project.name}” en {project.unit.name}.",
+            title="Te asignaron un proyecto" if recipient.pk == project.owner_assignment_id else "Nuevo proyecto",
+            body=f"{_actor_name(actor)} te asignó como responsable de “{project.name}”." if recipient.pk == project.owner_assignment_id else f"{_actor_name(actor)} creó “{project.name}” en {project.unit.name}.",
             route={"module": "tasks", "target": "department_projects", "project_id": str(project.id)},
             dedupe_key=f"project.created:{project.id}",
         )
@@ -203,6 +204,9 @@ def notify_project_updated(project_id, previous, actor_id=None):
         return
     actor = _active_assignments([actor_id]).first() if actor_id else None
     changes = []
+    owner_changed = previous.get("owner_assignment_id") != project.owner_assignment_id
+    if owner_changed:
+        changes.append("responsable")
     for key, label in (("status", "estado"), ("end_date", "fecha de entrega"), ("priority", "prioridad"), ("name", "nombre")):
         if previous.get(key) != getattr(project, key):
             changes.append(label)
@@ -210,28 +214,49 @@ def notify_project_updated(project_id, previous, actor_id=None):
         return
     recipients = _readable_assignments(_active_assignments(_project_recipient_ids(project)), "tasks.project.read", project)
     for recipient in recipients:
+        assigned = owner_changed and recipient.pk == project.owner_assignment_id
         create_notification(
-            recipient=recipient, actor=actor, project=project, event_type="project.updated",
-            title="Proyecto actualizado",
-            body=f"{_actor_name(actor)} actualizó {', '.join(changes)} de “{project.name}”.",
+            recipient=recipient, actor=actor, project=project, event_type="project.assigned" if assigned else "project.updated",
+            title="Te asignaron un proyecto" if assigned else "Proyecto actualizado",
+            body=f"{_actor_name(actor)} te asignó como responsable de “{project.name}”." if assigned else f"{_actor_name(actor)} actualizó {', '.join(changes)} de “{project.name}”.",
             route={"module": "tasks", "target": "department_projects", "project_id": str(project.id)},
             dedupe_key=f"project.updated:{project.id}:{project.updated_at.isoformat()}",
             metadata={"changed_fields": changes},
         )
 
 
-def notify_project_member_added(member_id):
+def notify_project_member_added(member_id, actor_id=None, event_id=None):
     member = ProjectMember.objects.select_related(
         "project__unit", "assignment__employee", "added_by_assignment__employee"
-    ).get(id=member_id)
-    if member.status != "active" or member.removed_at:
+    ).filter(id=member_id).first()
+    if not member or member.project.deleted_at or member.status != "active" or member.removed_at:
         return
+    actor = _active_assignments([actor_id]).first() if actor_id else member.added_by_assignment
     recipients = _readable_assignments(_active_assignments([member.assignment_id]), "tasks.project.read", member.project)
     for recipient in recipients:
         create_notification(
-            recipient=recipient, actor=member.added_by_assignment, project=member.project,
+            recipient=recipient, actor=actor, project=member.project,
             event_type="project.member_added", title="Te agregaron a un proyecto",
-            body=f"{_actor_name(member.added_by_assignment)} te agregó a “{member.project.name}”.",
+            body=f"{_actor_name(actor)} te agregó a “{member.project.name}”.",
             route={"module": "tasks", "target": "department_projects", "project_id": str(member.project_id)},
-            dedupe_key=f"project.member_added:{member.id}",
+            dedupe_key=f"project.member_added:{member.id}:{event_id or member.joined_at.isoformat()}",
+        )
+
+
+def notify_task_follower_added(follower_id, actor_id=None, event_id=None):
+    follower = TaskFollower.objects.select_related("task__unit", "added_by_assignment__employee").filter(pk=follower_id).first()
+    if not follower or follower.notification_level == "none" or follower.task.deleted_at:
+        return
+    # The responsible already receives its assignment notification.
+    if follower.assignment_id == follower.task.assignee_assignment_id:
+        return
+    actor = _active_assignments([actor_id]).first() if actor_id else follower.added_by_assignment
+    recipients = _readable_assignments(_active_assignments([follower.assignment_id]), "tasks.task.read", follower.task)
+    for recipient in recipients:
+        create_notification(
+            recipient=recipient, actor=actor, task=follower.task,
+            event_type="task.collaborator_added", title="Te agregaron como colaborador",
+            body=f"{_actor_name(actor)} te agregó como colaborador de “{follower.task.title}”.",
+            route={"module": "tasks", "target": "tasks", "task_id": str(follower.task_id)},
+            dedupe_key=f"task.collaborator_added:{follower.pk}:{event_id or follower.followed_at.isoformat()}",
         )

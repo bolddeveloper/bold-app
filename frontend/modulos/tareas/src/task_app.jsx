@@ -1,4 +1,5 @@
 import { projectHasTasks } from "./services/project_deletion.js";
+import { createProjectDraftInitializer, initialProjectMemberIds } from "./services/project_draft.js";
 import { tasksBySection } from "./services/task_models.js";
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
@@ -78,7 +79,7 @@ import { pagedAttachmentsEnabled, notifyAttachmentViews, createTaskEditLoader } 
 import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./services/paged_comments.js";
 
 
-const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
+const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, "task.collaborator_added": user_plus_icon, "project.assigned": user_plus_icon, "project.member_added": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
 const app_toast = Swal.mixin({ toast: true, position: "top-end", showConfirmButton: false, timer: 2400, timerProgressBar: true });
 const show_task_permission_denied = message => Swal.fire({
     icon: "warning",
@@ -4082,7 +4083,7 @@ function render_project_modal(props) {
                                 const people = membersForUnit(props.directory, value);
                                 set_project_unit_id(value);
                                 set_project_owner_assignment_id(people[0]?.id || "");
-                                set_project_people_ids(people.map(person => person.id));
+                                set_project_people_ids([]);
                             }} options={(props.units || []).map(unit => ({ value: unit.id, label: unit.name }))} /></label>
                             <label>Responsable<TaskSelect aria_label="Responsable del proyecto" name="project_owner_assignment" value={project_owner_assignment_id} on_change={set_project_owner_assignment_id} options={unit_people.map(person => ({ value: person.id, label: person.name, description: person.job_role_title }))} /></label>
                         </div>
@@ -4552,19 +4553,24 @@ function TaskAppContent({ externalModules = {} }) {
         localStorage.setItem("bold_task_drawer_width", String(Math.round(task_detail_width)));
     }, [task_detail_width]);
 
+    const project_form_initialized = use_ref(createProjectDraftInitializer());
     use_effect(() => {
         if (active_modal === "project") {
+            const draftKey = `${session.activeAssignment?.id || "demo"}:${editing_project_id || "new"}`;
             const project = projects.find(project => project.id === editing_project_id);
-            const unitId = project?.unitId || project?.unit || session.activeUnit?.id || "";
-            const unitPeople = membersForUnit(session.directory, unitId);
-            set_project_avatar_data_url(project?.avatar_data_url || "");
-            set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
-            set_project_priority(project?.priority || "Media");
-            set_project_unit_id(unitId);
-            set_project_owner_assignment_id(project?.owner_assignment || (String(session.activeAssignment?.unitId) === String(unitId) ? session.activeAssignment?.id : session.directory?.find(person => String(person.unitId) === String(unitId))?.id) || "");
-            set_project_people_ids(project
-                ? (project.member_ids || []).filter(id => unitPeople.some(person => person.id === id))
-                : unitPeople.map(person => person.id));
+            if (editing_project_id && !project) return;
+            project_form_initialized.current.initialize(draftKey, () => {
+                const unitId = project?.unitId || project?.unit || session.activeUnit?.id || "";
+                const unitPeople = membersForUnit(session.directory, unitId);
+                set_project_avatar_data_url(project?.avatar_data_url || "");
+                set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
+                set_project_priority(project?.priority || "Media");
+                set_project_unit_id(unitId);
+                set_project_owner_assignment_id(project?.owner_assignment || (String(session.activeAssignment?.unitId) === String(unitId) ? session.activeAssignment?.id : session.directory?.find(person => String(person.unitId) === String(unitId))?.id) || "");
+                set_project_people_ids(initialProjectMemberIds(project, unitPeople));
+            });
+        } else {
+            project_form_initialized.current.reset();
         }
     }, [active_modal, editing_project_id, projects, session.activeAssignment?.id, session.activeUnit?.id, session.directory]);
 
@@ -4601,18 +4607,11 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) {
             let created_project_id = editing_project_id;
             mutate(async () => {
-                const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, priority: project_payload.priority, start_date: start_date || null, end_date: end_date || null };
+                const payload = { name: label, description: project_payload.description, avatar_data_url: project_payload.avatar_data_url, color_hex: project_color, status: project_payload.status, priority: project_payload.priority, start_date: start_date || null, end_date: end_date || null, member_ids: project_people_ids };
                 const project = editing_project_id
                     ? await api.update("projects", editing_project_id, session.account?.is_superuser ? { ...payload, ...owner_context } : payload)
                     : await api.create("projects", { ...payload, ...owner_context });
                 created_project_id = project.id;
-                const members = data.members.filter(item => item.project === project.id);
-                for (const member of members) if (!project_people_ids.includes(member.assignment)) await api.remove("project-members", member.id);
-                for (const id of project_people_ids) {
-                    const old = members.find(item => item.assignment === id);
-                    if (!old) await api.create("project-members", { project: project.id, assignment: id, member_role: "member", status: "active" });
-                    else if (old.status !== "active" || old.removed_at) await api.update("project-members", old.id, { status: "active", removed_at: null });
-                }
                 set_selected_project_id(project.id);
             }, () => {
                 if (!editing_project_id) remember_project(created_project_id, [created_project_id, ...projects.map(project => project.id)]);
@@ -4697,11 +4696,7 @@ function TaskAppContent({ externalModules = {} }) {
             if (close_modal) set_active_modal(null);
             return;
         }
-        mutate(async () => {
-            const members = data.members.filter(item => item.project === project_id);
-            for (const member of members) if (!member_ids.includes(member.assignment)) await api.remove("project-members", member.id);
-            for (const id of member_ids) if (!members.some(member => member.assignment === id)) await api.create("project-members", { project: project_id, assignment: id, member_role: "member", status: "active" });
-        }, () => { if (close_modal) set_active_modal(null); }, "Cambios guardados", () => {}, ["members"]);
+        mutate(() => api.update("projects", project_id, { member_ids }), () => { if (close_modal) set_active_modal(null); }, "Cambios guardados", () => {}, PROJECT_RESOURCES);
     }
 
     function handle_update_project(project_id, changes) {

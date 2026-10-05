@@ -16,6 +16,8 @@ from django.test import RequestFactory, TransactionTestCase, override_settings
 
 from boldApp.autenticacion.services import create_session, issue_ws_ticket, revoke_session
 from boldApp.core.models import Employee, JobRole, JobRolePermission, OrganizationalUnit, Permission, Position, PositionAssignment, UserAccount
+from boldApp.notificaciones.events import build_notification_envelope
+from boldApp.notificaciones.models import Notification
 from config.asgi import application
 
 
@@ -51,6 +53,10 @@ class ConcurrentControlTests(TransactionTestCase):
         controls = [self.socket(identity) for identity in identities]
         tasks = [self.socket(identity, "tasks") for identity in identities]
         sockets = controls + tasks
+        survivor_notice = Notification.objects.create(
+            recipient_assignment=identities[-1][1], type="synthetic.survivor", title="Sesión vigente",
+        )
+        survivor_envelope = build_notification_envelope(survivor_notice)
 
         async def scenario():
             connect_times = []
@@ -72,15 +78,15 @@ class ConcurrentControlTests(TransactionTestCase):
                 close = await asyncio.gather(controls[0].receive_output(timeout=10), tasks[0].receive_output(timeout=10))
                 self.assertEqual([event["code"] for event in close], [4401, 4403])
                 await get_channel_layer().group_send(f"notifications_assignment_{identities[-1][1].id}", {
-                    "type": "notification.created", "envelope": {"event_type": "notification.created", "event_id": "synthetic-survivor"},
+                    "type": "notification.created", "envelope": survivor_envelope,
                 })
                 # A policy signal may queue a control heartbeat as well. It is
                 # allowed; prove survival with a recipient-scoped notification.
                 for _ in range(5):
                     survivor = await controls[-1].receive_json_from(timeout=10)
-                    if survivor.get("event_id") == "synthetic-survivor":
+                    if survivor.get("entity_id") == str(survivor_notice.pk):
                         break
-                self.assertEqual(survivor.get("event_id"), "synthetic-survivor")
+                self.assertEqual(survivor.get("entity_id"), str(survivor_notice.pk))
                 if os.getenv("BOLD_REPORT_CAPACITY") == "1":
                     times = sorted(connect_times)
                     print("CAPACITY " + json.dumps({"scope": "isolated-asgi-not-cloud-capacity", "clients": count, "sockets": len(sockets),
