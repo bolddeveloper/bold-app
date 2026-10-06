@@ -1161,7 +1161,13 @@
     transform: rotate(-7deg);
 }
 
-.bell_button_active svg {
+/* La campana se mueve al recibir un aviso nuevo, también en móvil. */
+.notification_bell_arrival {
+    display: inline-flex;
+}
+
+.notification_bell_arrival svg {
+    transform-origin: 50% 12%;
     animation: notification_bell_ring 520ms cubic-bezier(.2, .8, .2, 1);
 }
 
@@ -1170,6 +1176,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
+    .notification_bell_arrival svg { animation: none; }
 
     .bell_button,
     .bell_button svg {

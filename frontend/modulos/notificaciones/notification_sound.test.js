@@ -14,7 +14,7 @@ test("notification tones play only for newly received unread items, not bootstra
 
 test("five supplied audio presets replace synthesized tones", () => {
     assert.equal(notificationSounds.length, 5);
-    assert.equal(defaultNotificationSettings.sound, "samsung");
+    assert.equal(defaultNotificationSettings.sound, "post");
     assert.equal(notificationSounds.some(([id]) => ["soft", "bell", "double"].includes(id)), false);
 });
 

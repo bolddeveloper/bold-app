@@ -1,3 +1,4 @@
+import {confirmBold} from "../core/shared/bold_dialog.js";
 /* Editor shell: connection, save state, navigation and Google fallback. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, FileText, Sheet, Presentation, Save, RefreshCw, Download, Star, Users } from "lucide-react";
@@ -65,13 +66,13 @@ export default function WorkspaceEditor({file, connection, close, onDirty, onBus
         if (dirtyRef.current) {setError("Guarda los cambios pendientes antes de insertar o modificar la estructura."); return false;}
         return commit(requests);
     }
-    function reload() {
+    async function reload() {
         if (working.current) return;
-        if (!dirtyRef.current || window.confirm("¿Descartar los cambios sin guardar y cargar la versión de Google?")) load();
+        if (!dirtyRef.current || await confirmBold("¿Descartar los cambios sin guardar y cargar la versión de Google?")) load();
     }
-    function back() {
+    async function back() {
         if (working.current) return;
-        if (!dirtyRef.current || window.confirm("¿Salir y descartar los cambios sin guardar?")) {changed(false); close();}
+        if (!dirtyRef.current || await confirmBold("¿Salir y descartar los cambios sin guardar?")) {changed(false); close();}
     }
     async function rename() {
         if (!canEdit || !name.trim() || name === model.file.name || working.current) return;

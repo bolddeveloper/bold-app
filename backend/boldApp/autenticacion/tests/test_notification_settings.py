@@ -11,11 +11,11 @@ class NotificationSettingsTests(TestCase):
         self.url = "/api/v2/auth/notification-settings/"
 
     def test_preferences_are_saved_only_for_current_user(self):
-        result = self.client.patch(self.url, {"sound": "post", "volume": 30}, format="json")
+        result = self.client.patch(self.url, {"sound": "melody", "volume": 30}, format="json")
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(self.client.get(self.url).data["sound"], "post")
+        self.assertEqual(self.client.get(self.url).data["sound"], "melody")
         self.client.force_authenticate(self.users[1])
-        self.assertEqual(self.client.get(self.url).data["sound"], "samsung")
+        self.assertEqual(self.client.get(self.url).data["sound"], "post")
         self.client.force_authenticate(None)
         self.assertIn(self.client.get(self.url).status_code, [401, 403])
 

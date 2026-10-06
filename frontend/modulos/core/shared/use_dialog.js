@@ -16,7 +16,7 @@ export function useDialog(open, selector, onClose) {
         panel.setAttribute("tabindex", "-1");
         (controls()[0] || panel).focus({ preventScroll: true });
         const keydown = event => {
-            if (dialogs.at(-1) !== panel) return;
+            if (dialogs.at(-1) !== panel || document.querySelector(".swal2-container")) return;
             // The field walkthrough owns Escape/Tab while above this dialog.
             if (document.querySelector(".bold_onboarding_popover")) return;
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close.current(); }

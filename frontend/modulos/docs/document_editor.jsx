@@ -1,3 +1,4 @@
+import {promptBold} from "../core/shared/bold_dialog.js";
 import ColorPicker from "../core/shared/color_picker.jsx";
 /* Document page, rich text controls and Google paragraph/table rendering. */
 import { useImperativeHandle, useRef, useState } from "react";
@@ -74,11 +75,13 @@ export default function DocumentEditor({ref, model, canEdit, zoom, onDirty, appl
     }
     const insertLocation = () => {const range = selectedRange(); return {index: range.endIndex - 1, ...(tabId ? {tabId} : {})};};
     async function insertTable() {
-        const rows = Number(window.prompt("Filas de la tabla (1–20)", "3")), columns = Number(window.prompt("Columnas de la tabla (1–10)", "3"));
+        const rowInput = await promptBold("Filas de la tabla (1–20)", "3");
+        if (rowInput === null) return;
+        const rows = Number(rowInput), columns = Number(await promptBold("Columnas de la tabla (1–10)", "3"));
         if (Number.isInteger(rows) && rows >= 1 && rows <= 20 && Number.isInteger(columns) && columns >= 1 && columns <= 10) await apply([{insertTable: {rows, columns, location: insertLocation()}}]);
     }
     async function insertImage() {
-        const uri = window.prompt("URL pública HTTPS de la imagen");
+        const uri = await promptBold("URL pública HTTPS de la imagen");
         if (!uri) return;
         if (!uri.startsWith("https://")) {setNotice("Usa una URL HTTPS accesible para Google."); return;}
         await apply([{insertInlineImage: {uri, location: insertLocation(), objectSize: {width: {magnitude: 300, unit: "PT"}}}}]);
@@ -118,7 +121,7 @@ export default function DocumentEditor({ref, model, canEdit, zoom, onDirty, appl
             <select aria-label="Estilo de párrafo" disabled={!canEdit} defaultValue="NORMAL_TEXT" onChange={event => apply([{updateParagraphStyle: {range: selectedRange(), paragraphStyle: {namedStyleType: event.target.value}, fields: "namedStyleType"}}])}>{[["NORMAL_TEXT", "Texto normal"], ["TITLE", "Título"], ["SUBTITLE", "Subtítulo"], ["HEADING_1", "Encabezado 1"], ["HEADING_2", "Encabezado 2"], ["HEADING_3", "Encabezado 3"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             <select aria-label="Tamaño de texto" disabled={!canEdit} defaultValue="12" onChange={event => command("fontSize", event.target.value)}>{["8", "10", "12", "14", "18", "24", "36"].map(size => <option key={size}>{size}</option>)}</select>
             <ColorPicker label="Color del texto" disabled={!canEdit} value="#222222" commitOnly onOpen={() => {const selection=window.getSelection();colorRange.current=selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;}} onChange={color => {if(colorRange.current){const selection=window.getSelection();selection.removeAllRanges();selection.addRange(colorRange.current);}command("foreColor",color);}}/>
-            <button title="Insertar enlace" aria-label="Insertar enlace" disabled={!canEdit} onMouseDown={event => event.preventDefault()} onClick={() => {const url = window.prompt("URL del enlace"); if (safeUrl(url)) command("createLink", url);}}><Link size={17}/></button>
+            <button title="Insertar enlace" aria-label="Insertar enlace" disabled={!canEdit} onMouseDown={event => event.preventDefault()} onClick={async () => {const url = await promptBold("URL del enlace"); if (safeUrl(url)) command("createLink", url);}}><Link size={17}/></button>
             {[[AlignLeft, "START", "Izquierda"], [AlignCenter, "CENTER", "Centro"], [AlignRight, "END", "Derecha"]].map(([Icon, alignment, title]) => <button key={alignment} aria-label={`Alinear ${title}`} disabled={!canEdit} onMouseDown={event => event.preventDefault()} onClick={() => apply([{updateParagraphStyle: {range: selectedRange(), paragraphStyle: {alignment}, fields: "alignment"}}])}><Icon size={17}/></button>)}
             <button aria-label="Lista con viñetas" disabled={!canEdit} onMouseDown={event => event.preventDefault()} onClick={() => apply([{createParagraphBullets: {range: selectedRange(), bulletPreset: "BULLET_DISC_CIRCLE_SQUARE"}}])}><List size={17}/></button>
             <button aria-label="Lista numerada" disabled={!canEdit} onMouseDown={event => event.preventDefault()} onClick={() => apply([{createParagraphBullets: {range: selectedRange(), bulletPreset: "NUMBERED_DIGIT_ALPHA_ROMAN"}}])}><ListOrdered size={17}/></button>

@@ -4,7 +4,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-DEFAULTS = {"enabled": True, "sound": "samsung", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False}
+DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False}
 
 class NotificationSettingsSerializer(serializers.Serializer):
     enabled = serializers.BooleanField(required=False)
@@ -38,14 +38,14 @@ class NotificationSettingsSerializer(serializers.Serializer):
         if settings["sound"] == "custom" and not settings["custom_audio"]:
             raise serializers.ValidationError("Sube un sonido antes de seleccionar Personalizado.")
         if settings["sound"] in ["soft", "bell", "double"]:
-            settings["sound"] = "samsung"
+            settings["sound"] = DEFAULTS["sound"]
         return settings
 
 class NotificationSettingsView(APIView):
     def get(self, request):
         settings = {**DEFAULTS, **request.user.notification_settings}
         if settings["sound"] in ["soft", "bell", "double"]:
-            settings["sound"] = "samsung"
+            settings["sound"] = DEFAULTS["sound"]
         return Response(settings)
 
     def patch(self, request):

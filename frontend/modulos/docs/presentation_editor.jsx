@@ -1,3 +1,4 @@
+import {confirmBold, promptBold} from "../core/shared/bold_dialog.js";
 import ColorPicker from "../core/shared/color_picker.jsx";
 /* Slide filmstrip, editable canvas, object properties and presentation mode. */
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
@@ -54,9 +55,9 @@ export default function PresentationEditor({ref, model, canEdit, zoom, onDirty, 
         const objectId = identity("shape");
         apply([{createShape: {objectId, shapeType, elementProperties: {pageObjectId: slide.objectId, size: {width: {magnitude: 240, unit: "PT"}, height: {magnitude: 80, unit: "PT"}}, transform: {scaleX: 1, scaleY: 1, translateX: 50, translateY: 50, unit: "PT"}}}}, ...(shapeType === "TEXT_BOX" ? [{insertText: {objectId, text: "Escribe aquí", insertionIndex: 0}}] : [])]);
     }
-    function createImage() {
+    async function createImage() {
         if (!slide) return;
-        const url = window.prompt("URL pública HTTPS de la imagen");
+        const url = await promptBold("URL pública HTTPS de la imagen");
         if (!url) return;
         if (!url.startsWith("https://")) {setNotice("Usa una URL HTTPS accesible para Google."); return;}
         apply([{createImage: {objectId: identity("image"), url, elementProperties: {pageObjectId: slide.objectId, size: {width: {magnitude: 240, unit: "PT"}, height: {magnitude: 180, unit: "PT"}}, transform: {scaleX: 1, scaleY: 1, translateX: 50, translateY: 50, unit: "PT"}}}}]);
@@ -93,7 +94,7 @@ export default function PresentationEditor({ref, model, canEdit, zoom, onDirty, 
         <div className="editor_toolbar" role="toolbar" aria-label="Herramientas de presentación">
             <button onClick={createSlide} disabled={!canEdit}><Plus size={17}/>Diapositiva</button>
             <button disabled={!canEdit || !slide} onClick={() => apply([{duplicateObject: {objectId: slide.objectId}}])}><Copy size={16}/>Duplicar</button>
-            <button disabled={!canEdit || !slide} onClick={() => {if (window.confirm("¿Eliminar esta diapositiva? Puedes recuperar versiones desde Google.")) apply([{deleteObject: {objectId: slide.objectId}}]);}}><Trash2 size={16}/>Eliminar diapositiva</button>
+            <button disabled={!canEdit || !slide} onClick={async () => {if (await confirmBold("¿Eliminar esta diapositiva? Puedes recuperar versiones desde Google.")) apply([{deleteObject: {objectId: slide.objectId}}]);}}><Trash2 size={16}/>Eliminar diapositiva</button>
             <button onClick={() => createShape()} disabled={!canEdit}><Type size={17}/>Texto</button>
             <button onClick={() => createShape("RECTANGLE")} disabled={!canEdit}><Square size={16}/>Forma</button>
             <button onClick={createImage} disabled={!canEdit}><Image size={16}/>Imagen</button>
@@ -115,7 +116,7 @@ export default function PresentationEditor({ref, model, canEdit, zoom, onDirty, 
                 <label>Escala vertical<input type="number" min="0.1" max="20" step="0.1" value={transform.scaleY} disabled={!canEdit} onChange={event => changeTransform(selectedElement, {scaleY: Number(event.target.value) || 1})}/></label>
                 {selectedElement.shape && <label>Color de forma<ColorPicker label="Color de forma" value="#ffffff" disabled={!canEdit} commitOnly onChange={color => apply([{updateShapeProperties: {objectId: selected, shapeProperties: {shapeBackgroundFill: {solidFill: {color: {rgbColor: googleRgb(color)}, alpha: 1}}}, fields: "shapeBackgroundFill"}}])}/></label>}
                 <button disabled={!canEdit} onClick={() => apply([{duplicateObject: {objectId: selected}}])}><Copy size={15}/>Duplicar objeto</button>
-                <button disabled={!canEdit} onClick={() => {if (window.confirm("¿Eliminar el objeto seleccionado?")) apply([{deleteObject: {objectId: selected}}]);}}><Trash2 size={15}/>Eliminar objeto</button>
+                <button disabled={!canEdit} onClick={async () => {if (await confirmBold("¿Eliminar el objeto seleccionado?")) apply([{deleteObject: {objectId: selected}}]);}}><Trash2 size={15}/>Eliminar objeto</button>
             </> : <p>Selecciona un objeto en el lienzo.</p>}<small>Elementos avanzados y animaciones originales se conservan. Usa Google para editar sus opciones.</small></aside>
         </div>
         {presenting && createPortal(<section ref={presentation} className="editor_presentation" role="dialog" aria-modal="true" aria-label="Presentación"><header><span>Diapositiva {active + 1} de {slides.length}</span><button onClick={() => setPresenting(false)} aria-label="Cerrar presentación"><X size={22}/></button></header><div className="editor_present_canvas">{canvas(slide)}</div><footer><button disabled={!active} onClick={() => setActive(Math.max(0, active - 1))} aria-label="Diapositiva anterior"><ChevronLeft/></button><button disabled={active === slides.length - 1} onClick={() => setActive(Math.min(slides.length - 1, active + 1))} aria-label="Diapositiva siguiente"><ChevronRight/></button></footer></section>, document.body)}

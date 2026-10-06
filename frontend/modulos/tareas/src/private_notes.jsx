@@ -1,3 +1,4 @@
+import {promptBold} from "../../core/shared/bold_dialog.js";
 import { useEffect, useRef, useState } from "react";
 import { http } from "../../core/http_client.js";
 import { Bold, Italic, Underline, Strikethrough, Undo2, Redo2, List, ListOrdered, IndentIncrease, Link, Plus, LockKeyhole } from "lucide-react";
@@ -82,8 +83,8 @@ export default function PrivateNotes({ storageKey, preview = false, heading }) {
         document.execCommand(name, false, value);
         remember(); save();
     };
-    const link = () => {
-        const url = window.prompt("Enlace HTTPS", "https://");
+    const link = async () => {
+        const url = await promptBold("Enlace HTTPS", "https://");
         if (!url) return;
         if (!/^https?:\/\//i.test(url)) { setStatus("Usa un enlace que empiece con https:// o http://."); return; }
         command("createLink", url);

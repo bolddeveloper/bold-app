@@ -1,11 +1,11 @@
 export const notificationSounds = [["samsung", "Silbido Samsung"], ["post", "Nueva publicación"], ["melody", "SMS melódico"], ["delivered", "Mensaje entregado"], ["facebook", "Mensaje Facebook"]];
-export const defaultNotificationSettings = {enabled: true, sound: "samsung", volume: 60, custom_audio: "", custom_name: "", desktop_enabled: false};
+export const defaultNotificationSettings = {enabled: true, sound: "post", volume: 60, custom_audio: "", custom_name: "", desktop_enabled: false};
 let audio, customTimer;
 export function stopNotificationSound() {clearTimeout(customTimer); if (audio) {audio.pause(); audio = null;}}
 export async function playNotificationSound(settings = defaultNotificationSettings) {
     if (!settings.enabled || !settings.volume) return;
     stopNotificationSound();
-    const preset = notificationSounds.some(([id]) => id === settings.sound) ? settings.sound : "samsung";
+    const preset = notificationSounds.some(([id]) => id === settings.sound) ? settings.sound : defaultNotificationSettings.sound;
     const url = settings.sound === "custom" && settings.custom_audio ? settings.custom_audio : `/notification-sounds/${preset}.mp3`;
     const current = new Audio(url); audio = current; current.volume = settings.volume / 100;
     await current.play();

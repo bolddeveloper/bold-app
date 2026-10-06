@@ -1,0 +1,29 @@
+/* Confirmaciones y entradas de texto compartidas entre módulos. */
+.swal2-container.bold_dialog_container { z-index: 20000; }
+.swal2-popup.bold_dialog {
+    background: #fff;
+    color: #18202d;
+    border: 1px solid #d9dde5;
+    border-radius: 18px;
+    box-shadow: 0 20px 70px #0003;
+    width: min(460px, calc(100vw - 32px));
+    padding-bottom: 24px;
+}
+.bold_dialog .swal2-title { color: inherit; font-size: 22px; }
+.bold_dialog .swal2-html-container { color: inherit; font-size: 15px; line-height: 1.6; overflow-wrap: anywhere; }
+.bold_dialog .swal2-input { width: calc(100% - 48px); margin: 20px 24px 0; box-sizing: border-box; border-radius: 10px; background: transparent; color: inherit; border: 1px solid #d9dde5; }
+.bold_dialog .swal2-styled { border-radius: 10px; font-size: 14px; transition: background 150ms, transform 150ms; }
+.bold_dialog .swal2-styled.bold_dialog_confirm { background: #ef1f2d; color: white; }
+.bold_dialog .swal2-styled.bold_dialog_cancel { background: #eef1f5; color: #18202d; }
+.bold_dialog .swal2-styled:active { transform: scale(.97); }
+.bold_dialog :is(button, input):focus-visible { outline: 2px solid #ef1f2d; outline-offset: 3px; }
+
+/* Los portales heredan el tema desde el documento, fuera del módulo activo. */
+html[data-bold-theme="dark"] .swal2-popup.bold_dialog { background: #232830; color: #f3f4f6; border-color: #3b424d; }
+html[data-bold-theme="dark"] .bold_dialog .swal2-input { border-color: #49505c; }
+html[data-bold-theme="dark"] .bold_dialog .swal2-styled.bold_dialog_cancel { background: #343b46; color: #f3f4f6; }
+
+/* Respeta la preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+    .bold_dialog, .bold_dialog .swal2-styled { animation: none !important; transition: none; }
+}

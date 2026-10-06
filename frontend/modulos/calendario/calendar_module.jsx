@@ -1,3 +1,4 @@
+import {confirmBold} from "../core/shared/bold_dialog.js";
 import {createContactSearch, mergeContactSuggestions} from "./contact_search.js";
 import { googleCache, cacheScope, backgroundRefresh } from "../core/google_cache.js";
 import GoogleConnection from "../docs/google_connection.jsx";
@@ -71,7 +72,7 @@ function EventDetails({ event, zone, onClose, onEdit, onSaved }) {
     const when = event.start?.date ? `${new Intl.DateTimeFormat("es", { dateStyle: "full" }).format(fromDay(event.start.date))} · Todo el día` : `${new Intl.DateTimeFormat("es", { timeZone: zone, dateStyle: "full" }).format(new Date(event.start.dateTime))} · ${eventTimeRange(event, zone)}`;
     useEffect(() => { const escape = key => { if (key.key === "Escape") onClose(); }; window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape); }, [onClose]);
     async function remove(scope = "instance") {
-        if (!window.confirm(scope === "series" ? "¿Eliminar toda la serie?" : "¿Eliminar este evento?")) return;
+        if (!await confirmBold(scope === "series" ? "¿Eliminar toda la serie?" : "¿Eliminar este evento?")) return;
         setBusy(true); setError("");
         try { await calendarApi.remove(event.id, scope); onSaved(); }
         catch (problem) { setError(problem.message); setBusy(false); }
@@ -114,7 +115,7 @@ function TaskEditor({ date, lists, onClose, onSaved }) {
 function TaskDetails({ task, onClose, onSaved }) {
     const [busy, setBusy] = useState(false), [error, setError] = useState("");
     async function action(remove) {
-        if (remove && !window.confirm("¿Eliminar esta tarea de Google?")) return;
+        if (remove && !await confirmBold("¿Eliminar esta tarea de Google?")) return;
         setBusy(true); setError("");
         try { if (remove) await calendarApi.removeTask(task.list_id, task.id); else await calendarApi.updateTask(task.list_id, task.id, { status: "completed" }); onSaved(); }
         catch (problem) { setError(problem.message); setBusy(false); }
@@ -289,7 +290,7 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
         catch (problem) { setError(problem.message); setBusy(false); }
     }
     async function remove() {
-        if (!window.confirm(scope === "series" ? "¿Eliminar toda la serie?" : "¿Eliminar este evento?")) return;
+        if (!await confirmBold(scope === "series" ? "¿Eliminar toda la serie?" : "¿Eliminar este evento?")) return;
         setBusy(true); setError("");
         try { await calendarApi.remove(event.id, scope); onSaved(); }
         catch (problem) { setError(problem.message); setBusy(false); }

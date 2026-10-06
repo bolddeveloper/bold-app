@@ -1,5 +1,7 @@
+import NewsPreferences from "./news_preferences.jsx";
+import {confirmBold} from "../core/shared/bold_dialog.js";
 import {useEffect, useRef, useState} from "react";
-import {Bell, Pencil, Plug, User, X} from "lucide-react";
+import {Bell, Keyboard, Newspaper, Pencil, Plug, User, X} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
 import {useShell} from "../core/app_shell.jsx";
 import {http} from "../core/http_client.js";
@@ -10,10 +12,12 @@ import ColorPicker from "../core/shared/color_picker.jsx";
 import GoogleConnection from "../docs/google_connection.jsx";
 import "./profile.css";
 import NotificationPreferences from "./notification_preferences.jsx";
+import ShortcutPreferences from "./shortcut_preferences.jsx";
 
 export default function ProfileModule() {
     const core = useCore(), shell = useShell(), file = useRef(null);
-    const [tab, setTab] = useState("account"), [profile, setProfile] = useState(null), [draft, setDraft] = useState(null);
+    const tab = shell.profile_tab, setTab = shell.set_profile_tab;
+    const [profile, setProfile] = useState(null), [draft, setDraft] = useState(null);
     const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [password, setPassword] = useState(false);
     const alive = useRef(true);
     const [photoFile, setPhotoFile] = useState(null);
@@ -37,9 +41,9 @@ export default function ProfileModule() {
         finally {if (alive.current) setBusy(false);}
     }
     function photo(event) {const image = event.target.files?.[0]; event.target.value = ""; if (image) setPhotoFile(image);}
-    function leave() {if (shell.set_active_module("home")) shell.set_profile_editing(false);}
-    function switchTab(next) {
-        if (editing && JSON.stringify(draft) !== JSON.stringify(profile) && !window.confirm("\u00bfDescartar los cambios del perfil?")) return;
+    async function leave() {if (await shell.set_active_module("home")) shell.set_profile_editing(false);}
+    async function switchTab(next) {
+        if (editing && JSON.stringify(draft) !== JSON.stringify(profile) && !await confirmBold("\u00bfDescartar los cambios del perfil?")) return;
         setDraft(profile); shell.set_profile_editing(false); setTab(next);
     }
     const identity = core.activeAssignment, shown = editing ? draft : profile;
@@ -47,10 +51,10 @@ export default function ProfileModule() {
         <header className="bold_profile_header"><h1>Perfil</h1><button aria-label="Cerrar ajustes del perfil" onClick={leave}><X size={21}/></button></header>
         <div className="bold_profile_layout">
             <aside className="bold_profile_navigation"><div className="bold_profile_identity"><ProfileAvatar url={core.account?.avatar_url} initials={identity?.initials}/><strong>{profile?.name || identity?.name}</strong></div>
-                <nav aria-label="Ajustes del perfil"><button aria-current={tab === "account" ? "page" : undefined} onClick={() => setTab("account")}><User size={18}/>Cuenta</button><button aria-current={tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? "page" : undefined} onClick={() => switchTab("connectors")}><Plug size={18}/>Conectores</button><button aria-current={tab === "notifications" ? "page" : undefined} onClick={() => switchTab("notifications")}><Bell size={18}/>Notificaciones</button></nav>
+                <nav aria-label="Ajustes del perfil"><button aria-current={tab === "account" ? "page" : undefined} onClick={() => setTab("account")}><User size={18}/>Cuenta</button><button aria-current={tab === "connectors" ? "page" : undefined} onClick={() => switchTab("connectors")}><Plug size={18}/>Conectores</button><button aria-current={tab === "notifications" ? "page" : undefined} onClick={() => switchTab("notifications")}><Bell size={18}/>Notificaciones</button><button aria-current={tab === "shortcuts" ? "page" : undefined} onClick={() => switchTab("shortcuts")}><Keyboard size={18}/>Atajos</button><button aria-current={tab === "news" ? "page" : undefined} onClick={() => switchTab("news")}><Newspaper size={18}/>Novedades</button></nav>
             </aside>
             <main className="bold_profile_main">{error && <div className="bold_profile_error" role="alert">{error}{!profile && <button onClick={load}>Reintentar</button>}</div>}{notice && <p role="status">{notice}</p>}
-                {tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <p role="status">Cargando perfil…</p> : <>
+                {tab === "news" ? <NewsPreferences/> : tab === "shortcuts" ? <ShortcutPreferences/> : tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <p role="status">Cargando perfil…</p> : <>
                     <div className="bold_profile_section_heading"><h2>{editing ? "Editar perfil" : "Información de cuenta"}</h2>{!editing && <button onClick={() => {setDraft(profile); shell.set_profile_editing(true); setNotice("");}}><Pencil size={16}/>Editar perfil</button>}</div>
                     <div className="bold_profile_editor">
                         <div className="bold_profile_account_fields"><dl><div><dt>Nombre</dt><dd>{profile.name}</dd></div><div><dt>Correo empresarial</dt><dd>{profile.email}</dd></div><div><dt>Departamento activo</dt><dd>{identity?.unit_name}</dd></div><div><dt>Cargo</dt><dd>{identity?.job_role_title}</dd></div></dl></div>

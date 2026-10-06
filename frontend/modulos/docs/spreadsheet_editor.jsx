@@ -1,3 +1,4 @@
+import {promptBold} from "../core/shared/bold_dialog.js";
 import ColorPicker from "../core/shared/color_picker.jsx";
 /* Spreadsheet grid: bounded pages, formulas, selection and cell-only writes. */
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
@@ -65,7 +66,7 @@ export default function SpreadsheetEditor({ref, model, canEdit, zoom, onDirty, a
         change(changes);
     }
     async function addSheet() {
-        const title = window.prompt("Nombre de la hoja", `Hoja ${sheets.length + 1}`);
+        const title = await promptBold("Nombre de la hoja", `Hoja ${sheets.length + 1}`);
         if (title?.trim()) apply([{addSheet: {properties: {title: title.trim()}}}]);
     }
     function chart() {
@@ -98,7 +99,7 @@ export default function SpreadsheetEditor({ref, model, canEdit, zoom, onDirty, a
                 onChange={event => change({[key]: event.target.value})} onPaste={paste}
                 onKeyDown={event => {if (event.key === "Enter" || event.key === "Tab") {event.preventDefault(); focusCell(row + (event.key === "Enter" ? event.shiftKey ? -1 : 1 : 0), column + (event.key === "Tab" ? event.shiftKey ? -1 : 1 : 0));}}}/></td>;
         })}</tr>)}</tbody></table></div>}
-        <footer className="editor_sheet_footer"><button aria-label="Añadir hoja" disabled={!canEdit} onClick={addSheet}><Plus size={17}/></button>{sheets.map(item => <button key={item.properties.sheetId} aria-pressed={sheetId === item.properties.sheetId} onClick={() => navigate(() => {setSheetId(item.properties.sheetId); setOffset(0); setColumnOffset(0); setSelected([0, 0]); setEnd([0, 0]);})} onDoubleClick={() => {if (!canEdit) return; const title = window.prompt("Nombre de la hoja", item.properties.title); if (title?.trim()) apply([{updateSheetProperties: {properties: {sheetId: item.properties.sheetId, title: title.trim()}, fields: "title"}}]);}}>{item.properties.title}</button>)}</footer>
+        <footer className="editor_sheet_footer"><button aria-label="Añadir hoja" disabled={!canEdit} onClick={addSheet}><Plus size={17}/></button>{sheets.map(item => <button key={item.properties.sheetId} aria-pressed={sheetId === item.properties.sheetId} onClick={() => navigate(() => {setSheetId(item.properties.sheetId); setOffset(0); setColumnOffset(0); setSelected([0, 0]); setEnd([0, 0]);})} onDoubleClick={async () => {if (!canEdit) return; const title = await promptBold("Nombre de la hoja", item.properties.title); if (title?.trim()) apply([{updateSheetProperties: {properties: {sheetId: item.properties.sheetId, title: title.trim()}, fields: "title"}}]);}}>{item.properties.title}</button>)}</footer>
         <div className="editor_grid_pagination"><button aria-label="Filas anteriores" disabled={!offset} onClick={() => navigate(() => {setOffset(Math.max(0, offset - 100)); setSelected([Math.max(0, offset - 100), columnOffset]); setEnd([Math.max(0, offset - 100), columnOffset]);})}><ChevronLeft size={16}/></button><span>Filas {offset + 1}–{offset + rowCount}</span><button aria-label="Filas siguientes" disabled={offset + rowCount >= (properties.gridProperties?.rowCount || 1000)} onClick={() => navigate(() => {setOffset(offset + 100); setSelected([offset + 100, columnOffset]); setEnd([offset + 100, columnOffset]);})}><ChevronRight size={16}/></button><button aria-label="Columnas anteriores" disabled={!columnOffset} onClick={() => navigate(() => {setColumnOffset(Math.max(0, columnOffset - 26)); setSelected([offset, Math.max(0, columnOffset - 26)]); setEnd([offset, Math.max(0, columnOffset - 26)]);})}><ChevronLeft size={16}/></button><span>{columnName(columnOffset)}–{columnName(columnOffset + columnCount - 1)}</span><button aria-label="Columnas siguientes" disabled={columnOffset + columnCount >= (properties.gridProperties?.columnCount || 26)} onClick={() => navigate(() => {setColumnOffset(columnOffset + 26); setSelected([offset, columnOffset + 26]); setEnd([offset, columnOffset + 26]);})}><ChevronRight size={16}/></button><small>Fórmulas calculadas por Google al guardar. Doble clic en pestaña para renombrar.</small></div>
     </>;
 }

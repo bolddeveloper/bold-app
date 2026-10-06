@@ -204,6 +204,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         window.addEventListener("bold:notification-sound-changed", changeSound);
         const store = createSessionNotifications({ onChange: rows => {
             if (mounted) {
+                if (containsNewUnreadNotification(previousRows, rows)) window.dispatchEvent(new Event("bold:notification-arrived"));
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
                     playNotificationSound(soundSettings).catch(() => {});
                     const known = new Set(previousRows.map(row => String(row.id)));
@@ -219,7 +220,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const reconcile = (reason, desktopEvent = false) => {
             const background = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
                 && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
-            if (contentCanRefresh() || background) store.refresh({ reason, force: background }).catch(report);
+            if (contentCanRefresh() || background) store.refresh({ reason, force: background, immediate: reason === "notification-focus-or-poll" }).catch(report);
         };
         const recover = () => reconcile("notification-focus-or-poll");
         const invalidate = event => {previousRows = null; store.invalidate(event.detail || {}).catch(report); previousRows = null;};
@@ -241,7 +242,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onError: report,
         }).catch(report);
         store.refresh({ reason: "notification-bootstrap", immediate: true }).catch(report);
-        const timer = setInterval(recover, 300_000);
+        const timer = setInterval(recover, 2_000);
         return () => {
             mounted = false; realtime.disconnect(); store.dispose(); clearInterval(timer);
             soundController.abort(); stopNotificationSound();

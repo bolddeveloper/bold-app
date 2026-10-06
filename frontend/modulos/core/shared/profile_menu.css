@@ -28,6 +28,25 @@
 .profile_mobile_button .bold_profile_avatar { width: 34px; height: 34px; font-size: 13px; }
 @media (max-width: 1023px) { .top_bar .profile_header_button { display: none; } }
 
+/* Accesos al perfil: respuesta al mouse, teclado y pulsación. */
+.profile_identity_button { border-radius: 10px; }
+:is(.profile_identity_button, .profile_header_button, .profile_menu_button) {
+    transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+:is(.profile_identity_button, .profile_header_button) .bold_profile_avatar,
+.profile_menu_button svg { transition: transform 180ms ease; }
+:is(.profile_identity_button, .profile_header_button, .profile_menu_button):focus-visible {
+    outline: 2px solid var(--bold_red);
+    outline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+    .profile_identity_button:hover { background: color-mix(in srgb, var(--bold_red) 8%, transparent); transform: translateY(-1px); }
+    :is(.profile_identity_button, .profile_header_button):hover .bold_profile_avatar { transform: scale(1.06); }
+    .profile_header_button:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--bold_red) 14%, transparent); }
+    .profile_menu_button:hover svg { transform: rotate(25deg); }
+}
+:is(.profile_identity_button, .profile_header_button, .profile_menu_button):active { transform: scale(.97); }
+
 /* Menú rápido: contenido desplazable y posición limitada a la pantalla. */
 .bold_profile_popover {
     position: fixed;
@@ -44,7 +63,12 @@
 }
 .bold_profile_card_content .bold_profile_action { display: flex; width: 100%; justify-content: flex-start; margin-top: 10px; }
 .bold_profile_action > svg:last-child:not(:first-child) { margin-left: auto; }
-.bold_profile_departments { display: grid; gap: 5px; padding: 8px 0; }
+/* Selector lateral de departamentos, separado del área desplazable de la ficha. */
+.bold_profile_departments { position: fixed; z-index: 2301; display: grid; gap: 6px; width: min(280px, calc(100vw - 24px)); box-sizing: border-box; max-height: calc(100dvh - 24px); overflow: auto; padding: 12px; border: 1px solid var(--bold_line); border-radius: 12px; color: var(--bold_text); background: var(--bold_surface); box-shadow: 0 12px 32px #0003; animation: bold_profile_enter 150ms ease-out; }
+.bold_profile_departments header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--bold_line); }
+.bold_profile_departments header h3 { margin: 0; font-size: 14px; }
+.bold_profile_departments header button { width: auto; padding: 5px; }
+.bold_profile_departments > p { margin: 8px 0; color: var(--bold_muted); font-size: 12px; }
 .bold_profile_departments button { width: 100%; justify-content: space-between; text-align: left; }
 .bold_profile_departments button[aria-pressed="true"] { color: var(--bold_red); }
 .bold_profile_departments span { display: grid; gap: 4px; }
@@ -52,4 +76,13 @@
 @keyframes bold_profile_enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 
-@media (prefers-reduced-motion: reduce) { .bold_profile_popover { animation: none; } .bold_profile_popover button { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .bold_profile_popover, .bold_profile_departments { animation: none; }
+    .bold_profile_popover button,
+    :is(.profile_identity_button, .profile_header_button, .profile_menu_button),
+    :is(.profile_identity_button, .profile_header_button) .bold_profile_avatar,
+    .profile_menu_button svg { transition: none; }
+    :is(.profile_identity_button, .profile_header_button, .profile_menu_button):is(:hover, :active),
+    :is(.profile_identity_button, .profile_header_button):hover .bold_profile_avatar,
+    .profile_menu_button:hover svg { transform: none; }
+}
