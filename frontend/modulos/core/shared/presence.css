@@ -1,0 +1,7 @@
+.bold_presence_dot { display: inline-block; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: #7c8b9a; }
+.bold_presence_online { background: #18b884; }
+.bold_presence_away { background: #e5a52a; }
+.bold_presence_busy { background: #ef1f2d; }
+.bold_presence_meeting { background: #9568dc; }
+.bold_presence_vacation { background: #2d9aca; }
+.bold_presence_custom { background: #18b884; box-shadow: 0 0 0 2px color-mix(in srgb, #18b884 25%, transparent); }

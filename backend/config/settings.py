@@ -272,10 +272,22 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "refresh-calendar-presence": {
+        "task": "boldApp.calendario.tasks.refresh_calendar_presence",
+        "schedule": 120.0,
+    },
     "cleanup-calendar-drafts": {
         "task": "boldApp.calendario.tasks.cleanup_calendar_drafts",
         "schedule": 60.0,
     },
+}
+
+# Presence has its own namespace; do not change authentication/throttling caches.
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "presence": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": redis_url,
+                 "KEY_PREFIX": "bold-presence", "OPTIONS": {"socket_connect_timeout": 2, "socket_timeout": 2}}
+        if os.environ.get("REDIS_URL") else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "bold-presence"},
 }
 
 

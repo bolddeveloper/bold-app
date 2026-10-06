@@ -66,16 +66,19 @@ class CalendarEventsView(APIView):
                 raise ValueError()
         except (KeyError, ValueError):
             raise ValidationError("Selecciona un rango válido de hasta 93 días.")
-        items, page = [], None
+        items, raw_items, page = [], [], None
         for _ in range(30):
             params = {"timeMin": start.isoformat(), "timeMax": end.isoformat(), "singleEvents": "true", "maxResults": 250, "orderBy": "startTime"}
             if page:
                 params["pageToken"] = page
             result = google_request(request.user, "GET", event_path(), params=params)
+            raw_items.extend(result.get("items", []))
             drafts = set(CalendarDraft.objects.filter(owner=request.user, connection__user=request.user).values_list("event_id", flat=True))
             items.extend(public_event(event) for event in result.get("items", []) if event.get("status") != "cancelled" and event.get("id") not in drafts and not is_task_mirror(event))
             page = result.get("nextPageToken")
             if not page:
+                from .presence import store_windows
+                store_windows(request.user, raw_items, start, end)
                 return Response({"events": items})
         raise CalendarUnavailable("Hay demasiados eventos en este rango. Prueba una vista más corta.")
 

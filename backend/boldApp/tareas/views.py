@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import EmptyResultSet
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Max
 from django.utils import timezone
 from uuid import UUID
 from rest_framework import status, viewsets
@@ -55,7 +55,7 @@ from .serializers import (
     WebhookDeliverySerializer,
     WebhookEndpointSerializer,
 )
-from .webhook_events import WEBHOOK_TEST, build_event_envelope
+from .webhook_events import WEBHOOK_TEST, build_event_envelope, dispatch_resource_invalidation
 from .webhook_tasks import deliver_webhook
 
 
@@ -229,13 +229,73 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = SectionSerializer
 
     def get_queryset(self):
-        queryset = self.stable_order(Section.objects.filter(project__in=self.visible_projects()))
+        queryset = Section.objects.filter(project__in=self.visible_projects()).order_by("position", "created_at", "pk")
         project_id = self.request.query_params.get("project")
         return queryset.filter(project_id=project_id) if project_id else queryset
 
     def perform_create(self, serializer):
-        self.require_permission("tasks.project.manage", serializer.validated_data["project"].unit)
-        serializer.save()
+        project = serializer.validated_data["project"]
+        self.require_permission("tasks.project.manage", project.unit, project.id)
+        # Serialize appends with reordering/materialization on this project.
+        with transaction.atomic():
+            Project.objects.select_for_update().get(pk=project.pk)
+            if Section.objects.filter(project=project, name=serializer.validated_data["name"]).exists():
+                raise ValidationError({"name": "Ya existe una sección con este nombre en el proyecto."})
+            last = Section.objects.filter(project=project).aggregate(last=Max("position"))["last"] or 0
+            serializer.save(position=last + 1000)
+
+    def locked_project(self, value):
+        try:
+            project_id = UUID(str(value))
+        except (ValueError, TypeError, AttributeError):
+            raise ValidationError({"project": "Indica un proyecto válido."})
+        project = self.visible_projects().select_for_update().filter(pk=project_id).first()
+        if not project:
+            raise PermissionDenied("No tienes acceso a este proyecto.")
+        self.require_permission("tasks.project.manage", project.unit, project.id)
+        return project
+
+    @action(detail=False, methods=["post"], url_path="materialize-unsectioned")
+    def materialize_unsectioned(self, request):
+        # One transaction: no partially renamed group or task status changes.
+        with transaction.atomic():
+            project = self.locked_project(request.data.get("project"))
+            serializer = self.get_serializer(data={"project": str(project.pk), "name": request.data.get("name")})
+            serializer.is_valid(raise_exception=True)
+            last = project.sections.aggregate(last=Max("position"))["last"] or 0
+            section = serializer.save(position=last + 1000)
+            TaskProject.objects.filter(project=project, section__isnull=True).update(section=section)
+            Project.objects.filter(pk=project.pk).update(unsectioned_index=None)
+            # Section's post-save invalidation is delivered after the entire move commits.
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        with transaction.atomic():
+            project = self.locked_project(request.data.get("project"))
+            values = request.data.get("sections")
+            if not isinstance(values, list) or len(values) > 1000:
+                raise ValidationError({"sections": "Indica la lista completa de secciones (máximo 1000)."})
+            try:
+                ids = [UUID(str(value)) for value in values]
+            except (ValueError, TypeError, AttributeError):
+                raise ValidationError({"sections": "Los identificadores deben ser UUID válidos."})
+            rows = list(project.sections.select_for_update())
+            if len(set(ids)) != len(ids) or set(ids) != {row.pk for row in rows}:
+                raise ValidationError({"sections": "Las secciones cambiaron. Actualiza la vista e intenta nuevamente."})
+            if "unsectioned_index" in request.data:
+                index = request.data["unsectioned_index"]
+                if index is not None and (isinstance(index, bool) or not isinstance(index, int) or not 0 <= index <= len(rows)):
+                    raise ValidationError({"unsectioned_index": "Indica una posición válida para Sin sección."})
+                Project.objects.filter(pk=project.pk).update(unsectioned_index=index)
+            positions = {pk: (index + 1) * 1000 for index, pk in enumerate(ids)}
+            for row in rows:
+                row.position = positions[row.pk]
+                row.updated_at = timezone.now()
+            Section.objects.bulk_update(rows, ["position", "updated_at"])
+            transaction.on_commit(lambda: dispatch_resource_invalidation(
+                [project.unit_id], "project.changed", "project", project.id, {}))
+        return Response(self.get_serializer(sorted(rows, key=lambda row: row.position), many=True).data)
 
     def perform_update(self, serializer):
         section = self.get_object()
@@ -243,11 +303,15 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         new_project = serializer.validated_data.get("project")
         if new_project and new_project.id != section.project_id:
             self.require_permission("tasks.project.manage", new_project.unit, new_project.id)
-        serializer.save()
+        with transaction.atomic():
+            list(Project.objects.select_for_update().filter(pk__in=[section.project_id, new_project.pk if new_project else section.project_id]).order_by("pk"))
+            serializer.save()
 
     def perform_destroy(self, instance):
         self.require_permission("tasks.project.manage", instance.project.unit, instance.project_id)
-        instance.delete()
+        with transaction.atomic():
+            Project.objects.select_for_update().get(pk=instance.project_id)
+            instance.delete()
 
 
 class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):

@@ -64,6 +64,18 @@ class NotificationModuleTests(TransactionTestCase):
         self.assertEqual(listed.data["results"][0]["id"], str(notification.id))
         self.assertEqual(self.actor_client.get("/api/v2/notifications/").data["results"], [])
 
+    def test_disabled_events_are_not_stored_or_dispatched(self):
+        self.recipient.notification_settings = {"events": {"task.assigned": False}}
+        self.recipient.save(update_fields=["notification_settings"])
+        with patch("boldApp.notificaciones.services.dispatch_notification") as dispatch:
+            self.create_task("Asignación silenciada")
+        self.assertFalse(Notification.objects.filter(recipient_assignment=self.recipient_assignment).exists())
+        dispatch.assert_not_called()
+        self.recipient.notification_settings = {"events": {"task.updated": False}}
+        self.recipient.save(update_fields=["notification_settings"])
+        self.create_task("Asignación permitida")
+        self.assertEqual(Notification.objects.filter(recipient_assignment=self.recipient_assignment, type="task.assigned").count(), 1)
+
     def test_clear_hides_only_authorized_current_recipient_notifications(self):
         task = self.create_task("Aviso para limpiar")
         notification = Notification.objects.get(recipient_assignment=self.recipient_assignment)

@@ -49,6 +49,7 @@ class UserAccount(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     biography = models.CharField(max_length=500, blank=True, default="")
     notification_settings = models.JSONField(default=dict, blank=True)
     shortcut_settings = models.JSONField(default=dict, blank=True)
+    presence_settings = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True, db_column="last_login_at")

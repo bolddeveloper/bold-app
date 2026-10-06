@@ -2,7 +2,7 @@
 export let directory = [];
 export let activeAssignment = null;
 export let activeAssignmentId = "";
-let state = { account: null, employee: null, assignments: [], units: [], directory, activeAssignment, activeUnit: null, sessionStatus: "loading", error: "", securityUncertain: false, authorizationRevision: 0 };
+let state = { account: null, employee: null, assignments: [], units: [], directory, activeAssignment, activeUnit: null, sessionStatus: "loading", error: "", securityUncertain: false, authorizationRevision: 0, presence: null };
 const listeners = new Set();
 export const getCoreState = () => state;
 export const subscribeCore = listener => { listeners.add(listener); return () => listeners.delete(listener); };
@@ -15,5 +15,5 @@ export function updateCore(patch) {
     for (const listener of listeners) listener();
 }
 export function clearCore() {
-    updateCore({ account: null, employee: null, assignments: [], units: [], directory: [], activeAssignment: null, sessionStatus: "anonymous", error: "", securityUncertain: false, authorizationRevision: 0 });
+    updateCore({ account: null, employee: null, assignments: [], units: [], directory: [], activeAssignment: null, sessionStatus: "anonymous", error: "", securityUncertain: false, authorizationRevision: 0, presence: null });
 }

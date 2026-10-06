@@ -11,6 +11,26 @@ from .service import event_path, google_request
 
 
 @shared_task
+def refresh_calendar_presence():
+    from boldApp.autenticacion.presence import connected_account_ids, settings_for
+    from boldApp.core.models import UserAccount
+    from .presence import refresh_meetings
+    from django.core.cache import caches
+    accounts = UserAccount.objects.filter(pk__in=connected_account_ids(), googleconnection__isnull=False)
+    for user in accounts:
+        preferences = settings_for(user)
+        if not preferences["calendar_automatic"] or preferences["status"] in ("offline", "vacation"):
+            continue
+        # A short lock prevents overlapping beats from multiplying Google requests.
+        key = f"calendar-sync:{user.pk}"
+        if caches["presence"].add(key, True, 110):
+            try:
+                refresh_meetings(user)
+            except Exception:
+                caches["presence"].delete(f"meetings:{user.pk}")
+
+
+@shared_task
 def cleanup_calendar_drafts():
     expired = CalendarDraft.objects.filter(last_seen_at__lt=timezone.now() - timedelta(minutes=4)).values_list("id", flat=True)
     for draft_id in expired:

@@ -66,6 +66,55 @@ class TasksV2ApiTests(TransactionTestCase):
             "project_position": "1.0000000000",
         }
 
+    def test_materialize_unsectioned_persists_name_links_and_task_status(self):
+        project = self.ops_project
+        task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Tarea sin sección", priority="high", created_by_assignment=self.actor_assignment)
+        link = TaskProject.objects.create(task=task, project=project, section=None, position="1250", added_by_assignment=self.actor_assignment)
+        response = self.client.post("/api/v2/sections/materialize-unsectioned/", {"project": str(project.pk), "name": "Nombre persistente"}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        link.refresh_from_db(); task.refresh_from_db()
+        self.assertEqual(str(link.section_id), response.data["id"])
+        self.assertEqual(link.position, 1250)
+        self.assertEqual(task.status_id, self.ops_status.pk)
+        self.assertEqual(self.client.get(f"/api/v2/sections/{link.section_id}/").data["name"], "Nombre persistente")
+        fresh = Task.objects.create(unit=self.operations, status=self.ops_status, title="Nueva sin sección", priority="high", created_by_assignment=self.actor_assignment)
+        fresh_link = TaskProject.objects.create(task=fresh, project=project, section=None, position="2250", added_by_assignment=self.actor_assignment)
+        self.assertIsNone(fresh_link.section_id)
+        duplicate = self.client.post("/api/v2/sections/materialize-unsectioned/", {"project": str(project.pk), "name": "Nombre persistente"}, format="json")
+        self.assertEqual(duplicate.status_code, 400)
+        fresh_link.refresh_from_db(); self.assertIsNone(fresh_link.section_id)
+
+    def test_sections_append_in_creation_order_and_reorder_atomically(self):
+        project = self.ops_project
+        z = self.client.post("/api/v2/sections/", {"project": str(project.pk), "name": "ZZZ"}, format="json")
+        a = self.client.post("/api/v2/sections/", {"project": str(project.pk), "name": "AAA"}, format="json")
+        self.assertEqual(z.status_code, 201, z.data)
+        self.assertEqual(a.status_code, 201, a.data)
+        original = list(project.sections.order_by("position", "created_at", "pk").values_list("pk", flat=True))
+        self.assertEqual([str(pk) for pk in original[-2:]], [z.data["id"], a.data["id"]])
+        ids = [str(pk) for pk in reversed(original)]
+        response = self.client.post("/api/v2/sections/reorder/", {"project": str(project.pk), "sections": ids}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([str(pk) for pk in project.sections.order_by("position").values_list("pk", flat=True)], ids)
+        response = self.client.post("/api/v2/sections/reorder/", {"project": str(project.pk), "sections": ids, "unsectioned_index": 0}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(self.client.get(f"/api/v2/projects/{project.pk}/").data["unsectioned_index"], 0)
+        for invalid in (-1, len(ids) + 1, "0", True):
+            response = self.client.post("/api/v2/sections/reorder/", {"project": str(project.pk), "sections": ids, "unsectioned_index": invalid}, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+        project.refresh_from_db(); self.assertEqual(project.unsectioned_index, 0)
+        for invalid in (ids[:-1], [ids[0]] * len(ids), [*ids[:-1], "not-a-uuid"]):
+            response = self.client.post("/api/v2/sections/reorder/", {"project": str(project.pk), "sections": invalid}, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertEqual([str(pk) for pk in project.sections.order_by("position").values_list("pk", flat=True)], ids)
+
+    def test_section_operations_enforce_management_permission(self):
+        self.client.force_authenticate(self.ana)
+        self.client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.pk))
+        for path, body in (("materialize-unsectioned", {"name": "No autorizado"}), ("reorder", {"sections": []})):
+            response = self.client.post(f"/api/v2/sections/{path}/", {"project": str(self.ops_project.pk), **body}, format="json")
+            self.assertEqual(response.status_code, 403, response.data)
+
     def test_cross_department_collaborator_reads_only_assigned_task(self):
         task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Colaboración entre áreas",
             priority="medium", created_by_assignment=self.david_assignment)

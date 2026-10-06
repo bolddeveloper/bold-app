@@ -1,0 +1,10 @@
+.home_presence_controls { display: grid; gap: 8px; margin: 8px 0 12px; min-width: 0; }
+.home_presence_controls input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); padding: 8px 10px; font: inherit; font-size: 12px; }
+.home_presence_controls .bold_select { min-width: 0; }
+.home_presence_list { max-height: 225px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.home_presence_person { display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--bold_line); padding: 10px 2px; }
+.home_presence_person > .bold_presence_dot { margin-top: 4px; }
+.home_presence_person > div { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.home_presence_person strong { font-size: 13px; }
+.home_presence_person span, .home_presence_person small, .home_presence_hint { color: var(--bold_muted); font-size: 11px; }
+.home_presence_hint { display: block; margin-top: 10px; }

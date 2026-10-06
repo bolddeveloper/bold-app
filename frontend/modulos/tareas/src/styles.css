@@ -12542,6 +12542,47 @@ button {
     }
 }
 
+/* Keep the composer in normal flow: a long history must never cover comments. */
+.detail_comments_list {
+    max-height: min(340px, 40dvh);
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    grid-auto-rows: max-content;
+    align-content: start;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+}
+.detail_comment_item { min-width: 0; overflow-wrap: anywhere; }
+.detail_comment_input_box {
+    position: relative;
+    bottom: auto;
+    z-index: auto;
+    flex-shrink: 0;
+    box-shadow: none;
+}
+.section_drag_grip {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 26px; width: 26px; height: 28px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--bold_muted, #7c8b9a); cursor: grab; touch-action: none;
+}
+.section_drag_grip:hover, .section_drag_grip:focus-visible { background: color-mix(in srgb, var(--bold_red) 12%, transparent); color: var(--bold_red); }
+.section_drag_grip:active { cursor: grabbing; }
+.section_drag_grip:disabled { display: none; }
+.mobile_task_section > .section_drag_grip { float: left; margin: 4px 6px 0 0; }
+.mobile_task_section > .mobile_section_header { width: auto; }
+.mobile_task_section[data-section-drop="before"] { box-shadow: inset 0 3px var(--bold_red); }
+.mobile_task_section[data-section-drop="after"] { box-shadow: inset 0 -3px var(--bold_red); }
+.section_drag_ghost {
+    position: fixed; left: 0; top: 0; z-index: 2000; pointer-events: none;
+    padding: 14px 18px; border: 1px solid var(--bold_red); border-radius: 10px;
+    background: var(--bold_surface, #fff); color: var(--bold_text, #202632);
+    box-shadow: 0 12px 32px #0003; font-weight: 700; overflow: hidden; text-overflow: ellipsis;
+}
+.task_group, .board_column { transition: opacity .15s ease, box-shadow .15s ease; }
+@media (prefers-reduced-motion: reduce) { .task_group, .board_column { transition: none; } }
+
 @media (prefers-reduced-motion: reduce) {
 
     .board_card {

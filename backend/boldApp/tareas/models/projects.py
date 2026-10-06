@@ -27,6 +27,8 @@ class Project(UUIDPrimaryKeyModel, SoftDeleteModel):
     end_date = models.DateField(null=True, blank=True)
     sensitivity_level = models.CharField(max_length=20, null=True, blank=True)
     is_archived = models.BooleanField(default=False)
+    # None keeps the virtual unsectioned group at the end, including new sections.
+    unsectioned_index = models.PositiveIntegerField(null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

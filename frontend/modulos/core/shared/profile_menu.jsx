@@ -38,6 +38,7 @@ export function ProfileQuickMenu({anchor, close, openProfile, changeDepartment})
             <h2>{core.employee?.full_name || identity?.name}</h2><p>{account?.email || identity?.email}</p>
             <p className="bold_profile_department">{identity?.unit_name} · {identity?.job_role_title}</p>
             <button className="bold_profile_action" onClick={() => {close(); openProfile(true);}}><Pencil size={17}/>Editar perfil</button>
+            <button className="bold_profile_action" onClick={() => {close(); openProfile(false, "presence");}}><User size={17}/>Mi disponibilidad</button>
             <button ref={departmentButton} className="bold_profile_action" aria-expanded={departments} aria-controls={departments ? "bold_profile_departments" : undefined} aria-haspopup="dialog" onClick={() => setDepartments(value => !value)}><User size={17}/>Cambiar departamento<ChevronRight size={17}/></button>
             <button className="bold_profile_action" onClick={() => {close(); openProfile(false, "news");}}><Newspaper size={17}/>Novedades</button>
             <button className="bold_profile_action" onClick={() => {close(); core.logout();}}><LogOut size={17}/>Cerrar sesión</button>

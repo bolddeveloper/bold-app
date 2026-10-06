@@ -239,6 +239,7 @@ function Sidebar(props) {
 // Renders the "Notificaciones" dropdown panel opened from the bell button.
 function NotificationsPanel(props) {
     const core = useCore();
+    const shell = useShell();
     const [clearing, setClearing] = useState(false), [clearError, setClearError] = useState("");
     async function clear() {
         setClearing(true); setClearError("");
@@ -255,6 +256,7 @@ function NotificationsPanel(props) {
         <div className="task_tool_panel notifications_panel" role="dialog" aria-label="Notificaciones">
             <header className="notifications_panel_header">
                 <h3>Notificaciones</h3><button type="button" className="icon_button" aria-label="Cerrar notificaciones" onClick={handle_close_notifications}>{render_icon(x_icon, 20)}</button>
+                <button className="link_button" type="button" onClick={() => {handle_close_notifications(); shell.open_profile(false, "notifications");}}>Configurar notificaciones</button>
                 <button className="link_button" type="button" onClick={handle_mark_notifications_read}>
                     Marcar como leidas
                 </button>

@@ -4,6 +4,12 @@ import {useCore} from "../core/core_provider.jsx";
 import {http} from "../core/http_client.js";
 import {notificationSounds, playNotificationSound, stopNotificationSound} from "../core/notification_sound.js";
 const endpoint = "/api/v2/auth/notification-settings/";
+export const notificationEvents = [
+    ["task.assigned", "Tareas asignadas a mí"], ["task.collaborator_added", "Me agregan como colaborador de una tarea"],
+    ["task.updated", "Ediciones de tareas"], ["task.status_changed", "Cambios de estado de tareas"], ["task.due_changed", "Cambios de fecha límite"],
+    ["project.created", "Proyectos nuevos"], ["project.assigned", "Me asignan como responsable de un proyecto"], ["project.member_added", "Me agregan a un proyecto"], ["project.updated", "Ediciones de proyectos"],
+    ["comment.created", "Comentarios nuevos"], ["comment.mentioned", "Menciones en comentarios"],
+];
 
 export default function NotificationPreferences() {
     const core = useCore();
@@ -49,6 +55,7 @@ export default function NotificationPreferences() {
         finally {if (alive.current) setBusy(false);}
     }
     return <section className="bold_notification_preferences"><h2><Volume2 size={22}/>Notificaciones</h2><p>Elige el sonido de las nuevas notificaciones de BOLD. Se guarda en tu cuenta.</p>{error && <p role="alert">{error}<button type="button" onClick={load}>Reintentar</button></p>}{notice && <p role="status">{notice}</p>}{!settings ? <p>Cargando preferencias…</p> : <form onSubmit={save}>
+        <fieldset disabled={busy}><legend>Eventos que quiero recibir</legend><p>Controla los avisos nuevos dentro de BOLD y sus alertas. Los avisos anteriores se conservan.</p>{notificationEvents.map(([id, label]) => <label className="bold_notification_toggle" key={id}><input type="checkbox" checked={settings.events?.[id] !== false} onChange={event => setSettings(value => ({...value, events: {...value.events, [id]: event.target.checked}}))}/>{label}</label>)}</fieldset>
         <label className="bold_notification_toggle"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={event => setSettings({...settings, enabled: event.target.checked})}/>Sonido de notificaciones</label>
         <fieldset disabled={busy}><legend>Sonido</legend>{[...notificationSounds,["custom","Personalizado"]].map(([id,label]) => <label className="bold_notification_choice" key={id}><input type="radio" name="notification-sound" value={id} checked={settings.sound === id} disabled={id === "custom" && !settings.custom_audio} onChange={() => setSettings({...settings, sound: id})}/>{label}</label>)}</fieldset>
         <label>Volumen: {settings.volume}%<input type="range" min="0" max="100" value={settings.volume} disabled={busy} onChange={event => setSettings({...settings, volume: Number(event.target.value)})}/></label>

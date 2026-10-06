@@ -9,6 +9,8 @@ from boldApp.core.events import build_event_envelope
 from boldApp.core.security_control import security_snapshot as sync_security_snapshot
 
 security_snapshot = database_sync_to_async(sync_security_snapshot)
+from boldApp.autenticacion.presence import heartbeat_snapshot
+presence_snapshot = database_sync_to_async(heartbeat_snapshot)
 
 
 @database_sync_to_async
@@ -90,7 +92,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.notification_group = f"notifications_assignment_{self.assignment_id}"
         self.session_group = f"session_{self.session_id}"
         self.groups_joined = (self.notification_group, self.session_group,
-                              f"assignment_{self.assignment_id}", "permission_watch")
+                              f"assignment_{self.assignment_id}", "permission_watch", "presence_watch")
         for group in self.groups_joined:
             await self.channel_layer.group_add(group, self.channel_name)
         self.control_channel = str(uuid.uuid4())
@@ -125,9 +127,10 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.control_state = (snapshot["revision"], snapshot["state"])
         self.next_check_seconds = max(0.05, min(30, snapshot["boundary_ms"] / 1000))
         self.control_sequence += 1
+        presence = await presence_snapshot(self.session_id)
         await self.send_json(build_event_envelope(
             event_type, "security_control", self.control_channel,
-            {**snapshot, "assignment": self.assignment_id, "sequence": self.control_sequence,
+            {**snapshot, "presence": presence, "assignment": self.assignment_id, "sequence": self.control_sequence,
              "capabilities": {"permissions_revision": True}, "lease_ms": 45000,
              "force": force or changed},
         ))
@@ -138,6 +141,10 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             while True:
                 try:
                     await asyncio.wait_for(self.security_wake.wait(), timeout=self.next_check_seconds)
+                    # Policy/assignment handlers already checked and sent control.
+                    # Wake only restarts the lease timer; do not send a duplicate.
+                    self.security_wake.clear()
+                    continue
                 except asyncio.TimeoutError:
                     pass
                 self.security_wake.clear()
@@ -168,6 +175,9 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         # revision. Duplicate/irrelevant model signals must not reload every client.
         await self.send_control("permissions.revision")
         self.security_wake.set()
+
+    async def presence_changed(self, event):
+        await self.send_control()
 
     async def notification_created(self, event):
         if not await notification_identity_is_active(self.session_id, self.assignment_id):

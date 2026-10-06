@@ -25,3 +25,16 @@ class NotificationSettingsTests(TestCase):
         audio = "data:audio/ogg;base64," + base64.b64encode(b"OggSdemo").decode()
         self.assertEqual(self.client.patch(self.url, {"custom_audio": audio, "sound": "custom", "custom_name": "demo.ogg"}, format="json").status_code, 200)
         self.assertEqual(self.client.get(self.url).data["custom_audio"], audio)
+
+    def test_event_preferences_merge_and_validate(self):
+        result = self.client.patch(self.url, {"events": {"task.updated": False}}, format="json")
+        self.assertEqual(result.status_code, 200)
+        self.assertFalse(result.data["events"]["task.updated"])
+        self.assertTrue(result.data["events"]["task.assigned"])
+        result = self.client.patch(self.url, {"events": {"project.updated": False}}, format="json")
+        self.assertFalse(result.data["events"]["task.updated"])
+        self.assertFalse(result.data["events"]["project.updated"])
+        for invalid in [{"unknown": True}, {"task.updated": "maybe"}, {"task.updated": {"user": "x"}}]:
+            self.assertEqual(self.client.patch(self.url, {"events": invalid}, format="json").status_code, 400)
+        self.client.force_authenticate(self.users[1])
+        self.assertTrue(self.client.get(self.url).data["events"]["task.updated"])

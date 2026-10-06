@@ -39,7 +39,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = "__all__"
-        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at"]
+        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "unsectioned_index"]
         validators = []
 
     def validate_name(self, value):
@@ -151,6 +151,7 @@ class SectionSerializer(serializers.ModelSerializer):
         model = Section
         fields = "__all__"
         read_only_fields = ["created_at", "updated_at"]
+        extra_kwargs = {"position": {"required": False}}
 
 
 class TaskStatusSerializer(serializers.ModelSerializer):

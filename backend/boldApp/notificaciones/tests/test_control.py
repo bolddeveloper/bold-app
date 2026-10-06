@@ -45,7 +45,10 @@ class SecurityControlTests(TransactionTestCase):
             self.assertEqual(ready["payload"]["assignment"], str(self.assignment.id))
             self.assertEqual(ready["payload"]["capabilities"], {"permissions_revision": True})
             self.assertEqual(set(ready["payload"]), {"revision", "state", "context", "boundary_ms", "assignment",
-                                                    "sequence", "capabilities", "lease_ms", "force"})
+                                                    "sequence", "capabilities", "lease_ms", "force", "presence"})
+            self.assertEqual(set(ready["payload"]["presence"]), {"rows", "updated_at", "grace_seconds"})
+            for person in ready["payload"]["presence"]["rows"]:
+                self.assertEqual(set(person), {"employee_id", "name", "units", "status", "title", "description"})
             self.assertFalse(ready["payload"]["force"])
             await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": None})
             update = await socket.receive_json_from()

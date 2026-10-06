@@ -1,3 +1,4 @@
+import SectionDragHandle from "./section_drag_handle.jsx";
 import ColorPicker from "../../core/shared/color_picker.jsx";
 import { cropAvatar as crop_project_avatar } from "../../core/shared/avatar_image.js";
 import { projectHasTasks } from "./services/project_deletion.js";
@@ -6,7 +7,7 @@ import { tasksBySection } from "./services/task_models.js";
 import { ResponsiveOverlay } from "../../core/shared/responsive_overlay.jsx";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useDialog } from "../../core/shared/use_dialog.js";
-import { createContext, useContext, Component as react_component, createElement as create_element, useEffect as use_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
+import { createContext, useContext, Component as react_component, createElement as create_element, useEffect as use_effect, useLayoutEffect as use_layout_effect, useId as use_id, useMemo as use_memo, useState as use_state, useRef as use_ref } from "react";
 import Swal from "sweetalert2";
 import { createPortal } from "react-dom";
 import {
@@ -2964,6 +2965,8 @@ function render_list_view(props) {
 
             <div className="mobile_task_stack mobile_only">
                 {board_columns.map((section_item) => render_mobile_section({
+                    can_reorder_sections: board_columns.length > 1,
+                    handle_section_drag_start, handle_section_drag_over, handle_section_drop, handle_section_drag_end, handle_section_key_down,
                     mobile_actions: props.mobile_actions,
                     collapsed_sections,
                     filtered_tasks,
@@ -3027,6 +3030,7 @@ function render_task_group(props) {
         <div
             className={`task_group ${dragged_task_id ? "task_group_drop_ready" : ""}${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
             data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
+            data-section-id={section_item.id}
             key={section_item.id}
             onDragOver={event => dragged_section_id ? handle_section_drag_over(event, section_item.id, "list") : handle_column_drop && event.preventDefault()}
             onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "list"); else handle_column_drop?.(section_item.id); }}
@@ -3034,6 +3038,7 @@ function render_task_group(props) {
             <div className="task_group_header" role="button" tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") handle_toggle_section(section_item.id);
             }}>
+                <SectionDragHandle id={section_item.id} label={section_item.label} view="list" disabled={!can_reorder_sections} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
                 <span className={`section_chevron ${is_collapsed ? "section_chevron_collapsed" : ""}`}>
                     {render_icon(chevron_down_icon, 14)}
                 </span>
@@ -3276,6 +3281,7 @@ function render_task_row(props) {
 // Renders one task section in the mobile list.
 function render_mobile_section(props) {
     const {
+        can_reorder_sections, handle_section_drag_start, handle_section_drag_over, handle_section_drop, handle_section_drag_end, handle_section_key_down,
         collapsed_sections = [],
         filtered_tasks,
         handle_task_select,
@@ -3291,7 +3297,8 @@ function render_mobile_section(props) {
     }
 
     return (
-        <div className="mobile_task_section" key={section_item.id}>
+        <div className="mobile_task_section" data-section-id={section_item.id} key={section_item.id}>
+            <SectionDragHandle id={section_item.id} label={section_item.label} view="list" disabled={!can_reorder_sections} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
             <button className="mobile_section_header" type="button" onClick={() => handle_toggle_section(section_item.id)}>
                 <span className={`section_chevron ${is_collapsed ? "section_chevron_collapsed" : ""}`}>
                     {render_icon(chevron_down_icon, 14)}
@@ -3427,12 +3434,14 @@ function render_board_view(props) {
                     <section
                         className={`board_column${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
                         data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
+                        data-section-id={section_item.id}
                         key={section_item.id}
                         onDragOver={event => { if (dragged_section_id) handle_section_drag_over(event, section_item.id, "board"); else if (handle_column_drop) { event.preventDefault(); event.currentTarget.dataset.taskDrop = "true"; } }}
                         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.taskDrop; }}
                         onDrop={event => { event.preventDefault(); delete event.currentTarget.dataset.taskDrop; if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else handle_column_drop?.(section_item.id); }}
                     >
                         <header>
+                            <SectionDragHandle id={section_item.id} label={section_item.label} view="board" disabled={board_columns.length < 2} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
                             {editing_column_id === section_item.id ? (
                                 <input
                                     autoFocus
@@ -4420,12 +4429,28 @@ function TaskAppContent({ externalModules = {} }) {
     const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
     const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
-    const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id) : mock_sections_by_project[selected_project_id] || [];
+    const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id).sort((a, b) => Number(a.position) - Number(b.position) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))) : mock_sections_by_project[selected_project_id] || [];
     const board_columns = task_scope !== "project" && real
         ? [{ id: "unsectioned", label: task_scope === "workspace" ? active_workspace?.name || "Workspace" : "Mis tareas" }]
         : !unsectioned_config.hidden || has_unsectioned_tasks
-            ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id])
+            ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id] ?? (real ? data?.projects.find(project => project.id === selected_project_id)?.unsectioned_index : undefined))
             : project_sections;
+    const section_positions = use_ref(new Map());
+    const section_order_key = board_columns.map(section => section.id).join(",");
+    use_layout_effect(() => {
+        const next = new Map();
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        document.querySelectorAll("[data-section-id]").forEach(element => {
+            const key = `${element.classList[0]}:${element.dataset.sectionId}`;
+            const point = {x: element.offsetLeft, y: element.offsetTop}, previous = section_positions.current.get(key);
+            next.set(key, point);
+            if (previous && !reduced && element.animate && (previous.x !== point.x || previous.y !== point.y)) {
+                element.getAnimations().forEach(animation => animation.cancel());
+                element.animate([{transform: `translate(${previous.x - point.x}px, ${previous.y - point.y}px)`}, {transform: "translate(0, 0)"}], {duration: 180, easing: "ease-out"});
+            }
+        });
+        section_positions.current = next;
+    }, [section_order_key, active_view, selected_project_id]);
 
     const [task_detail_width, set_task_detail_width] = use_state(() => {
         const saved = Number(localStorage.getItem("bold_task_drawer_width"));
@@ -4745,7 +4770,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function section_drop_side(event, section_id, view) {
-        const anchor = event.currentTarget.querySelector(view === "list" ? ".task_group_header" : "header");
+        const anchor = event.currentTarget.querySelector(view === "list" ? ".task_group_header, .mobile_section_header" : "header");
         const rect = anchor.getBoundingClientRect();
         return (view === "list" ? event.clientY > rect.top + rect.height / 2 : event.clientX > rect.left + rect.width / 2) ? "after" : "before";
     }
@@ -4766,11 +4791,12 @@ function TaskAppContent({ externalModules = {} }) {
         if (virtual_index >= 0) set_unsectioned_order_by_project(current => ({ ...current, [selected_project_id]: virtual_index }));
         const sections = board_columns.filter(section => section.id !== "unsectioned");
         const real_next = next.filter(section => section.id !== "unsectioned");
-        if (real_next.every((section, index) => section.id === sections[index]?.id)) return;
+        if (!real && real_next.every((section, index) => section.id === sections[index]?.id)) return;
         if (real) {
             const positions = new Map(real_next.map((section, index) => [section.id, (index + 1) * 1000]));
             set_data(current => ({ ...current, sections: current.sections.map(section => positions.has(section.id) ? { ...section, position: String(positions.get(section.id)) } : section).sort((a, b) => Number(a.position) - Number(b.position)) }));
-            mutate(async () => { for (const section of sections) if (Number(section.position) !== positions.get(section.id)) await api.update("sections", section.id, { position: String(positions.get(section.id)) }); }, () => {}, "Orden de secciones guardado", undefined, ["sections"]);
+            const reconcile_virtual = () => set_unsectioned_order_by_project(current => {const next = {...current}; delete next[selected_project_id]; return next;});
+            mutate(() => api.reorderSections({ project: selected_project_id, sections: real_next.map(section => section.id), unsectioned_index: virtual_index < 0 ? null : virtual_index }), reconcile_virtual, "Orden de secciones guardado", reconcile_virtual, ["sections", "projects"]);
         } else {
             set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: real_next }));
         }
@@ -4806,7 +4832,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_add_column() {
-        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim(), position: String(Math.max(0, ...board_columns.map(item => Number(item.position) || 0)) + 1000) }), () => { set_new_column_name(""); set_is_adding_column(false); }, undefined, undefined, ["sections"]); return; }
+        if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim() }), () => { set_new_column_name(""); set_is_adding_column(false); }, undefined, undefined, ["sections"]); return; }
         const trimmed_name = new_column_name.trim();
         if (!trimmed_name) return;
 
@@ -4822,10 +4848,24 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_save_column_name() {
+        if (real && mutation_pending.current) return;
         const label = editing_column_name.trim();
         if (!editing_column_id || !label) return;
         if (editing_column_id === "unsectioned") {
-            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label, hidden: false } }));
+            if (task_scope !== "project") return;
+            if (real) {
+                mutate(() => api.materializeUnsectioned({ project: selected_project_id, name: label }), () => {
+                    set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
+                    set_unsectioned_order_by_project(current => {const next = {...current}; delete next[selected_project_id]; return next;});
+                    set_editing_column_id(null);
+                    set_editing_column_name("");
+                }, "Sección guardada con sus tareas", undefined, ["sections", "links", "projects"]);
+                return;
+            }
+            const id = `col_${Date.now()}`;
+            set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: [...(current[selected_project_id] || []), { id, label }] }));
+            set_tasks(current => current.map(task => task.project_id === selected_project_id && task.section === "unsectioned" ? { ...task, section: id } : task));
+            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
             set_editing_column_id(null);
             set_editing_column_name("");
             return;

@@ -4,6 +4,7 @@ from django.db import transaction
 
 from boldApp.core.authorization import build_authorization_context, resolve_access
 from boldApp.core.models import Permission, PositionAssignment, UserAccount
+from boldApp.autenticacion.notification_settings import event_preferences
 from boldApp.tareas.models import Comment, Project, ProjectMember, Task, TaskFollower
 
 from .events import dispatch_notification
@@ -55,6 +56,8 @@ def _actor_name(actor):
 
 def create_notification(*, recipient, event_type, title, body="", actor=None, task=None, project=None, route=None, metadata=None, dedupe_key=None):
     if actor and recipient.id == actor.id:
+        return None
+    if not event_preferences(recipient.employee.user_account.notification_settings).get(event_type, True):
         return None
     defaults = {
         "actor_assignment": actor,
@@ -118,7 +121,6 @@ def notify_task_updated(task_id, previous, actor_id=None):
     event_type = "task.updated"
     if previous.get("assignee") != task.assignee_assignment_id:
         changes.append("responsable")
-        event_type = "task.assigned"
     if previous.get("status") != task.status_id:
         changes.append("estado")
         event_type = "task.status_changed"

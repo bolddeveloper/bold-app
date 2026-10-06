@@ -121,3 +121,10 @@
 .bold_profile_module .bold_notification_preferences input:is([type="radio"], [type="checkbox"]) {width: auto; accent-color: var(--bold_red);}
 .bold_profile_module .bold_notification_preferences input[type="range"] {padding: 0; accent-color: var(--bold_red);}
 .bold_notification_preferences > p, .bold_notification_preferences form > p {color: var(--bold_muted);}
+.bold_presence_preferences { max-width: 700px; }
+.bold_presence_preferences h2 { display: flex; align-items: center; gap: 10px; }
+.bold_presence_preferences fieldset { display: grid; gap: 16px; border: 1px solid var(--bold_line); border-radius: 12px; padding: 18px; min-width: 0; }
+.bold_presence_choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.bold_profile_module .bold_presence_choice { display: flex; align-items: center; gap: 10px; font-weight: 400; }
+.bold_profile_module .bold_presence_choice input { width: auto; accent-color: var(--bold_red); }
+.bold_presence_preferences small { color: var(--bold_muted); line-height: 1.6; }

@@ -4,15 +4,31 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False}
+EVENT_TYPES = (
+    "task.assigned", "task.collaborator_added", "task.updated", "task.status_changed", "task.due_changed",
+    "project.created", "project.assigned", "project.member_added", "project.updated",
+    "comment.created", "comment.mentioned",
+)
+DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False,
+            "events": dict.fromkeys(EVENT_TYPES, True)}
+
+
+def event_preferences(settings):
+    return {**DEFAULTS["events"], **(settings or {}).get("events", {})}
 
 class NotificationSettingsSerializer(serializers.Serializer):
+    events = serializers.DictField(child=serializers.BooleanField(), required=False)
     enabled = serializers.BooleanField(required=False)
     desktop_enabled = serializers.BooleanField(required=False)
     sound = serializers.ChoiceField(choices=["samsung", "post", "melody", "delivered", "facebook", "custom"], required=False)
     volume = serializers.IntegerField(min_value=0, max_value=100, required=False)
     custom_name = serializers.CharField(max_length=120, allow_blank=True, required=False)
     custom_audio = serializers.CharField(max_length=700000, allow_blank=True, required=False)
+
+    def validate_events(self, value):
+        if set(value) - set(EVENT_TYPES):
+            raise serializers.ValidationError("Tipo de evento desconocido.")
+        return value
 
     def validate_custom_audio(self, value):
         if not value:
@@ -35,6 +51,7 @@ class NotificationSettingsSerializer(serializers.Serializer):
         if set(self.initial_data) - set(self.fields):
             raise serializers.ValidationError("Preferencia de notificación inválida.")
         settings = {**DEFAULTS, **self.context["existing"], **attrs}
+        settings["events"] = {**event_preferences(self.context["existing"]), **attrs.get("events", {})}
         if settings["sound"] == "custom" and not settings["custom_audio"]:
             raise serializers.ValidationError("Sube un sonido antes de seleccionar Personalizado.")
         if settings["sound"] in ["soft", "bell", "double"]:
@@ -44,6 +61,7 @@ class NotificationSettingsSerializer(serializers.Serializer):
 class NotificationSettingsView(APIView):
     def get(self, request):
         settings = {**DEFAULTS, **request.user.notification_settings}
+        settings["events"] = event_preferences(request.user.notification_settings)
         if settings["sound"] in ["soft", "bell", "double"]:
             settings["sound"] = DEFAULTS["sound"]
         return Response(settings)

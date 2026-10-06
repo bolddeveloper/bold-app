@@ -160,7 +160,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const monitor = createPermissionMonitor({ assignmentId, cache: permissionCache.current,
             fetchRevision: () => coreApi.getPermissionRevision(),
             onInvalidate: detail => {
-                updateCore({ securityUncertain: Boolean(detail.uncertain), authorizationRevision: getCoreState().authorizationRevision + 1 });
+                updateCore({ securityUncertain: Boolean(detail.uncertain), authorizationRevision: getCoreState().authorizationRevision + 1, ...(detail.uncertain ? {presence: null} : {}) });
                 window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail }));
                 if (detail.contextChanged) {
                     // Rebuild Core identity/unit projections before remounting modules.
@@ -240,9 +240,13 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onNotification: () => reconcile("notification-event", true),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => reconcile("notification-reconnect"),
-            onControl: envelope => mounted && window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } })),
+            onControl: envelope => {
+                if (!mounted) return;
+                updateCore({presence: Array.isArray(envelope.payload?.presence?.rows) ? envelope.payload.presence : null});
+                window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
+            },
             onState: status => {
-                if (mounted && status !== "open") window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId } }));
+                if (mounted && status !== "open") { updateCore({presence: null}); window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId } })); }
             },
             onTerminal: error => {
                 if (mounted && [401, 403].includes(error?.status)) window.dispatchEvent(new Event("bold:unauthorized"));

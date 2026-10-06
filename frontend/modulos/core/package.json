@@ -7,7 +7,7 @@
         "dev": "vite --configLoader runner --host 0.0.0.0",
         "build": "vite build --configLoader runner",
         "preview": "vite preview --configLoader runner --host 0.0.0.0",
-        "test": "node --test shared/image_controls.test.js shared/bold_dialog.test.js keyboard_shortcuts.test.js google_cache.test.js onboarding*.test.js ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../docs/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js",
+        "test": "node --test shared/image_controls.test.js shared/bold_dialog.test.js shared/presence.test.js keyboard_shortcuts.test.js google_cache.test.js onboarding*.test.js ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../docs/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js",
         "test:worker": "node --test worker/*.test.js",
         "check:sync-capacity": "node tools/check_sync_capacity.mjs",
         "probe:public-health": "node tools/probe_public_health.mjs",
