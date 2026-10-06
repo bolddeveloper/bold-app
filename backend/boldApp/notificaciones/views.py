@@ -37,7 +37,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         ]
 
     def get_queryset(self):
-        base = Notification.objects.filter(recipient_assignment=self.request.assignment)
+        base = Notification.objects.filter(recipient_assignment=self.request.assignment, dismissed_at__isnull=True)
         if self.kwargs.get("pk"):
             base = base.filter(pk=self.kwargs["pk"])
         task_ids = base.exclude(task_id__isnull=True).values_list("task_id", flat=True)
@@ -51,6 +51,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         ).filter(
             Q(project__isnull=True) | Q(project_id__in=visible_projects),
         ).order_by("-created_at", "pk")
+
+    @action(detail=False, methods=["post"], url_path="clear")
+    def clear(self, request):
+        updated = self.get_queryset().update(dismissed_at=timezone.now())
+        return Response({"updated": updated})
 
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):

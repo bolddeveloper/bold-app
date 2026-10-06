@@ -1,6 +1,7 @@
+import PrivateNotes from "./private_notes.jsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AtSign, BarChart3, CalendarDays, Check, ChevronRight, Clock3, FolderPlus, GripVertical, MoreHorizontal, Plus, RotateCcw, Search, X } from "lucide-react";
+import { AtSign, BarChart3, CalendarDays, Check, ChevronRight, Clock3, FolderPlus, GripVertical, MoreHorizontal, Plus, RotateCcw, Search, X, LockKeyhole } from "lucide-react";
 import { useDialog } from "../../core/shared/use_dialog.js";
 import { useMediaQuery } from "../../core/shared/use_media_query.js";
 import { useShell } from "../../core/app_shell.jsx";
@@ -10,8 +11,8 @@ import "./home.css";
 
 const percentage = (part, total) => total ? Math.round(part / total * 100) : 0;
 const dateText = date => date.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
-const widgetNames = { metrics: "Indicadores", tasks: "Mis tareas", projects: "Proyectos", activity: "Actividad reciente", shortcuts: "Navegación rápida", status: "Tareas por estado", deadlines: "Próximos vencimientos" };
-const widgetIcons = { metrics: BarChart3, tasks: Check, projects: FolderPlus, activity: AtSign, shortcuts: ChevronRight, status: BarChart3, deadlines: CalendarDays };
+const widgetNames = { notes: "Bloc de notas privado", metrics: "Indicadores", tasks: "Mis tareas", projects: "Proyectos", activity: "Actividad reciente", shortcuts: "Navegación rápida", status: "Tareas por estado", deadlines: "Próximos vencimientos" };
+const widgetIcons = { notes: LockKeyhole, metrics: BarChart3, tasks: Check, projects: FolderPlus, activity: AtSign, shortcuts: ChevronRight, status: BarChart3, deadlines: CalendarDays };
 const WidgetTitleContext = createContext(null);
 function WidgetHeading({ type, title, action, onAction }) {
     const Icon = widgetIcons[type], editing = useContext(WidgetTitleContext);
@@ -122,7 +123,7 @@ function DeadlinesWidget({ data, onOpenTask, onOpenTasks }) {
 function GalleryPreview({ type, data, projects, catalog }) {
     const widget = { type, variant: "compact", metrics: Object.keys(metricNames), tab: "today", shortcuts: ["create_task", "create_project"] };
     const noop = () => {};
-    const content = type === "metrics" ? <MetricsWidget widget={widget} data={data} />
+    const content = type === "notes" ? <PrivateNotes preview /> : type === "metrics" ? <MetricsWidget widget={widget} data={data} />
         : type === "tasks" ? <TasksWidget widget={widget} data={data} projects={projects} onChange={noop} onOpenTask={noop} onOpenTasks={noop} onToggleTask={noop} onCreateTask={noop} />
         : type === "projects" ? <ProjectsWidget data={data} onOpenProject={noop} onOpenTasks={noop} />
         : type === "activity" ? <ActivityWidget activity={data.activity} onOpenTasks={noop} onOpenTask={noop} onOpenProject={noop} />
@@ -136,7 +137,7 @@ function WidgetGallery({ data, projects, catalog, layout, onAdd, onClose, trigge
     const [added, setAdded] = useState(0);
     useDialog(true, ".home_gallery", onClose);
     useEffect(() => () => triggerRef.current?.focus(), [triggerRef]);
-    const descriptions = { metrics: "Tus cifras importantes de un vistazo", tasks: "Lo pendiente para hoy y los próximos días", projects: "Avance de tus proyectos", activity: "Últimos movimientos de tu equipo", shortcuts: "Enlaces a lo que usas más", status: "Distribución real de tus tareas", deadlines: "Tareas con fecha próxima" };
+    const descriptions = { notes: "Tus notas personales, sincronizadas entre dispositivos", metrics: "Tus cifras importantes de un vistazo", tasks: "Lo pendiente para hoy y los próximos días", projects: "Avance de tus proyectos", activity: "Últimos movimientos de tu equipo", shortcuts: "Enlaces a lo que usas más", status: "Distribución real de tus tareas", deadlines: "Tareas con fecha próxima" };
     return createPortal(<div className="home_modal_backdrop home_gallery_backdrop" onPointerDown={event => event.target === event.currentTarget && onClose()}><section className="home_gallery" role="dialog" aria-modal="true" aria-label="Galería de widgets"><header><div><span>PERSONALIZA TU INICIO</span><h2>Galería de widgets</h2><p>Agrega los widgets disponibles.</p></div><button type="button" aria-label="Cerrar galería" onClick={onClose}><X /></button></header><div className="home_gallery_grid">{HOME_WIDGET_TYPES.filter(type => type === "shortcuts" || !layout.some(widget => widget.type === type)).map(type => <article className="home_gallery_card home_variant_compact" aria-label={widgetNames[type]} key={type}><div className={`home_gallery_preview home_gallery_preview_${type}`} inert><GalleryPreview type={type} data={data} projects={projects} catalog={catalog} /></div><div className="home_gallery_card_info"><p>{descriptions[type]}</p><button type="button" onClick={() => { onAdd(type); setAdded(count => count + 1); }}><Plus /> Agregar</button></div></article>)}</div><footer><span role="status">{added ? `${added} ${added === 1 ? "widget agregado" : "widgets agregados"} al tablero` : "Selecciona un widget para agregarlo"}</span><button type="button" onClick={onClose}>Listo</button></footer></section></div>, document.body);
 }
 
@@ -255,7 +256,7 @@ export default function HomeModule({ currentUser, notifications, onCreateProject
                 const configure = ["metrics", "shortcuts"].includes(widget.type) ? () => setPicker({ type: widget.type, index }) : null;
                 return <HomeWidgetSlot widget={widget} position={positions[widget.id]} columns={columns} dragging={draggingId === widget.id} dropTarget={dropTargetId === widget.id} onMeasure={measureWidget} key={widget.id}>
                     <WidgetFrame widget={widget} index={index} openId={openMenu} setOpenId={setOpenMenu} move={move} remove={position => setLayout(items => items.filter((_, itemIndex) => itemIndex !== position))} configure={configure} update={update} beginDrag={beginDrag}>
-                        {widget.type === "metrics" ? <MetricsWidget widget={widget} data={data} /> : widget.type === "tasks" ? <TasksWidget widget={widget} data={data} projects={projects} onChange={value => update(index, value)} onOpenTask={onOpenTask} onOpenTasks={onOpenTasks} onToggleTask={onToggleTask} onCreateTask={onCreateTask} /> : widget.type === "projects" ? <ProjectsWidget data={data} onOpenProject={onOpenProject} onOpenTasks={() => onNavigate("projects")} /> : widget.type === "activity" ? <ActivityWidget activity={data.activity} onOpenTasks={() => onNavigate("inbox")} onOpenTask={onOpenTask} onOpenProject={onOpenProject} /> : widget.type === "status" ? <StatusWidget data={data} onOpenTasks={onOpenTasks} /> : widget.type === "deadlines" ? <DeadlinesWidget data={data} onOpenTask={onOpenTask} onOpenTasks={onOpenTasks} /> : <ShortcutsWidget widget={widget} catalog={catalog} />}
+                        {widget.type === "notes" ? <PrivateNotes heading={<WidgetHeading type="notes" />} key={storageKey} storageKey={`bold_private_notes:${currentUser?.id || "local"}`} /> : widget.type === "metrics" ? <MetricsWidget widget={widget} data={data} /> : widget.type === "tasks" ? <TasksWidget widget={widget} data={data} projects={projects} onChange={value => update(index, value)} onOpenTask={onOpenTask} onOpenTasks={onOpenTasks} onToggleTask={onToggleTask} onCreateTask={onCreateTask} /> : widget.type === "projects" ? <ProjectsWidget data={data} onOpenProject={onOpenProject} onOpenTasks={() => onNavigate("projects")} /> : widget.type === "activity" ? <ActivityWidget activity={data.activity} onOpenTasks={() => onNavigate("inbox")} onOpenTask={onOpenTask} onOpenProject={onOpenProject} /> : widget.type === "status" ? <StatusWidget data={data} onOpenTasks={onOpenTasks} /> : widget.type === "deadlines" ? <DeadlinesWidget data={data} onOpenTask={onOpenTask} onOpenTasks={onOpenTasks} /> : <ShortcutsWidget widget={widget} catalog={catalog} />}
                     </WidgetFrame>
                 </HomeWidgetSlot>;
             })}

@@ -1,0 +1,123 @@
+/* Perfil: cuenta personal, vista previa y conexiones Google. */
+.bold_profile_module {
+    padding: 24px;
+    color: var(--bold_text);
+    min-width: 0;
+}
+.bold_profile_header, .bold_profile_section_heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.bold_profile_header h1, .bold_profile_section_heading h2 { margin: 0; }
+.bold_profile_layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; }
+.bold_profile_navigation {
+    padding: 16px;
+    border: 1px solid var(--bold_line);
+    border-radius: 16px;
+    background: var(--bold_surface);
+    align-self: start;
+}
+.bold_profile_identity { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; overflow-wrap: anywhere; }
+.bold_profile_navigation nav { display: grid; gap: 8px; }
+.bold_profile_navigation nav button { justify-content: flex-start; }
+.bold_profile_navigation button[aria-current="page"] { color: var(--bold_red); background: var(--bold_surface_soft); }
+.bold_profile_main { min-width: 0; max-width: 1100px; }
+.bold_profile_main > p, .bold_profile_card_content > p { color: var(--bold_muted); }
+.bold_profile_editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 28px; }
+.bold_profile_account_fields dl { margin: 0; }
+.bold_profile_account_fields dl > div { padding: 20px 0; border-bottom: 1px solid var(--bold_line); }
+.bold_profile_account_fields dt { color: var(--bold_muted); font-size: 13px; margin-bottom: 8px; }
+.bold_profile_account_fields dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+.bold_profile_module form { display: grid; gap: 18px; }
+.bold_profile_module label { display: grid; gap: 9px; font-weight: 600; }
+.bold_profile_module input:not([type="file"]) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid var(--bold_line);
+    border-radius: 9px;
+    color: var(--bold_text);
+    background: var(--bold_surface);
+    font: inherit;
+}
+.bold_profile_module small, .bold_profile_account_fields form > p { color: var(--bold_muted); font-size: 12px; font-weight: 400; }
+.bold_profile_buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.bold_profile_module button, .bold_profile_popover button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 38px;
+    padding: 9px 12px;
+    border: 1px solid var(--bold_line);
+    border-radius: 9px;
+    color: inherit;
+    background: var(--bold_surface);
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.bold_profile_module button:hover:not(:disabled), .bold_profile_popover button:hover:not(:disabled) { background: var(--bold_surface_soft); border-color: var(--bold_red); }
+.bold_profile_module button:disabled { opacity: .55; cursor: default; }
+.bold_profile_module .bold_profile_primary { background: var(--bold_red); color: white; border-color: var(--bold_red); }
+.bold_profile_module :focus-visible, .bold_profile_popover :focus-visible, .profile_identity_button:focus-visible, .profile_header_button:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; }
+.bold_profile_security { border-top: 1px solid var(--bold_line); margin-top: 32px; padding-top: 18px; }
+.bold_profile_security form { margin-top: 20px; max-width: 480px; }
+.bold_profile_error { padding: 14px; border: 1px solid var(--bold_red); border-radius: 10px; margin-bottom: 16px; }
+
+/* Edición sobre la tarjeta: foto con lápiz y campos de cuenta. */
+.bold_profile_module form.bold_profile_card_content { display: block; }
+.bold_profile_card_content label { margin-top: 14px; }
+.bold_profile_card_content .bold_profile_buttons { margin-top: 18px; }
+.bold_profile_card_content .bold_profile_photo_help { color: var(--bold_muted); font-size: 12px; }
+.bold_profile_module button.bold_profile_photo_edit {
+    position: relative;
+    display: flex;
+    width: 94px;
+    height: 94px;
+    margin-top: -38px;
+    padding: 0;
+    border: 5px solid var(--bold_surface);
+    border-radius: 50%;
+    overflow: hidden;
+}
+.bold_profile_photo_edit .bold_profile_avatar { width: 100%; height: 100%; font-size: 26px; }
+.bold_profile_photo_overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(35, 38, 43, .45);
+    color: white;
+    transition: background-color 150ms ease;
+}
+.bold_profile_photo_edit:hover .bold_profile_photo_overlay { background: rgba(35, 38, 43, .6); }
+
+/* Diseño adaptable y movimiento reducido. */
+@media (max-width: 1100px) { .bold_profile_editor { grid-template-columns: minmax(0, 1fr); } .bold_profile_preview { max-width: 360px; width: 100%; } }
+@media (max-width: 700px) {
+    .bold_profile_module { padding: 16px; }
+    .bold_profile_layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .bold_profile_navigation nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bold_profile_identity { margin-bottom: 12px; }
+    .bold_profile_section_heading { align-items: flex-start; flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .bold_profile_popover { animation: none; } .bold_profile_module button, .bold_profile_popover button, .bold_profile_photo_overlay { transition: none; } }
+
+/* Banner editable: mismo selector de color que proyectos y carpetas. */
+.bold_profile_preview > button.bold_color_trigger { display: block; width: 100%; border: 0; border-radius: 0; padding: 0; min-height: 96px; background: transparent; }
+.bold_profile_preview .bold_profile_banner_edit { display: flex; align-items: center; justify-content: flex-end; box-sizing: border-box; width: 100%; height: 96px; margin: 0; padding: 20px; border: 0; border-radius: 0; color: white; }
+
+/* Preferencias de notificación: sonidos, volumen y carga personal. */
+.bold_notification_preferences {max-width: 700px;}
+.bold_notification_preferences h2 {display: flex; align-items: center; gap: 10px;}
+.bold_notification_preferences fieldset {display: grid; gap: 12px; padding: 18px; border: 1px solid var(--bold_line); border-radius: 12px;}
+.bold_notification_preferences legend {padding: 0 8px;}
+.bold_profile_module .bold_notification_choice, .bold_profile_module .bold_notification_toggle {display: flex; align-items: center; gap: 10px; font-weight: 400;}
+.bold_profile_module .bold_notification_preferences input:is([type="radio"], [type="checkbox"]) {width: auto; accent-color: var(--bold_red);}
+.bold_profile_module .bold_notification_preferences input[type="range"] {padding: 0; accent-color: var(--bold_red);}
+.bold_notification_preferences > p, .bold_notification_preferences form > p {color: var(--bold_muted);}

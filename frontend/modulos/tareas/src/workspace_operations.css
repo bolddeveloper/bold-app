@@ -1,25 +1,138 @@
-.workspace_ops { margin: 0 0 28px; min-width: 0; color: var(--bold_text, #252a34); }
-.workspace_ops_heading, .workspace_toolbar, .workspace_bulk, .workspace_chips { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-.workspace_ops_heading { justify-content: space-between; margin-bottom: 16px; }
-.workspace_ops_heading h1 { margin: 0; font-size: clamp(24px, 3vw, 30px); }
-.workspace_ops_heading p { margin: 5px 0 0; color: var(--bold_muted, #68717d); }
-.workspace_progress { margin: 8px 0; padding: 9px 12px; border-left: 3px solid var(--bold_red, #ef1f2d); border-radius: 6px; background: color-mix(in srgb, var(--bold_surface, #fff) 92%, var(--bold_red, #ef1f2d) 8%); }
-.workspace_skeleton { height: 58px; margin: 9px 0; border-radius: 10px; background: linear-gradient(90deg, var(--bold_surface, #fff), color-mix(in srgb, var(--bold_surface, #fff) 86%, var(--bold_text, #252a34) 14%), var(--bold_surface, #fff)); background-size: 200% 100%; animation: workspace_skeleton 1.2s linear infinite; }
-@keyframes workspace_skeleton { to { background-position: -200% 0; } }
-@media (prefers-reduced-motion: reduce) { .workspace_skeleton { animation: none; } }
-.workspace_ops button, .workspace_ops select, .workspace_ops input, .workspace_ops textarea, .workspace_ops summary { font: inherit; }
-.workspace_ops button, .workspace_ops select, .workspace_ops summary { min-height: 40px; border: 1px solid var(--bold_line, #ddd); border-radius: 9px; padding: 8px 11px; color: inherit; background: var(--bold_surface, #fff); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
-.workspace_ops :is(button, summary):hover { border-color: color-mix(in srgb, var(--bold_red, #ef1f2d) 45%, var(--bold_line, #ddd)); background: color-mix(in srgb, var(--bold_surface, #fff) 96%, var(--bold_red, #ef1f2d) 4%); }
-.workspace_ops select { padding-right: 32px; }
-.workspace_ops .workspace_select { min-width: 135px; font-size: 13px; font-weight: 500; }
-.workspace_task_cell .workspace_select { min-width: 0; width: 100%; }
-.workspace_ops .workspace_select .task_select_trigger { width: 100%; min-height: 38px; text-align: left; }
-.workspace_ops .workspace_select .task_select_menu { min-width: 190px; padding: 6px; border-radius: 12px; box-shadow: 0 14px 36px #20242b26; }
-.workspace_ops .workspace_select .task_select_option { width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; text-align: left; }
+/* Operaciones del workspace: filtros, tabla, menús y formularios. */
+.workspace_ops {
+    margin: 0 0 28px;
+    min-width: 0;
+    color: var(--bold_text, #252a34);
+}
+
+.workspace_ops_heading, .workspace_toolbar, .workspace_bulk, .workspace_chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.workspace_ops_heading {
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.workspace_ops_heading h1 {
+    margin: 0;
+    font-size: clamp(24px, 3vw, 30px);
+}
+
+.workspace_ops_heading p {
+    margin: 5px 0 0;
+    color: var(--bold_muted, #68717d);
+}
+
+.workspace_progress {
+    margin: 8px 0;
+    padding: 9px 12px;
+    border-left: 3px solid var(--bold_red, #ef1f2d);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bold_surface, #fff) 92%, var(--bold_red, #ef1f2d) 8%);
+}
+
+.workspace_skeleton {
+    height: 58px;
+    margin: 9px 0;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--bold_surface, #fff), color-mix(in srgb, var(--bold_surface, #fff) 86%, var(--bold_text, #252a34) 14%), var(--bold_surface, #fff));
+    background-size: 200% 100%;
+    animation: workspace_skeleton 1.2s linear infinite;
+}
+
+/* Animaciones y transiciones del módulo */
+@keyframes workspace_skeleton {
+
+    to {
+        background-position: -200% 0;
+    }
+}
+
+/* Accesibilidad: movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+
+    .workspace_skeleton {
+        animation: none;
+    }
+}
+
+.workspace_ops button, .workspace_ops select, .workspace_ops input, .workspace_ops textarea, .workspace_ops summary {
+    font: inherit;
+}
+
+.workspace_ops button, .workspace_ops select, .workspace_ops summary {
+    min-height: 40px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 9px;
+    padding: 8px 11px;
+    color: inherit;
+    background: var(--bold_surface, #fff);
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.workspace_ops :is(button, summary):hover {
+    border-color: color-mix(in srgb, var(--bold_red, #ef1f2d) 45%, var(--bold_line, #ddd));
+    background: color-mix(in srgb, var(--bold_surface, #fff) 96%, var(--bold_red, #ef1f2d) 4%);
+}
+
+.workspace_ops select {
+    padding-right: 32px;
+}
+
+.workspace_ops .workspace_select {
+    min-width: 135px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.workspace_task_cell .workspace_select {
+    min-width: 0;
+    width: 100%;
+}
+
+.workspace_ops .workspace_select .task_select_trigger {
+    width: 100%;
+    min-height: 38px;
+    text-align: left;
+}
+
+.workspace_ops .workspace_select .task_select_menu {
+    min-width: 190px;
+    padding: 6px;
+    border-radius: 12px;
+    box-shadow: 0 14px 36px #20242b26;
+}
+
+.workspace_ops .workspace_select .task_select_option {
+    width: 100%;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+}
+
 .workspace_ops .workspace_select .task_select_option:hover,
-.workspace_ops .workspace_select .task_select_option_focused { background: var(--bold_hover, #f6f3f0); }
-.workspace_ops .workspace_select .task_select_option[aria-selected="true"] { background: #fff0f1; color: #b91c2a; }
-.workspace_ops .workspace_select .task_select_text strong { font-size: 13px; font-weight: 600; }
+.workspace_ops .workspace_select .task_select_option_focused {
+    background: var(--bold_hover, #f6f3f0);
+}
+
+.workspace_ops .workspace_select .task_select_option[aria-selected="true"] {
+    background: #fff0f1;
+    color: #b91c2a;
+}
+
+.workspace_ops .workspace_select .task_select_text strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
 .workspace_ops select {
     appearance: none;
     background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
@@ -27,115 +140,739 @@
     background-size: 5px 5px, 5px 5px;
     background-repeat: no-repeat;
 }
-.workspace_ops select:hover { border-color: color-mix(in srgb, var(--bold_red, #ef1f2d) 50%, var(--bold_line, #ddd)); }
-.workspace_ops select:focus { border-color: var(--bold_red, #ef1f2d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent); outline: 0; }
-.workspace_ops select option { padding: 9px 12px; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); }
-.workspace_ops select option:checked { background: var(--bold_red, #ef1f2d); color: #fff; }
-.workspace_ops .primary_button { display: inline-flex; align-items: center; gap: 5px; background: var(--bold_red, #ef1f2d); color: #fff; border-color: var(--bold_red, #ef1f2d); }
-.workspace_ops input:not([type=checkbox]), .workspace_ops textarea { min-width: 0; min-height: 38px; border: 1px solid var(--bold_line, #ddd); border-radius: 8px; padding: 7px 9px; color: inherit; background: var(--bold_surface, #fff); box-sizing: border-box; }
-.workspace_ops input[type=checkbox] { width: 18px; height: 18px; flex: none; accent-color: var(--bold_red, #ef1f2d); }
-.workspace_ops :is(button, select, input, textarea, summary):focus-visible { outline: 2px solid var(--bold_red, #ef1f2d); outline-offset: 2px; }
-.workspace_toolbar { align-items: flex-end; gap: 10px; padding: 14px; border: 1px solid var(--bold_line, #ddd); border-radius: 14px; background: var(--bold_surface, #fff); }
-.workspace_toolbar label { display: inline-grid; gap: 5px; color: var(--bold_muted, #68717d); font-size: 11px; font-weight: 700; }
-.workspace_search { display: flex !important; align-items: center; flex: 1 1 250px; max-width: 410px; }
-.workspace_search input { width: 100%; }
-.workspace_toolbar details { position: relative; }
-.workspace_toolbar summary, .workspace_bulk summary { display: flex; align-items: center; gap: 5px; list-style: none; }
-.workspace_toolbar summary::-webkit-details-marker, .workspace_bulk summary::-webkit-details-marker { display: none; }
-.workspace_toolbar details[open] > summary, .workspace_bulk details[open] > summary { border-color: var(--bold_red, #ef1f2d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent); }
-.workspace_filter_panel, .workspace_fields_panel, .workspace_more { position: absolute; z-index: 40; top: calc(100% + 7px); left: 0; width: min(580px, calc(100vw - 32px)); max-height: min(65dvh, 560px); overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px; padding: 14px; border: 1px solid var(--bold_line, #ddd); border-radius: 14px; background: var(--bold_surface, #fff); box-shadow: 0 18px 44px #20242b24; box-sizing: border-box; }
-.workspace_filter_panel { position: fixed; z-index: 15000; top: 18px; left: 50%; width: min(580px, calc(100vw - 32px)); max-height: min(calc(100dvh - 36px), 650px); padding-top: 58px; transform: translateX(-50%); overscroll-behavior: contain; scrollbar-gutter: stable; }
-.workspace_filters_close { position: absolute; top: 12px; right: 14px; z-index: 3; min-height: 36px !important; padding: 6px 10px !important; background: var(--bold_surface, #fff) !important; }
-.workspace_filter_panel fieldset { margin: 0; padding: 8px 10px; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; min-width: 0; }
-.workspace_filter_panel legend { font-weight: 700; }
-.workspace_filter_options { max-height: 96px; overflow-y: auto; display: grid; gap: 3px; scrollbar-width: thin; }
-.workspace_filter_panel label, .workspace_fields_panel label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
-.workspace_filter_panel > label { display: grid; align-content: start; }
-.workspace_filter_panel .bold_date_trigger_btn { min-height: 42px; padding: 9px 12px; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); font-size: 13px; font-weight: 600; }
-.workspace_filter_panel .bold_date_trigger_btn:hover, .workspace_filter_panel .bold_date_trigger_btn[aria-expanded="true"] { border-color: var(--bold_red, #ef1f2d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent); }
-.workspace_ops .custom_datepicker_popover { color: var(--bold_text, #252a34); text-transform: none; letter-spacing: normal; }
+
+.workspace_ops select:hover {
+    border-color: color-mix(in srgb, var(--bold_red, #ef1f2d) 50%, var(--bold_line, #ddd));
+}
+
+.workspace_ops select:focus {
+    border-color: var(--bold_red, #ef1f2d);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent);
+    outline: 0;
+}
+
+.workspace_ops select option {
+    padding: 9px 12px;
+    background: var(--bold_surface, #fff);
+    color: var(--bold_text, #252a34);
+}
+
+.workspace_ops select option:checked {
+    background: var(--bold_red, #ef1f2d);
+    color: #fff;
+}
+
+.workspace_ops .primary_button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bold_red, #ef1f2d);
+    color: #fff;
+    border-color: var(--bold_red, #ef1f2d);
+}
+
+.workspace_ops input:not([type=checkbox]), .workspace_ops textarea {
+    min-width: 0;
+    min-height: 38px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 8px;
+    padding: 7px 9px;
+    color: inherit;
+    background: var(--bold_surface, #fff);
+    box-sizing: border-box;
+}
+
+.workspace_ops input[type=checkbox] {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    accent-color: var(--bold_red, #ef1f2d);
+}
+
+.workspace_ops :is(button, select, input, textarea, summary):focus-visible {
+    outline: 2px solid var(--bold_red, #ef1f2d);
+    outline-offset: 2px;
+}
+
+/* Barra de operaciones */
+.workspace_toolbar {
+    align-items: flex-end;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 14px;
+    background: var(--bold_surface, #fff);
+}
+
+.workspace_toolbar label {
+    display: inline-grid;
+    gap: 5px;
+    color: var(--bold_muted, #68717d);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.workspace_search {
+    display: flex !important;
+    align-items: center;
+    flex: 1 1 250px;
+    max-width: 410px;
+}
+
+.workspace_search input {
+    width: 100%;
+}
+
+.workspace_toolbar details {
+    position: relative;
+}
+
+.workspace_toolbar summary, .workspace_bulk summary {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    list-style: none;
+}
+
+.workspace_toolbar summary::-webkit-details-marker, .workspace_bulk summary::-webkit-details-marker {
+    display: none;
+}
+
+.workspace_toolbar details[open] > summary, .workspace_bulk details[open] > summary {
+    border-color: var(--bold_red, #ef1f2d);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent);
+}
+
+/* Panel de filtros */
+.workspace_filter_panel, .workspace_fields_panel, .workspace_more {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 7px);
+    left: 0;
+    width: min(580px, calc(100vw - 32px));
+    max-height: min(65dvh, 560px);
+    overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 12px;
+    padding: 14px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 14px;
+    background: var(--bold_surface, #fff);
+    box-shadow: 0 18px 44px #20242b24;
+    box-sizing: border-box;
+}
+
+.workspace_filter_panel {
+    position: fixed;
+    z-index: 15000;
+    top: 18px;
+    left: 50%;
+    width: min(580px, calc(100vw - 32px));
+    max-height: min(calc(100dvh - 36px), 650px);
+    padding-top: 58px;
+    transform: translateX(-50%);
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.workspace_filters_close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    z-index: 3;
+    min-height: 36px !important;
+    padding: 6px 10px !important;
+    background: var(--bold_surface, #fff) !important;
+}
+
+.workspace_filter_panel fieldset {
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 10px;
+    min-width: 0;
+}
+
+.workspace_filter_panel legend {
+    font-weight: 700;
+}
+
+.workspace_filter_options {
+    max-height: 96px;
+    overflow-y: auto;
+    display: grid;
+    gap: 3px;
+    scrollbar-width: thin;
+}
+
+.workspace_filter_panel label, .workspace_fields_panel label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+}
+
+.workspace_filter_panel > label {
+    display: grid;
+    align-content: start;
+}
+
+.workspace_filter_panel .bold_date_trigger_btn {
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 10px;
+    background: var(--bold_surface, #fff);
+    color: var(--bold_text, #252a34);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.workspace_filter_panel .bold_date_trigger_btn:hover, .workspace_filter_panel .bold_date_trigger_btn[aria-expanded="true"] {
+    border-color: var(--bold_red, #ef1f2d);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent);
+}
+
+.workspace_ops .custom_datepicker_popover {
+    color: var(--bold_text, #252a34);
+    text-transform: none;
+    letter-spacing: normal;
+}
+
 .workspace_swal {
     border: 1px solid var(--bold_line, #dce2ea);
     border-radius: 14px;
 }
+
+/* Operaciones en modo oscuro */
 .theme_dark .workspace_swal {
     background: #22262e;
     color: #edf0f5;
 }
-.workspace_ops .custom_datepicker_nav > button { min-height: 32px; padding: 4px; border: 0; }
-.workspace_ops .custom_datepicker_popover .day_cell { min-height: 30px; border: 0; }
-.workspace_ops .custom_datepicker_actions button { min-height: 34px; padding: 6px 9px; border: 0; }
-.workspace_fields_panel { width: 220px; grid-template-columns: 1fr; }
-.workspace_more { width: 200px; grid-template-columns: 1fr; }
-.workspace_chips { padding: 10px 0; }
-.workspace_chips button { min-height: 30px; padding: 4px 8px; font-size: 12px; }
-.workspace_bulk { position: sticky; top: 0; z-index: 25; margin: 10px 0; padding: 10px; border: 1px solid var(--bold_red, #ef1f2d); border-radius: 10px; background: var(--bold_surface, #fff); box-shadow: 0 5px 20px #0001; }
-.workspace_bulk strong { margin-right: 5px; }
-.workspace_bulk label { display: flex; align-items: center; gap: 4px; }
-.workspace_bulk details { position: relative; }
-.workspace_error { color: #c52232; }
-.workspace_table { width: 100%; overflow-x: auto; border: 1px solid var(--bold_line, #ddd); border-radius: 14px; background: var(--bold_surface, #fff); box-shadow: 0 8px 24px #20242b0d; }
-.workspace_table_head, .workspace_task_row { display: grid; grid-template-columns: minmax(260px, 2fr) repeat(var(--workspace-fields, 5), minmax(135px, 1fr)); align-items: center; box-sizing: border-box; width: 100%; min-width: var(--workspace-table-min, 935px); }
-.workspace_table_head { min-height: 48px; font-weight: 800; font-size: 11px; color: var(--bold_muted, #68717d); border-bottom: 1px solid var(--bold_line, #ddd); background: color-mix(in srgb, var(--bold_surface, #fff) 97%, var(--bold_text, #252a34) 3%); text-transform: uppercase; letter-spacing: .025em; }
-.workspace_table_head > div, .workspace_task_cell { padding: 8px 10px; min-width: 0; }
-.workspace_table_head > div:first-child { display: flex; align-items: center; gap: 8px; }
-.workspace_table_head .workspace_select { width: 100%; min-width: 0; }
-.workspace_table_head .workspace_select .task_select_trigger { min-height: 32px; padding: 4px 7px; border: 0; background: transparent; color: var(--bold_muted, #68717d); font-size: 11px; font-weight: 800; text-transform: uppercase; }
-.workspace_table_head .workspace_select .task_select_trigger:hover { color: var(--bold_red, #ef1f2d); background: color-mix(in srgb, var(--bold_surface, #fff) 90%, var(--bold_red, #ef1f2d) 10%); }
-.workspace_group h3 { margin: 0; padding: 9px 14px; border-bottom: 1px solid var(--bold_line, #ddd); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; background: color-mix(in srgb, var(--bold_surface, #fff) 91%, var(--bold_text, #252a34) 9%); }
-.workspace_group h3 small { margin-left: 5px; font-weight: 400; }
-.workspace_task_row { min-height: 54px; border-bottom: 1px solid color-mix(in srgb, var(--bold_line, #ddd) 78%, transparent); transition: background 120ms ease; }
-.workspace_task_row:hover { background: color-mix(in srgb, var(--bold_surface, #fff) 96%, var(--bold_text, #252a34) 4%); }
-.workspace_task_name { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 9px 5px calc(9px + var(--task-depth, 0) * 18px); }
-.workspace_ops .workspace_completion { display: grid; place-items: center; flex: none; width: 20px; height: 20px; min-height: 20px; padding: 0; border: 2px solid var(--bold_muted, #68717d); border-radius: 50%; color: #fff; background: transparent; }
-.workspace_ops .workspace_completion.is_complete { border-color: var(--bold_red, #ef1f2d); background: var(--bold_red, #ef1f2d); }
-.workspace_ops .workspace_expand { display: grid; place-items: center; flex: none; width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; }
-.workspace_expand_spacer { width: 28px; flex: none; }
-.workspace_ops .workspace_task_title { min-width: 0; flex: 1; padding: 3px 2px; border: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
-.workspace_task_name small { color: var(--bold_muted, #68717d); white-space: nowrap; }
-.workspace_cell_value { display: block; overflow: hidden; color: var(--bold_text, #252a34); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.workspace_cell_badge { display: inline-flex; align-items: center; min-height: 24px; max-width: 100%; padding: 3px 9px; box-sizing: border-box; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--bold_surface, #fff) 88%, var(--bold_text, #252a34) 12%); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.workspace_cell_badge.is_alta { color: #b42333; background: #ffe4e8; }
-.workspace_cell_badge.is_media { color: #8a5a00; background: #fff0bd; }
-.workspace_cell_badge.is_baja { color: #237246; background: #e2f3e8; }
-.workspace_empty { padding: 30px; text-align: center; }
-.workspace_ops .workspace_show_more { display: block; margin: 10px auto; }
-.workspace_modal_overlay { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; padding: 18px; background: #17191d99; backdrop-filter: blur(2px); }
-.workspace_modal { display: grid; gap: 16px; width: min(560px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; overscroll-behavior: contain; padding: 24px; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--bold_line, #ddd) 82%, transparent); border-radius: 18px; background: var(--bold_surface, #fff); color: var(--bold_text, #252a34); box-shadow: 0 28px 80px #11182742; }
-.workspace_modal header, .workspace_modal footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.workspace_modal header { align-items: flex-start; }
-.workspace_modal h2 { margin: 0; font-size: 21px; letter-spacing: -.02em; }
-.workspace_modal header p { margin: 5px 0 0; color: var(--bold_muted, #68717d); font-size: 13px; }
-.workspace_modal button, .workspace_modal input, .workspace_modal textarea { font: inherit; }
-.workspace_modal button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--bold_line, #ddd); border-radius: 9px; color: inherit; background: var(--bold_surface, #fff); cursor: pointer; }
-.workspace_modal .workspace_modal_close { display: grid; place-items: center; flex: none; width: 40px; padding: 0; font-size: 20px; }
-.workspace_modal .primary_button { border-color: var(--bold_red, #ef1f2d); color: #fff; background: var(--bold_red, #ef1f2d); font-weight: 700; }
-.workspace_batch_preview { margin: 0; color: var(--bold_muted, #68717d); font-size: 13px; }
-.workspace_modal label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
-.workspace_modal textarea, .workspace_modal input { width: 100%; min-height: 44px; padding: 10px 12px; box-sizing: border-box; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; color: inherit; background: var(--bold_surface, #fff); }
-.workspace_modal textarea { min-height: 132px; max-height: 190px; resize: vertical; line-height: 1.45; }
-.workspace_modal :is(input, textarea):focus { border-color: var(--bold_red, #ef1f2d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent); outline: 0; }
-.workspace_modal .workspace_select .task_select_trigger { width: 100%; min-height: 44px; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; background: var(--bold_surface, #fff); text-align: left; }
-.workspace_modal .workspace_select .task_select_menu { z-index: 12010; min-width: 100%; padding: 6px; border: 1px solid var(--bold_line, #ddd); border-radius: 12px; background: var(--bold_surface, #fff); box-shadow: 0 14px 36px #20242b26; }
-.workspace_modal .workspace_select .task_select_option { width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; text-align: left; }
-.workspace_modal .workspace_select .task_select_option:hover, .workspace_modal .workspace_select .task_select_option_focused { background: var(--bold_hover, #f6f3f0); }
-.workspace_modal footer { position: sticky; bottom: -24px; z-index: 2; justify-content: flex-end; margin: 2px -24px -24px; padding: 14px 24px 24px; border-top: 1px solid var(--bold_line, #ddd); background: var(--bold_surface, #fff); }
-@media (max-width: 760px) {
-    .workspace_ops_heading { align-items: flex-start; }
-    .workspace_toolbar { align-items: stretch; }
-    .workspace_search { flex-basis: 100%; max-width: none; }
-    .workspace_filter_panel { position: fixed; inset: 12px; width: auto; max-height: none; padding: 54px 12px 12px; transform: none; grid-template-columns: 1fr; }
-    .workspace_table { border: 0; overflow: visible; background: transparent; }
-    .workspace_table_head { min-width: 0; display: flex; padding: 8px; }
-    .workspace_table_head > div:not(:first-child) { display: none; }
-    .workspace_task_row { display: block; min-width: 0; margin: 8px 0; padding: 9px; border: 1px solid var(--bold_line, #ddd); border-radius: 10px; background: var(--bold_surface, #fff); }
-    .workspace_task_name { padding-left: calc(3px + var(--task-depth, 0) * 12px); }
-    .workspace_task_cell { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 7px; }
-    .workspace_task_cell::before { content: attr(data-label); flex: 0 0 100px; font-size: 12px; color: var(--bold_muted, #68717d); }
-    .workspace_task_cell > span { min-width: 0; text-align: right; }
-    .workspace_bulk { position: static; }
+
+.workspace_ops .custom_datepicker_nav > button {
+    min-height: 32px;
+    padding: 4px;
+    border: 0;
 }
-@media (max-width: 400px) { .workspace_task_cell::before { flex-basis: 82px; } .workspace_ops_heading .primary_button { width: 100%; justify-content: center; } }
+
+.workspace_ops .custom_datepicker_popover .day_cell {
+    min-height: 30px;
+    border: 0;
+}
+
+.workspace_ops .custom_datepicker_actions button {
+    min-height: 34px;
+    padding: 6px 9px;
+    border: 0;
+}
+
+.workspace_fields_panel {
+    width: 220px;
+    grid-template-columns: 1fr;
+}
+
+.workspace_more {
+    width: 200px;
+    grid-template-columns: 1fr;
+}
+
+.workspace_chips {
+    padding: 10px 0;
+}
+
+.workspace_chips button {
+    min-height: 30px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.workspace_bulk {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    margin: 10px 0;
+    padding: 10px;
+    border: 1px solid var(--bold_red, #ef1f2d);
+    border-radius: 10px;
+    background: var(--bold_surface, #fff);
+    box-shadow: 0 5px 20px #0001;
+}
+
+.workspace_bulk strong {
+    margin-right: 5px;
+}
+
+.workspace_bulk label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.workspace_bulk details {
+    position: relative;
+}
+
+/* Mensajes de error */
+.workspace_error {
+    color: #c52232;
+}
+
+/* Tabla del workspace */
+.workspace_table {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 14px;
+    background: var(--bold_surface, #fff);
+    box-shadow: 0 8px 24px #20242b0d;
+}
+
+.workspace_table_head, .workspace_task_row {
+    display: grid;
+    grid-template-columns: minmax(260px, 2fr) repeat(var(--workspace-fields, 5), minmax(135px, 1fr));
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: var(--workspace-table-min, 935px);
+}
+
+.workspace_table_head {
+    min-height: 48px;
+    font-weight: 800;
+    font-size: 11px;
+    color: var(--bold_muted, #68717d);
+    border-bottom: 1px solid var(--bold_line, #ddd);
+    background: color-mix(in srgb, var(--bold_surface, #fff) 97%, var(--bold_text, #252a34) 3%);
+    text-transform: uppercase;
+    letter-spacing: .025em;
+}
+
+.workspace_table_head > div, .workspace_task_cell {
+    padding: 8px 10px;
+    min-width: 0;
+}
+
+.workspace_table_head > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.workspace_table_head .workspace_select {
+    width: 100%;
+    min-width: 0;
+}
+
+.workspace_table_head .workspace_select .task_select_trigger {
+    min-height: 32px;
+    padding: 4px 7px;
+    border: 0;
+    background: transparent;
+    color: var(--bold_muted, #68717d);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.workspace_table_head .workspace_select .task_select_trigger:hover {
+    color: var(--bold_red, #ef1f2d);
+    background: color-mix(in srgb, var(--bold_surface, #fff) 90%, var(--bold_red, #ef1f2d) 10%);
+}
+
+.workspace_group h3 {
+    margin: 0;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--bold_line, #ddd);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    background: color-mix(in srgb, var(--bold_surface, #fff) 91%, var(--bold_text, #252a34) 9%);
+}
+
+.workspace_group h3 small {
+    margin-left: 5px;
+    font-weight: 400;
+}
+
+.workspace_task_row {
+    min-height: 54px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bold_line, #ddd) 78%, transparent);
+    transition: background 120ms ease;
+}
+
+.workspace_task_row:hover {
+    background: color-mix(in srgb, var(--bold_surface, #fff) 96%, var(--bold_text, #252a34) 4%);
+}
+
+.workspace_task_name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 9px 5px calc(9px + var(--task-depth, 0) * 18px);
+}
+
+.workspace_ops .workspace_completion {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    min-height: 20px;
+    padding: 0;
+    border: 2px solid var(--bold_muted, #68717d);
+    border-radius: 50%;
+    color: #fff;
+    background: transparent;
+}
+
+.workspace_ops .workspace_completion.is_complete {
+    border-color: var(--bold_red, #ef1f2d);
+    background: var(--bold_red, #ef1f2d);
+}
+
+.workspace_ops .workspace_expand {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.workspace_expand_spacer {
+    width: 28px;
+    flex: none;
+}
+
+.workspace_ops .workspace_task_title {
+    min-width: 0;
+    flex: 1;
+    padding: 3px 2px;
+    border: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: transparent;
+}
+
+.workspace_task_name small {
+    color: var(--bold_muted, #68717d);
+    white-space: nowrap;
+}
+
+/* Contenido y edición de celdas */
+.workspace_cell_value {
+    display: block;
+    overflow: hidden;
+    color: var(--bold_text, #252a34);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace_cell_badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    max-width: 100%;
+    padding: 3px 9px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bold_surface, #fff) 88%, var(--bold_text, #252a34) 12%);
+    font-size: 12px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace_cell_badge.is_alta {
+    color: #b42333;
+    background: #ffe4e8;
+}
+
+.workspace_cell_badge.is_media {
+    color: #8a5a00;
+    background: #fff0bd;
+}
+
+.workspace_cell_badge.is_baja {
+    color: #237246;
+    background: #e2f3e8;
+}
+
+.workspace_empty {
+    padding: 30px;
+    text-align: center;
+}
+
+.workspace_ops .workspace_show_more {
+    display: block;
+    margin: 10px auto;
+}
+
+/* Diálogos de operaciones */
+.workspace_modal_overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: #17191d99;
+    backdrop-filter: blur(2px);
+}
+
+.workspace_modal {
+    display: grid;
+    gap: 16px;
+    width: min(560px, 100%);
+    max-height: calc(100dvh - 36px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 24px;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--bold_line, #ddd) 82%, transparent);
+    border-radius: 18px;
+    background: var(--bold_surface, #fff);
+    color: var(--bold_text, #252a34);
+    box-shadow: 0 28px 80px #11182742;
+}
+
+.workspace_modal header, .workspace_modal footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.workspace_modal header {
+    align-items: flex-start;
+}
+
+.workspace_modal h2 {
+    margin: 0;
+    font-size: 21px;
+    letter-spacing: -.02em;
+}
+
+.workspace_modal header p {
+    margin: 5px 0 0;
+    color: var(--bold_muted, #68717d);
+    font-size: 13px;
+}
+
+.workspace_modal button, .workspace_modal input, .workspace_modal textarea {
+    font: inherit;
+}
+
+.workspace_modal button {
+    min-height: 40px;
+    padding: 8px 14px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 9px;
+    color: inherit;
+    background: var(--bold_surface, #fff);
+    cursor: pointer;
+}
+
+.workspace_modal .workspace_modal_close {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    padding: 0;
+    font-size: 20px;
+}
+
+.workspace_modal .primary_button {
+    border-color: var(--bold_red, #ef1f2d);
+    color: #fff;
+    background: var(--bold_red, #ef1f2d);
+    font-weight: 700;
+}
+
+.workspace_batch_preview {
+    margin: 0;
+    color: var(--bold_muted, #68717d);
+    font-size: 13px;
+}
+
+.workspace_modal label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.workspace_modal textarea, .workspace_modal input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 10px;
+    color: inherit;
+    background: var(--bold_surface, #fff);
+}
+
+.workspace_modal textarea {
+    min-height: 132px;
+    max-height: 190px;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.workspace_modal :is(input, textarea):focus {
+    border-color: var(--bold_red, #ef1f2d);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bold_red, #ef1f2d) 12%, transparent);
+    outline: 0;
+}
+
+.workspace_modal .workspace_select .task_select_trigger {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 10px;
+    background: var(--bold_surface, #fff);
+    text-align: left;
+}
+
+.workspace_modal .workspace_select .task_select_menu {
+    z-index: 12010;
+    min-width: 100%;
+    padding: 6px;
+    border: 1px solid var(--bold_line, #ddd);
+    border-radius: 12px;
+    background: var(--bold_surface, #fff);
+    box-shadow: 0 14px 36px #20242b26;
+}
+
+.workspace_modal .workspace_select .task_select_option {
+    width: 100%;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    text-align: left;
+}
+
+.workspace_modal .workspace_select .task_select_option:hover, .workspace_modal .workspace_select .task_select_option_focused {
+    background: var(--bold_hover, #f6f3f0);
+}
+
+.workspace_modal footer {
+    position: sticky;
+    bottom: -24px;
+    z-index: 2;
+    justify-content: flex-end;
+    margin: 2px -24px -24px;
+    padding: 14px 24px 24px;
+    border-top: 1px solid var(--bold_line, #ddd);
+    background: var(--bold_surface, #fff);
+}
+
+/* Adaptación de pantalla: (max-width: 760px) */
+@media (max-width: 760px) {
+
+    .workspace_ops_heading {
+        align-items: flex-start;
+    }
+
+    .workspace_toolbar {
+        align-items: stretch;
+    }
+
+    .workspace_search {
+        flex-basis: 100%;
+        max-width: none;
+    }
+
+    .workspace_filter_panel {
+        position: fixed;
+        inset: 12px;
+        width: auto;
+        max-height: none;
+        padding: 54px 12px 12px;
+        transform: none;
+        grid-template-columns: 1fr;
+    }
+
+    .workspace_table {
+        border: 0;
+        overflow: visible;
+        background: transparent;
+    }
+
+    .workspace_table_head {
+        min-width: 0;
+        display: flex;
+        padding: 8px;
+    }
+
+    .workspace_table_head > div:not(:first-child) {
+        display: none;
+    }
+
+    .workspace_task_row {
+        display: block;
+        min-width: 0;
+        margin: 8px 0;
+        padding: 9px;
+        border: 1px solid var(--bold_line, #ddd);
+        border-radius: 10px;
+        background: var(--bold_surface, #fff);
+    }
+
+    .workspace_task_name {
+        padding-left: calc(3px + var(--task-depth, 0) * 12px);
+    }
+
+    .workspace_task_cell {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 4px 7px;
+    }
+
+    .workspace_task_cell::before {
+        content: attr(data-label);
+        flex: 0 0 100px;
+        font-size: 12px;
+        color: var(--bold_muted, #68717d);
+    }
+
+    .workspace_task_cell > span {
+        min-width: 0;
+        text-align: right;
+    }
+
+    .workspace_bulk {
+        position: static;
+    }
+}
+
+/* Adaptación de pantalla: (max-width: 400px) */
+@media (max-width: 400px) {
+
+    .workspace_task_cell::before {
+        flex-basis: 82px;
+    }
+
+    .workspace_ops_heading .primary_button {
+        width: 100%;
+        justify-content: center;
+    }
+}
 
 .workspace_filter_panel {
     gap: 16px;
@@ -143,33 +880,43 @@
     padding-bottom: 20px;
     animation: workspace_filters_enter 160ms ease-out;
 }
+
 .workspace_filter_panel fieldset {
     padding: 12px;
 }
+
 .workspace_ops input[type="checkbox"] {
     accent-color: var(--bold_red, #ef1f2d);
     transition: transform 140ms ease, box-shadow 140ms ease;
 }
+
 .workspace_ops input[type="checkbox"]:active {
     transform: scale(.88);
 }
+
 .workspace_ops input[type="checkbox"]:checked {
     box-shadow: 0 0 0 3px rgb(239 31 45 / 12%);
 }
+
 @keyframes workspace_filters_enter {
+
     from {
         opacity: 0;
         translate: 0 -6px;
     }
+
     to {
         opacity: 1;
         translate: 0 0;
     }
 }
+
 @media (prefers-reduced-motion: reduce) {
+
     .workspace_filter_panel {
         animation: none;
     }
+
     .workspace_ops input[type="checkbox"] {
         transition: none;
     }
@@ -179,6 +926,7 @@
     padding: 20px;
     align-items: start;
 }
+
 .workspace_filter_heading {
     grid-column: 1 / -1;
     display: flex;
@@ -192,26 +940,32 @@
     background: var(--bold_surface, #fff);
     border-bottom: 1px solid var(--bold_line, #ddd);
 }
+
 .workspace_filter_heading h2 {
     margin: 0;
     font-size: 18px;
 }
+
 .workspace_filter_heading .workspace_filters_close {
     position: static;
 }
+
 .workspace_filter_panel fieldset {
     background: var(--bold_surface_soft, #f7f7f7);
 }
+
 .workspace_filter_panel .workspace_filter_options {
     gap: 6px;
     max-height: 120px;
     padding-block: 4px;
 }
+
 .workspace_filter_panel .workspace_filter_options label {
     min-height: 28px;
     align-items: flex-start;
     line-height: 1.5;
 }
+
 .workspace_filter_panel input[type="checkbox"] {
     flex-shrink: 0;
     margin-top: 3px;

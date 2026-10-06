@@ -1,30 +1,99 @@
+import "./shared/bold_dialog.css";
+import {useKeyboardShortcuts} from "./use_keyboard_shortcuts.js";
+import {confirmBold} from "./shared/bold_dialog.js";
+import { ProfileAvatar, ProfileQuickMenu } from "./shared/profile_menu.jsx";
+import { workspaceTabs, emptyWorkspaceTabs } from "./workspace_tabs.js";
 import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, createElement } from "react";
-import { ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, CircleHelp as circle_help_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MessageSquarePlus as message_square_plus_icon, Moon as moon_icon, MoreHorizontal as more_horizontal_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useReducer, createElement } from "react";
+import { FileText as docs_icon, FolderOpen as drive_icon, ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, CircleHelp as circle_help_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MessageSquarePlus as message_square_plus_icon, Moon as moon_icon, Settings as settings_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
-import { is_using_real_backend } from "./http_client.js";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
-import { entranceModule } from "./shell_navigation_state.js";
-const icon_map = { home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
+import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
+const icon_map = { profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
 export const useShell = () => useContext(ShellContext);
 export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const storageKey = `bold_shell_module:${contextId}`;
-    const [active_module, set_active_module] = useState(() => {
+    const [active_module, set_module] = useState(() => {
         let saved;
         try { saved = sessionStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
         return entranceModule(navigation, saved);
     });
     useEffect(() => {
-        if (navigation.some(item => item.id === active_module)) {
+        if (isShellModuleAllowed(active_module, navigation)) {
             try { sessionStorage.setItem(storageKey, active_module); } catch { /* No authorization is stored here. */ }
         }
     }, [active_module, storageKey, navigation]);
     const [is_sidebar_open, set_is_sidebar_open] = useState(false);
+    const [profile_editing, set_profile_editing] = useState(false);
+    const [profile_tab, set_profile_tab] = useState("account");
+    const profile_dirty = useRef(false);
+    const set_profile_dirty = value => {profile_dirty.current = value;};
+    const [workspace_file, set_workspace_file] = useState(null);
+    const [workspace_tab_state, workspace_dispatch] = useReducer(workspaceTabs, undefined, emptyWorkspaceTabs);
+    const open_workspace_tab = file => workspace_dispatch({type: "open", file});
+    const close_workspace_tab = id => workspace_dispatch({type: "close", id});
+    const select_workspace_tab = id => workspace_dispatch({type: "select", id});
+    const [workspace_connection, set_workspace_connection] = useState(null);
+    const sync_workspace_account = connection => {
+        set_workspace_connection(connection);
+        workspace_dispatch({type: "account", key: connection.connection_key || ""});
+    };
+    const workspace_dirty = useRef(false);
+    const workspace_busy = useRef(false);
+    const set_workspace_dirty = value => {workspace_dirty.current = value;};
+    const set_workspace_busy = value => {workspace_busy.current = value;};
+    const set_active_module = async value => {
+        if (!isShellModuleAllowed(value, navigation)) return false;
+        if (active_module === "profile" && value !== "profile" && profile_dirty.current && !await confirmBold("¿Salir del perfil y descartar los cambios sin guardar?")) return false;
+        if (active_module === "docs" && value !== "docs" && workspace_busy.current) return;
+        if (active_module === "docs" && value !== "docs" && workspace_dirty.current && !await confirmBold("¿Salir de Docs y descartar los cambios sin guardar?")) return;
+        workspace_dirty.current = false;
+        set_module(value);
+        return true;
+    };
+    // Historial nativo: Atrás/Adelante también funcionan con botones laterales del mouse.
+    const historyPosition = useRef(window.history.state?.bold_navigation?.index || 0);
+    const applyHistory = useRef(null);
+    applyHistory.current = async event => {
+        const target = event.state?.bold_navigation;
+        const module = historyModule(target, contextId, navigation);
+        if (!module) {
+            window.history.replaceState({...window.history.state, bold_navigation: {context: contextId, module: active_module, tab: workspace_tab_state.active, index: historyPosition.current}}, "");
+            return;
+        }
+        const changingFile = active_module === "docs" && module === "docs" && target.tab !== workspace_tab_state.active;
+        const blockedFile = changingFile && (workspace_busy.current || workspace_dirty.current && !await confirmBold("¿Cambiar documento y descartar los cambios sin guardar?"));
+        if (blockedFile || !await set_active_module(module)) {
+            window.history.go(historyPosition.current - target.index);
+            return;
+        }
+        historyPosition.current = target.index;
+        if (module === "docs") {
+            workspace_dirty.current = false;
+            select_workspace_tab(workspace_tab_state.tabs.some(file => file.id === target.tab) ? target.tab : null);
+        }
+        set_is_sidebar_open(false);
+    };
+    useEffect(() => {
+        const pop = event => applyHistory.current(event);
+        window.addEventListener("popstate", pop);
+        return () => window.removeEventListener("popstate", pop);
+    }, []);
+    useEffect(() => {
+        const previous = window.history.state?.bold_navigation;
+        const tab = active_module === "docs" ? workspace_tab_state.active : null;
+        if (previous?.context === contextId && previous.module === active_module && previous.tab === tab) return;
+        const replacing = !previous || previous.context !== contextId;
+        const index = replacing ? historyPosition.current : historyPosition.current + 1;
+        const state = {...window.history.state, bold_navigation: {context: contextId, module: active_module, tab, index}};
+        window.history[replacing ? "replaceState" : "pushState"](state, "");
+        historyPosition.current = index;
+    }, [active_module, workspace_tab_state.active, contextId]);
     const [is_dark_mode, set_is_dark_mode] = useState(() => {
         try { const theme = localStorage.getItem("bold_color_theme"); return theme ? theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; } catch { return false; }
     });
@@ -39,26 +108,42 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
-    return <ShellContext.Provider value={{ active_module, set_active_module, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
+    return <ShellContext.Provider value={{ profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, children }) {
     const shell = useShell();
     const core = useCore();
+    const [profileAnchor, setProfileAnchor] = useState(null);
+    const [bellPulse, setBellPulse] = useState(0);
+    useEffect(() => {
+        setBellPulse(0);
+        const ring = () => setBellPulse(value => value + 1);
+        window.addEventListener("bold:notification-arrived", ring);
+        return () => window.removeEventListener("bold:notification-arrived", ring);
+    }, [core.activeAssignment?.id]);
+    useEffect(() => setProfileAnchor(null), [shell.active_module]);
+    const profileActions = {onQuickProfile: event => {const anchor = event.currentTarget; setProfileAnchor(old => old === anchor ? null : anchor); globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", {detail: "profile"}));}, onOpenProfile: shell.open_profile};
     const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(compact && shell.is_sidebar_open, ".sidebar_shell", () => shell.set_is_sidebar_open(false));
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
-    const identity = { current_user: core.activeAssignment };
+    const identity = { current_user: core.activeAssignment, profileAvatar: core.account?.avatar_url };
+    const handle_toggle_notifications = () => {
+        if (!topBarProps.is_notifications_open) setBellPulse(value => value + 1);
+        topBarProps.handle_toggle_notifications();
+    };
+    useKeyboardShortcuts(core.activeAssignment?.id, shell, {handle_toggle_notifications});
     return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
-        <Sidebar {...sidebarProps} {...shell} {...identity} compact={compact} onLogout={core.logout} onManageMfa={core.mfa.open} mfaEnabled={core.mfa.enabled} />
+        <Sidebar {...profileActions} {...sidebarProps} {...shell} {...identity} compact={compact} onLogout={core.logout} onManageMfa={core.mfa.open} mfaEnabled={core.mfa.enabled} />
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
-            {render_mobile_header({ ...mobileHeaderProps, ...shell, ...identity, ...topBarProps })}
-            <TopBar {...topBarProps} {...shell} {...identity} />
-            {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{render_notifications_panel(topBarProps)}</div></ResponsiveOverlay>}
+            {render_mobile_header({ ...profileActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, handle_toggle_notifications })}
+            <TopBar {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} handle_toggle_notifications={handle_toggle_notifications} />
+            {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{<NotificationsPanel {...topBarProps}/>}</div></ResponsiveOverlay>}
             {children}
         </main>
         <div id="bold-overlay-root" />
+        {profileAnchor && <ProfileQuickMenu anchor={profileAnchor} close={() => setProfileAnchor(null)} openProfile={shell.open_profile} changeDepartment={async id => {if (!await shell.can_change_department()) return false; core.setActiveAssignment(id); return true;}}/>}
         {overlays}
     </div>;
 }
@@ -104,19 +189,6 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 
 function Sidebar(props) {
     const { active_module, handle_module_change, is_sidebar_open, set_is_sidebar_open, navigation_items, current_user, navigationSlots = {} } = props;
-    const [profileOpen, setProfileOpen] = useState(false);
-    const profileRef = useRef(null);
-    useEffect(() => {
-        if (!profileOpen) return undefined;
-        const close = event => {
-            if (event.type === "keydown" && event.key === "Escape") { setProfileOpen(false); profileRef.current?.querySelector(".profile_menu_button")?.focus(); }
-            if (event.type === "pointerdown" && !profileRef.current?.contains(event.target)) setProfileOpen(false);
-        };
-        document.addEventListener("keydown", close); document.addEventListener("pointerdown", close);
-        return () => { document.removeEventListener("keydown", close); document.removeEventListener("pointerdown", close); };
-    }, [profileOpen]);
-    useEffect(() => setProfileOpen(false), [active_module, is_sidebar_open]);
-    useEffect(() => { const close = event => event.detail !== "profile" && setProfileOpen(false); globalThis.addEventListener?.("bold:sidebar-popover", close); return () => globalThis.removeEventListener?.("bold:sidebar-popover", close); }, []);
     const groups = [{ id: "work", label: current_user?.unit_name || "Trabajo" }, { id: "management", label: "Gestión" }];
 
     return (
@@ -152,19 +224,12 @@ function Sidebar(props) {
                 </div>; })}
             </div>
 
-            <div className="sidebar_footer" data-tour="profile">
-                <span className="profile_avatar">{current_user.initials}</span>
-                <div className="profile_text">
-                    <strong>{current_user.name}</strong>
-                    <span>{current_user?.job_role_title || "Administrador"}</span>
-                </div>
-                {is_using_real_backend() && <div className={`profile_session_menu ${profileOpen ? "is_open" : ""}`} ref={profileRef}>
-                    <button className="profile_menu_button" type="button" aria-label="Opciones del perfil" aria-expanded={profileOpen} onClick={() => setProfileOpen(open => { const next = !open; if (next) globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", { detail: "profile" })); return next; })}>{render_icon(more_horizontal_icon, 18)}</button>
-                    {profileOpen && <div className="profile_session_popover">
-                        <button className="profile_security_action" type="button" onClick={() => { setProfileOpen(false); props.onManageMfa(); }}>{props.mfaEnabled ? "Administrar MFA" : "Configurar MFA"}</button>
-                        <button type="button" onClick={props.onLogout}>Cerrar sesión</button>
-                    </div>}
-                </div>}
+            <div className="sidebar_footer profile_footer_controls" data-tour="profile">
+                <button className="profile_identity_button" aria-label="Abrir ajustes rápidos del perfil" onClick={props.onQuickProfile}>
+                    <ProfileAvatar className="profile_avatar" url={props.profileAvatar} initials={current_user.initials}/>
+                    <span className="profile_text"><strong>{current_user.name}</strong><span>{current_user?.job_role_title || "Administrador"}</span></span>
+                </button>
+                <button className="profile_menu_button" type="button" aria-label="Ajustes del perfil" onClick={() => props.onOpenProfile()}>{render_icon(settings_icon, 19)}</button>
             </div>
         </aside>
     );
@@ -172,7 +237,13 @@ function Sidebar(props) {
 
 
 // Renders the "Notificaciones" dropdown panel opened from the bell button.
-function render_notifications_panel(props) {
+function NotificationsPanel(props) {
+    const core = useCore();
+    const [clearing, setClearing] = useState(false), [clearError, setClearError] = useState("");
+    async function clear() {
+        setClearing(true); setClearError("");
+        try {await core.notifications.clear();} catch (problem) {setClearError(problem.message);} finally {setClearing(false);}
+    }
     const {
         handle_close_notifications,
         handle_mark_notifications_read,
@@ -188,6 +259,7 @@ function render_notifications_panel(props) {
                     Marcar como leidas
                 </button>
             </header>
+            {clearError && <p role="alert">{clearError}</p>}
             <div className="notification_list">
                 {notifications.map((notification_item) => {
                     const actor = notification_item.actor;
@@ -214,6 +286,7 @@ function render_notifications_panel(props) {
                 {!notifications.length && <p className="notification_empty">No tienes notificaciones por ahora.</p>}
             </div>
             <footer className="modal_footer">
+                <button className="link_button" type="button" disabled={clearing || !notifications.length} onClick={clear}>{clearing ? "Limpiando…" : "Limpiar notificaciones"}</button>
                 <button className="link_button" type="button" onClick={handle_close_notifications}>
                     Cerrar notificaciones
                 </button>
@@ -316,12 +389,12 @@ function TopBar(props) {
                         aria-label="Notificaciones"
                         onClick={handle_toggle_notifications}
                     >
-                        {render_icon(bell_icon, 18)}
+                        <span key={props.bellPulse} className={props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 18)}</span>
                         {has_unread_notifications ? <span className="bell_unread_dot"></span> : null}
                     </button>
 
                 </div>
-                <span className="soft_avatar">{current_user.initials}</span>
+                <button className="profile_header_button" aria-label="Abrir ajustes rápidos del perfil" onClick={props.onQuickProfile}><ProfileAvatar className="soft_avatar" url={props.profileAvatar} initials={current_user.initials}/></button>
             </div>
         </header>
     );
@@ -354,9 +427,10 @@ function render_mobile_header(props) {
                 </button>
                 {detailOpen ? <h1>{title}</h1> : active_item?.brand ? render_logo() : <h1>{title}</h1>}
                 <div className="mobile_tour_actions">
+                    <button className="profile_header_button profile_mobile_button" aria-label={"Abrir ajustes r\u00e1pidos del perfil"} onClick={props.onQuickProfile}><ProfileAvatar initials={current_user.initials} url={props.profileAvatar}/></button>
                 <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
                 <button className="mobile_more_button" data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
-                    {render_icon(bell_icon, 22)}
+                    <span key={props.bellPulse} className={props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 22)}</span>
                     {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
                 </button>
                 </div>

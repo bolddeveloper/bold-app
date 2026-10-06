@@ -17,6 +17,8 @@ class GoogleCalendarConnection(models.Model):
 class CalendarDraft(models.Model):
     event_id = models.CharField(max_length=255, unique=True)
     owner = models.ForeignKey("boldApp_core.UserAccount", null=True, on_delete=models.SET_NULL)
+    connection = models.ForeignKey("boldApp_workspace.GoogleConnection", null=True, on_delete=models.SET_NULL)
+    google_subject = models.CharField(max_length=255, blank=True)
     calendar_email = models.EmailField()
     last_seen_at = models.DateTimeField(auto_now_add=True)
 

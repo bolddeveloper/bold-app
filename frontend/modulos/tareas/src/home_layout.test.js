@@ -11,3 +11,10 @@ test("keeps one widget per type except navigation shortcuts", () => {
     ]);
     assert.deepEqual(layout.map(widget => widget.id), ["metrics-1", "shortcuts-1", "shortcuts-2"]);
 });
+
+test("private notes survive normalization and remain unique", () => {
+    const layout = normalizeHomeLayout([{ id: "notes1", type: "notes", size: "medium" }, { id: "notes2", type: "notes", size: "small" }]);
+    assert.deepEqual(layout.map(widget => widget.id), ["notes1"]);
+    assert.equal(layout[0].type, "notes");
+    assert.equal(layout[0].size, "medium");
+});

@@ -1,18 +1,7 @@
 from datetime import date, datetime
 from urllib.parse import quote
 
-import requests
-from cryptography.fernet import InvalidToken
-from django.conf import settings
-from django.utils import timezone
-from rest_framework.exceptions import APIException, ValidationError
-
-from boldApp.autenticacion.services import decrypt_secret
-
-from .models import GoogleCalendarConnection
-
-GOOGLE_API = "https://www.googleapis.com/calendar/v3"
-GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
+from rest_framework.exceptions import APIException, ValidationError, NotFound
 
 
 class CalendarUnavailable(APIException):
@@ -22,64 +11,31 @@ class CalendarUnavailable(APIException):
 
 class CalendarReconnect(APIException):
     status_code = 409
-    default_detail = "La conexión con Google venció. Pide al dueño que vuelva a conectarla."
+    default_detail = "La conexión con Google venció. Vuelve a conectar tu cuenta."
 
 
 def configured():
-    return all((settings.GOOGLE_CALENDAR_CLIENT_ID, settings.GOOGLE_CALENDAR_CLIENT_SECRET, settings.GOOGLE_CALENDAR_REDIRECT_URI))
+    from boldApp.workspace.service import configured as common
+    return common()
 
 
-def _token(connection):
-    # ponytail: refresh per request avoids sharing access-token state; cache it if Google latency becomes noticeable.
+def google_request(user, method, path, *, params=None, body=None, base=None):
+    from boldApp.workspace.google_config import public_connection
+    from boldApp.workspace.service import google, Reconnect, GoogleUnavailable
+    service = "people" if base == "https://people.googleapis.com" else "tasks" if base == "https://tasks.googleapis.com" else "calendar"
+    grant = "contacts" if service == "people" else service
+    status = public_connection(user)["services"][grant]["status"]
+    if status != "available":
+        raise CalendarReconnect("Conecta tu cuenta y autoriza " + grant + " en Conectores.")
+    resource = path.removeprefix("/v1") if service == "people" else path.removeprefix("/tasks/v1") if service == "tasks" else path
     try:
-        refresh = decrypt_secret(connection.refresh_token_encrypted)
-    except (InvalidToken, ValueError) as exc:
-        raise CalendarReconnect() from exc
-    try:
-        response = requests.post(GOOGLE_TOKEN, data={
-            "client_id": settings.GOOGLE_CALENDAR_CLIENT_ID,
-            "client_secret": settings.GOOGLE_CALENDAR_CLIENT_SECRET,
-            "refresh_token": refresh,
-            "grant_type": "refresh_token",
-        }, timeout=12)
-    except requests.RequestException as exc:
-        raise CalendarUnavailable() from exc
-    if response.status_code != 200:
-        if response.status_code in (400, 401):
-            raise CalendarReconnect()
-        raise CalendarUnavailable()
-    return response.json()["access_token"]
-
-
-def google_request(method, path, *, params=None, body=None, base=None):
-    connection = GoogleCalendarConnection.objects.first()
-    if not connection:
-        raise CalendarReconnect("Todavía no se ha conectado Google Calendar.")
-    token = _token(connection)
-    try:
-        response = requests.request(method, f"{base or GOOGLE_API}{path}", params=params, json=body,
-                                    headers={"Authorization": f"Bearer {token}"}, timeout=15)
-    except requests.RequestException as exc:
-        raise CalendarUnavailable() from exc
-    if response.status_code == 401:
-        raise CalendarReconnect()
-    if response.status_code == 403:
-        if base == "https://people.googleapis.com":
-            raise ValidationError("Google Contacts no autorizó la búsqueda. Activa People API en Cloud y reconecta la cuenta en Conectores.")
-        if base:
-            raise ValidationError("Google Tasks no autorizó la operación. Activa Google Tasks API en Cloud y reconecta la cuenta en Conectores.")
-        raise ValidationError("Google no permite esta acción en el calendario principal.")
-    if response.status_code == 404:
-        raise ValidationError("El evento ya no existe en Google Calendar.")
-    if response.status_code == 410 and method == "DELETE":
-        return None
-    if response.status_code >= 500 or response.status_code == 429:
-        raise CalendarUnavailable()
-    if response.status_code >= 400:
-        raise ValidationError(response.json().get("error", {}).get("message", "Google rechazó el evento."))
-    connection.last_checked_at = timezone.now()
-    connection.save(update_fields=["last_checked_at"])
-    return response.json() if response.content else None
+        return google(user, method, resource, api=service, params=params, body=body)
+    except NotFound as error:
+        raise ValidationError("El evento ya no existe en Google Calendar.") from error
+    except Reconnect as error:
+        raise CalendarReconnect(str(error.detail)) from error
+    except GoogleUnavailable as error:
+        raise CalendarUnavailable() from error
 
 
 def event_path(event_id=""):

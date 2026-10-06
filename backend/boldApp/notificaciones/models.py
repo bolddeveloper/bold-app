@@ -6,6 +6,7 @@ from boldApp.tareas.models import Project, Task
 
 
 class Notification(UUIDPrimaryKeyModel):
+    dismissed_at = models.DateTimeField(null=True, blank=True)
     recipient_assignment = models.ForeignKey(
         PositionAssignment,
         on_delete=models.CASCADE,

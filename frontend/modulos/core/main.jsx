@@ -11,6 +11,9 @@ import "../tareas/src/tasks_tablet.css";
 import "../tareas/src/theme_rework.css";
 import "../administrativo/admin.css";
 import "./shared/universal_responsive.css";
+// Module styles are loaded by the entry point, including during local hot reload.
+import "../docs/development_notice.css";
+import "../perfil/shortcut_preferences.css";
 
 
 // Mounts the React application into the document root.

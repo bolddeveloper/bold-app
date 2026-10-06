@@ -1,3 +1,8 @@
-
-
-.responsive_overlay_backdrop { position: fixed; inset: 0; border: 0; background: #0005; z-index: 1290; }
+/* Superposiciones compartidas: separación y adaptación al área visible. */
+.responsive_overlay_backdrop {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    background: #0005;
+    z-index: 1290;
+}

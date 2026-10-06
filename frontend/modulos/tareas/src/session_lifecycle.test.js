@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createSessionNotifications } from "../../core/session_notifications.js";
-import { entranceModule } from "../../core/shell_navigation_state.js";
+import { entranceModule, historyModule, isShellModuleAllowed } from "../../core/shell_navigation_state.js";
 import { requiresTaskData } from "./services/task_activity.js";
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -114,4 +114,40 @@ test("disposal ignores an in-flight old-context response", async () => {
     const read = refresh(store); const handled = assert.rejects(read, { name: "AbortError" }); await tick();
     store.dispose(); delayed.resolve([{ id: "old" }]); await handled;
     assert.deepEqual(store.getRows(), []); assert.deepEqual(published, []);
+});
+
+
+test("browser history restores only modules authorized in the current department", () => {
+    const navigation = [{id: "home"}, {id: "drive"}, {id: "docs"}];
+    const target = {context: "employee-a:department-1", module: "drive", index: 2};
+    assert.equal(historyModule(target, target.context, navigation), "drive");
+    assert.equal(historyModule({...target, module: "profile"}, target.context, navigation), "profile");
+    assert.equal(historyModule({...target, module: "administration"}, target.context, navigation), null);
+    assert.equal(historyModule(target, "employee-b:department-1", navigation), null);
+    assert.equal(historyModule({...target, index: undefined}, target.context, navigation), null);
+    assert.equal(historyModule(null, target.context, navigation), null);
+});
+
+
+test("nested task modules work through sidebar, restored session and browser history", () => {
+    const navigation = [{id: "home", default: true}, {id: "tasks"}];
+    for (const module of ["projects", "department_projects", "workspaces", "schedules"]) {
+        assert.equal(isShellModuleAllowed(module, navigation), true);
+        assert.equal(entranceModule(navigation, module), module);
+        assert.equal(historyModule({context: "employee", module, index: 1}, "employee", navigation), module);
+        assert.equal(isShellModuleAllowed(module, [{id: "home"}]), false);
+    }
+    assert.equal(isShellModuleAllowed("administration", navigation), false);
+    assert.equal(isShellModuleAllowed("unknown", navigation), false);
+});
+
+
+test("clearing notifications confirms server cleanup and refreshes without clearing another session", async () => {
+    let current = [{id: "first", is_read: false}], cleared = 0;
+    const store = createSessionNotifications({...options, client: {
+        list: async () => current,
+        request: async path => {assert.equal(path, "/api/v2/notifications/clear/"); cleared++; current = []; return {updated: 1};},
+    }});
+    try {await refresh(store); await store.clear(); assert.equal(cleared, 1); assert.deepEqual(store.getRows(), []);}
+    finally {store.dispose();}
 });

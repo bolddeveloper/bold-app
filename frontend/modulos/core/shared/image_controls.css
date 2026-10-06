@@ -1,0 +1,39 @@
+/* Controles compartidos: disparadores y panel de color. */
+.bold_color_trigger { display: inline-flex; padding: 0; border: 0; border-radius: 50%; background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red); cursor: pointer; }
+.bold_color_trigger > span { width: 30px; height: 30px; margin: 4px; border-radius: 50%; border: 2px solid var(--bold_surface); }
+/* Controles secundarios por encima de drawers y diálogos de Workspace (hasta 15000). */
+.bold_control_overlay { position: fixed; inset: 0; z-index: 16010; }
+.bold_color_panel { position: fixed; width: min(260px,calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; padding: 16px; border: 1px solid var(--bold_line); border-radius: 12px; background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 12px 40px #0005; }
+.bold_color_panel header, .bold_avatar_editor header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.bold_color_square { position: relative; height: 150px; border-radius: 4px; background-image: linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent); touch-action: none; cursor: crosshair; }
+.bold_color_square i { position: absolute; width: 8px; height: 8px; border: 2px solid white; border-radius: 50%; transform: translate(-50%,-50%); box-shadow: 0 0 2px #000; pointer-events: none; }
+.bold_color_panel .bold_color_hue { width: 100%; height: 10px; margin: 16px 0; appearance: none; background: linear-gradient(to right,red,yellow,lime,cyan,blue,magenta,red); border-radius: 8px; padding: 0; }
+.bold_color_hex { display: flex; align-items: center; border: 1px solid var(--bold_line); border-radius: 6px; overflow: hidden; }
+.bold_color_hex input { width: 100%; min-width: 0; padding: 9px; color: inherit; background: transparent; border: 0; font: inherit; }
+.bold_color_presets { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.bold_color_panel .bold_color_presets button { width: 32px; height: 32px; border: 1px solid #999; border-radius: 4px; }
+.bold_color_accessible { display: grid; grid-template-columns: 90px 1fr; align-items: center; margin-top: 8px; font-size: 12px; color: var(--bold_muted); }
+.bold_color_accessible input { width: 100%; }
+/* Editor de avatar: recorte circular, zoom, desplazamiento y giro. */
+.bold_image_overlay { position: fixed; inset: 0; z-index: 16000; display: grid; place-items: center; padding: 16px; background: transparent; }
+.bold_avatar_editor { width: min(480px,100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; box-sizing: border-box; border-radius: 16px; border: 1px solid var(--bold_line); background: var(--bold_surface); color: var(--bold_text); }
+.bold_avatar_editor h2 { margin: 0; font-size: 20px; }
+.bold_avatar_crop { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; touch-action: none; cursor: grab; background: #0003; }
+.bold_avatar_crop:active { cursor: grabbing; }
+.bold_avatar_crop canvas { display: block; width: 100%; height: 100%; }
+.bold_avatar_mask { position: absolute; inset: 0; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 60px #0007; pointer-events: none; }
+.bold_avatar_editor label { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; }
+.bold_avatar_editor input { width: 100%; accent-color: var(--bold_red); }
+.bold_avatar_position { display: flex; align-items: end; gap: 12px; }
+.bold_avatar_position label { min-width: 0; flex: 1; }
+.bold_avatar_editor footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.bold_avatar_editor footer button:first-child { margin-right: auto; }
+.bold_avatar_editor button, .bold_color_panel button { padding: 8px; display: inline-flex; align-items: center; justify-content: center; font: inherit; color: inherit; background: var(--bold_surface_soft); border: 1px solid var(--bold_line); border-radius: 7px; cursor: pointer; transition: background-color 150ms ease; }
+.bold_avatar_editor .bold_control_primary { background: var(--bold_red); color: white; }
+.bold_avatar_editor button:disabled { opacity: .5; cursor: default; }
+.bold_avatar_editor :focus-visible, .bold_color_panel :focus-visible, .bold_color_trigger:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; }
+@media(prefers-reduced-motion: reduce) { .bold_avatar_editor button, .bold_color_panel button { transition: none; } }
+
+/* Las capas conservan las variables del tema sin pintar el fondo de BOLD. */
+.bold_control_overlay, .bold_control_overlay.theme_dark,
+.bold_image_overlay, .bold_image_overlay.theme_dark { background: transparent; }

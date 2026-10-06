@@ -9,6 +9,7 @@ import { createPermissionCache } from "./permission_cache.js";
 import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
 import { createSessionNotifications } from "./session_notifications.js";
+import {defaultNotificationSettings, containsNewUnreadNotification, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
 import { contentCanRefresh } from "./refresh_coordinator.js";
 const CoreContext = createContext(null);
 export function useCore() {
@@ -204,23 +205,39 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const report = error => {
             if (mounted && error?.name !== "AbortError") setNotificationSnapshot(current => ({ assignmentId, rows: current.assignmentId === assignmentId ? current.rows : [], error: error?.message || String(error) }));
         };
+        let soundSettings = defaultNotificationSettings, settingsLoaded = false, previousRows = null;
+        const soundController = new AbortController();
+        http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted) {soundSettings = value; settingsLoaded = true;}}).catch(() => {});
+        const changeSound = event => {soundSettings = event.detail; settingsLoaded = true;};
+        window.addEventListener("bold:notification-sound-changed", changeSound);
         const store = createSessionNotifications({ onChange: rows => {
-            if (mounted) setNotificationSnapshot({ assignmentId, rows, error: "" });
+            if (mounted) {
+                if (containsNewUnreadNotification(previousRows, rows)) window.dispatchEvent(new Event("bold:notification-arrived"));
+                if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
+                    playNotificationSound(soundSettings).catch(() => {});
+                    const known = new Set(previousRows.map(row => String(row.id)));
+                    for (const row of rows.filter(row => !row.is_read && !known.has(String(row.id))).slice(0,3)) {try {showDesktopNotification(row, soundSettings);} catch { /* Los permisos los administra el navegador. */ }}
+                }
+                previousRows = rows;
+                setNotificationSnapshot({ assignmentId, rows, error: "" });
+            }
         } });
         notificationController.current = store;
         if (getCoreState().securityUncertain) store.invalidate({ uncertain: true }).catch(report);
         const realtime = createNotificationRealtime();
-        const reconcile = reason => {
-            if (contentCanRefresh()) store.refresh({ reason }).catch(report);
+        const reconcile = (reason, desktopEvent = false) => {
+            const background = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
+                && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
+            if (contentCanRefresh() || background) store.refresh({ reason, force: background, immediate: reason === "notification-focus-or-poll" }).catch(report);
         };
         const recover = () => reconcile("notification-focus-or-poll");
-        const invalidate = event => store.invalidate(event.detail || {}).catch(report);
+        const invalidate = event => {previousRows = null; store.invalidate(event.detail || {}).catch(report); previousRows = null;};
         window.addEventListener("bold:permissions-revision", invalidate);
         window.addEventListener("focus", recover);
         window.addEventListener("online", recover);
         document.addEventListener("visibilitychange", recover);
         realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
-            onNotification: () => reconcile("notification-event"),
+            onNotification: () => reconcile("notification-event", true),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => reconcile("notification-reconnect"),
             onControl: envelope => mounted && window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } })),
@@ -233,9 +250,11 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onError: report,
         }).catch(report);
         store.refresh({ reason: "notification-bootstrap", immediate: true }).catch(report);
-        const timer = setInterval(recover, 300_000);
+        const timer = setInterval(recover, 2_000);
         return () => {
             mounted = false; realtime.disconnect(); store.dispose(); clearInterval(timer);
+            soundController.abort(); stopNotificationSound();
+            window.removeEventListener("bold:notification-sound-changed", changeSound);
             if (notificationController.current === store) notificationController.current = null;
             window.removeEventListener("bold:permissions-revision", invalidate);
             window.removeEventListener("focus", recover); window.removeEventListener("online", recover);
@@ -366,8 +385,15 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", getRows: notificationRows, setRead: setNotificationRead };
-    const value = { ...state, ...http.getSession(), notifications, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", getRows: notificationRows, setRead: setNotificationRead, clear: () => notificationController.current?.clear() || Promise.resolve() };
+    function updateProfile(profile) {
+        const current = getCoreState(), employeeId = current.account?.employee;
+        const initials = profile.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("");
+        const change = row => row.personId === employeeId || row.employee === employeeId ? {...row, name: profile.name, employee_name: profile.name, initials} : row;
+        const assignments = current.assignments.map(change);
+        updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change)});
+    }
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}
