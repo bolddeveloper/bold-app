@@ -28,9 +28,7 @@ Las variables `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` y `
 
 Habilitar Google Drive API, Google Docs API, Google Sheets API y Google Slides API en el proyecto y declarar los scopes `openid`, `email` y `https://www.googleapis.com/auth/drive`. Este scope amplio se necesita para explorar Drive completo. En estado de pruebas, agregar las cuentas que probarán la integración a los usuarios de prueba del proyecto. La aprobación empresarial de la aplicación se administra en Google Workspace; no se obtiene al configurar APIs en Google Cloud.
 
-El usuario debe seleccionar la cuenta empresarial correspondiente a su correo BOLD. `GOOGLE_WORKSPACE_COMPANY_DOMAIN` vale `bold.gt` por defecto. En desarrollo (`DEBUG=True`), la cuenta `samueloyy@gmail.com` también está permitida para la demo, configurable con `GOOGLE_WORKSPACE_DEMO_EMAIL`. La excepción no se aplica en producción.
-
-Durante esta demo local, BOLD muestra y sugiere `samueloyy@gmail.com` al conectar Google. Esta cuenta personal puede vincularse al usuario de prueba de BOLD aunque su correo BOLD sea empresarial. Iniciar sesión en BOLD sigue siendo necesario para asociar la conexión a ese usuario.
+Se permite conectar cualquier cuenta Google verificada del dominio configurado en `GOOGLE_WORKSPACE_COMPANY_DOMAIN` (`bold.gt` por defecto), aunque su correo sea distinto del usuario BOLD. Las cuentas personales y los subdominios quedan excluidos. Iniciar sesión en BOLD sigue siendo necesario; la conexión pertenece al usuario BOLD que autoriza y no se comparte con otros usuarios.
 
 Los tokens se cifran con el mecanismo existente de BOLD. Producción requiere `AUTH_ENCRYPTION_KEY`, orígenes autorizados y un callback HTTPS propios; no desplegar el cliente local como configuración de producción. Desconectar elimina únicamente la conexión del usuario en BOLD y no elimina archivos ni revoca otras conexiones del proyecto.
 

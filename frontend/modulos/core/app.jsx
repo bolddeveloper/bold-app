@@ -9,7 +9,6 @@ import WorkspaceModule from "../docs/workspace_module.jsx?docs-uploads";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
-import ModuleNotice from "./shared/module_notice.jsx";
 
 const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
@@ -36,9 +35,9 @@ function ApplicationWorkspace() {
     ];
     const externalModules = {
         profile: <ProfileModule/>,
-        calendar: <ModuleNotice key="calendar" name="Calendario"><CalendarModule /></ModuleNotice>,
-        docs: <ModuleNotice key="docs" name="Docs"><WorkspaceModule mode="docs" /></ModuleNotice>,
-        drive: <ModuleNotice key="drive" name="Drive"><WorkspaceModule mode="drive" /></ModuleNotice>,
+        calendar: <CalendarModule key="calendar" />,
+        docs: <WorkspaceModule key="docs" mode="docs" />,
+        drive: <WorkspaceModule key="drive" mode="drive" />,
         suggestions: <SuggestionsModule />,
         ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),

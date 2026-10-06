@@ -3,6 +3,33 @@ import assert from "node:assert/strict";
 import { createRealtimeChannel, createTicketQueue } from "../../../core/realtime_channel.js";
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("retries notify once per interruption, including unstable recoveries", async () => {
+    let time = 0;
+    const sockets = [], timers = [], errors = [];
+    class Socket {
+        constructor() { this.readyState = 0; this.handlers = {}; sockets.push(this); }
+        addEventListener(name, fn) { this.handlers[name] = fn; }
+        close() { this.readyState = 3; this.handlers.close?.({code: 1006}); }
+    }
+    const channel = createRealtimeChannel({WebSocketImpl: Socket, eventTarget: new EventTarget(), now: () => time, random: () => 0,
+        getTicket: async () => ({}), urlForTicket: () => "ws://example.test", onError: message => errors.push(message),
+        setTimer: (fn, delay) => {timers.push({fn, delay}); return timers.length;}, clearTimer: () => {}});
+    await tick();
+    sockets[0].close();
+    timers.at(-1).fn(); await tick();
+    sockets[1].close();
+    assert.equal(errors.length, 1);
+    timers.at(-1).fn(); await tick();
+    sockets[2].readyState = 1; sockets[2].handlers.open();
+    time = 1000; sockets[2].close();
+    assert.equal(errors.length, 1);
+    timers.at(-1).fn(); await tick();
+    sockets[3].readyState = 1; sockets[3].handlers.open();
+    time = 31000; sockets[3].close();
+    assert.equal(errors.length, 2);
+    channel.stop();
+});
+
 test("terminal ticket rejection never schedules an automatic retry", async () => {
     for (const status of [401, 403]) {
         let tickets = 0, scheduled = 0, terminal = 0;

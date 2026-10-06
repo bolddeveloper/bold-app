@@ -95,10 +95,10 @@ class WorkspaceTests(TestCase):
         self.client.get(self.root + "oauth/callback/", {"state": state, "code": "unexpected"})
         exchange.assert_not_called()
 
-    @override_settings(GOOGLE_WORKSPACE_DEMO_EMAIL="samueloyy@gmail.com")
+    @override_settings(GOOGLE_WORKSPACE_COMPANY_DOMAIN="bold.gt")
     @patch("boldApp.workspace.oauth.requests.get")
     @patch("boldApp.workspace.oauth.requests.post")
-    def test_personal_demo_account_connects_to_company_bold_user(self, exchange, identity):
+    def test_company_accounts_connect_without_matching_bold_email(self, exchange, identity):
         from urllib.parse import parse_qs, urlparse
         from boldApp.autenticacion.services import decrypt_secret
         session = AuthSession.objects.create(user_account=self.users[0], token_hash="demo-session", credentials_version=self.users[0].credentials_version, expires_at=timezone.now() + timedelta(hours=1))
@@ -107,33 +107,34 @@ class WorkspaceTests(TestCase):
         token.json.return_value = {"access_token": "access", "refresh_token": "refresh", "scope": "openid email https://www.googleapis.com/auth/drive", "expires_in": 3600}
         exchange.return_value = token
         profile = Mock()
-        profile.json.return_value = {"email": "samueloyy@gmail.com", "email_verified": True, "sub": "samuel"}
+        profile.json.return_value = {"email": "soporte@bold.gt", "email_verified": True, "sub": "samuel"}
         identity.return_value = profile
 
         def callback():
             start = self.client.post(self.root + "oauth/start/")
             self.assertEqual(start.status_code, 200)
             query = parse_qs(urlparse(start.data["authorization_url"]).query)
-            self.assertEqual(query["login_hint"], ["samueloyy@gmail.com"])
+            self.assertEqual(query["login_hint"], [self.users[0].email])
             return self.client.get(self.root + "oauth/callback/", {"state": query["state"][0], "code": "demo"})
 
         self.assertContains(callback(), '"connected"')
         connection = GoogleConnection.objects.get(user=self.users[0])
-        self.assertEqual(connection.email, "samueloyy@gmail.com")
+        self.assertEqual(connection.email, "soporte@bold.gt")
         self.assertEqual(decrypt_secret(connection.refresh_token_encrypted), "refresh")
         self.assertNotEqual(connection.refresh_token_encrypted, "refresh")
-        profile.json.return_value["email"] = "other@gmail.com"
-        self.assertContains(callback(), '"wrong_account"')
+        for debug in (True, False):
+            with override_settings(DEBUG=debug, AUTH_ENCRYPTION_KEY="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="):
+                for email in ("other@gmail.com", "samueloyy@gmail.com", "user@fakebold.gt", "user@bold.gt.evil", "user@sub.bold.gt"):
+                    profile.json.return_value["email"] = email
+                    self.assertContains(callback(), '\"wrong_account\"')
+                profile.json.return_value.update(email="Other@BOLD.GT", email_verified=False)
+                self.assertContains(callback(), '\"failed\"')
+                profile.json.return_value["email_verified"] = True
+                self.assertContains(callback(), '\"connected\"')
         connection.refresh_from_db()
-        self.assertEqual(connection.email, "samueloyy@gmail.com")
-        with override_settings(DEBUG=False):
-            profile.json.return_value["email"] = "samueloyy@gmail.com"
-            from django.core import signing
-            cache.set("bold-workspace-oauth:production", str(session.pk), timeout=600)
-            state = signing.dumps({"session": str(session.pk), "nonce": "production", "version": configuration()["version"]}, salt="bold-workspace")
-            result = self.client.get(self.root + "oauth/callback/", {"state": state, "code": "demo"})
-            self.assertContains(result, '"wrong_account"')
-            self.assertEqual(self.client.get(self.root + "connection/").data["demo_email"], "")
+        self.assertEqual(connection.email, "Other@BOLD.GT")
+        self.client.force_authenticate(self.users[1])
+        self.assertFalse(self.client.get(self.root + "connection/").data["connected"])
 
     @patch("boldApp.workspace.service.access_token", return_value="upload-token")
     @patch("boldApp.workspace.service.requests.Session.send")

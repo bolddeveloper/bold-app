@@ -251,7 +251,6 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174")
 GOOGLE_WORKSPACE_CLIENT_ID = os.environ.get("GOOGLE_WORKSPACE_CLIENT_ID", "")
 GOOGLE_WORKSPACE_CLIENT_SECRET = os.environ.get("GOOGLE_WORKSPACE_CLIENT_SECRET", "")
 GOOGLE_WORKSPACE_COMPANY_DOMAIN = os.environ.get("GOOGLE_WORKSPACE_COMPANY_DOMAIN", "bold.gt")
-GOOGLE_WORKSPACE_DEMO_EMAIL = os.environ.get("GOOGLE_WORKSPACE_DEMO_EMAIL", "samueloyy@gmail.com") if DEBUG else ""
 GOOGLE_WORKSPACE_REDIRECT_URI = os.environ.get("GOOGLE_WORKSPACE_REDIRECT_URI", "http://localhost:8000/api/v2/workspace/oauth/callback/")
 
 

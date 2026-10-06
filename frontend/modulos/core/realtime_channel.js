@@ -18,6 +18,11 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
     online = () => globalThis.navigator?.onLine !== false, eventTarget = globalThis.window,
     ticketQueue = queueTicket, diagnostics = syncDiagnostics, connectionTimeoutMs = 15_000 } = {}) {
     let stopped = false, opening = false, attempt = 0, socket = null, timer = null, connectionTimer = null, retryAt = 0, openedAt = 0, hasOpened = false, settled = false;
+    let lastError = "";
+    function report(message) {
+        if (message === lastError) return;
+        lastError = message; onError(message);
+    }
     let finishReady;
     const ready = new Promise(resolve => { finishReady = resolve; });
     const settle = () => { if (!settled) { settled = true; finishReady(); } };
@@ -26,13 +31,13 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
         onState("disconnected");
         settle();
         if (error?.name === "AbortError" || [401, 403].includes(error?.status)) { stop(); onTerminal(error); return; }
-        if (!online()) { onError("Sin conexión. La sincronización se reanudará al recuperar Internet."); return; }
+        if (!online()) { report("Sin conexión. La sincronización se reanudará al recuperar Internet."); return; }
         const backoff = Math.min(60_000, 1000 * 2 ** Math.min(attempt++, 6));
         const delay = Math.max(error?.retryAfterMs || 0, Math.round(backoff * (1 + random() * 0.25)));
         retryAt = now() + delay;
         diagnostics.record("socket", "retry");
         clearTimer(timer); timer = setTimer(open, delay);
-        onError(error?.quotaExceeded ? "El servicio alcanzó su límite de peticiones. La sincronización está pausada temporalmente." : "Reconectando. Tus cambios guardados siguen en el servidor.");
+        report(error?.quotaExceeded ? "El servicio alcanzó su límite de peticiones. La sincronización está pausada temporalmente." : "Reconectando. Tus cambios guardados siguen en el servidor.");
     }
     async function open() {
         timer = null;
@@ -71,7 +76,7 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
                 socket = null; diagnostics.record("socket", "close");
                 onState("disconnected");
                 if ([4401, 4403].includes(event.code)) { settle(); stop(); onTerminal({ status: event.code === 4401 ? 401 : 403 }); return; }
-                if (hasOpened && now() - openedAt >= 30_000) attempt = 0;
+                if (hasOpened && now() - openedAt >= 30_000) { attempt = 0; lastError = ""; }
                 schedule();
             });
         } catch (error) { if (!stopped) schedule(error); }
