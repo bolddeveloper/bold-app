@@ -24,6 +24,8 @@ Drive permite listar, buscar, navegar carpetas y unidades compartidas, crear arc
 
 ## Configuración local
 
+En Oracle, `GOOGLE_WORKSPACE_REDIRECT_URI` se pasa al contenedor. Si se deja vacío con `DJANGO_DEBUG=false`, el callback se deriva de `FRONTEND_URL` (no del Host de la petición). Para la demo actual es `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`. Esta URL exacta debe figurar en los URI de redirección autorizados del cliente web en Google Cloud; después descarga nuevamente el JSON y súbelo en Administración → Conectores si aún no incluye esa URL. Desarrollo conserva el callback local cuando `DJANGO_DEBUG=true`.
+
 Administración → Conectores permite gestionar el cliente OAuth al propietario y a cuentas con autorización individual `can_manage_connectors` **y** cargo administrativo activo en Dirección. El acceso a Administración por sí solo no concede esta capacidad. No hay excepciones por correo en ejecución ni acceso por `is_staff`.
 
 La migración `0017_account_connector_delegation` habilita una sola vez la cuenta existente `soporte@bold.gt`, si está activa y tiene delegación administrativa en Dirección, registrándolo en auditoría como provisión del despliegue, sin atribuir falsamente la acción a otro empleado. No promueve a soporte a propietario ni habilita otros administradores. Las cuentas futuras nacen sin esta capacidad y el campo no se acepta en las APIs generales de cuentas/perfil. Si se retira su cargo, Administración o la autorización individual, la API vuelve a rechazarla; el propietario mantiene sus protecciones.

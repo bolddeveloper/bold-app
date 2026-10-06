@@ -251,7 +251,12 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5174")
 GOOGLE_WORKSPACE_CLIENT_ID = os.environ.get("GOOGLE_WORKSPACE_CLIENT_ID", "")
 GOOGLE_WORKSPACE_CLIENT_SECRET = os.environ.get("GOOGLE_WORKSPACE_CLIENT_SECRET", "")
 GOOGLE_WORKSPACE_COMPANY_DOMAIN = os.environ.get("GOOGLE_WORKSPACE_COMPANY_DOMAIN", "bold.gt")
-GOOGLE_WORKSPACE_REDIRECT_URI = os.environ.get("GOOGLE_WORKSPACE_REDIRECT_URI", "http://localhost:8000/api/v2/workspace/oauth/callback/")
+# Production is served through the same public origin as the frontend (Worker).
+# Never infer OAuth destinations from a request's Host header.
+GOOGLE_WORKSPACE_REDIRECT_URI = os.environ.get("GOOGLE_WORKSPACE_REDIRECT_URI", "").strip() or (
+    "http://localhost:8000/api/v2/workspace/oauth/callback/" if DEBUG
+    else FRONTEND_URL.rstrip("/") + "/api/v2/workspace/oauth/callback/"
+)
 
 
 # Define la configuracion de Celery para la entrega asincrona de webhooks.
