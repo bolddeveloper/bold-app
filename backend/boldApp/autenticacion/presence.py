@@ -4,10 +4,12 @@ Heartbeats ride the existing security WebSocket. No HTTP polling, passwords,
 emails, tokens, event titles, attendees or meeting URLs in the public projection.
 """
 import logging
+from datetime import timedelta
 from django.core.cache import caches
 from django.db import transaction
 from django.db.models import F, Q, Prefetch
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework import serializers
@@ -21,12 +23,29 @@ from .models import AuthSession
 
 log = logging.getLogger(__name__)
 HEARTBEAT_TTL = 90
-DEFAULTS = {"status": "online", "title": "", "description": "", "calendar_automatic": True}
-STATUSES = ("online", "away", "busy", "vacation", "offline", "meeting", "custom")
+DEFAULTS = {"status": "online", "title": "", "description": "", "calendar_automatic": True, "duration_minutes": 0, "expires_at": None}
+DURATIONS = (0, 15, 30, 60, 120)
+STATUSES = ("online", "away", "busy", "vacation", "custom")
 
 
-def settings_for(account):
-    return {**DEFAULTS, **account.presence_settings}
+def settings_for(account, now=None):
+    value = {**DEFAULTS, **account.presence_settings}
+    # Previously selectable offline/meeting are now automatic, never persisted
+    # overrides. Old preferences must not hide a connected person indefinitely.
+    if value["status"] not in STATUSES:
+        value.update(status="online", duration_minutes=0, expires_at=None)
+    if value["duration_minutes"] not in DURATIONS:
+        value["duration_minutes"] = 0  # Keep an existing expiry until it elapses.
+    # Resolve expiry on reads, even when the browser has closed.
+    if value["status"] in ("away", "busy") and value["expires_at"]:
+        try:
+            expiry = parse_datetime(value["expires_at"])
+            expired = not expiry or timezone.is_naive(expiry) or expiry <= (now or timezone.now())
+        except (ValueError, TypeError):
+            expired = True
+        if expired:
+            value.update(status="online", duration_minutes=0, expires_at=None)
+    return value
 
 
 def session_key(session_id):
@@ -49,9 +68,9 @@ def connected_account_ids():
 
 
 def effective_status(account, connection=None, now=None, schedule=None):
-    value = settings_for(account)
-    # Invisible/vacation is a deliberate override, not undone by a calendar event.
-    if value["status"] not in ("offline", "vacation") and value["calendar_automatic"] and connection:
+    value = settings_for(account, now)
+    # Vacation is a deliberate override, not undone by a calendar event.
+    if value["status"] != "vacation" and value["calendar_automatic"] and connection:
         cached = schedule if schedule is not None else caches["presence"].get(f"meetings:{account.pk}", {})
         stamp = (now or timezone.now()).timestamp()
         if cached.get("subject") == connection.subject and cached.get("scopes") == connection.scopes and any(start <= stamp < end for start, end in cached.get("windows", [])):
@@ -113,11 +132,19 @@ class PresenceSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=60, allow_blank=True, required=False)
     description = serializers.CharField(max_length=160, allow_blank=True, required=False)
     calendar_automatic = serializers.BooleanField(required=False)
+    duration_minutes = serializers.ChoiceField(choices=DURATIONS, required=False)
 
     def validate(self, attrs):
         if set(self.initial_data) - set(self.fields):
             raise serializers.ValidationError("Solo puedes modificar tu propio estado.")
         result = {**self.context["existing"], **attrs}
+        if result["status"] not in ("away", "busy"):
+            if attrs.get("duration_minutes"):
+                raise serializers.ValidationError({"duration_minutes": "La duración solo corresponde a Ausente u Ocupado."})
+            result.update(duration_minutes=0, expires_at=None)
+        elif "duration_minutes" in attrs or "status" in attrs:
+            minutes = attrs.get("duration_minutes", 0)
+            result.update(duration_minutes=minutes, expires_at=(timezone.now() + timedelta(minutes=minutes)).isoformat() if minutes else None)
         if result["status"] == "custom" and not result["title"].strip():
             raise serializers.ValidationError({"title": "Escribe un título para el estado personalizado."})
         return result

@@ -12543,6 +12543,14 @@ button {
 }
 
 /* Keep the composer in normal flow: a long history must never cover comments. */
+.task_drawer_panel > .task_detail_panel_card > * { flex-shrink: 0; }
+.detail_comments_disclosure { flex: 0 0 auto; min-width: 0; margin-block: 14px; }
+.detail_comments_disclosure summary { cursor: pointer; flex-wrap: wrap; padding-block: 10px; }
+.detail_comments_disclosure summary:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; }
+.detail_comments_toggle { margin-left: auto; color: var(--bold_red); font-size: 12px; }
+.detail_comments_disclosure .detail_comments_heading > .detail_comments_toggle { background: transparent; color: var(--bold_red); }
+.detail_comments_disclosure[open] .when_closed, .detail_comments_disclosure:not([open]) .when_open { display: none; }
+.detail_comments_disclosure .detail_comments_list { max-height: min(640px, 70dvh); }
 .detail_comments_list {
     max-height: min(340px, 40dvh);
     min-height: 0;

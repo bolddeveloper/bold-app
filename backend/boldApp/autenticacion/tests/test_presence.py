@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from boldApp.core.models import Employee, UserAccount, OrganizationalUnit, JobRole, Position, PositionAssignment
 from boldApp.autenticacion.services import create_session
-from boldApp.autenticacion.presence import heartbeat_snapshot, presence_directory, effective_status, session_key, HEARTBEAT_TTL
+from boldApp.autenticacion.presence import heartbeat_snapshot, presence_directory, effective_status, session_key, HEARTBEAT_TTL, settings_for
 from boldApp.calendario.presence import meeting_window, store_windows, refresh_meetings
 from boldApp.workspace.models import GoogleConnection
 from boldApp.calendario.service import CalendarUnavailable
@@ -27,6 +27,39 @@ class PresenceTests(TestCase):
 
     def tearDown(self):
         caches["presence"].clear()
+
+    def test_timed_status_expires_on_server_at_exact_boundary_without_browser(self):
+        now = timezone.now()
+        with patch("boldApp.autenticacion.presence.timezone.now", return_value=now):
+            response = self.client.patch("/api/v2/auth/presence/", {"status": "busy", "duration_minutes": 30}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["expires_at"], (now + timedelta(minutes=30)).isoformat())
+        self.account.refresh_from_db()
+        self.assertEqual(effective_status(self.account, now=now + timedelta(minutes=30, seconds=-1)), "busy")
+        self.assertEqual(effective_status(self.account, now=now + timedelta(minutes=30)), "online")
+        self.assertIsNone(settings_for(self.account, now + timedelta(hours=2))["expires_at"])
+        with patch("boldApp.autenticacion.presence.timezone.now", return_value=now + timedelta(hours=2)):
+            self.assertEqual(self.client.get("/api/v2/auth/presence/").data["status"], "online")
+
+    def test_duration_validation_partial_update_and_clear(self):
+        url = "/api/v2/auth/presence/"
+        for data in [{"status": "busy", "duration_minutes": -1}, {"status": "busy", "duration_minutes": 17}, {"status": "online", "duration_minutes": 30}, {"expires_at": "2099-01-01T00:00:00Z"}]:
+            self.assertEqual(self.client.patch(url, data, format="json").status_code, 400)
+        first = self.client.patch(url, {"status": "away", "duration_minutes": 15}, format="json").data
+        partial = self.client.patch(url, {"calendar_automatic": False}, format="json").data
+        self.assertEqual(first["expires_at"], partial["expires_at"])
+        always = self.client.patch(url, {"duration_minutes": 0}, format="json").data
+        self.assertIsNone(always["expires_at"])
+        online = self.client.patch(url, {"status": "online"}, format="json").data
+        self.assertEqual(online["duration_minutes"], 0)
+        self.assertIsNone(online["expires_at"])
+
+    def test_expired_status_still_allows_automatic_meeting(self):
+        connection = self.calendar_connection()
+        now = timezone.now()
+        self.account.presence_settings = {"status": "busy", "expires_at": now.isoformat(), "duration_minutes": 15}
+        schedule = {"subject": connection.subject, "scopes": connection.scopes, "windows": [(now.timestamp(), (now + timedelta(hours=1)).timestamp())]}
+        self.assertEqual(effective_status(self.account, connection, now, schedule), "meeting")
 
     def test_session_alone_does_not_mean_connected_and_snapshot_contains_no_private_data(self):
         self.assertEqual(presence_directory()["rows"], [])
@@ -68,7 +101,7 @@ class PresenceTests(TestCase):
         self.account.save(update_fields=["credentials_version"])
         self.assertEqual(presence_directory()["rows"], [])
 
-    def test_self_only_settings_validation_and_invisible_mode(self):
+    def test_self_only_settings_validation_and_automatic_states(self):
         url = "/api/v2/auth/presence/"
         for data in [{"status": "unknown"}, {"status": "custom", "title": " "}, {"user": str(self.other.pk)}, {"description": "a" * 161}]:
             self.assertEqual(self.client.patch(url, data, format="json").status_code, 400)
@@ -80,8 +113,9 @@ class PresenceTests(TestCase):
         self.assertEqual(self.other.presence_settings, {})
         heartbeat_snapshot(self.session.pk)
         self.assertEqual(presence_directory()["rows"][0]["title"], "En una entrega")
-        self.assertEqual(self.client.patch(url, {"status": "offline"}, format="json").status_code, 200)
-        self.assertFalse(presence_directory()["rows"])
+        for status in ("offline", "meeting"):
+            self.assertEqual(self.client.patch(url, {"status": status}, format="json").status_code, 400)
+        self.assertEqual(len(presence_directory()["rows"]), 1)
         self.client.force_authenticate(None)
         self.assertIn(self.client.get(url).status_code, (401, 403))
         self.assertIn(self.client.get(url + "directory/").status_code, (401, 403))
@@ -110,7 +144,7 @@ class PresenceTests(TestCase):
         self.assertNotIn("@", str(stored))
         self.assertEqual(effective_status(self.account, connection, start), "meeting")
         self.assertEqual(effective_status(self.account, connection, end), "online")
-        for status in ("offline", "vacation"):
+        for status in ("vacation",):
             self.account.presence_settings = {"status": status}
             self.assertEqual(effective_status(self.account, connection, now), status)
         self.account.presence_settings = {"calendar_automatic": False}
@@ -119,6 +153,21 @@ class PresenceTests(TestCase):
         connection.subject = "another-account"
         self.account.presence_settings = {}
         self.assertEqual(effective_status(self.account, connection, now), "online")
+
+    def test_legacy_automatic_states_and_removed_durations(self):
+        url = "/api/v2/auth/presence/"
+        for minutes in (45, 240, 480, 1440):
+            self.assertEqual(self.client.patch(url, {"status": "away", "duration_minutes": minutes}, format="json").status_code, 400)
+        for status in ("offline", "meeting"):
+            self.account.presence_settings = {"status": status}
+            self.assertEqual(settings_for(self.account)["status"], "online")
+            self.account.save(update_fields=["presence_settings"])
+            self.assertEqual(heartbeat_snapshot(self.session.pk)["rows"][0]["status"], "online")
+        now = timezone.now()
+        self.account.presence_settings = {"status": "away", "duration_minutes": 45, "expires_at": (now + timedelta(minutes=45)).isoformat()}
+        self.assertEqual(settings_for(self.account, now)["duration_minutes"], 0)
+        self.assertEqual(effective_status(self.account, now=now), "away")
+        self.assertEqual(effective_status(self.account, now=now + timedelta(minutes=45)), "online")
 
     def test_non_meetings_declined_cancelled_all_day_and_different_timezone(self):
         now = timezone.now()

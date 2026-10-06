@@ -8,18 +8,23 @@ const {JSDOM} = await import(pathToFileURL(path.join(os.tmpdir(), "bold-ui-check
 const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
 for (const key of ["window", "document", "navigator", "localStorage", "sessionStorage", "HTMLElement", "FormData", "MutationObserver", "Element", "HTMLInputElement", "HTMLSelectElement", "CustomEvent"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
 window.matchMedia = () => ({matches: false, addEventListener() {}, removeEventListener() {}});
+globalThis.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0);
+globalThis.cancelAnimationFrame = clearTimeout;
+const uiErrors = [];
+window.addEventListener("error", event => {uiErrors.push(event.error || event.message);});
 const originalTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (callback, delay, ...args) => {const timer = originalTimeout(callback, delay, ...args); if (delay >= 600000) timer.unref?.(); return timer;};
 const React = await import("react"), {createRoot} = await import("react-dom/client");
 const server = await createServer({configFile: false, resolve: {dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]}, esbuild: {jsx: "automatic", jsxImportSource: "react"}, cacheDir: path.join(os.tmpdir(), "bold-presence-ui-vite"), optimizeDeps: {noDiscovery: true, include: [], entries: []}, server: {middlewareMode: true}, appType: "custom"});
 const load = file => server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll("\\", "/")}`);
 const {default: PresencePreferences} = await load("../perfil/presence_preferences.jsx");
+const {default: PresenceMenu} = await load("./shared/presence_menu.jsx");
 const {default: SectionDragHandle} = await load("../tareas/src/section_drag_handle.jsx");
 const {http} = await load("./http_client.js");
 const root = createRoot(document.getElementById("root"));
 const settle = () => new Promise(resolve => setTimeout(resolve, 40));
 let saved, requests = 0;
-http.request = async (url, options = {}) => {requests++; if (options.method === "PATCH") {saved = {...options.body}; return saved;} return {status: "online", title: "", description: "", calendar_automatic: true};};
+http.request = async (url, options = {}) => {requests++; if (options.method === "PATCH") {saved = {...options.body}; return saved;} return {status: "online", title: "", description: "", calendar_automatic: true, duration_minutes: 0, expires_at: null};};
 function pointer(type, x, y, target = document) {
     const event = new window.Event(type, {bubbles: true, cancelable: true});
     for (const [key, value] of Object.entries({button: 0, pointerId: 1, clientX: x, clientY: y})) Object.defineProperty(event, key, {value});
@@ -27,18 +32,47 @@ function pointer(type, x, y, target = document) {
 }
 try {
     root.render(React.createElement(PresencePreferences)); await settle();
-    assert.equal(document.querySelectorAll('[name="presence-status"]').length, 7);
+    assert.equal(document.querySelectorAll('[name="presence-status"]').length, 5);
+    assert.equal(document.querySelector('[value="offline"]'), null);
+    assert.equal(document.querySelector('[value="meeting"]'), null);
     document.querySelector('[value="busy"]').click(); await settle();
+    assert.equal(document.querySelector("select").options.length, 5);
     document.querySelector("form").dispatchEvent(new window.Event("submit", {bubbles: true, cancelable: true})); await settle();
     assert.equal(saved.status, "busy"); assert.equal(saved.calendar_automatic, true);
+    assert.ok(!("expires_at" in saved), "Server expiry must never be echoed in PATCH");
     assert.match(document.querySelector('[role="status"]').textContent, /guardó/);
     document.querySelector('[value="custom"]').click(); await settle();
     assert.equal(document.querySelector('[maxlength="60"]').required, true);
     assert.equal(document.querySelector("textarea").maxLength, 160);
-    document.querySelector('[value="offline"]').click(); await settle();
+    document.querySelector('[value="vacation"]').click(); await settle();
     document.querySelector("form").dispatchEvent(new window.Event("submit", {bubbles: true, cancelable: true})); await settle();
-    assert.equal(saved.status, "offline");
+    assert.equal(saved.status, "vacation");
     assert.equal(requests, 3, "One initial read, two explicit writes; no polling");
+
+    let closed = 0, configured = 0;
+    const trigger = {current: null};
+    root.render(React.createElement("section", {className: "bold_profile_popover"}, React.createElement("button", {ref: node => {trigger.current = node;}}, "Mi disponibilidad"), React.createElement(PresenceMenu, {trigger, close: () => closed++, configure: () => configured++})));
+    await settle();
+    assert.deepEqual([...document.querySelectorAll(".bold_profile_submenu > div > button")].map(button => button.textContent), ["En línea", "Ausente", "Ocupado"]);
+    const busyButton = [...document.querySelectorAll(".bold_profile_submenu > div > button")].find(button => button.textContent === "Ocupado");
+    busyButton.dispatchEvent(new window.MouseEvent("mouseover", {bubbles: true})); await settle();
+    assert.ok(document.querySelector(".bold_presence_durations"), "Hover opens durations without writing");
+    assert.equal(requests, 4, "One read only when submenu mounts");
+    const durationButton = [...document.querySelectorAll(".bold_presence_durations button")].find(button => button.textContent === "30 minutos");
+    durationButton.click(); durationButton.click(); await settle();
+    assert.deepEqual(saved, {status: "busy", duration_minutes: 30});
+    assert.equal(requests, 5, "Duplicate rapid click produces one save");
+    assert.equal(document.querySelector(".bold_presence_durations"), null);
+    assert.match(document.querySelector('[role="status"]').textContent, /Ocupado/);
+    busyButton.dispatchEvent(new window.KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true})); await settle();
+    assert.ok(document.querySelector(".bold_presence_durations"));
+    document.querySelector(".bold_presence_durations button").dispatchEvent(new window.KeyboardEvent("keydown", {key: "Escape", bubbles: true})); await settle();
+    assert.equal(document.querySelector(".bold_presence_durations"), null);
+    assert.equal(closed, 0, "Escape closes only inner level");
+    [...document.querySelectorAll(".bold_profile_submenu > button")].find(button => button.textContent === "Más configuraciones del perfil").click();
+    assert.equal(configured, 1);
+    root.render(React.createElement("div")); await settle();
+    assert.equal(requests, 5, "Hover/navigation never starts polling");
 
     const calls = []; let key;
     const handlers = {id: "source", label: "Entrega", view: "list", onStart: (event, id) => {calls.push("start"); event.dataTransfer.setData("application/x-bold-section", id);}, onOver: (event, id) => calls.push(`over:${id}`), onDrop: (event, id) => calls.push(`drop:${id}:${event.dataTransfer.getData("application/x-bold-section")}`), onEnd: () => calls.push("end"), onKeyDown: (event, id, view) => {key = [event.key, id, view];}};
@@ -59,7 +93,8 @@ try {
     calls.length = 0;
     pointer("pointerdown", 10, 10, grip); pointer("pointermove", 40, 40); root.unmount(); await settle();
     assert.equal(document.querySelector(".section_drag_ghost"), null, "Unmount cleans ghost and pointer handlers");
-    console.log("Presence preferences and section grip: interaction, cancellation, keyboard, cleanup and request budget passed.");
+    assert.deepEqual(uiErrors, [], "UI handlers must not throw silently");
+    console.log("Presence preferences, quick states and section grip: interaction, cancellation, keyboard, cleanup and request budget passed.");
 } finally {await server.close(); dom.window.close();}
 // Vite's SSR dependency runner may retain an esbuild IPC handle on Windows.
 // Assertions and component teardown are complete before exiting successfully.

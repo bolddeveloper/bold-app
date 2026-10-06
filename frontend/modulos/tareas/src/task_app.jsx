@@ -1786,7 +1786,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
 
             {is_using_real_backend() && (pagedAttachmentsEnabled() ? <PagedAttachments taskId={selected_task.id} /> : selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>))}
-            {show_comments ? <>{pagedCommentsEnabled() ? <PagedComments queries={commentQueries({ taskIds: [selected_task.id] })} /> : <><div className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span></div>{comments.length ? (
+            {show_comments ? <>{pagedCommentsEnabled() ? <PagedComments queries={commentQueries({ taskIds: [selected_task.id] })} /> : <details className="detail_comments_disclosure" open><summary className="detail_comments_heading"><span className="meta_label">COMENTARIOS</span><span>{comments.length}</span><span className="detail_comments_toggle"><span className="when_open">Plegar</span><span className="when_closed">Desplegar</span></span></summary>{comments.length ? (
                 <div className="detail_comments_list">
                     {comments.map((comment_item) => (
                         <div className="detail_comment_item" key={comment_item.id}>
@@ -1805,7 +1805,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                 </div>
             ) : (
                 <p className="detail_comments_empty">Aun no hay comentarios.</p>
-            )}</>}
+            )}</details>}
 
             {comment_images.length ? (
                 <div className="detail_comment_image_previews">
