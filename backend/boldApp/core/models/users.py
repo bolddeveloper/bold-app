@@ -50,6 +50,9 @@ class UserAccount(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     notification_settings = models.JSONField(default=dict, blank=True)
     shortcut_settings = models.JSONField(default=dict, blank=True)
     presence_settings = models.JSONField(default=dict, blank=True)
+    # Individual technical delegation, distinct from ownership and role access.
+    # Never editable through the general account/profile APIs.
+    can_manage_connectors = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True, db_column="last_login_at")

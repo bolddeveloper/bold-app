@@ -6,9 +6,10 @@ from django.db import transaction
 from cryptography.fernet import InvalidToken
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from boldApp.administrativo.permissions import IsCompanyOwner
+from boldApp.administrativo.permissions import IsAdministrationOperator, HasRecentOperatorMFA
 from boldApp.administrativo.services import record_system_event
 from boldApp.autenticacion.services import decrypt_secret, encrypt_secret
 from .models import GoogleOAuthConfiguration, GoogleConnection
@@ -20,6 +21,21 @@ SCOPES = {
     "tasks": {"https://www.googleapis.com/auth/tasks"},
     "contacts": {"https://www.googleapis.com/auth/contacts.readonly", "https://www.googleapis.com/auth/contacts.other.readonly"},
 }
+
+
+class IsConnectorAdministrator(IsAdministrationOperator):
+    """Individual delegation AND administration in Dirección, never email trust."""
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        if not request.user.is_superuser and not request.user.can_manage_connectors:
+            self.message = "Tu cuenta no tiene autorización individual para gestionar los conectores globales."
+            return False
+        if request.method not in SAFE_METHODS and not HasRecentOperatorMFA.recent(request):
+            self.message = "Confirma tu MFA para gestionar los conectores de toda la empresa."
+            return False
+        return True
 for editor in ("docs", "sheets", "slides"):
     SCOPES[editor] = SCOPES["drive"]
 
@@ -35,11 +51,11 @@ def configuration():
 def credentials():
     config = configuration()
     if not config["configured"]:
-        raise ValidationError("El dueño debe configurar el cliente Google en Conectores.")
+        raise ValidationError("Un administrador autorizado debe configurar el cliente Google en Conectores.")
     try:
         secret = decrypt_secret(config["secret"]) if config["source"] == "managed" else settings.GOOGLE_WORKSPACE_CLIENT_SECRET
     except (InvalidToken, ValueError):
-        raise ValidationError("No se pudo descifrar la configuración Google. El dueño debe volver a subir el JSON.")
+        raise ValidationError("No se pudo descifrar la configuración Google. Un administrador autorizado debe volver a subir el JSON.")
     return config["client_id"], secret
 
 
@@ -60,7 +76,7 @@ def public_connection(user):
 
 
 class ConfigurationView(APIView):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsConnectorAdministrator]
     parser_classes = [MultiPartParser]
 
     def get(self, request):
@@ -108,7 +124,7 @@ class ConfigurationView(APIView):
 
 
 class VerifyView(APIView):
-    permission_classes = [IsCompanyOwner]
+    permission_classes = [IsConnectorAdministrator]
 
     def post(self, request):
         from .service import google

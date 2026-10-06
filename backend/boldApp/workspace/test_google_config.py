@@ -9,8 +9,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
-from boldApp.core.models import UserAccount
+from boldApp.core.models import UserAccount, JobRole
 from boldApp.autenticacion.services import create_session, encrypt_secret, decrypt_secret
+from boldApp.administrativo.models import SystemAuditEvent
 from boldApp.calendario.models import CalendarDraft, GoogleCalendarConnection
 from boldApp.calendario.tasks import cleanup_calendar_drafts
 from .google_config import configuration, SCOPES
@@ -25,13 +26,109 @@ class GoogleConfigurationTests(TestCase):
         self.owner = UserAccount.objects.get(email="luis@bold.gt")
         self.member = UserAccount.objects.get(email="samuel@bold.gt")
         self.clients = {}
+        self.sessions = {}
         for user in (self.owner, self.member):
             _, session = create_session(user, APIRequestFactory().get("/"))
+            if user.is_superuser:
+                session.auth_strength = "password_totp"
+                session.mfa_verified_at = timezone.now()
+                session.save(update_fields=["auth_strength", "mfa_verified_at"])
+            self.sessions[user.pk] = session
             client = APIClient(); client.force_authenticate(user, session)
             client.credentials(HTTP_X_ASSIGNMENT_ID=str(user.employee.position_assignments.get(is_active=True, released_at__isnull=True).id))
             self.clients[user.pk] = client
         self.client = self.clients[self.owner.pk]
         self.url = "/api/v2/google/configuration/"
+
+    def delegate_member(self, recent_mfa=True, direction=True, connector_access=True):
+        assignment = self.member.employee.position_assignments.get(is_active=True, released_at__isnull=True)
+        role = JobRole.objects.create(title="Asistente técnico", administration_enabled=True)
+        assignment.position.job_role = role
+        if direction:
+            assignment.position.unit = self.owner.employee.position_assignments.get(is_active=True, released_at__isnull=True).position.unit
+        assignment.position.save(update_fields=["job_role", "unit"])
+        self.member.can_manage_connectors = connector_access
+        self.member.save(update_fields=["can_manage_connectors"])
+        session = self.sessions[self.member.pk]
+        if recent_mfa:
+            session.auth_strength = "password_totp"
+            session.mfa_verified_at = timezone.now()
+            session.save(update_fields=["auth_strength", "mfa_verified_at"])
+        return assignment, role
+
+    def test_other_administrators_are_denied_without_individual_connector_access(self):
+        self.delegate_member(connector_access=False)
+        self.client = self.clients[self.member.pk]
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(self.upload().status_code, 403)
+        self.assertEqual(self.client.delete(self.url).status_code, 403)
+        self.assertEqual(self.client.post(self.url + "verify/", {}, format="json").status_code, 403)
+
+    def test_individual_access_revocation_takes_effect_immediately(self):
+        self.delegate_member()
+        self.client = self.clients[self.member.pk]
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.member.can_manage_connectors = False
+        self.member.save(update_fields=["can_manage_connectors"])
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_support_bootstrap_is_individual_audited_and_idempotent(self):
+        import importlib
+        from django.apps import apps
+        from django.db import connection
+        bootstrap = importlib.import_module("boldApp.core.migrations.0017_account_connector_delegation").authorize_existing_support
+        self.delegate_member(connector_access=False)
+        self.member.email = "soporte@bold.gt"
+        self.member.save(update_fields=["email"])
+        from types import SimpleNamespace
+        editor = SimpleNamespace(connection=connection)
+        bootstrap(apps, editor)
+        bootstrap(apps, editor)
+        self.member.refresh_from_db()
+        self.assertTrue(self.member.can_manage_connectors)
+        self.assertFalse(self.member.is_superuser)
+        self.assertFalse(UserAccount.objects.exclude(pk=self.member.pk).filter(can_manage_connectors=True).exists())
+        self.assertEqual(SystemAuditEvent.objects.filter(event_type="google.connector_access_provisioned", target_id=self.member.pk).count(), 1)
+
+    def test_delegated_administrator_can_manage_configuration_without_becoming_owner(self):
+        assignment, role = self.delegate_member()
+        self.client = self.clients[self.member.pk]
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        response = self.upload()
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("uploaded-secret", response.content.decode())
+        self.assertEqual(self.client.post(self.url + "verify/", {}, format="json").status_code, 200)
+        self.assertEqual(self.client.delete(self.url).status_code, 200)
+        for event_type in ("google.configuration_updated", "google.configuration_removed"):
+            self.assertTrue(SystemAuditEvent.objects.filter(event_type=event_type, actor_account=self.member).exists())
+        self.member.refresh_from_db()
+        self.assertFalse(self.member.is_superuser)
+        role.administration_enabled = False
+        role.save(update_fields=["administration_enabled"])
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_connectors_require_direction_and_recent_mfa_for_every_mutation(self):
+        self.delegate_member(recent_mfa=False)
+        self.client = self.clients[self.member.pk]
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.upload().status_code, 403)
+        self.assertEqual(self.client.delete(self.url).status_code, 403)
+        self.assertEqual(self.client.post(self.url + "verify/", {}, format="json").status_code, 403)
+        self.assertFalse(GoogleOAuthConfiguration.objects.exists())
+        owner_session = self.sessions[self.owner.pk]
+        owner_session.mfa_verified_at = timezone.now() - timedelta(hours=1)
+        owner_session.save(update_fields=["mfa_verified_at"])
+        self.client = self.clients[self.owner.pk]
+        self.assertEqual(self.upload().status_code, 403)
+
+    def test_administrative_role_outside_direction_and_staff_have_no_connector_access(self):
+        self.delegate_member(direction=False)
+        self.member.is_staff = True
+        self.member.save(update_fields=["is_staff"])
+        self.client = self.clients[self.member.pk]
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(self.upload().status_code, 403)
+        self.assertEqual(self.client.delete(self.url).status_code, 403)
 
     def upload(self, data=None, identity="original.apps.googleusercontent.com"):
         data = data if data is not None else {"web": {"client_id": identity, "client_secret": "uploaded-secret", "project_id": "bold-demo", "redirect_uris": ["http://localhost:8000/api/v2/workspace/oauth/callback/"]}}

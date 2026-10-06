@@ -24,6 +24,12 @@ Drive permite listar, buscar, navegar carpetas y unidades compartidas, crear arc
 
 ## Configuración local
 
+Administración → Conectores permite gestionar el cliente OAuth al propietario y a cuentas con autorización individual `can_manage_connectors` **y** cargo administrativo activo en Dirección. El acceso a Administración por sí solo no concede esta capacidad. No hay excepciones por correo en ejecución ni acceso por `is_staff`.
+
+La migración `0017_account_connector_delegation` habilita una sola vez la cuenta existente `soporte@bold.gt`, si está activa y tiene delegación administrativa en Dirección, registrándolo en auditoría como provisión del despliegue, sin atribuir falsamente la acción a otro empleado. No promueve a soporte a propietario ni habilita otros administradores. Las cuentas futuras nacen sin esta capacidad y el campo no se acepta en las APIs generales de cuentas/perfil. Si se retira su cargo, Administración o la autorización individual, la API vuelve a rechazarla; el propietario mantiene sus protecciones.
+
+Consultar la configuración no requiere repetir MFA; subir/reemplazar JSON, eliminar credenciales y verificar servicios requieren MFA reciente (también para el dueño). La interfaz solicita el código antes de ejecutar la operación. Los secretos nunca se devuelven; los cambios existentes siguen auditados. Cambiar el cliente OAuth o eliminarlo puede desconectar a todos los empleados de Google; no elimina sus archivos ni eventos. Las cuentas, cargos y plaza del propietario conservan sus protecciones.
+
 Las variables `GOOGLE_WORKSPACE_CLIENT_ID`, `GOOGLE_WORKSPACE_CLIENT_SECRET` y `GOOGLE_WORKSPACE_REDIRECT_URI` se guardan en `backend/.env`, excluido de Git. El cliente OAuth es una aplicación web con callback exacto `http://localhost:8000/api/v2/workspace/oauth/callback/`.
 
 Habilitar Google Drive API, Google Docs API, Google Sheets API y Google Slides API en el proyecto y declarar los scopes `openid`, `email` y `https://www.googleapis.com/auth/drive`. Este scope amplio se necesita para explorar Drive completo. En estado de pruebas, agregar las cuentas que probarán la integración a los usuarios de prueba del proyecto. La aprobación empresarial de la aplicación se administra en Google Workspace; no se obtiene al configurar APIs en Google Cloud.

@@ -1,0 +1,51 @@
+// Isolated UI regressions: no production accounts, credentials or Google calls.
+import assert from "node:assert/strict";
+import path from "node:path";
+import os from "node:os";
+import {pathToFileURL} from "node:url";
+import {createServer} from "vite";
+const {JSDOM} = await import(pathToFileURL(path.join(os.tmpdir(), "bold-ui-check/node_modules/jsdom/lib/api.js")));
+const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
+for (const key of ["window", "document", "navigator", "localStorage", "sessionStorage", "HTMLElement", "FormData", "MutationObserver", "Element", "HTMLInputElement", "CustomEvent", "Event"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
+window.matchMedia = () => ({matches: false, addEventListener() {}, removeEventListener() {}});
+const uiErrors = [];
+window.addEventListener("error", event => uiErrors.push(event.error || event.message));
+const React = await import("react"), {createRoot} = await import("react-dom/client"), {default: Swal} = await import("sweetalert2");
+const server = await createServer({configFile: false, resolve: {dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]}, esbuild: {jsx: "automatic", jsxImportSource: "react"}, cacheDir: path.join(os.tmpdir(), "bold-connectors-ui-vite"), optimizeDeps: {noDiscovery: true, include: [], entries: []}, server: {middlewareMode: true}, appType: "custom"});
+const load = file => server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll("\\", "/")}`);
+const {default: Connectors} = await load("../administrativo/connectors.jsx");
+const {http} = await load("./http_client.js"), {coreApi} = await load("./core_api.js");
+let dialogResult = {isConfirmed: true, value: "123456"}, mfaFailure = false;
+Swal.fire = async () => dialogResult;
+const calls = [];
+coreApi.stepUpMfa = async code => {calls.push(["mfa", code]); if (mfaFailure) throw new Error("Código MFA inválido");};
+http.request = async (url, options = {}) => {
+    calls.push([url, options.method || "GET"]);
+    return options.method === "POST" ? {note: "Servicios comprobados", services: {}} : {configured: false, client_id: "", callback: "https://example.test/callback"};
+};
+const root = createRoot(document.getElementById("root"));
+const settle = () => new Promise(resolve => setTimeout(resolve, 50));
+const verify = () => [...document.querySelectorAll("button")].find(button => button.textContent === "Verificar conexión");
+try {
+    root.render(React.createElement(Connectors)); await settle();
+    assert.deepEqual(calls, [["/api/v2/google/configuration/", "GET"]], "Reading configuration does not require step-up");
+    verify().click(); verify().click(); await settle();
+    assert.deepEqual(calls.slice(1), [["mfa", "123456"], ["/api/v2/google/configuration/verify/", "POST"]], "One mutation only, after successful MFA");
+    dialogResult = {isConfirmed: false};
+    const before = calls.length;
+    verify().click(); await settle(); assert.equal(calls.length, before, "Cancel must not invoke MFA/API");
+    dialogResult = {isConfirmed: true, value: "12"};
+    verify().click(); await settle(); assert.equal(calls.length, before);
+    assert.match(document.querySelector('[role="alert"]').textContent, /seis dígitos/);
+    dialogResult = {isConfirmed: true, value: "123456"}; mfaFailure = true;
+    verify().click(); await settle(); assert.equal(calls.length, before + 1);
+    assert.match(document.querySelector('[role="alert"]').textContent, /MFA inválido/);
+    root.render(React.createElement("div")); await settle();
+    http.request = async () => {const error = new Error("Forbidden"); error.status = 403; throw error;};
+    root.render(React.createElement(Connectors)); await settle();
+    assert.match(document.querySelector('[role="alert"]').textContent, /no está autorizada/);
+    assert.deepEqual(uiErrors, []);
+    root.unmount();
+    console.log("Connectors: delegated access notice, MFA ordering, cancellation, duplicate clicks and invalid codes passed.");
+} finally {await server.close(); dom.window.close();}
+process.exit(0);
