@@ -461,3 +461,14 @@ El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracio
 - Compilacion de produccion completada. Portada, JavaScript y CSS con HTTP 200; health confirmo PostgreSQL y Redis disponibles; sesion anonima sin autenticar.
 - Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`.
 - No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se modifico Google Cloud.
+
+### Quinta entrega del 8 de octubre de 2026: permiso del microfono
+
+- Rama `Develop`, commit `3d444b9676052d9692192d55efbd6e2e5bcecf14`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T160602Z.dump`.
+- Oracle actualizado por fast-forward; servicios activos y sin migraciones pendientes. No se reconstruyo el backend porque no cambio.
+- Cloudflare Worker `boldapp`: version `7345ebb7-3675-4771-995c-dd9226bc061c`.
+- Confirmado en la respuesta publica: `Permissions-Policy` contiene `microphone=(self)` y mantiene bloqueadas camara, geolocalizacion, pagos y USB.
+- Compilacion completada. Portada, JavaScript, CSS y sesion anonima con HTTP 200; health confirmo PostgreSQL y Redis disponibles.
+- Callback corporativo activo confirmado. No se modifico Google Cloud.
+- No se ejecutaron suites de pruebas ni se grabo audio desde un navegador autenticado, siguiendo la indicacion del usuario.

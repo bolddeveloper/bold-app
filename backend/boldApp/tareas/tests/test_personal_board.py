@@ -22,12 +22,12 @@ class PersonalBoardTests(TestCase):
 
     def test_sections_and_task_placement_survive_reload_and_are_private(self):
         section, task = str(uuid4()), str(uuid4())
-        board = {"sections": [{"id": section, "label": "Hoy"}], "task_sections": {task: section}}
+        board = {"sections": [{"id": section, "label": "Hoy"}], "task_sections": {task: section}, "unsectioned_index": 0}
         response = self.client.put(self.endpoint, board, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(self.client.get(self.endpoint).data, board)
         self.login(self.other)
-        self.assertEqual(self.client.get(self.endpoint).data, {"sections": [], "task_sections": {}})
+        self.assertEqual(self.client.get(self.endpoint).data, {"sections": [], "task_sections": {}, "unsectioned_index": None})
         self.login(self.owner)
         self.client.put(self.endpoint, {"sections": [], "task_sections": {}}, format="json")
         self.assertEqual(self.client.get(self.endpoint).data["task_sections"], {})
@@ -42,3 +42,13 @@ class PersonalBoardTests(TestCase):
         for board in invalid:
             self.assertEqual(self.client.put(self.endpoint, board, format="json").status_code, 400)
         self.assertEqual(self.client.get(self.endpoint).data["sections"], [])
+
+    def test_order_and_renamed_section_keep_task_placement(self):
+        first, second, task = str(uuid4()), str(uuid4()), str(uuid4())
+        board = {"sections": [{"id": second, "label": "Renombrada"}, {"id": first, "label": "Hoy"}], "task_sections": {task: second}, "unsectioned_index": 1}
+        self.assertEqual(self.client.put(self.endpoint, board, format="json").status_code, 200)
+        self.assertEqual(self.client.get(self.endpoint).data, board)
+        for invalid in [-1, 3, True, "invalid"]:
+            response = self.client.put(self.endpoint, {**board, "unsectioned_index": invalid}, format="json")
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.get(self.endpoint).data, board)

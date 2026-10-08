@@ -12,3 +12,10 @@ export function insertUnsectioned(sections, column, position) {
     next.splice(Number.isInteger(position) ? Math.max(0, Math.min(position, next.length)) : next.length, 0, column);
     return next;
 }
+
+export function materializePersonalSection(board, section, taskIds) {
+    const sections = insertUnsectioned(board.sections, section, board.unsectioned_index);
+    const task_sections = {...board.task_sections};
+    for (const id of taskIds) if (!task_sections[id]) task_sections[id] = section.id;
+    return {...board, sections, task_sections, unsectioned_index: null};
+}

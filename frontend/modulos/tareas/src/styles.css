@@ -11998,6 +11998,14 @@ button {
     box-shadow: 4px 0 var(--bold_red);
 }
 
+:root:not(.theme_dark) .app_shell .board_column[data-section-drop="before"] {
+    box-shadow: -4px 0 var(--bold_red), 0 6px 20px rgb(28 36 48 / 9%);
+}
+
+:root:not(.theme_dark) .app_shell .board_column[data-section-drop="after"] {
+    box-shadow: 4px 0 var(--bold_red), 0 6px 20px rgb(28 36 48 / 9%);
+}
+
 .task_table_card > .add_row_button, .list_section_creator .add_row_button {
     width: fit-content;
     min-height: 36px;

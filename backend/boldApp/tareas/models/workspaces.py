@@ -19,3 +19,4 @@ class PersonalTaskBoard(models.Model):
     assignment = models.OneToOneField("boldApp_core.PositionAssignment", primary_key=True, on_delete=models.CASCADE)
     sections = models.JSONField(default=list)
     task_sections = models.JSONField(default=dict)
+    unsectioned_index = models.PositiveIntegerField(null=True, blank=True, default=None)

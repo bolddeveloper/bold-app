@@ -70,7 +70,7 @@ import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, 
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
-import { insertUnsectioned, reorderSections } from "./section_order.js";
+import { insertUnsectioned, reorderSections, materializePersonalSection } from "./section_order.js";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
@@ -4480,7 +4480,7 @@ function TaskAppContent({ externalModules = {} }) {
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
     const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id).sort((a, b) => Number(a.position) - Number(b.position) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))) : mock_sections_by_project[selected_project_id] || [];
     const board_columns = task_scope !== "project" && real
-        ? task_scope === "mine" ? [...personal_board.board.sections, {id: "unsectioned", label: "Sin sección"}] : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
+        ? task_scope === "mine" ? insertUnsectioned(personal_board.board.sections, {id: "unsectioned", label: "Sin sección"}, personal_board.board.unsectioned_index) : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
         : !unsectioned_config.hidden || has_unsectioned_tasks
             ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id] ?? (real ? data?.projects.find(project => project.id === selected_project_id)?.unsectioned_index : undefined))
             : project_sections;
@@ -4847,7 +4847,8 @@ function TaskAppContent({ externalModules = {} }) {
     function reorder_section(source_id, target_id, after) {
         if (real && task_scope === "mine") {
             const next = reorderSections(board_columns, source_id, target_id, after);
-            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned")}));
+            if (next === board_columns) return;
+            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned"), unsectioned_index: next.findIndex(row => row.id === "unsectioned")}));
             return;
         }
         if (task_scope !== "project" || source_id === target_id || real && mutation_pending.current) return;
@@ -4924,8 +4925,12 @@ function TaskAppContent({ externalModules = {} }) {
         const label = editing_column_name.trim();
         if (!editing_column_id || !label) return;
         if (real && task_scope === "mine") {
-            if (editing_column_id !== "unsectioned") void personal_board.update(board => ({...board, sections: board.sections.map(row => row.id === editing_column_id ? {...row, label} : row)})).then(saved => {if (saved) set_editing_column_id(null);});
-            else set_editing_column_id(null);
+            const id = crypto.randomUUID();
+            const taskIds = tasks.filter(task => isMyTask(task, current_user_id)).map(task => task.id);
+            void personal_board.update(board => editing_column_id === "unsectioned"
+                ? materializePersonalSection(board, {id, label}, taskIds)
+                : {...board, sections: board.sections.map(row => row.id === editing_column_id ? {...row, label} : row)}
+            ).then(saved => {if (saved) set_editing_column_id(null);});
             return;
         }
         if (editing_column_id === "unsectioned") {
@@ -4955,7 +4960,10 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_delete_column(column_id) {
         if (real && task_scope === "mine") {
-            if (column_id !== "unsectioned") void personal_board.update(board => ({...board, sections: board.sections.filter(row => row.id !== column_id), task_sections: Object.fromEntries(Object.entries(board.task_sections).filter(([, section]) => section !== column_id))}));
+            if (column_id !== "unsectioned") void personal_board.update(board => {
+                const index = board.sections.findIndex(row => row.id === column_id);
+                return {...board, sections: board.sections.filter(row => row.id !== column_id), task_sections: Object.fromEntries(Object.entries(board.task_sections).filter(([, section]) => section !== column_id)), unsectioned_index: Number.isInteger(board.unsectioned_index) && index >= 0 && index < board.unsectioned_index ? board.unsectioned_index - 1 : board.unsectioned_index};
+            });
             return;
         }
         if (column_id === "unsectioned") {
