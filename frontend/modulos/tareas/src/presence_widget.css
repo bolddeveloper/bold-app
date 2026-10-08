@@ -1,6 +1,11 @@
 .home_presence_controls { display: grid; gap: 8px; margin: 8px 0 12px; min-width: 0; }
 .home_presence_controls input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); padding: 8px 10px; font: inherit; font-size: 12px; }
 .home_presence_controls .bold_select { min-width: 0; }
+.home_presence_search { display: flex; align-items: center; gap: 6px; min-width: 0; grid-column: 1 / -1; }
+.home_presence_search input { flex: 1; }
+.home_presence_controls .home_presence_filter { display: grid; place-items: center; flex: 0 0 32px; width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_muted); cursor: pointer; }
+.home_presence_filter:hover, .home_presence_filter[data-active="true"] { border-color: var(--bold_red); color: var(--bold_red); }
+.home_presence_controls > select { grid-column: 1 / -1; width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); font: inherit; font-size: 12px; }
 .home_presence_list { max-height: 225px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .home_presence_person { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; border-radius: 7px; padding: 7px 6px; }
 .home_presence_person:hover { background: var(--bold_surface_soft); }

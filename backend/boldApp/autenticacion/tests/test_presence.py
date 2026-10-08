@@ -64,7 +64,7 @@ class PresenceTests(TestCase):
     def test_session_alone_does_not_mean_connected_and_snapshot_contains_no_private_data(self):
         self.account.avatar_url = "data:image/webp;base64,test-avatar"
         self.account.save(update_fields=["avatar_url"])
-        self.assertEqual(presence_directory()["rows"], [])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
         roster = heartbeat_snapshot(self.session.pk)
         self.assertEqual(len(roster["rows"]), 1)
         person = roster["rows"][0]
@@ -76,23 +76,23 @@ class PresenceTests(TestCase):
         self.assertEqual(AssignmentDirectorySerializer(self.assignment).data["avatar_url"], self.account.avatar_url)
         self.assertNotIn("@bold.gt", str(roster))
 
-    def test_revoked_expired_idle_and_stale_connections_are_excluded(self):
+    def test_revoked_expired_idle_and_stale_connections_show_offline(self):
         heartbeat_snapshot(self.session.pk)
         self.session.revoked_at = timezone.now()
         self.session.save(update_fields=["revoked_at"])
-        self.assertFalse(presence_directory()["rows"])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
         self.session.revoked_at = None
         self.session.expires_at = timezone.now() - timedelta(seconds=1)
         self.session.save(update_fields=["revoked_at", "expires_at"])
-        self.assertFalse(presence_directory()["rows"])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
         self.session.expires_at = timezone.now() + timedelta(hours=1)
         self.session.idle_expires_at = timezone.now() - timedelta(seconds=1)
         self.session.save(update_fields=["expires_at", "idle_expires_at"])
-        self.assertFalse(presence_directory()["rows"])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
         self.session.idle_expires_at = None
         self.session.save(update_fields=["idle_expires_at"])
         caches["presence"].set(session_key(self.session.pk), timezone.now().timestamp() - HEARTBEAT_TTL - 1, 90)
-        self.assertFalse(presence_directory()["rows"])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
 
     def test_multiple_sessions_are_deduplicated_and_other_session_survives_revocation(self):
         _, second = create_session(self.account, RequestFactory().get("/"))
@@ -104,7 +104,30 @@ class PresenceTests(TestCase):
         self.assertEqual(len(presence_directory()["rows"]), 1)
         self.account.credentials_version += 1
         self.account.save(update_fields=["credentials_version"])
-        self.assertEqual(presence_directory()["rows"], [])
+        self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
+
+    def test_directory_keeps_disconnected_preferences_and_excludes_inactive_people(self):
+        other_unit = OrganizationalUnit.objects.create(name="Ventas", unit_type="department", sensitivity_level="normal")
+        empty_unit = OrganizationalUnit.objects.create(name="Sin asignaciones", unit_type="department", sensitivity_level="normal")
+        placement = PositionAssignment.objects.create(employee=self.other.employee,
+            position=Position.objects.create(unit=other_unit, job_role=self.assignment.position.job_role))
+        self.other.presence_settings = {"status": "away"}
+        self.other.save(update_fields=["presence_settings"])
+        roster = presence_directory()
+        self.assertEqual({row["employee_id"]: row["status"] for row in roster["rows"]}, {
+            str(self.account.employee_id): "offline", str(self.other.employee_id): "away"})
+        self.assertIn(str(empty_unit.pk), [unit["id"] for unit in roster["units"]])
+        self.other.presence_settings = {"status": "busy"}
+        self.other.save(update_fields=["presence_settings"])
+        self.assertEqual(next(row for row in presence_directory()["rows"] if row["employee_id"] == str(self.other.employee_id))["status"], "busy")
+        self.other.is_active = False
+        self.other.save(update_fields=["is_active"])
+        self.assertEqual(len(presence_directory()["rows"]), 1)
+        self.other.is_active = True
+        self.other.save(update_fields=["is_active"])
+        placement.is_active = False
+        placement.save(update_fields=["is_active"])
+        self.assertEqual(len(presence_directory()["rows"]), 1)
 
     def test_self_only_settings_validation_and_automatic_states(self):
         url = "/api/v2/auth/presence/"

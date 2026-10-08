@@ -8,16 +8,17 @@ export function presencePatch(value) {
 export const presenceLabel = person => person.status === "custom" ? person.title || presenceLabels.custom : presenceLabels[person.status] || "Estado desconocido";
 export function filterPresence(rows, unit = "", query = "") {
     const text = query.trim().toLocaleLowerCase("es");
-    return (rows || []).filter(row => row.status !== "offline" && (!unit || row.units?.some(item => item.id === unit)) && (!text || `${row.name} ${presenceLabel(row)} ${row.description || ""}`.toLocaleLowerCase("es").includes(text)));
+    return (rows || []).filter(row => (!unit || row.units?.some(item => item.id === unit)) && (!text || `${row.name} ${presenceLabel(row)} ${row.description || ""}`.toLocaleLowerCase("es").includes(text)));
 }
 
-export function groupPresence(rows, query = "") {
-    const groups = new Map();
-    for (const row of filterPresence(rows, "", query)) {
+export function groupPresence(rows, query = "", unitId = "", firstUnitId = "", units = []) {
+    const groups = new Map(units.filter(unit => !unitId || unit.id === unitId).map(unit => [unit.id, {...unit, people: []}]));
+    for (const row of filterPresence(rows, unitId, query)) {
         for (const unit of new Map((row.units || []).map(unit => [unit.id, unit])).values()) {
+            if (unitId && unit.id !== unitId) continue;
             if (!groups.has(unit.id)) groups.set(unit.id, { ...unit, people: [] });
             groups.get(unit.id).people.push(row);
         }
     }
-    return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    return [...groups.values()].filter(group => !query.trim() || group.people.length).sort((a, b) => Number(b.id === firstUnitId) - Number(a.id === firstUnitId) || a.name.localeCompare(b.name, "es"));
 }

@@ -1,4 +1,4 @@
-"""Authenticated connection presence, independent of login/session lifetime.
+"""Employee directory with live availability, independent of session lifetime.
 
 Heartbeats ride the existing security WebSocket. No HTTP polling, passwords,
 emails, tokens, event titles, attendees or meeting URLs in the public projection.
@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from boldApp.core.models import UserAccount, PositionAssignment
+from boldApp.core.models import UserAccount, PositionAssignment, OrganizationalUnit
 from boldApp.core.permissions import HasActiveAssignment
 from .models import AuthSession
 
@@ -82,7 +82,7 @@ def presence_directory():
     from boldApp.workspace.models import GoogleConnection
     ids = connected_account_ids()
     assignments = PositionAssignment.objects.filter(is_active=True, released_at__isnull=True).select_related("position__unit")
-    accounts = UserAccount.objects.filter(pk__in=ids).select_related("employee").only(
+    accounts = UserAccount.objects.filter(is_active=True, employee__is_active=True).select_related("employee").only(
         "id", "employee_id", "avatar_url", "presence_settings", "employee__id", "employee__full_name").prefetch_related(
         Prefetch("employee__position_assignments", queryset=assignments, to_attr="presence_assignments"))
     connections = {row.user_id: row for row in GoogleConnection.objects.filter(user_id__in=ids).only("user_id", "subject", "scopes")}
@@ -93,8 +93,8 @@ def presence_directory():
         if not placements:
             continue
         status = effective_status(account, connections.get(account.pk), schedule=schedules.get(f"meetings:{account.pk}", {}))
-        if status == "offline":
-            continue
+        if account.pk not in ids and status == "online":
+            status = "offline"
         units = {str(a.position.unit_id): {"id": str(a.position.unit_id), "name": a.position.unit.name} for a in placements}
         preferences = settings_for(account)
         rows.append({"employee_id": str(account.employee_id), "name": account.employee.full_name,
@@ -103,6 +103,7 @@ def presence_directory():
                      "title": preferences["title"] if status == "custom" else "",
                      "description": preferences["description"] if status == "custom" else ""})
     return {"rows": sorted(rows, key=lambda row: (row["name"].casefold(), row["employee_id"])),
+            "units": [{"id": str(unit.pk), "name": unit.name} for unit in OrganizationalUnit.objects.all()],
             "updated_at": timezone.now().isoformat(), "grace_seconds": HEARTBEAT_TTL}
 
 

@@ -172,7 +172,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         </main>
         <div className="team_members_overlay" hidden={!membersOpen} onClick={() => setMembersOpen(false)}>
             <aside className="team_members_panel" role="dialog" aria-modal="true" aria-labelledby="team_members_title" onClick={event => event.stopPropagation()}>
-                <header><div><h2 id="team_members_title">Equipo conectado</h2><small>Disponibilidad en vivo</small></div><button type="button" className="theme_toggle_button" aria-label="Cerrar lista de miembros" onClick={() => setMembersOpen(false)}>{render_icon(x_icon, 18)}</button></header>
+                <header><div><h2 id="team_members_title">Equipo</h2><small>Personas y disponibilidad</small></div><button type="button" className="theme_toggle_button" aria-label="Cerrar lista de miembros" onClick={() => setMembersOpen(false)}>{render_icon(x_icon, 18)}</button></header>
                 {membersContent}
             </aside>
         </div>

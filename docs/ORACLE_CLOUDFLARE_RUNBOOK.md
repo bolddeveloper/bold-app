@@ -415,4 +415,16 @@ GOOGLE_WORKSPACE_REDIRECT_URI=https://boldapp.boldapp-93b.workers.dev/api/v2/wor
 
 Registrar exactamente esa misma URL en los URI de redireccion autorizados del cliente OAuth corporativo de Google. La plantilla y el valor predeterminado de Compose incluyen ese callback. Un valor explicito antiguo en `.env.oracle` debe reemplazarse antes del despliegue. En desarrollo local se mantiene `http://localhost:8000/api/v2/workspace/oauth/callback/`.
 
-Esta preparacion no cambia la configuracion remota ni publica un despliegue.
+El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracion activa de Oracle. No se modifico la consola de Google durante el despliegue.
+
+
+## Entrega del 8 de octubre de 2026
+
+- Rama: `Develop`, commit `1fe2439f1ead0fbadc3c3b7aab9087c96b5f6e6e`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T120639Z.dump`.
+- Oracle: imagen reconstruida; backend y Celery recreados. Migraciones de tareas hasta `0012`, Workspace hasta `0007` y sugerencias hasta `0003` aplicadas.
+- Cloudflare Worker `boldapp`: version `fe2b602f-c8c1-493c-8aee-c9a00333aff1`.
+- Compilacion de produccion completada; frontend y API utilizan el mismo origen publico.
+- Disponibilidad confirmada: portada, JavaScript y CSS con HTTP 200; health con base de datos y Redis disponibles; sesion anonima sin autenticar; Celery listo.
+- Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`; dominio corporativo `bold.gt`.
+- No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se cambio el cliente OAuth guardado ni la configuracion de Google Cloud.
