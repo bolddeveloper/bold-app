@@ -450,3 +450,14 @@ El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracio
 - Compilacion de produccion completada con backend real y API en el mismo origen. Portada, JavaScript y CSS con HTTP 200; health confirmo PostgreSQL y Redis disponibles; sesion anonima sin autenticar.
 - Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`.
 - No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se modifico Google Cloud.
+
+### Cuarta entrega del 8 de octubre de 2026: perfiles en busquedas
+
+- Rama `Develop`, commit `5629322bd97e1a042a4ee2c102f6485a91ed52ee`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T155442Z.dump`.
+- Oracle actualizado por fast-forward. El cambio solo afecta al frontend; backend y Celery permanecen activos, sin reconstruccion necesaria ni migraciones pendientes.
+- Cloudflare Worker `boldapp`: version `fe2b985f-50ad-4d0e-88c6-d640fc7c996b`.
+- Publicada la correccion de perfiles duplicados para personas con varios cargos en busquedas de proyectos, tareas y Workspace.
+- Compilacion de produccion completada. Portada, JavaScript y CSS con HTTP 200; health confirmo PostgreSQL y Redis disponibles; sesion anonima sin autenticar.
+- Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`.
+- No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se modifico Google Cloud.

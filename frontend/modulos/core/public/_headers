@@ -2,7 +2,7 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), geolocation=(), microphone=(), payment=(), usb=()
+  Permissions-Policy: camera=(), geolocation=(), microphone=(self), payment=(), usb=()
 
 /sw.js
   Cache-Control: no-cache, no-store, must-revalidate

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {readFileSync} from "node:fs";
 
 import worker from "./index.js";
+
+test("permite solicitar microfono en el propio sitio sin habilitar otros dispositivos", () => {
+    const headers = readFileSync(new URL("../public/_headers", import.meta.url), "utf8");
+    assert.match(headers, /Permissions-Policy: camera=\(\), geolocation=\(\), microphone=\(self\), payment=\(\), usb=\(\)/);
+});
 
 
 function create_environment() {
