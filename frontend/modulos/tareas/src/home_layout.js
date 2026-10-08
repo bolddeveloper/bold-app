@@ -1,7 +1,6 @@
-export const HOME_WIDGET_TYPES = ["metrics", "tasks", "projects", "activity", "shortcuts", "status", "deadlines", "notes", "presence"];
+export const HOME_WIDGET_TYPES = ["metrics", "tasks", "projects", "activity", "shortcuts", "status", "deadlines", "notes"];
 export const HOME_WIDGET_SIZES = { small: true, medium: true, large: true };
 export const HOME_WIDGET_COLUMNS = {
-    presence: { small: 3, medium: 4, large: 6 },
     notes: { small: 3, medium: 6, large: 8 },
     metrics: { small: 4, medium: 6, large: 8 },
     projects: { small: 3, medium: 4, large: 6 },
@@ -20,7 +19,6 @@ export const defaultHomeLayout = () => [
     { id: "home_activity", type: "activity", size: "small", variant: "compact" },
     { id: "home_deadlines", type: "deadlines", size: "medium", variant: "compact" },
     { id: "home_shortcuts", type: "shortcuts", size: "medium", variant: "compact", shortcuts: ["create_task", "create_project", "module:reports"] },
-    { id: "home_presence", type: "presence", size: "small", variant: "compact" },
 ];
 
 export function widgetColumnSpan(widget, columns) {

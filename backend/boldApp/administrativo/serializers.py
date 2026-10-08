@@ -1,3 +1,4 @@
+from boldApp.workspace.image_storage import DriveImagesMixin
 from difflib import SequenceMatcher
 import re
 import unicodedata
@@ -237,7 +238,7 @@ class OrganizationCatalogOptionSerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "value"]
 
 
-class JobRoleAdminSerializer(serializers.ModelSerializer):
+class JobRoleAdminSerializer(DriveImagesMixin, serializers.ModelSerializer):
     reason = serializers.CharField(write_only=True, min_length=8, max_length=1000)
 
     class Meta:

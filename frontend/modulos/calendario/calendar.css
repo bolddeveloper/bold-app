@@ -668,7 +668,7 @@
     gap: 12px;
     min-height: 62px;
     margin: 0;
-    border-bottom: 1px solid var(--cal-line);
+    border-bottom: 0;
 }
 
 .bold_calendar_header > svg {
@@ -827,7 +827,7 @@
     min-height: 62px;
     margin: 0;
     padding: 8px 0;
-    border-bottom: 1px solid var(--cal-line);
+    border-bottom: 0;
 }
 
 .bold_calendar_move {
@@ -1992,3 +1992,6 @@
         min-width: calc(48px + var(--days) * 118px);
     }
 }
+
+.bold_calendar_now_line { position: absolute; left: 0; right: 0; height: 2px; background: #ea4335; z-index: 4; pointer-events: none; }
+.bold_calendar_now_line::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #ea4335; }

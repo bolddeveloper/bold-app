@@ -61,3 +61,17 @@ test("workspace membership is multiple and project tasks are included once", () 
     const tasks = [{ id: "t", project_id: "p" }, { id: "loose", project_id: null }, { id: "other", project_id: "q" }];
     assert.deepEqual(tasksInWorkspace({ ...workspaces[0], taskIds: ["t", "loose"] }, tasks).map(task => task.id), ["t", "loose"]);
 });
+
+
+test("Drive shortcuts persist with their workspace and reject unsafe identifiers", () => {
+    const data = new Map();
+    const storage = {getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value)};
+    saveWorkspaces(storage, 'unit', [{id: 'workspace', name: 'Team', driveFolders: [
+        {id: 'folder_123', name: ' Assets '}, {id: 'folder_123', name: 'Assets'},
+        {id: 'https://evil.example', name: 'Unsafe'}, {id: 'folder_empty', name: ' '}
+    ]}]);
+    const rows = readWorkspaces(storage, 'unit');
+    assert.deepEqual(rows[0].driveFolders, [{id: 'folder_123', name: 'Assets'}]);
+    assert.deepEqual(transferFolderItems(rows, 'workspace', 'workspace', [], 'add')[0].driveFolders, rows[0].driveFolders);
+    assert.equal(readWorkspaces(storage, 'another-unit').length, 0);
+});

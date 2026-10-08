@@ -64,11 +64,12 @@ export const ONBOARDING_GUIDES = {
     ] },
     suggestions: { title: "Sugerencias", root: ".suggestions_module", steps: [
         step(".suggestions_header", "Mejora Bold desde Bold", "Envía problemas, ideas y ajustes dentro de la aplicación. No se necesita correo: los recibe el equipo autorizado para revisar sugerencias."),
-        step('.suggestions_form select[name="category"]', "Clasifica tu mensaje", "Elige si se trata de una idea, un problema u otra categoría disponible. Así el equipo puede distinguir una mejora de un fallo que necesita revisión."),
+        step('.suggestions_form .suggestions_choice_group', "Clasifica tu reporte", "Elige problema, mejora visual, idea u otro. Añade una prioridad para ayudar a IT a organizar la revisión."),
         step('.suggestions_form select[name="source_module"]', "Indica dónde ocurre", "Selecciona el módulo relacionado o General si afecta a varias partes. Esto ayuda a dirigir la revisión al área correcta."),
         step('.suggestions_form textarea', "Describe algo reproducible", "Cuenta qué intentabas hacer, qué ocurrió y qué esperabas. Para una idea, explica la necesidad que resolvería. No incluyas contraseñas, códigos MFA ni datos confidenciales."),
-        step(".suggestions_primary", "Revisa y confirma", "Al enviar se pide confirmación. Tras guardarse se muestra el aviso de éxito y se limpia el formulario. Mientras se envía, espera a que termine antes de repetir la solicitud."),
-        step(".suggestions_history", "Seguimiento y correcciones", "Consulta el historial y filtra por estado. Solo el creador puede editar o eliminar su propia sugerencia dentro del alcance autorizado; el equipo revisor puede gestionar su estado. Actualizar vuelve a consultar la información."),
+        step(".suggestions_upload", "Añade contexto visual", "Adjunta hasta tres capturas e indica tu navegador o dispositivo si resulta útil. Las imágenes se optimizan antes de enviar."),
+        step(".suggestions_form .suggestions_primary", "Envía tu reporte", "Tras guardarse se muestra el aviso de éxito y se limpia el formulario. Mientras se envía, espera a que termine antes de repetir la solicitud."),
+        step(".suggestions_tabs", "Seguimiento y correcciones", "Mis reportes muestra tus envíos. IT dispone de su bandeja con búsqueda y filtros combinados. Abre un reporte para ver capturas y seguimiento; solo su autor puede editar el contenido o eliminarlo."),
     ] },
     reports: { title: "Informes", root: ".reports_module", steps: [
         step(".reports_work_in_progress", "Informes está en desarrollo", "Estamos trabajando en este módulo. Próximamente. Lo visible por ahora es un resumen preliminar de tareas, no un informe completo de toda la empresa ni de módulos futuros."),

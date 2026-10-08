@@ -11,6 +11,19 @@ from .service import event_path, google_request
 
 
 @shared_task
+def send_calendar_reminders():
+    from .reminders import refresh_reminders
+    count = 0
+    for connection in GoogleConnection.objects.select_related("user").filter(user__is_active=True):
+        try:
+            count += refresh_reminders(connection.user)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Calendar reminders failed for account %s", connection.user_id)
+    return count
+
+
+@shared_task
 def refresh_calendar_presence():
     from boldApp.autenticacion.presence import connected_account_ids, settings_for
     from boldApp.core.models import UserAccount

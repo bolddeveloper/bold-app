@@ -83,7 +83,7 @@ def presence_directory():
     ids = connected_account_ids()
     assignments = PositionAssignment.objects.filter(is_active=True, released_at__isnull=True).select_related("position__unit")
     accounts = UserAccount.objects.filter(pk__in=ids).select_related("employee").only(
-        "id", "employee_id", "presence_settings", "employee__id", "employee__full_name").prefetch_related(
+        "id", "employee_id", "avatar_url", "presence_settings", "employee__id", "employee__full_name").prefetch_related(
         Prefetch("employee__position_assignments", queryset=assignments, to_attr="presence_assignments"))
     connections = {row.user_id: row for row in GoogleConnection.objects.filter(user_id__in=ids).only("user_id", "subject", "scopes")}
     schedules = caches["presence"].get_many([f"meetings:{pk}" for pk in connections])
@@ -98,6 +98,7 @@ def presence_directory():
         units = {str(a.position.unit_id): {"id": str(a.position.unit_id), "name": a.position.unit.name} for a in placements}
         preferences = settings_for(account)
         rows.append({"employee_id": str(account.employee_id), "name": account.employee.full_name,
+                     "avatar_url": account.avatar_url,
                      "units": sorted(units.values(), key=lambda unit: unit["name"]), "status": status,
                      "title": preferences["title"] if status == "custom" else "",
                      "description": preferences["description"] if status == "custom" else ""})

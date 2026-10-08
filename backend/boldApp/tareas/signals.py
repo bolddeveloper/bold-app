@@ -45,7 +45,6 @@ def capture_previous_task_state(sender, instance, **kwargs):
 # Dispara el evento de webhook correspondiente segun lo que cambio en la tarea.
 @receiver(post_save, sender=Task)
 def dispatch_task_events(sender, instance, created, **kwargs):
-    payload = TaskSerializer(instance).data
     unit_ids = [instance.unit_id]
     if instance._previous_unit_id and instance._previous_unit_id != instance.unit_id:
         unit_ids.insert(0, instance._previous_unit_id)
@@ -57,8 +56,11 @@ def dispatch_task_events(sender, instance, created, **kwargs):
             TASK_UPDATED, "task", instance.id, {}))
 
     def enqueue(event_type):
+        def send():
+            current = Task.all_objects.get(pk=instance.pk)
+            dispatch_task_event(unit_ids, event_type, "task", instance.id, TaskSerializer(current).data)
         transaction.on_commit(
-            partial(dispatch_task_event, unit_ids, event_type, "task", instance.id, payload)
+            send
         )
 
     if created:
@@ -82,17 +84,10 @@ def dispatch_comment_created_event(sender, instance, created, **kwargs):
     if not created:
         return
 
-    payload = CommentSerializer(instance).data
-    transaction.on_commit(
-        partial(
-            dispatch_task_event,
-            instance.task.unit_id,
-            COMMENT_CREATED,
-            "comment",
-            instance.id,
-            payload,
-        )
-    )
+    def send():
+        current = Comment.all_objects.get(pk=instance.pk)
+        dispatch_task_event(instance.task.unit_id, COMMENT_CREATED, "comment", instance.id, CommentSerializer(current).data)
+    transaction.on_commit(send)
 
 
 @receiver(post_save, sender=TaskProject)

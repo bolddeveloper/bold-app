@@ -632,3 +632,48 @@
     outline: 2px solid var(--bold_red);
     outline-offset: 3px;
 }
+
+
+.folder_dialog:has(.folder_picker_with_drive) { width: min(1120px, calc(100vw - 24px)); }
+.folder_picker_with_drive { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.folder_drive_picker { gap: 12px; }
+.folder_drive_picker .drive_move_picker { min-width: 0; }
+.folder_drive_picker .drive_destination_heading { flex-wrap: wrap; gap: 8px; }
+.folder_drive_picker .drive_destination_heading select { max-width: 100%; }
+.folder_drive_picker .drive_destination_folders { max-height: 240px; overflow-y: auto; }
+.folder_drive_picker .drive_destination_folders button { width: 100%; min-width: 0; text-align: left; }
+.folder_drive_picker .drive_destination_folders button span { min-width: 0; overflow-wrap: anywhere; }
+.folder_drive_selection { display: grid; gap: 8px; }
+.folder_drive_selection > div { display: flex; align-items: center; gap: 8px; }
+.folder_drive_selection span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.folder_drive_selection svg { flex-shrink: 0; }
+.folder_drive_links { margin-block: 24px; }
+.folder_drive_card { position: relative; gap: 12px; padding-right: 48px; }
+.folder_drive_card .folder_drive_open { display: flex; align-items: center; gap: 12px; color: var(--bold_text); text-decoration: none; }
+.folder_drive_card .folder_drive_open strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.folder_drive_card svg { flex-shrink: 0; }
+.folder_drive_card > .folder_drive_remove { position: absolute; right: 12px; top: 12px; padding: 6px; }
+@media (max-width: 900px) {
+    .folder_picker_with_drive { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .folder_drive_picker { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+    .folder_picker_with_drive { grid-template-columns: minmax(0, 1fr); }
+}
+
+
+.folder_drive_card .folder_drive_open { position: static; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.folder_drive_card > .folder_drive_remove, .folder_card footer > button { display: grid; place-items: center; flex: 0 0 30px; width: 30px; min-width: 30px; max-width: 30px; height: 30px; min-height: 30px; padding: 0; box-sizing: border-box; }
+.folder_dialog.folder_share_dialog { width: min(380px, calc(100vw - 24px)); padding: 20px; }
+.folder_share_dialog header h2 { font-size: 17px; }
+.folder_share_dialog header button { display: grid; place-items: center; width: 32px; min-width: 32px; height: 32px; padding: 0; }
+.folder_share_dialog > p { margin: 8px 0 16px; color: var(--bold_muted); font-size: 13px; }
+.folder_share_dialog .folder_share_search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--bold_line); border-radius: 9px; background: var(--bold_surface_soft); }
+.folder_share_search input[type="search"] { border: 0; background: transparent; min-width: 0; padding: 10px 0; }
+.folder_share_people { max-height: 320px; overflow-y: auto; overflow-x: hidden; margin: 12px 0; display: grid; gap: 8px; }
+.folder_share_people .folder_share_person { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 4px; border: 0; background: transparent; color: var(--bold_text); text-align: left; box-sizing: border-box; }
+.folder_share_person > span:not(.folder_share_avatar) { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.folder_share_person strong, .folder_share_person small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.folder_share_avatar { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; background: var(--bold_red); color: white; }
+.folder_share_dialog .folder_share_remove { display: grid; place-items: center; flex: 0 0 28px; width: 28px; min-width: 28px; max-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--bold_muted); }
+.folder_share_person button:hover, button.folder_share_person:hover { color: var(--bold_red); background: var(--bold_surface_soft); }

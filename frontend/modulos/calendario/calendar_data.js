@@ -10,7 +10,7 @@ export const eventDay = (event, zone) => event.start?.date || zoneDay(event.star
 export const endDay = (event, zone) => event.end?.date ? dayKey(addDays(fromDay(event.end.date), -1)) : zoneDay(new Date(new Date(event.end.dateTime).getTime() - 1), zone);
 export const matchesDay = (event, key, zone) => eventDay(event, zone) <= key && endDay(event, zone) >= key;
 
-const minutesInZone = (value, zone) => {
+export const minutesInZone = (value, zone) => {
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value)).map(part => [part.type, part.value]));
     return Number(parts.hour) * 60 + Number(parts.minute);
 };
@@ -45,4 +45,7 @@ export function guestSuggestions(query, previous, contacts) {
 export function mergeEventScopeDraft(current, original, target) {
     const changes = Object.fromEntries(Object.entries(current).filter(([key,value]) => key !== "originalRepeat" && value !== original[key]));
     return {...target,...changes};
+}
+export function formatCalendarTime(value, zone) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(value));
 }

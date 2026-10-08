@@ -1,6 +1,8 @@
 import re
+from html import unescape
 
 from django.db import transaction
+from django.utils.html import strip_tags
 
 from boldApp.core.authorization import build_authorization_context, resolve_access
 from boldApp.core.models import Permission, PositionAssignment, UserAccount
@@ -154,7 +156,10 @@ def notify_comment_created(comment_id):
     task = comment.task
     actor = comment.author_assignment
     regular_ids = set(_task_recipient_ids(task))
-    emails = {email.lower() for email in EMAIL_MENTION.findall(comment.body)}
+    body = comment.body
+    if body.startswith("<!--bold-rich-text-->"):
+        body = unescape(strip_tags(re.sub(r"<br\s*/?>|</(?:p|div|li|h2|h3|blockquote|pre)>", "\n", body.removeprefix("<!--bold-rich-text-->"), flags=re.IGNORECASE)))
+    emails = {email.lower() for email in EMAIL_MENTION.findall(body)}
     mentioned_ids = set()
     if emails:
         account_ids = UserAccount.objects.filter(email__in=emails, is_active=True).values_list("employee_id", flat=True)
@@ -165,7 +170,7 @@ def notify_comment_created(comment_id):
         )
     all_ids = regular_ids | mentioned_ids
     recipients = _readable_assignments(_active_assignments(all_ids), "tasks.task.read", task)
-    snippet = " ".join(comment.body.split())[:180]
+    snippet = " ".join(body.split())[:180]
     for recipient in recipients:
         mentioned = recipient.id in mentioned_ids
         create_notification(

@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { http } from "../core/http_client.js";
 import { clearGoogleCache } from "../core/google_cache.js";
 import {coreApi} from "../core/core_api.js";
+import ImageStorage from "./image_storage.jsx";
 import "../docs/workspace.css";
 
 // Una configuración cifrada por instalación; las autorizaciones siguen siendo personales.
-export default function Connectors() { return <GoogleConfiguration/>; }
+export default function Connectors() { return <><GoogleConfiguration/><ImageStorage/></>; }
 function GoogleConfiguration() {
     const [config, setConfig] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false), [verification, setVerification] = useState(null);
     const input = useRef(null), alive = useRef(true), running = useRef(false);

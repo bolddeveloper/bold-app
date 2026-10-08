@@ -66,7 +66,7 @@ export default function PresenceMenu({trigger, close, configure, dark}) {
                 </div>;
             })}
             {busy && <p role="status">Guardando estado…</p>}
-            <button type="button" onMouseEnter={() => setDuration(null)} onClick={configure}>Más configuraciones del perfil<ChevronRight size={16}/></button>
+            <button type="button" onMouseEnter={() => setDuration(null)} onClick={configure}><span>Más configuraciones del perfil</span><ChevronRight size={16}/></button>
         </>}
     </aside>;
 }

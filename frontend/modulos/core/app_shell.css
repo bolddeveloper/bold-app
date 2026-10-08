@@ -1,4 +1,21 @@
 /* Estructura de la aplicación: navegación, perfil y superficies compartidas. */
+.team_members_overlay { position: fixed; inset: 0; z-index: 1450; background: #0005; display: flex; justify-content: flex-end; opacity: 1; transition: opacity 220ms ease, display 220ms allow-discrete; }
+.team_members_panel { box-sizing: border-box; width: min(238px, 100%); height: 100dvh; display: flex; flex-direction: column; gap: 8px; padding: 20px 12px; border-left: 1px solid var(--bold_line); background: var(--bold_surface); color: var(--bold_text); box-shadow: -12px 0 32px #0002; transform: translateX(0); transition: transform 220ms ease; }
+.team_members_overlay[hidden] { display: none; opacity: 0; pointer-events: none; }
+.team_members_overlay[hidden] .team_members_panel { transform: translateX(100%); }
+@starting-style {
+    .team_members_overlay:not([hidden]) { opacity: 0; }
+    .team_members_overlay:not([hidden]) .team_members_panel { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .team_members_overlay, .team_members_panel { transition: none; }
+}
+.team_members_panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--bold_line); }
+.team_members_panel h2 { margin: 0 0 4px; font-size: 18px; }
+.team_members_panel header small { color: var(--bold_muted); font-size: 12px; }
+.team_members_panel .home_presence_controls, .team_members_panel .home_presence_hint { flex-shrink: 0; }
+.team_members_panel .home_presence_list { flex: 1; max-height: none; }
+.team_members_panel .home_empty { font-size: 13px; color: var(--bold_muted); line-height: 1.5; }
 /* Global shell styles, extracted from styles.css. */
 .app_shell {
     display: grid;
@@ -602,7 +619,7 @@
 .top_bar_actions {
     display: flex;
     align-items: center;
-    gap: 28px;
+    gap: 10px;
 }
 
 .bell_button {
@@ -999,9 +1016,19 @@
     transition: transform 300ms cubic-bezier(.2, .8, .2, 1);
 }
 
-.theme_dark .theme_toggle_icon {
+.theme_dark [data-tour="theme"] .theme_toggle_icon {
     transform: rotate(180deg);
 }
+
+.news_unread { position: relative; }
+.news_unread::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--bold_red); }
+.news_unread svg { transform-origin: center; animation: news_attention 3s ease-in-out infinite; }
+@keyframes news_attention {
+    0%, 25%, 100% { transform: rotate(0); }
+    5%, 15% { transform: rotate(-12deg); }
+    10%, 20% { transform: rotate(12deg); }
+}
+@media (prefers-reduced-motion: reduce) { .news_unread svg { animation: none; } }
 
 .theme_dark {
     --bold_surface: #22262e;
@@ -1045,6 +1072,14 @@
 .theme_dark .search_box input,
 .theme_dark .bell_button {
     color: #edf0f4;
+}
+
+.theme_dark .bell_button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--bold_line);
+    background: #292e37;
+    box-shadow: 0 0 20px rgba(255, 209, 102, .1);
 }
 
 .theme_dark .global_search_results {
@@ -1758,3 +1793,8 @@
 ) {
     box-shadow: 0 6px 20px rgb(28 36 48 / 9%);
 }
+
+/* Repeat the existing bell motion until unread notifications are cleared. */
+.bell_has_unread { position: relative; }
+.bell_has_unread .notification_bell_arrival svg { animation-iteration-count: infinite; }
+.bell_unread_dot { top: 4px; right: 4px; width: 6px; height: 6px; border: 0; background: var(--bold_red); animation: none; }

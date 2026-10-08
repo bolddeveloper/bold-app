@@ -166,7 +166,7 @@ export function projectTask(task, projectId) {
 export function taskPayload(task, statuses, { create = false, unitId } = {}) {
     const unit = task.unitId || unitId;
     const payload = {};
-    for (const field of ["title", "description", "start_date", "due_date", "parent_task"]) {
+    for (const field of ["title", "description", "start_date", "due_date", "parent_task", "recurrence", "voice_notes"]) {
         if (task[field] !== undefined) payload[field] = task[field] || (field.endsWith("date") ? null : task[field]);
     }
     if (task.priority !== undefined) payload.priority = ({ Alta: "high", Media: "medium", Baja: "low" })[task.priority] || task.priority;
@@ -179,6 +179,7 @@ export function taskPayload(task, statuses, { create = false, unitId } = {}) {
     }
     if (create) {
         payload.unit = unit;
+        if (task.image_creation_scope) payload.image_creation_scope = task.image_creation_scope;
         if (task.follow_creator !== undefined) payload.follow_creator = Boolean(task.follow_creator);
         if (task.project_id) Object.assign(payload, { project: task.project_id, section: task.section === "unsectioned" ? null : task.section || null, project_position: task.position || "1000" });
     }

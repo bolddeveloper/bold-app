@@ -2,7 +2,7 @@ import {confirmBold} from "../core/shared/bold_dialog.js";
 import {useFileDrop} from "./use_file_drop.js";
 import {uploadDriveFiles} from "./drive_upload.js";
 import ColorPicker from "../core/shared/color_picker.jsx";
-import { googleCache, cacheScope, backgroundRefresh, clearGoogleCache } from "../core/google_cache.js";
+import { googleCache, googleThumbnailCache, cacheScope, backgroundRefresh, clearGoogleCache, restoreGoogleConnection, cachedContentChanged, announceBackgroundUpdate } from "../core/google_cache.js";
 import { http } from "../core/http_client.js";
 import { officeFileKind, officeInBold } from "./office_files.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -25,6 +25,34 @@ function FileIcon({file, size = 23}) {
 }
 function googleUrl(email, route = "home") {
     const url = new URL(`https://drive.google.com/drive/${route}`); url.searchParams.set("authuser", email || ""); return url.href;
+}
+function FileThumbnail({file, cacheNamespace}) {
+    const ref = useRef(null), [url, setUrl] = useState("");
+    const available = Boolean(file.hasThumbnail || file.thumbnailLink);
+    useEffect(() => {
+        setUrl("");
+        if (isDriveFolder(file) || !available || !cacheNamespace) return;
+        let alive = true, object = "";
+        const controller = new AbortController();
+        const key = `thumbnail:${file.id}:${file.version || file.modifiedTime || "original"}`;
+        const show = blob => {if (alive) {object = URL.createObjectURL(blob); setUrl(object);}};
+        const observer = new IntersectionObserver(async entries => {
+            if (!entries.some(entry => entry.isIntersecting)) return;
+            observer.disconnect();
+            try {
+                const blob = await workspaceApi.thumbnail(file.id, {signal: controller.signal});
+                if (!alive) return;
+                show(blob);
+                void googleThumbnailCache.put(cacheNamespace, key, blob);
+            } catch {}
+        }, {rootMargin: "200px"});
+        googleThumbnailCache.get(cacheNamespace, key).then(blob => {
+            if (!alive) return;
+            if (blob) show(blob); else observer.observe(ref.current);
+        });
+        return () => {alive = false; observer.disconnect(); controller.abort(); if (object) URL.revokeObjectURL(object);};
+    }, [cacheNamespace, file.id, file.version, file.modifiedTime, available]);
+    return <div ref={ref} className="drive_card_preview">{url ? <img src={url} alt="" draggable={false} onError={() => setUrl("")}/> : <FileIcon file={file} size={58}/>}</div>;
 }
 function Modal({title, children, close, wide = false}) {
     const ref = useRef(null), closeRef = useRef(close); closeRef.current = close;
@@ -98,7 +126,7 @@ export default function DriveModule() {
     useLayoutEffect(() => {++requests.current; loadLock.current?.controller?.abort(); ++identityTicket.current; setDisplayReady(false); filesRef.current = []; setFiles([]); setSuggested([]); setAbout(null); setDrives([]); setSelected([]); setDetails(false); setModal(null);}, [cacheNamespace]);
     useEffect(() => () => {if (preparedDownload) URL.revokeObjectURL(preparedDownload.url);}, [preparedDownload]);
     const preferenceKey = connection?.preference_key ? `bold:drive:${connection.preference_key}` : null;
-    useEffect(() => {mounted.current = true; workspaceApi.connection().then(value => {if (mounted.current) {setConnection(value); shell.sync_workspace_account(value);}}).catch(problem => {if (mounted.current) setError(problem.message);}); return () => {mounted.current = false; ++requests.current; loadLock.current?.controller?.abort(); ++scope.current; uploadController.current?.abort();};}, []);
+    useEffect(() => {mounted.current = true; restoreGoogleConnection(`account:${http.getSession().email}:${http.getSession().assignmentId}`, "drive", () => workspaceApi.connection(), value => {if (mounted.current) {setConnection(value); shell.sync_workspace_account(value);}}).catch(problem => {if (mounted.current) setError(problem.message);}); return () => {mounted.current = false; ++requests.current; loadLock.current?.controller?.abort(); ++scope.current; uploadController.current?.abort();};}, []);
     useEffect(() => {if (!preferenceKey) return; try {const saved = JSON.parse(localStorage.getItem(preferenceKey) || "{}"); if (["list", "grid"].includes(saved.layout)) setLayout(saved.layout); if (["", "folder,name", "folder,name desc", "modifiedTime desc", "quotaBytesUsed desc"].includes(saved.order)) setOrder(saved.order || "");} catch {}}, [preferenceKey]);
     function preference(name, value) {if (name === "layout") setLayout(value); else setOrder(value); try {if (preferenceKey) localStorage.setItem(preferenceKey, JSON.stringify({layout, order, [name]: value}));} catch {}}
     async function load(page = "", force = false) {
@@ -129,6 +157,8 @@ export default function DriveModule() {
             if (!valid()) return;
             const seen = new Map((page ? [...filesRef.current, ...combined] : combined).map(file => [file.id, file]));
             const payload = {files: [...seen.values()], suggested: folders, next: result.nextPageToken || "", pages: page ? pageCount.current + 1 : pages};
+            const content = rows => rows.map(({thumbnailLink, viewedByMeTime, ...file}) => file);
+            if (cachedContentChanged(cached && {files: content(cached.files), suggested: content(cached.suggested)}, {files: content(payload.files), suggested: content(payload.suggested)})) announceBackgroundUpdate("Drive actualizado: hay archivos nuevos o modificados.");
             pageCount.current = payload.pages; filesRef.current = payload.files;
             setFiles(payload.files); setSuggested(folders); setNext(payload.next);
             await googleCache.put(context, key, payload);
@@ -139,8 +169,20 @@ export default function DriveModule() {
     useEffect(() => {++scope.current; setSelected([]); setMenu(null); if (restoredFor === cacheNamespace && connection?.services?.drive?.status === "available" && !reconnectView) load(); return () => {++requests.current;};}, [cacheNamespace, restoredFor, connection?.services?.drive?.status, reconnectView, view, parent, query, type, owner, after, order, drive]);
     useEffect(() => {if (!cacheNamespace || restoredFor !== cacheNamespace || reconnectView || connection?.services?.drive?.status !== "available") return; return backgroundRefresh(() => load());}, [cacheNamespace, restoredFor, reconnectView, view, parent, query, type, owner, after, order, drive]);
     useEffect(() => {const clear = () => {++identityTicket.current; ++requests.current; setFiles([]); filesRef.current = []; setSuggested([]); setAbout(null); setDrives([]); setConnection(null); setReconnectView(true);}; globalThis.addEventListener("bold:google-cache-cleared", clear); return () => globalThis.removeEventListener("bold:google-cache-cleared", clear);}, []);
+    useEffect(() => {
+        if (!shell.drive_folder || !cacheNamespace || restoredFor !== cacheNamespace) return;
+        const folder = shell.drive_folder;
+        let alive = true;
+        workspaceApi.metadata(folder.id).then(file => {
+            if (!alive) return;
+            setView("my"); setPath([{id: file.id, name: file.name}]); setDrive(file.driveId || "");
+            setQuery(""); setSearch(""); setType(""); setOwner(""); setAfter(""); setSelected([]);
+            shell.finish_drive_folder(folder.requestId);
+        }).catch(problem => {if (alive) {setError(problem.message); shell.finish_drive_folder(folder.requestId);}});
+        return () => {alive = false;};
+    }, [shell.drive_folder?.requestId, cacheNamespace, restoredFor]);
     useEffect(() => {if (cacheNamespace && restoredFor === cacheNamespace) googleCache.put(cacheNamespace, "drive:navigation", {view, path, drive, query, search, type, owner, after});}, [cacheNamespace, restoredFor, view, path, drive, query, search, type, owner, after]);
-    useEffect(() => {let alive = true; if (cacheNamespace) googleCache.get(cacheNamespace, "drive:navigation").then(saved => {if (!alive) return; setRestoredFor(cacheNamespace); if (!saved) return; setView(saved.view); setPath(saved.path || []); setDrive(saved.drive || ""); setQuery(saved.query || ""); setSearch(saved.search || ""); setType(saved.type || ""); setOwner(saved.owner || ""); setAfter(saved.after || "");}); return () => {alive = false;};}, [cacheNamespace]);
+    useEffect(() => {let alive = true; if (cacheNamespace) googleCache.get(cacheNamespace, "drive:navigation").then(saved => {if (!alive) return; setRestoredFor(cacheNamespace); if (!saved) return; if (!shell.drive_folder) {setView(saved.view); setPath(saved.path || []);} setDrive(saved.drive || ""); setQuery(saved.query || ""); setSearch(saved.search || ""); setType(saved.type || ""); setOwner(saved.owner || ""); setAfter(saved.after || "");}); return () => {alive = false;};}, [cacheNamespace]);
     useEffect(() => {
         let alive = true; const identity = identityTicket.current;
         if (connection?.services?.drive?.status === "available") {
@@ -199,7 +241,7 @@ export default function DriveModule() {
     }
     function dropInto(event, target) {if (Array.from(event.dataTransfer.types).includes("Files")) return; event.preventDefault(); event.stopPropagation(); const ids = dragging.length ? dragging : []; moveRows(activeFiles.filter(file => ids.includes(file.id)), target);}
     async function download(file, format = "pdf") {
-        await action(async () => {const blob = await workspaceApi.download(file.id, format); setPreparedDownload(triggerDownload(blob, file.name + (kindOf(file) ? `.${format}` : "")));}, "Descarga preparada.");
+        await action(async () => {const blob = await workspaceApi.download(file.id, format); setPreparedDownload(triggerDownload(blob, file.name + (isDriveFolder(file) ? ".zip" : kindOf(file) ? `.${format}` : "")));}, "Descarga preparada.");
     }
     async function enqueue(items, destination = parent) {
         if (uploads.current || !items.length) return;
@@ -213,7 +255,7 @@ export default function DriveModule() {
     }
     function fileMenu(file) {
         const capability = file.capabilities || {}, kind = kindOf(file);
-        return <><button onClick={() => {setMenu(null); open(file);}}>Abrir</button><button onClick={() => original(file)}>Abrir en Google <ExternalLink size={15}/></button><button onClick={async () => {try {await navigator.clipboard.writeText(isDriveFolder(file) ? `https://drive.google.com/drive/folders/${encodeURIComponent(file.id)}` : googleFileUrl(file, connection.email)); setNotice("Enlace copiado."); setMenu(null);} catch {setError("El navegador no permitió copiar el enlace.");}}}>Copiar enlace</button>{capability.canRename && <button onClick={() => {setModal({kind: "rename", file}); setMenu(null);}}>Cambiar nombre</button>}<button onClick={() => mutate([file], {starred: !file.starred})}>{file.starred ? "Quitar de destacados" : "Añadir a destacados"}</button>{isDriveFolder(file) && <button onClick={() => {setModal({kind: "color", file}); setMenu(null);}}>Color de carpeta</button>}{canMove(file) && <button onClick={() => {setModal({kind: "move", rows: [file]}); setMenu(null);}}>Mover</button>}{capability.canCopy && !isDriveFolder(file) && <button onClick={() => action(() => workspaceApi.copy(file.id))}>Hacer una copia</button>}<button onClick={() => {setModal({kind: "share", file}); setMenu(null);}}>Compartir y ver permisos</button>{capability.canDownload && !isDriveFolder(file) && <><button onClick={() => download(file)}>{kind ? "Descargar PDF" : "Descargar"}</button>{kind && <button onClick={() => download(file, {docs: "docx", sheets: "xlsx", slides: "pptx"}[kind])}>Descargar Office</button>}</>}<button onClick={() => {setSelected([file.id]); setDetails(true); setMenu(null);}}>Información</button>{!file.trashed && capability.canTrash && <button onClick={() => {setModal({kind: "trash", rows: [file]}); setMenu(null);}}>Mover a papelera</button>}{file.trashed && capability.canUntrash && <button onClick={() => mutate([file], {trashed: false})}>Restaurar</button>}</>;
+        return <><button onClick={() => {setMenu(null); open(file);}}>Abrir</button><button onClick={() => original(file)}>Abrir en Google <ExternalLink size={15}/></button><button onClick={async () => {try {await navigator.clipboard.writeText(isDriveFolder(file) ? `https://drive.google.com/drive/folders/${encodeURIComponent(file.id)}` : googleFileUrl(file, connection.email)); setNotice("Enlace copiado."); setMenu(null);} catch {setError("El navegador no permitió copiar el enlace.");}}}>Copiar enlace</button>{capability.canRename && <button onClick={() => {setModal({kind: "rename", file}); setMenu(null);}}>Cambiar nombre</button>}<button onClick={() => mutate([file], {starred: !file.starred})}>{file.starred ? "Quitar de destacados" : "Añadir a destacados"}</button>{isDriveFolder(file) && <button onClick={() => {setModal({kind: "color", file}); setMenu(null);}}>Color de carpeta</button>}{canMove(file) && <button onClick={() => {setModal({kind: "move", rows: [file]}); setMenu(null);}}>Mover</button>}{capability.canCopy && !isDriveFolder(file) && <button onClick={() => action(() => workspaceApi.copy(file.id))}>Hacer una copia</button>}<button onClick={() => {setModal({kind: "share", file}); setMenu(null);}}>Compartir y ver permisos</button>{capability.canDownload && <><button onClick={() => download(file)}>{isDriveFolder(file) ? "Descargar como ZIP" : kind ? "Descargar PDF" : "Descargar"}</button>{kind && <button onClick={() => download(file, {docs: "docx", sheets: "xlsx", slides: "pptx"}[kind])}>Descargar Office</button>}</>}<button onClick={() => {setSelected([file.id]); setDetails(true); setMenu(null);}}>Información</button>{!file.trashed && capability.canTrash && <button onClick={() => {setModal({kind: "trash", rows: [file]}); setMenu(null);}}>Mover a papelera</button>}{file.trashed && capability.canUntrash && <button onClick={() => mutate([file], {trashed: false})}>Restaurar</button>}</>;
     }
     const rowEvents = file => ({
         tabIndex: 0, onClick: event => pick(file, event), onDoubleClick: () => open(file),
@@ -226,7 +268,7 @@ export default function DriveModule() {
         onDrop: event => {if (isDriveFolder(file) && file.capabilities?.canAddChildren) dropInto(event, file.id);},
     });
     function renderFiles(rows) {
-        if (layout === "grid") return <div className="drive_grid" role="list" aria-label="Archivos">{rows.map(file => <article role="listitem" key={file.id} {...rowEvents(file)} aria-label={file.name} className={`drive_card ${selected.includes(file.id) ? "is_selected" : ""} ${drop === file.id ? "is_drop" : ""} ${dragging.includes(file.id) ? "is_dragging" : ""}`}><div className="drive_card_title"><FileIcon file={file}/>{(kindOf(file) || officeFileKind(file)) ? <button className="drive_native_name" onDoubleClick={event => event.stopPropagation()} onClick={event => {event.stopPropagation(); if (event.ctrlKey || event.metaKey || event.shiftKey) pick(file, event); else open(file);}}>{file.name}</button> : <span>{file.name}</span>}<button aria-label={`Opciones de ${file.name}`} onDoubleClick={event => event.stopPropagation()} onClick={event => {event.stopPropagation(); setMenu({id: file.id, anchor: event.currentTarget});}}><MoreVertical size={19}/></button></div><div className="drive_card_preview"><FileIcon file={file} size={58}/></div><footer><span>{file.owners?.[0]?.displayName || "Unidad compartida"}</span>{file.starred && <Star size={15}/>}</footer></article>)}</div>;
+        if (layout === "grid") return <div className="drive_grid" role="list" aria-label="Archivos">{rows.map(file => <article role="listitem" key={file.id} {...rowEvents(file)} aria-label={file.name} className={`drive_card ${selected.includes(file.id) ? "is_selected" : ""} ${drop === file.id ? "is_drop" : ""} ${dragging.includes(file.id) ? "is_dragging" : ""}`}><div className="drive_card_title"><FileIcon file={file}/>{(kindOf(file) || officeFileKind(file)) ? <button className="drive_native_name" onDoubleClick={event => event.stopPropagation()} onClick={event => {event.stopPropagation(); if (event.ctrlKey || event.metaKey || event.shiftKey) pick(file, event); else open(file);}}>{file.name}</button> : <span>{file.name}</span>}<button aria-label={`Opciones de ${file.name}`} onDoubleClick={event => event.stopPropagation()} onClick={event => {event.stopPropagation(); setMenu({id: file.id, anchor: event.currentTarget});}}><MoreVertical size={19}/></button></div><FileThumbnail file={file} cacheNamespace={cacheNamespace}/><footer><span>{file.owners?.[0]?.displayName || "Unidad compartida"}</span>{file.starred && <Star size={15}/>}</footer></article>)}</div>;
         return <div className="drive_table_wrap"><table className="drive_table" aria-label="Archivos"><thead><tr><th>Nombre</th><th>Propietario</th><th>{view === "recent" ? "Última apertura" : "Última modificación"}</th><th>Tamaño</th><th><span className="drive_sr">Acciones</span></th></tr></thead><tbody>{rows.map(file => <tr key={file.id} {...rowEvents(file)} aria-selected={selected.includes(file.id)} className={`${selected.includes(file.id) ? "is_selected" : ""} ${drop === file.id ? "is_drop" : ""} ${dragging.includes(file.id) ? "is_dragging" : ""}`}><td><div className="drive_file_title"><button className="drive_select" aria-label={`${selected.includes(file.id) ? "Deseleccionar" : "Seleccionar"} ${file.name}`} onClick={event => {event.stopPropagation(); setSelected(old => selectDriveFile(old, file.id, {toggle: true}));}}>{selected.includes(file.id) ? <Check size={16}/> : <FileIcon file={file}/>}</button>{(kindOf(file) || officeFileKind(file)) ? <button className="drive_native_name" onDoubleClick={event => event.stopPropagation()} onClick={event => {event.stopPropagation(); if (event.ctrlKey || event.metaKey || event.shiftKey) pick(file, event); else open(file);}}>{file.name}</button> : <span>{file.name}</span>}{file.starred && <Star size={14}/>}</div></td><td>{file.owners?.[0]?.displayName || "Unidad compartida"}</td><td>{dateLabel(view === "recent" ? file.viewedByMeTime : file.modifiedTime)}</td><td>{isDriveFolder(file) ? "—" : bytesLabel(file.size || file.quotaBytesUsed)}</td><td><button aria-label={`Opciones de ${file.name}`} onClick={event => {event.stopPropagation(); setMenu({id: file.id, anchor: event.currentTarget});}}><MoreVertical size={19}/></button></td></tr>)}</tbody></table></div>;
     }
     const fileDrop = useFileDrop(items => {
@@ -234,7 +276,7 @@ export default function DriveModule() {
         setModal({kind: "upload", items});
     });
     return <section className="drive_module">
-        {fileDrop && <div className="drive_drop_hint" role="status"><Upload size={28}/><strong>Suelta aquí para subir</strong><span>Word, Excel, PowerPoint y otros archivos · Luego elige la carpeta · Máximo 20 MB por archivo</span></div>}<header className="drive_top"><div className="drive_brand"><Cloud size={30}/><strong>Drive</strong><span>BOLD</span></div><form className="drive_search" onSubmit={event => {event.preventDefault(); setQuery(search); setPath([]); setDrive("");}}><Search size={21}/><input aria-label="Buscar en Drive" placeholder="Buscar en Drive" value={search} onChange={event => setSearch(event.target.value)}/>{search && <button type="button" aria-label="Borrar búsqueda" onClick={() => {setSearch(""); setQuery("");}}><X size={18}/></button>}<button aria-label="Buscar" type="submit"><Search size={18}/></button></form><a className="drive_icon_button" title="Gemini — abrir en Google" aria-label="Gemini — abrir en Google" href={googleUrl(connection?.email)} target="_blank" rel="noopener noreferrer"><Sparkles size={22}/></a><span className="drive_account_email" title={connection?.email} aria-label="Cuenta Google conectada">{connection?.email || "Sin cuenta Google conectada"}</span></header>
+        {fileDrop && <div className="drive_drop_hint" role="status"><Upload size={28}/><strong>Suelta aquí para subir</strong><span>Word, Excel, PowerPoint y otros archivos · Luego elige la carpeta</span></div>}<header className="drive_top"><div className="drive_brand"><Cloud size={30}/><strong>Drive</strong><span>BOLD</span></div><form className="drive_search" onSubmit={event => {event.preventDefault(); setQuery(search); setPath([]); setDrive("");}}><Search size={21}/><input aria-label="Buscar en Drive" placeholder="Buscar en Drive" value={search} onChange={event => setSearch(event.target.value)}/>{search && <button type="button" aria-label="Borrar búsqueda" onClick={() => {setSearch(""); setQuery("");}}><X size={18}/></button>}<button aria-label="Buscar" type="submit"><Search size={18}/></button></form><a className="drive_icon_button" title="Gemini — abrir en Google" aria-label="Gemini — abrir en Google" href={googleUrl(connection?.email)} target="_blank" rel="noopener noreferrer"><Sparkles size={22}/></a><span className="drive_account_email" title={connection?.email} aria-label="Cuenta Google conectada">{connection?.email || "Sin cuenta Google conectada"}</span></header>
         {!connection || !reconnectView && connection.services?.drive?.status === "available" && (restoredFor !== cacheNamespace || !displayReady) ? <div className="drive_loading" role="status">{error ? <>{error}<button onClick={() => connection ? load() : workspaceApi.connection().then(setConnection).catch(problem => setError(problem.message))}>Reintentar</button></> : "Cargando Drive…"}</div> : connection?.services?.drive?.status !== "available" || reconnectView ? <div className="drive_connect">{error && <p role="alert">{error}</p>}<GoogleConnection onConnected={value => {setConnection(value); shell.sync_workspace_account(value); setReconnectView(false);}}/></div> : <div className="drive_body">
             <aside className="drive_sidebar"><div className="drive_menu_anchor"><button className="drive_new" aria-expanded={!!newMenu} aria-haspopup="menu" onClick={event => {const anchor = event.currentTarget; setNewMenu(value => value ? null : anchor);}}><Plus size={24}/>Nuevo</button>{newMenu && <FloatingMenu anchor={newMenu} close={() => setNewMenu(null)} label="Nuevo"><button onClick={() => {setNewMenu(false); setModal({kind: "create", type: "folder"});}}><Folder size={19}/>Nueva carpeta</button><button onClick={() => uploadInput.current.click()}><Upload size={19}/>Subir archivos</button><button onClick={() => folderInput.current.click()}><Folder size={19}/>Subir carpeta</button><hr/>{Object.entries(types).map(([kind, [label, , Icon, color]]) => <button key={kind} onClick={() => {setNewMenu(false); setModal({kind: "create", type: kind});}}><Icon size={19} style={{color}}/>{label}</button>)}</FloatingMenu>}</div>
                 <nav aria-label="Navegación de Drive">{navigation.map(([id, label, Icon]) => <div key={id}><button aria-current={view === id ? "page" : undefined} className={`${view === id ? "is_active" : ""} ${id === "my" && drop === "root" ? "is_drop" : ""}`} onClick={() => navigate(id)} onDragOver={event => {if (id === "my" && dragging.length) {event.preventDefault(); setDrop("root");}}} onDrop={event => {if (id === "my") dropInto(event, "root");}}><Icon size={19}/>{label}</button>{id === "my" && <FolderTree key={connection.email} active={path.at(-1)?.id} disabled={working} onNavigate={rows => {setView("my"); setDrive(""); setPath(rows); setQuery(""); setSearch(""); setType("");}} onDrop={moveRows} selectedFiles={chosen} connection={connection.email} revision={revision}/>}</div>)}</nav>
@@ -291,9 +333,10 @@ function FolderTree({active, disabled, onNavigate, onDrop, selectedFiles, connec
     return <div className="drive_tree"><button aria-expanded={opened} onClick={() => {setOpened(value => !value); if (!nodes.root?.loaded) expand("root");}}>{opened ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}Carpetas</button>{opened && branch("root", [])}{error && <small role="alert">{error}<button onClick={() => {setError(""); expand("root");}}>Reintentar</button></small>}</div>;
 }
 // Selector compartido por creación, cargas y movimiento de archivos.
-export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aquí", disabled = false, initialRoot = "root", initialPath = []}) {
+export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aquí", disabled = false, initialRoot = "root", initialPath = [], foldersOnly = false}) {
     const [path, setPath] = useState(initialPath), [root, setRoot] = useState(initialRoot), [folders, setFolders] = useState([]), [next, setNext] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(true), [search, setSearch] = useState("");
     const [sharedDrives, setSharedDrives] = useState(drives || []);
+    const [newFolder, setNewFolder] = useState(null), [creatingFolder, setCreatingFolder] = useState(false);
     const request = useRef(0), target = path.at(-1)?.id || root;
     useEffect(() => {
         if (drives) {setSharedDrives(drives); return;}
@@ -310,14 +353,29 @@ export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aqu
         finally {if (ticket === request.current) setBusy(false);}
     }
     useEffect(() => {setSearch(""); load(); return () => {++request.current;};}, [target, root]);
+    async function createFolder() {
+        if (creatingFolder || disabled || !newFolder?.trim()) return;
+        setCreatingFolder(true); setError("");
+        const ticket = request.current;
+        try {
+            const folder = await workspaceApi.create({type: "folder", name: newFolder.trim(), parent: target});
+            if (ticket === request.current) {setNewFolder(null); setPath(old => [...old, folder]);}
+        } catch (problem) {if (ticket === request.current) setError(problem.message);}
+        finally {setCreatingFolder(false);}
+    }
+    const pickerDisabled = disabled || creatingFolder;
     const displayed = folders.filter(file => file.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
     return <div className="drive_move_picker">
-        <div className="drive_destination_heading"><Cloud size={24}/><strong>Drive</strong><select aria-label="Unidad de destino" disabled={disabled} value={root} onChange={event => {setRoot(event.target.value); setPath([]);}}><option value="root">Mi unidad</option>{sharedDrives.map(drive => <option key={drive.id} value={drive.id}>{drive.name}</option>)}</select></div>
-        <nav className="drive_destination_path" aria-label="Carpeta de destino"><button type="button" disabled={disabled} onClick={() => setPath([])}>Raíz</button>{path.map((file, index) => <button type="button" key={file.id} disabled={disabled} onClick={() => setPath(old => old.slice(0, index + 1))}><ChevronRight size={14}/>{file.name}</button>)}</nav>
-        <label className="drive_destination_search"><Search size={17}/><input aria-label="Buscar carpetas en este destino" placeholder="Buscar carpetas" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)}/></label>
+        <div className="drive_destination_heading"><Cloud size={24}/><strong>Drive</strong><select aria-label={foldersOnly ? "Unidad de Drive" : "Unidad de destino"} disabled={pickerDisabled} value={root} onChange={event => {setNewFolder(null); setRoot(event.target.value); setPath([]);}}><option value="root">Mi unidad</option>{sharedDrives.map(drive => <option key={drive.id} value={drive.id}>{drive.name}</option>)}</select></div>
+        <nav className="drive_destination_path" aria-label={foldersOnly ? "Ruta de carpeta de Drive" : "Carpeta de destino"}><button type="button" disabled={pickerDisabled} onClick={() => setPath([])}>Raíz</button>{path.map((file, index) => <button type="button" key={file.id} disabled={pickerDisabled} onClick={() => setPath(old => old.slice(0, index + 1))}><ChevronRight size={14}/>{file.name}</button>)}</nav>
+        <label className="drive_destination_search"><Search size={17}/><input aria-label="Buscar carpetas en este destino" placeholder="Buscar carpetas" value={search} disabled={pickerDisabled} onChange={event => setSearch(event.target.value)}/></label>
         {error && <p role="alert">{error}<button type="button" onClick={() => load()}>Reintentar</button></p>}
-        <div className="drive_destination_folders" aria-busy={busy}>{displayed.map(file => <button type="button" key={file.id} disabled={disabled || busy || rows.some(row => row.id === file.id)} onClick={() => setPath(old => [...old, file])}><Folder size={20}/><span>{file.name}</span><ChevronRight size={16}/></button>)}{busy ? <p role="status">Cargando carpetas…</p> : !displayed.length && !error && <p>{search ? "No hay carpetas con ese nombre." : "Esta carpeta no tiene subcarpetas."}</p>}{next && <button type="button" disabled={busy || disabled} onClick={() => load(next)}>Más carpetas</button>}</div>
-        <button type="button" className="drive_primary" disabled={disabled || busy || !!error || rows.some(row => row.id === target) || path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => submit(target)}>{label}</button>
+        <div className="drive_destination_folders" aria-busy={busy}>{displayed.map(file => <button type="button" key={file.id} disabled={pickerDisabled || busy || rows.some(row => row.id === file.id)} onClick={() => setPath(old => [...old, file])}><Folder size={20}/><span>{file.name}</span><ChevronRight size={16}/></button>)}{busy ? <p role="status">Cargando carpetas…</p> : !displayed.length && !error && <p>{search ? "No hay carpetas con ese nombre." : "Esta carpeta no tiene subcarpetas."}</p>}{next && <button type="button" disabled={busy || pickerDisabled} onClick={() => load(next)}>Más carpetas</button>}</div>
+        {newFolder === null ? <button type="button" disabled={pickerDisabled || busy || path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => setNewFolder("")}><Plus size={16}/>Crear carpeta</button> : <div className="drive_destination_create">
+            <label>Nombre de la carpeta<input autoFocus maxLength={255} value={newFolder} disabled={pickerDisabled} onChange={event => setNewFolder(event.target.value)} onKeyDown={event => {if (event.key === "Enter") {event.preventDefault(); event.stopPropagation(); createFolder();} if (event.key === "Escape") {event.preventDefault(); event.stopPropagation(); if (!creatingFolder) setNewFolder(null);}}}/></label>
+            <div><button type="button" disabled={pickerDisabled || !newFolder.trim()} onClick={createFolder}>{creatingFolder ? "Creando…" : "Crear carpeta"}</button><button type="button" disabled={creatingFolder} onClick={() => setNewFolder(null)}>Cancelar</button></div>
+        </div>}
+        <button type="button" className="drive_primary" disabled={pickerDisabled || busy || !!error || foldersOnly && !path.length || rows.some(row => row.id === target) || !foldersOnly && path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => submit(target, path.at(-1) || {id: root, name: sharedDrives.find(item => item.id === root)?.name || "Mi unidad"})}>{label}</button>
     </div>;
 }
 function SharePermissions({file, report}) {

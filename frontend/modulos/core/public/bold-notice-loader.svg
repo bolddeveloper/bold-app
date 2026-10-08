@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="73 267 935 542" width="935" height="542" role="img" aria-label="Cargando">
+<title>BOLD loader</title>
+<style>
+ellipse{fill:none;stroke:#D23A32;stroke-width:76.0;animation:b 1.35s linear infinite}
+@keyframes b{
+0.000% { rx: 100.9px; ry: 100.9px; cy: 662.5px; }
+0.833% { rx: 111.4px; ry: 91.5px; cy: 675.5px; }
+1.667% { rx: 121.0px; ry: 84.2px; cy: 685.5px; }
+2.500% { rx: 126.0px; ry: 80.9px; cy: 690.1px; }
+3.333% { rx: 123.9px; ry: 82.2px; cy: 688.3px; }
+4.167% { rx: 115.8px; ry: 88.0px; cy: 680.4px; }
+5.000% { rx: 105.3px; ry: 96.7px; cy: 668.3px; }
+5.833% { rx: 98.3px; ry: 103.6px; cy: 637.5px; }
+6.667% { rx: 89.5px; ry: 113.9px; cy: 588.5px; }
+7.500% { rx: 85.8px; ry: 118.7px; cy: 549.8px; }
+8.333% { rx: 87.1px; ry: 117.0px; cy: 523.2px; }
+9.167% { rx: 88.4px; ry: 115.2px; cy: 499.6px; }
+10.000% { rx: 89.7px; ry: 113.5px; cy: 478.9px; }
+10.833% { rx: 91.1px; ry: 111.8px; cy: 461.1px; }
+11.667% { rx: 92.6px; ry: 110.1px; cy: 446.3px; }
+12.500% { rx: 94.0px; ry: 108.3px; cy: 434.5px; }
+13.333% { rx: 95.6px; ry: 106.6px; cy: 425.7px; }
+14.167% { rx: 97.1px; ry: 104.9px; cy: 419.8px; }
+15.000% { rx: 98.8px; ry: 103.2px; cy: 416.9px; }
+15.833% { rx: 100.4px; ry: 101.4px; cy: 416.9px; }
+16.667% { rx: 99.7px; ry: 102.2px; cy: 416.6px; }
+17.500% { rx: 98.1px; ry: 103.9px; cy: 417.8px; }
+18.333% { rx: 96.5px; ry: 105.6px; cy: 422.0px; }
+19.167% { rx: 94.9px; ry: 107.3px; cy: 429.1px; }
+20.000% { rx: 93.4px; ry: 109.1px; cy: 439.2px; }
+20.833% { rx: 91.9px; ry: 110.8px; cy: 452.3px; }
+21.667% { rx: 90.5px; ry: 112.5px; cy: 468.4px; }
+22.500% { rx: 89.2px; ry: 114.3px; cy: 487.4px; }
+23.333% { rx: 87.8px; ry: 116.0px; cy: 509.3px; }
+24.167% { rx: 86.5px; ry: 117.7px; cy: 534.3px; }
+25.000% { rx: 86.3px; ry: 118.1px; cy: 564.1px; }
+25.833% { rx: 93.1px; ry: 109.4px; cy: 609.3px; }
+26.667% { rx: 100.7px; ry: 101.1px; cy: 656.8px; }
+27.500% { rx: 114.5px; ry: 89.0px; cy: 679.0px; }
+28.333% { rx: 132.8px; ry: 76.7px; cy: 695.8px; }
+29.167% { rx: 129.2px; ry: 78.9px; cy: 692.9px; }
+30.000% { rx: 122.1px; ry: 83.4px; cy: 686.6px; }
+30.833% { rx: 114.2px; ry: 89.2px; cy: 678.6px; }
+31.667% { rx: 107.4px; ry: 94.9px; cy: 670.8px; }
+32.500% { rx: 102.7px; ry: 99.2px; cy: 664.9px; }
+33.333% { rx: 100.9px; ry: 100.9px; cy: 662.5px; }
+100%    { rx: 100.9px; ry: 100.9px; cy: 662.5px; }
+}
+@media(prefers-reduced-motion:reduce){ellipse{animation:none}}
+</style>
+<ellipse cx="263.5" cy="662.5" rx="100.9" ry="100.9" style="animation-delay:0s"/>
+<ellipse cx="540.0" cy="662.5" rx="100.9" ry="100.9" style="animation-delay:-0.9s"/>
+<ellipse cx="816.5" cy="662.5" rx="100.9" ry="100.9" style="animation-delay:-0.45s"/>
+</svg>

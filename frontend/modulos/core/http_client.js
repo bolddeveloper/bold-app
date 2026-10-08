@@ -1,5 +1,6 @@
 import { syncDiagnostics } from "./sync_diagnostics.js";
-import { clearGoogleCache } from "./google_cache.js";
+import { suspendGoogleCache } from "./google_cache.js";
+import { resolveImageUrls } from "./shared/media_urls.js";
 export const is_using_real_backend = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true";
 export const api_base_url = import.meta.env?.VITE_API_BASE_URL || globalThis.location?.origin || "http://127.0.0.1:8000";
 
@@ -19,13 +20,16 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     let quotaPause = null;
     const endpointPauses = new Map();
     function cancelRequests() { controller.abort(); controller = new AbortController(); }
-    async function request(path, { method = "GET", body, responseType, anonymous = false, signal = controller.signal, ...options } = {}) {
-        signal = AbortSignal.any([controller.signal, signal]);
+    async function request(path, { method = "GET", body, responseType, anonymous = false, signal = controller.signal, timeoutMs, ...options } = {}) {
+        const deadline = timeoutMs ? AbortSignal.timeout(timeoutMs) : null;
+        const timeoutError = () => new ApiError(408, {detail: "El guardado tardó demasiado. Conservamos el borrador. Comprueba si la tarea aparece antes de reintentar."});
+        signal = AbortSignal.any([controller.signal, signal, ...(deadline ? [deadline] : [])]);
         const base = new URL(baseUrl);
         let url = new URL(path, base);
         const loopback = host => ["localhost", "127.0.0.1", "[::1]"].includes(host);
         if (url.origin !== base.origin && loopback(url.hostname) && loopback(base.hostname)) url = new URL(`${url.pathname}${url.search}`, base);
         if (url.origin !== base.origin || !url.pathname.startsWith("/api/v2/")) throw new Error("Ruta de API no permitida.");
+        if (deadline?.aborted) throw timeoutError();
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         const pause = quotaPause?.until > now() ? quotaPause : endpointPauses.get(url.pathname);
         if (pause?.until > now()) { pause.error.retryAfterMs = pause.until - now(); throw pause.error; }
@@ -42,14 +46,19 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
             });
         } catch (error) {
             finishDiagnostic(signal.aborted || error.name === "AbortError" ? "cancelled" : "network-error");
+            if (deadline?.aborted) throw timeoutError();
             if (signal.aborted || error.name === "AbortError") throw error;
             throw new ApiError(0, { detail: "No se pudo conectar con el servidor. Comprueba que el backend esté activo y que permita el origen de esta página (CORS)." });
         }
         finishDiagnostic(response.status);
+        if (deadline?.aborted) throw timeoutError();
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         if (response.status === 204) return null;
         if (response.ok && responseType === "blob") return response.blob();
-        const raw = await response.text();
+        let raw;
+        try { raw = await response.text(); }
+        catch (error) { if (deadline?.aborted) throw timeoutError(); throw error; }
+        if (deadline?.aborted) throw timeoutError();
         if (signal.aborted) throw new DOMException("Contexto cancelado", "AbortError");
         let data;
         try { data = raw ? JSON.parse(raw) : null; } catch {
@@ -75,7 +84,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
             throw error;
         }
         endpointPauses.delete(url.pathname);
-        return data;
+        return resolveImageUrls(data, baseUrl, assignmentId);
     }
     async function listPage(resource, params = {}, { next = null, ...options } = {}) {
         if (!/^[a-z][a-z0-9-]*$/.test(resource)) throw new Error("Recurso de API no permitido.");
@@ -123,7 +132,7 @@ export function createHttpClient({ baseUrl = api_base_url, fetchImpl = (...args)
     const remove = (resource, id, options = {}) => request(`/api/v2/${resource}/${id}/`, { ...options, method: "DELETE" });
     return {
         request, list, listPage, create, update, remove, cancelRequests,
-        setSession(value, accountEmail = null) { if (!value || email && accountEmail !== email) clearGoogleCache(); cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
+        setSession(value, accountEmail = null) { if (!value || email && accountEmail !== email) suspendGoogleCache(); cancelRequests(); authenticated = Boolean(value); email = accountEmail; assignmentId = null; },
         setAssignment(value) { cancelRequests(); assignmentId = value; },
         getSession: () => ({ authenticated, assignmentId, email }),
     };

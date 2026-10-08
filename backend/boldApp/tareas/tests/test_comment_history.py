@@ -43,6 +43,20 @@ class CommentHistoryTests(TransactionTestCase):
         url = urlsplit(link)
         return self.client.get(url.path + "?" + url.query)
 
+    def test_timeline_filter_excludes_task_comments_and_other_project_timelines(self):
+        normal = Comment.objects.create(task=self.task, author_assignment=self.assignment, body="Tarea")
+        project = Project.objects.create(name="Cronograma", unit=self.unit, owner_assignment=self.assignment, created_by_assignment=self.assignment)
+        TaskProject.objects.create(task=self.task, project=project, position=1, added_by_assignment=self.assignment)
+        timeline = Comment.objects.create(task=self.task, author_assignment=self.assignment, body="Cronograma", image_section="timeline", image_project_id=project.pk)
+        other = Comment.objects.create(task=self.task, author_assignment=self.assignment, body="Otro", image_section="timeline")
+        page = self.page(tasks=str(self.task.pk), image_section="timeline")
+        self.assertEqual(page.status_code, 200, page.data)
+        self.assertEqual({str(row["id"]) for row in page.data["results"]}, {str(timeline.pk), str(other.pk)})
+        page = self.page(project=str(project.pk), image_section="timeline")
+        self.assertEqual(page.status_code, 200, page.data)
+        self.assertEqual([str(row["id"]) for row in page.data["results"]], [str(timeline.pk)])
+        self.assertEqual(self.page(image_section="invalid").status_code, 400)
+
     def test_large_history_returns_25_rows_and_authorized_count_not_all_comments(self):
         self.comments(self.task, 5000)
         foreign = self.task_for(self.other, "Privada", unit=self.other.position.unit)

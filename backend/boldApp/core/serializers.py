@@ -1,3 +1,4 @@
+from boldApp.workspace.image_storage import DriveImagesMixin
 from rest_framework import serializers
 
 from .models import (
@@ -22,7 +23,7 @@ class OrganizationalUnitSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class JobRoleSerializer(serializers.ModelSerializer):
+class JobRoleSerializer(DriveImagesMixin, serializers.ModelSerializer):
     class Meta:
         model = JobRole
         fields = "__all__"
@@ -74,6 +75,7 @@ class PositionAssignmentSerializer(serializers.ModelSerializer):
 
 class AssignmentDirectorySerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
     employee_email = serializers.SerializerMethodField()
     unit = serializers.UUIDField(source="position.unit_id", read_only=True)
     unit_name = serializers.CharField(source="position.unit.name", read_only=True)
@@ -86,13 +88,17 @@ class AssignmentDirectorySerializer(serializers.ModelSerializer):
     class Meta:
         model = PositionAssignment
         fields = [
-            "id", "employee", "employee_name", "employee_email", "unit", "unit_name",
+            "id", "employee", "employee_name", "employee_email", "avatar_url", "unit", "unit_name",
             "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled",
         ]
 
     def get_employee_email(self, assignment):
         account = getattr(assignment.employee, "user_account", None)
         return account.email if account and account.is_active else ""
+
+    def get_avatar_url(self, assignment):
+        account = getattr(assignment.employee, "user_account", None)
+        return account.avatar_url if account and account.is_active else None
 
     def get_account_is_superuser(self, assignment):
         account = getattr(assignment.employee, "user_account", None)

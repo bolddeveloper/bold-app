@@ -5,8 +5,9 @@ import {useCore} from "../core_provider.jsx";
 import {useDialog} from "./use_dialog.js";
 import "./profile_menu.css";
 import PresenceMenu from "./presence_menu.jsx";
+import {AvatarImage} from "./avatar_image.jsx";
 export function ProfileAvatar({className = "", url, initials}) {
-    return <span className={`bold_profile_avatar ${className}`}>{url ? <img src={url} alt=""/> : initials || "B"}</span>;
+    return <span className={`bold_profile_avatar ${className}`}><AvatarImage url={url} initials={initials || "B"}/></span>;
 }
 
 // One quick profile card for both entry points; the gear opens account settings.

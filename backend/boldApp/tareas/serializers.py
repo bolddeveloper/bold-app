@@ -1,8 +1,11 @@
 from boldApp.core.avatar import validate_avatar
+from boldApp.workspace.image_storage import DriveImagesMixin, image_id, store_instance_images
 
 from django.db import transaction
 from rest_framework import serializers
 from django.utils import timezone
+from .voice_notes import VoiceNotesField
+from .recurrence import validate_rule, next_date
 
 from boldApp.core.models import OrganizationalUnit, PositionAssignment
 
@@ -31,7 +34,7 @@ def validate_active_assignment(assignment, field_name="assignment"):
         raise serializers.ValidationError({field_name: "La asignacion debe estar activa."})
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectSerializer(DriveImagesMixin, serializers.ModelSerializer):
     member_ids = serializers.PrimaryKeyRelatedField(
         queryset=PositionAssignment.objects.select_related("position", "employee"),
         many=True, write_only=True, required=False,
@@ -49,6 +52,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         return value
 
     def validate_avatar_data_url(self, value):
+        if image_id(value) and self.instance and image_id(value) == image_id(self.instance.avatar_data_url):
+            return value
         return validate_avatar(value, "proyecto")
 
     def validate(self, attrs):
@@ -161,7 +166,9 @@ class TaskStatusSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at"]
 
 
-class TaskSerializer(serializers.ModelSerializer):
+class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
+    image_creation_scope = serializers.ChoiceField(choices=["personal", "project"], write_only=True, required=False)
+    voice_notes = VoiceNotesField(required=False)
     attachment_count = serializers.IntegerField(read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
     status_category = serializers.CharField(source="status.category", read_only=True)
@@ -189,7 +196,32 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = "__all__"
-        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at"]
+        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "recurrence_next_date", "recurrence_source", "recurrence_date", "image_origin_set", "image_origin_project_id"]
+
+    def save(self, **kwargs):
+        # Google I/O must finish before creating the task: SQLite otherwise blocks unrelated saves.
+        if "data:image/" in self.validated_data.get("description", ""):
+            from copy import copy
+            request = self.context["request"]
+            if self.instance:
+                draft = copy(self.instance)
+                draft.description = self.validated_data["description"]
+            else:
+                fields = {field.name for field in Task._meta.concrete_fields}
+                draft = Task(**{key: value for key, value in {**self.validated_data, **kwargs}.items() if key in fields})
+                draft.created_by_assignment = request.assignment
+                parent = self.validated_data.get("parent_task")
+                project = self.validated_data.get("project")
+                if parent and not parent.image_origin_set:
+                    from boldApp.workspace.image_storage import task_path
+                    task_path(parent)
+                scope = self.validated_data.get("image_creation_scope", "project" if project else "personal")
+                draft.image_origin_project_id = parent.image_origin_project_id if parent else project.pk if project and scope == "project" else None
+                draft.image_origin_set = True
+                kwargs["id"] = draft.pk
+            store_instance_images(draft, request, fields=["description"], write=False)
+            self.validated_data["description"] = draft.description
+        return super().save(**kwargs)
 
     def validate_title(self, value):
         value = value.strip()
@@ -198,6 +230,11 @@ class TaskSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if any(key in attrs and attrs[key] != getattr(self.instance, key, None) for key in ("recurrence", "start_date", "due_date")):
+            rule = attrs.get("recurrence", getattr(self.instance, "recurrence", {}))
+            anchor = attrs.get("start_date", getattr(self.instance, "start_date", None)) or attrs.get("due_date", getattr(self.instance, "due_date", None))
+            validate_rule(rule, anchor)
+            attrs["recurrence_next_date"] = next_date(anchor, rule) if rule else None
         unit = attrs.get("unit") or getattr(self.instance, "unit", None)
         status = attrs.get("status") or getattr(self.instance, "status", None)
         assignee = attrs.get("assignee_assignment", serializers.empty)
@@ -237,10 +274,16 @@ class TaskSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         follow_creator = validated_data.pop("follow_creator", True)
         project = validated_data.pop("project", None)
+        creation_scope = validated_data.pop("image_creation_scope", "project" if project else "personal")
         section = validated_data.pop("section", None)
         position = validated_data.pop("project_position", 0)
         assignment = self.context["request"].assignment
-        task = Task.objects.create(created_by_assignment=assignment, **validated_data)
+        parent = validated_data.get("parent_task")
+        if parent and not parent.image_origin_set:
+            from boldApp.workspace.image_storage import task_path
+            task_path(parent)
+        origin = parent.image_origin_project_id if parent else project.pk if project and creation_scope == "project" else None
+        task = Task.objects.create(created_by_assignment=assignment, image_origin_project_id=origin, image_origin_set=True, **validated_data)
         if follow_creator:
             TaskFollower.objects.create(
                 task=task,
@@ -260,6 +303,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         validated_data.pop("follow_creator", None)
+        validated_data.pop("image_creation_scope", None)
         return super().update(instance, validated_data)
 
 
@@ -286,14 +330,30 @@ class TaskDependencySerializer(serializers.ModelSerializer):
         read_only_fields = ["created_by_assignment", "created_at"]
 
 
-class CommentSerializer(serializers.ModelSerializer):
+class CommentSerializer(DriveImagesMixin, serializers.ModelSerializer):
+    voice_notes = VoiceNotesField(required=False)
+
+    def validate(self, attrs):
+        task = attrs.get("task", getattr(self.instance, "task", None))
+        section = attrs.get("image_section", getattr(self.instance, "image_section", "comments"))
+        project = attrs.get("image_project_id", getattr(self.instance, "image_project_id", None))
+        if section == "timeline" and project and not task.task_projects.filter(project_id=project).exists():
+            raise serializers.ValidationError("La tarea no pertenece al proyecto del cronograma.")
+        if self.instance and any(key in attrs and attrs[key] != getattr(self.instance, key) for key in ("image_section", "image_project_id")):
+            raise serializers.ValidationError("No puedes cambiar el origen del comentario.")
+        body = attrs.get("body", getattr(self.instance, "body", ""))
+        notes = attrs.get("voice_notes", getattr(self.instance, "voice_notes", []))
+        if not body.strip() and not notes:
+            raise serializers.ValidationError("Agrega un comentario o una nota de voz.")
+        return attrs
+
     class Meta:
         model = Comment
         fields = "__all__"
         read_only_fields = ["author_assignment", "created_at", "updated_at", "deleted_at"]
 
 
-class AttachmentSerializer(serializers.ModelSerializer):
+class AttachmentSerializer(DriveImagesMixin, serializers.ModelSerializer):
     class Meta:
         model = Attachment
         fields = "__all__"

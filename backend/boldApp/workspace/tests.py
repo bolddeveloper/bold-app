@@ -1,5 +1,6 @@
 from datetime import timedelta
 from unittest.mock import patch, Mock
+from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -115,6 +116,7 @@ class WorkspaceTests(TestCase):
             self.assertEqual(start.status_code, 200)
             query = parse_qs(urlparse(start.data["authorization_url"]).query)
             self.assertEqual(query["login_hint"], [self.users[0].email])
+            self.assertEqual(query["hd"], ["bold.gt"])
             return self.client.get(self.root + "oauth/callback/", {"state": query["state"][0], "code": "demo"})
 
         self.assertContains(callback(), '"connected"')
@@ -271,3 +273,14 @@ class WorkspaceTests(TestCase):
         capability.return_value = {"mimeType": "image/png"}
         self.assertEqual(self.client.get(endpoint, {"export_format": "pdf"}).status_code, 200)
         self.assertEqual(google.call_args.kwargs["params"]["alt"], "media")
+
+
+    @override_settings(GOOGLE_WORKSPACE_COMPANY_DOMAIN="bold.gt")
+    @patch("boldApp.workspace.service.requests.post")
+    def test_existing_personal_connection_is_blocked_before_using_tokens(self, exchange):
+        from .service import access_token, Reconnect
+        GoogleConnection.objects.create(user=self.users[0], email="samueloyy@gmail.com", subject="local-test", refresh_token_encrypted=encrypt_secret("private"))
+        self.assertFalse(self.client.get(self.root + "connection/").data["connected"])
+        with self.assertRaises(Reconnect):
+            access_token(self.users[0])
+        exchange.assert_not_called()

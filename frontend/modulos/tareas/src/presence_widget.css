@@ -2,21 +2,25 @@
 .home_presence_controls input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--bold_line); border-radius: 8px; background: var(--bold_surface); color: var(--bold_text); padding: 8px 10px; font: inherit; font-size: 12px; }
 .home_presence_controls .bold_select { min-width: 0; }
 .home_presence_list { max-height: 225px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.home_presence_person { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 10px; border-bottom: 1px solid var(--bold_line); padding: 12px 2px; }
+.home_presence_person { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; border-radius: 7px; padding: 7px 6px; }
+.home_presence_person:hover { background: var(--bold_surface_soft); }
+.home_presence_department + .home_presence_department { margin-top: 18px; }
+.home_presence_department h3 { display: flex; gap: 5px; margin: 10px 6px 7px; color: var(--bold_muted); font-size: 12px; font-weight: 500; }
+.home_presence_department h3 span { flex-shrink: 0; }
 .home_presence_person > .bold_presence_dot { margin-top: 4px; }
 .home_presence_person > div { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
-.home_presence_person strong { font-size: 13px; }
+.home_presence_person strong { font-size: 14px; font-weight: 700; }
 .home_presence_person span, .home_presence_person small, .home_presence_hint { color: var(--bold_muted); font-size: 11px; }
 .home_presence_hint { display: block; margin-top: 10px; }
 .home_widget_presence { container-type: inline-size; }
 .home_widget_presence .home_widget_body { min-width: 0; }
 .home_presence_controls .bold_select { max-width: 100%; }
 .home_presence_list { max-height: 360px; }
-.home_presence_avatar { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--bold_red) 10%, var(--bold_surface)); color: var(--bold_text); font-size: 11px; font-weight: 700; }
+.home_presence_person > .home_presence_avatar { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: visible; background: color-mix(in srgb, var(--bold_red) 10%, var(--bold_surface)); color: var(--bold_text); font-size: 13px; font-weight: 700; }
 .home_presence_avatar .bold_presence_dot { position: absolute; right: -1px; bottom: -1px; border: 2px solid var(--bold_surface); box-sizing: content-box; }
-.home_presence_person > .home_presence_identity { display: grid; gap: 4px; min-width: 0; }
+.home_presence_person > .home_presence_identity { display: grid; gap: 2px; min-width: 0; }
 .home_presence_identity strong { line-height: 1.4; color: var(--bold_text); overflow-wrap: anywhere; }
-.home_presence_identity .home_presence_status { font-size: 12px; line-height: 1.4; color: var(--bold_text); overflow-wrap: anywhere; }
+.home_presence_identity .home_presence_status { font-size: 12px; line-height: 1.4; color: var(--bold_muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home_presence_description, .home_presence_units { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.5; }
 .home_presence_hint { line-height: 1.5; }
 @container (min-width: 440px) {

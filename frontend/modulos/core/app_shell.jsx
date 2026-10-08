@@ -1,3 +1,4 @@
+import { AvatarImage } from "./shared/avatar_image.jsx";
 import "./shared/bold_dialog.css";
 import {useKeyboardShortcuts} from "./use_keyboard_shortcuts.js";
 import {confirmBold} from "./shared/bold_dialog.js";
@@ -7,7 +8,7 @@ import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useReducer, createElement } from "react";
-import { FileText as docs_icon, FolderOpen as drive_icon, ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, CircleHelp as circle_help_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MessageSquarePlus as message_square_plus_icon, Moon as moon_icon, Settings as settings_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
+import { FileText as docs_icon, FolderOpen as drive_icon, ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, UsersRound as users_icon, CircleHelp as circle_help_icon, Newspaper as newspaper_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MessageSquarePlus as message_square_plus_icon, Moon as moon_icon, Settings as settings_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
@@ -34,6 +35,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const profile_dirty = useRef(false);
     const set_profile_dirty = value => {profile_dirty.current = value;};
     const [workspace_file, set_workspace_file] = useState(null);
+    const [drive_folder, set_drive_folder] = useState(null);
     const [workspace_tab_state, workspace_dispatch] = useReducer(workspaceTabs, undefined, emptyWorkspaceTabs);
     const open_workspace_tab = file => workspace_dispatch({type: "open", file});
     const close_workspace_tab = id => workspace_dispatch({type: "close", id});
@@ -108,12 +110,38 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
-    return <ShellContext.Provider value={{ profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
+    return <ShellContext.Provider value={{ profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
-export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, children }) {
+export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, children }) {
     const shell = useShell();
     const core = useCore();
+    useEffect(() => {
+        if (shell.active_module !== "home") return;
+        let active = true;
+        const announce = ready => window.dispatchEvent(new CustomEvent("bold:home-ready", {detail: {ready, assignmentId: core.activeAssignment?.id}}));
+        const animations = document.querySelector(".main_workspace")?.getAnimations() || [];
+        Promise.allSettled(animations.map(animation => animation.finished)).then(() => { if (active) announce(true); });
+        return () => { active = false; announce(false); };
+    }, [shell.active_module, core.activeAssignment?.id]);
+    const newsKey = `bold_news_read:${core.account?.id || core.activeAssignment?.personId || "demo"}`;
+    const [unreadNews, setUnreadNews] = useState(false);
+    useEffect(() => {
+        const reading = shell.active_module === "profile" && shell.profile_tab === "news";
+        const update = () => {
+            try {
+                if (reading && latestNewsId) localStorage.setItem(newsKey, latestNewsId);
+                setUnreadNews(Boolean(latestNewsId && !reading && localStorage.getItem(newsKey) !== latestNewsId));
+            } catch { setUnreadNews(Boolean(latestNewsId && !reading)); }
+        };
+        update();
+        window.addEventListener("storage", update);
+        return () => window.removeEventListener("storage", update);
+    }, [newsKey, latestNewsId, shell.active_module, shell.profile_tab]);
     const [profileAnchor, setProfileAnchor] = useState(null);
+    const [membersOpen, setMembersOpen] = useState(false);
+    useDialog(membersOpen, ".team_members_panel", () => setMembersOpen(false));
+    useEffect(() => setMembersOpen(false), [core.activeAssignment?.id]);
+    const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews };
     const [bellPulse, setBellPulse] = useState(0);
     useEffect(() => {
         setBellPulse(0);
@@ -137,11 +165,17 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
-            {render_mobile_header({ ...profileActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, handle_toggle_notifications })}
-            <TopBar {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} handle_toggle_notifications={handle_toggle_notifications} />
+            {render_mobile_header({ ...profileActions, ...membersActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, handle_toggle_notifications })}
+            <TopBar {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} handle_toggle_notifications={handle_toggle_notifications} />
             {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{<NotificationsPanel {...topBarProps}/>}</div></ResponsiveOverlay>}
             {children}
         </main>
+        <div className="team_members_overlay" hidden={!membersOpen} onClick={() => setMembersOpen(false)}>
+            <aside className="team_members_panel" role="dialog" aria-modal="true" aria-labelledby="team_members_title" onClick={event => event.stopPropagation()}>
+                <header><div><h2 id="team_members_title">Equipo conectado</h2><small>Disponibilidad en vivo</small></div><button type="button" className="theme_toggle_button" aria-label="Cerrar lista de miembros" onClick={() => setMembersOpen(false)}>{render_icon(x_icon, 18)}</button></header>
+                {membersContent}
+            </aside>
+        </div>
         <div id="bold-overlay-root" />
         {profileAnchor && <ProfileQuickMenu anchor={profileAnchor} close={() => setProfileAnchor(null)} openProfile={shell.open_profile} changeDepartment={async id => {if (!await shell.can_change_department()) return false; core.setActiveAssignment(id); return true;}}/>}
         {overlays}
@@ -189,7 +223,7 @@ function render_navigation_item(item, active_module, handle_module_change, optio
 
 function Sidebar(props) {
     const { active_module, handle_module_change, is_sidebar_open, set_is_sidebar_open, navigation_items, current_user, navigationSlots = {} } = props;
-    const groups = [{ id: "work", label: current_user?.unit_name || "Trabajo" }, { id: "management", label: "Gestión" }];
+    const groups = [{ id: "work" }, { id: "management", label: "Gestión" }];
 
     return (
         <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} data-tour="sidebar" inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
@@ -210,7 +244,7 @@ function Sidebar(props) {
                     const items = navigation_items.filter(item => (item.group || "work") === group.id);
                     if (!items.length) return null;
                     return <div className="sidebar_section" key={group.id}>
-                    <p className="sidebar_label">{group.label}</p>
+                    {group.label && <p className="sidebar_label">{group.label}</p>}
                     <nav className="navigation_list" aria-label="Principal">
                         {items.map((item) => {
                             const slot = navigationSlots[item.id];
@@ -275,7 +309,7 @@ function NotificationsPanel(props) {
                             onClick={() => handle_notification_select?.(notification_item)}
                         >
                             <span className="notification_avatar" style={{ backgroundColor: actor ? actor.color : "#7c8b9a" }}>
-                                {actor ? actor.initials : render_icon(notification_icon, 14)}
+                                {actor ? <AvatarImage url={actor.avatar_url} initials={actor.initials} /> : render_icon(notification_icon, 14)}
                             </span>
                             <div className="notification_body">
                                 <p className="notification_title">{notification_item.title}</p>
@@ -362,17 +396,10 @@ function TopBar(props) {
             </div>}
             </div>
             <div className="top_bar_actions">
-                <button
-                    className="theme_toggle_button tour_help_button"
-                    data-tour="help"
-                    type="button"
-                    aria-label="Abrir tutorial de este módulo"
-                    title={["permissions", "administration"].includes(props.active_module) ? "Este módulo tendrá una guía en video" : "Tutorial de esta vista"}
-                    disabled={["permissions", "administration"].includes(props.active_module)}
-                    onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}
-                >
+                <button className="theme_toggle_button tour_help_button" data-tour="help" type="button" aria-label="Abrir tutorial de este módulo" title={["permissions", "administration"].includes(props.active_module) ? "Este módulo tendrá una guía en video" : "Tutorial de esta vista"} disabled={["permissions", "administration"].includes(props.active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>
                     <span className="theme_toggle_icon">{render_icon(circle_help_icon, 18)}</span>
                 </button>
+                <button className={`theme_toggle_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}><span className="theme_toggle_icon">{render_icon(newspaper_icon, 18)}</span></button>
                 <button
                     className="theme_toggle_button"
                     data-tour="theme"
@@ -385,18 +412,18 @@ function TopBar(props) {
                 </button>
                 <div className="task_tool_anchor">
                     <button
-                        className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}`}
+                        className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}${has_unread_notifications ? " bell_has_unread" : ""}`}
                         data-tour="notifications"
                         type="button"
                         aria-label="Notificaciones"
                         onClick={handle_toggle_notifications}
                     >
-                        <span key={props.bellPulse} className={props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 18)}</span>
+                        <span key={props.bellPulse} className={has_unread_notifications || props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 18)}</span>
                         {has_unread_notifications ? <span className="bell_unread_dot"></span> : null}
                     </button>
 
                 </div>
-                <button className="profile_header_button" aria-label="Abrir ajustes rápidos del perfil" onClick={props.onQuickProfile}><ProfileAvatar className="soft_avatar" url={props.profileAvatar} initials={current_user.initials}/></button>
+                <button className="theme_toggle_button" type="button" aria-label="Mostrar lista de miembros" title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 19)}</button>
             </div>
         </header>
     );
@@ -429,10 +456,11 @@ function render_mobile_header(props) {
                 </button>
                 {detailOpen ? <h1>{title}</h1> : active_item?.brand ? render_logo() : <h1>{title}</h1>}
                 <div className="mobile_tour_actions">
-                    <button className="profile_header_button profile_mobile_button" aria-label={"Abrir ajustes r\u00e1pidos del perfil"} onClick={props.onQuickProfile}><ProfileAvatar initials={current_user.initials} url={props.profileAvatar}/></button>
-                <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
-                <button className="mobile_more_button" data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
-                    <span key={props.bellPulse} className={props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 22)}</span>
+                    <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
+                    <button className={`mobile_more_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}>{render_icon(newspaper_icon, 22)}</button>
+                <button className="mobile_more_button" type="button" aria-label="Mostrar lista de miembros" title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 22)}</button>
+                <button className={`mobile_more_button${props.notifications.some(item => !item.is_read) ? " bell_has_unread" : ""}`} data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
+                    <span key={props.bellPulse} className={props.notifications.some(item => !item.is_read) || props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 22)}</span>
                     {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
                 </button>
                 </div>

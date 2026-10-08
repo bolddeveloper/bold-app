@@ -30,6 +30,13 @@ class Task(UUIDPrimaryKeyModel, SoftDeleteModel):
     status = models.ForeignKey(TaskStatus, on_delete=models.PROTECT, related_name="tasks")
     title = models.CharField(max_length=220)
     description = models.TextField(null=True, blank=True)
+    image_origin_project_id = models.UUIDField(null=True, blank=True)
+    image_origin_set = models.BooleanField(default=False)
+    voice_notes = models.JSONField(default=list, blank=True)
+    recurrence = models.JSONField(default=dict, blank=True)
+    recurrence_next_date = models.DateField(null=True, blank=True, db_index=True)
+    recurrence_source = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="occurrences")
+    recurrence_date = models.DateField(null=True, blank=True)
     priority = models.CharField(max_length=20)
     start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
@@ -44,6 +51,7 @@ class Task(UUIDPrimaryKeyModel, SoftDeleteModel):
             models.Index(fields=["assignee_assignment", "due_date"], name="idx_tasks_assignment_due"),
             models.Index(fields=["unit", "status"], name="idx_tasks_unit_status"),
         ]
+        constraints = [models.UniqueConstraint(fields=["recurrence_source", "recurrence_date"], name="unique_task_occurrence")]
 
     def __str__(self):
         return self.title

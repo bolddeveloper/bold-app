@@ -62,13 +62,18 @@ class PresenceTests(TestCase):
         self.assertEqual(effective_status(self.account, connection, now, schedule), "meeting")
 
     def test_session_alone_does_not_mean_connected_and_snapshot_contains_no_private_data(self):
+        self.account.avatar_url = "data:image/webp;base64,test-avatar"
+        self.account.save(update_fields=["avatar_url"])
         self.assertEqual(presence_directory()["rows"], [])
         roster = heartbeat_snapshot(self.session.pk)
         self.assertEqual(len(roster["rows"]), 1)
         person = roster["rows"][0]
         self.assertEqual(person["status"], "online")
         self.assertEqual(person["units"][0]["name"], "IT")
-        self.assertEqual(set(person), {"employee_id", "name", "units", "status", "title", "description"})
+        self.assertEqual(set(person), {"employee_id", "name", "avatar_url", "units", "status", "title", "description"})
+        self.assertEqual(person["avatar_url"], self.account.avatar_url)
+        from boldApp.core.serializers import AssignmentDirectorySerializer
+        self.assertEqual(AssignmentDirectorySerializer(self.assignment).data["avatar_url"], self.account.avatar_url)
         self.assertNotIn("@bold.gt", str(roster))
 
     def test_revoked_expired_idle_and_stale_connections_are_excluded(self):

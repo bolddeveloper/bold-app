@@ -10,6 +10,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from boldApp.administrativo.services import record_system_event
 from boldApp.workspace.models import GoogleConnection
+from boldApp.workspace.image_storage import provider_images
 from .models import CalendarDraft
 from .service import CalendarReconnect, CalendarUnavailable, event_path, google_request, is_task_mirror, public_event, validate_event
 
@@ -82,13 +83,18 @@ class CalendarEventsView(APIView):
                 return Response({"events": items})
         raise CalendarUnavailable("Hay demasiados eventos en este rango. Prueba una vista más corta.")
 
+    @transaction.atomic
     def post(self, request):
         data = validate_event(request.data)
         if data.pop("addMeet", False):
             data["conferenceData"] = {"createRequest": {"requestId": secrets.token_urlsafe(18), "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
         if not all(data.get(key) for key in ("summary", "start", "end")):
             raise ValidationError("Título, inicio y fin son obligatorios.")
+        document = provider_images(request, "calendar", data)
         event = google_request(request.user, "POST", event_path(), params={"sendUpdates": "all", "conferenceDataVersion": 1}, body=data)
+        if document:
+            document.external_id = event["id"]
+            document.save(update_fields=["external_id"])
         record_system_event("calendar.event_created", request, module_code="calendar", target_type="google_event", metadata={"google_event_id": event["id"]})
         return Response(public_event(event), status=201)
 
@@ -99,6 +105,7 @@ class CalendarEventView(APIView):
     def get(self, request, event_id):
         return Response(public_event(google_request(request.user, "GET", event_path(event_id))))
 
+    @transaction.atomic
     def patch(self, request, event_id):
         current = _event_for_write(request.user, event_id)
         scope = request.query_params.get("scope", "instance")
@@ -116,6 +123,7 @@ class CalendarEventView(APIView):
             data["conferenceData"] = {"createRequest": {"requestId": secrets.token_urlsafe(18), "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
         if not data:
             raise ValidationError("No hay cambios en el evento.")
+        provider_images(request, "calendar", data, target, current.get("summary", ""))
         event = google_request(request.user, "PATCH", event_path(target), params={"sendUpdates": "all", "conferenceDataVersion": 1}, body=data)
         record_system_event("calendar.event_updated", request, module_code="calendar", target_type="google_event", metadata={"google_event_id": target, "scope": scope})
         return Response(public_event(event))
@@ -197,6 +205,7 @@ class CalendarDraftView(APIView):
             data.pop("addMeet", None)
             if not all(data.get(key) for key in ("summary", "start", "end")):
                 raise ValidationError("Título, inicio y fin son obligatorios.")
+            provider_images(request, "calendar", data, draft.event_id)
             event = google_request(request.user, "PATCH", event_path(draft.event_id), params={"sendUpdates": "all", "conferenceDataVersion": 1}, body=data)
             draft.delete()
         record_system_event("calendar.event_created", request, module_code="calendar", target_type="google_event", metadata={"google_event_id": event["id"]})
@@ -269,7 +278,7 @@ def _task_data(data):
             raise ValidationError("Escribe un título válido.")
         result["title"] = data["title"].strip()
     if "notes" in data:
-        if not isinstance(data["notes"], str) or len(data["notes"]) > 8192:
+        if not isinstance(data["notes"], str) or len(data["notes"]) > 2_000_000:
             raise ValidationError("Las notas son demasiado largas.")
         result["notes"] = data["notes"]
     if "due" in data:
@@ -328,6 +337,7 @@ class CalendarTasksView(APIView):
                 raise CalendarUnavailable("Hay demasiadas tareas en este rango.")
         return Response({"tasks": tasks, "lists": tasklists})
 
+    @transaction.atomic
     def post(self, request):
         list_id = request.data.get("list_id")
         if not isinstance(list_id, str) or not list_id or len(list_id) > 255:
@@ -335,7 +345,11 @@ class CalendarTasksView(APIView):
         data = _task_data(request.data)
         if not data.get("title") or not data.get("due"):
             raise ValidationError("Título y fecha son obligatorios.")
+        document = provider_images(request, "calendar_task", data)
         task = google_request(request.user, "POST", _task_path(list_id), body=data, base=TASKS_API)
+        if document:
+            document.external_id = f"{list_id}/{task['id']}"
+            document.save(update_fields=["external_id"])
         record_system_event("calendar.task_created", request, module_code="calendar", target_type="google_task", metadata={"google_task_id": task["id"]})
         return Response({"id": task["id"]}, status=201)
 
@@ -343,10 +357,13 @@ class CalendarTasksView(APIView):
 class CalendarTaskView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def patch(self, request, list_id, task_id):
         data = _task_data(request.data)
         if not data:
             raise ValidationError("No hay cambios en la tarea.")
+        current = google_request(request.user, "GET", _task_path(list_id, task_id), base=TASKS_API)
+        provider_images(request, "calendar_task", data, f"{list_id}/{task_id}", current.get("title", ""))
         task = google_request(request.user, "PATCH", _task_path(list_id, task_id), body=data, base=TASKS_API)
         record_system_event("calendar.task_updated", request, module_code="calendar", target_type="google_task", metadata={"google_task_id": task_id})
         return Response({"id": task["id"]})

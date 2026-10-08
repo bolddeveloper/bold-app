@@ -9,6 +9,7 @@ export const notificationEvents = [
     ["task.updated", "Ediciones de tareas"], ["task.status_changed", "Cambios de estado de tareas"], ["task.due_changed", "Cambios de fecha límite"],
     ["project.created", "Proyectos nuevos"], ["project.assigned", "Me asignan como responsable de un proyecto"], ["project.member_added", "Me agregan a un proyecto"], ["project.updated", "Ediciones de proyectos"],
     ["comment.created", "Comentarios nuevos"], ["comment.mentioned", "Menciones en comentarios"],
+    ["calendar.meeting_reminder", "Recordatorios de reuniones: 30 minutos, 5 minutos y al inicio"],
 ];
 
 export default function NotificationPreferences() {

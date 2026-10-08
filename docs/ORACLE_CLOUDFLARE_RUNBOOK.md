@@ -401,3 +401,18 @@ divergentes.
 
 No se habilita `SECURE_HSTS_INCLUDE_SUBDOMAINS` ni `preload` sobre
 `workers.dev`, porque es un dominio compartido que no controla Bold.
+
+
+## Conexion Google corporativa al desplegar
+
+Usar el cliente OAuth corporativo y cargar su JSON en Administracion / Conectores. BOLD acepta unicamente cuentas del dominio `@bold.gt`, tanto en local como en produccion. La excepcion `samueloyy@gmail.com` fue retirada; las conexiones personales guardadas quedan bloqueadas sin borrar archivos de Drive.
+
+Antes de recrear el backend en Oracle, configurar en `deploy/oracle/.env.oracle`:
+
+```dotenv
+GOOGLE_WORKSPACE_REDIRECT_URI=https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/
+```
+
+Registrar exactamente esa misma URL en los URI de redireccion autorizados del cliente OAuth corporativo de Google. La plantilla y el valor predeterminado de Compose incluyen ese callback. Un valor explicito antiguo en `.env.oracle` debe reemplazarse antes del despliegue. En desarrollo local se mantiene `http://localhost:8000/api/v2/workspace/oauth/callback/`.
+
+Esta preparacion no cambia la configuracion remota ni publica un despliegue.

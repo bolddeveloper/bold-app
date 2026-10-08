@@ -276,6 +276,14 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "send-calendar-reminders": {
+        "task": "boldApp.calendario.tasks.send_calendar_reminders",
+        "schedule": 60.0,
+    },
+    "generate-recurring-tasks": {
+        "task": "boldApp.tareas.recurrence.generate_recurring_tasks",
+        "schedule": 60.0,
+    },
     "refresh-calendar-presence": {
         "task": "boldApp.calendario.tasks.refresh_calendar_presence",
         "schedule": 120.0,
@@ -318,3 +326,6 @@ else:
 
 # Editores propios activos; el visor publicado queda conservado para reactivarlo.
 GOOGLE_WORKSPACE_EDITORS_ENABLED = os.environ.get("GOOGLE_WORKSPACE_EDITORS_ENABLED", "true").lower() in {"true", "1"}
+
+# Rich-text images arrive as base64 JSON, rather than multipart file fields.
+DATA_UPLOAD_MAX_MEMORY_SIZE = None

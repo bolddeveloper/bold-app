@@ -9,6 +9,7 @@ export default function GoogleConnection({ onConnected }) {
     const shell = useShell();
     const [connection, setConnection] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
     const popup = useRef(null), watcher = useRef(null);
+    const accountHint = `una cuenta Google @${connection?.company_domain || "bold.gt"}`;
     async function load(report = false) {
         try { const result = await workspaceApi.connection(); setConnection(result); shell?.sync_workspace_account(result); setError(""); if (report) onConnected?.(result); }
         catch (problem) { setError(problem.message); }
@@ -19,11 +20,11 @@ export default function GoogleConnection({ onConnected }) {
         const receive = event => {
             if (event.source !== popup.current || event.origin !== connection?.callback_origin || event.data?.type !== "bold:workspace") return;
             clearInterval(watcher.current); setBusy(false);
-            if (event.data.status === "connected") load(true); else setError(event.data.status === "wrong_account" ? `Elige una cuenta Google @${connection?.company_domain || "bold.gt"}.` : "No se completó la conexión. Elige tu cuenta y acepta los permisos de Google.");
+            if (event.data.status === "connected") load(true); else setError(event.data.status === "wrong_account" ? `Elige ${accountHint}.` : "No se completó la conexión. Elige tu cuenta y acepta los permisos de Google.");
         };
         window.addEventListener("message", receive);
         return () => window.removeEventListener("message", receive);
-    }, [connection?.callback_origin, connection?.company_domain]);
+    }, [connection?.callback_origin, accountHint]);
     async function connect() {
         setError(""); setBusy(true);
         popup.current = window.open("", "bold-workspace", "width=560,height=740");
@@ -35,5 +36,5 @@ export default function GoogleConnection({ onConnected }) {
             watcher.current = setInterval(() => { if (popup.current?.closed) { clearInterval(watcher.current); setBusy(false); load(true); } }, 700);
         } catch (problem) { popup.current?.close(); setBusy(false); setError(problem.message); }
     }
-    return <section className="workspace_connection"><h2>Conectar servicios de Google</h2><p>{connection?.connected ? `Conectado como ${connection.email}` : `Conecta una cuenta Google @${connection?.company_domain || "bold.gt"}.`}</p><p>Autoriza Drive, Docs, Sheets, Slides, Calendario, Google Tasks, Contactos y Gmail en una sola conexión. Cada empleado conecta su propia cuenta y conserva sus permisos de Google.</p>{connection?.connected && <p>{authorized(connection) ? "Todos los servicios están autorizados." : "Faltan permisos. Conecta los servicios y selecciona todos los permisos en Google."}</p>}{error && <p role="alert">{error}</p>}{connection ? <div className="workspace_actions"><button disabled={busy || !connection.configured} onClick={connect}>{busy ? "Conectando…" : "Conectar servicios de Google"}</button>{connection.connected && <button onClick={async () => { if (!await confirmBold("¿Desconectar tu cuenta de Google de BOLD?")) return; try { await workspaceApi.disconnect(); await load(true); } catch (problem) { setError(problem.message); } }}>Desconectar mi cuenta</button>}<button onClick={() => load(true)}>Verificar conexión</button></div> : <button onClick={load}>Comprobar conexión</button>}{connection && !connection.configured && <p>El administrador debe subir el JSON OAuth una vez en Administración → Conectores. Los empleados solo tendrán que conectar su cuenta.</p>}</section>;
+    return <section className="workspace_connection"><h2>Conectar servicios de Google</h2><p>{connection?.connected ? `Conectado como ${connection.email}` : `Conecta ${accountHint}.`}</p><p>Autoriza Drive, Docs, Sheets, Slides, Calendario, Google Tasks, Contactos y Gmail en una sola conexión. Cada empleado conecta su propia cuenta y conserva sus permisos de Google.</p>{connection?.connected && <p>{authorized(connection) ? "Todos los servicios están autorizados." : "Faltan permisos. Conecta los servicios y selecciona todos los permisos en Google."}</p>}{error && <p role="alert">{error}</p>}{connection ? <div className="workspace_actions"><button disabled={busy || !connection.configured} onClick={connect}>{busy ? "Conectando…" : "Conectar servicios de Google"}</button>{connection.connected && <button onClick={async () => { if (!await confirmBold("¿Desconectar tu cuenta de Google de BOLD?")) return; try { await workspaceApi.disconnect(); await load(true); } catch (problem) { setError(problem.message); } }}>Desconectar mi cuenta</button>}<button onClick={() => load(true)}>Verificar conexión</button></div> : <button onClick={load}>Comprobar conexión</button>}{connection && !connection.configured && <p>El administrador debe subir el JSON OAuth una vez en Administración → Conectores. Los empleados solo tendrán que conectar su cuenta.</p>}</section>;
 }

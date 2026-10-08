@@ -59,8 +59,14 @@ def credentials():
     return config["client_id"], secret
 
 
+def company_account(email):
+    local, separator, domain = str(email or "").strip().lower().rpartition("@")
+    return bool(local and "@" not in local and separator and domain == settings.GOOGLE_WORKSPACE_COMPANY_DOMAIN.lower())
+
+
 def services(connection, config=None):
     config = config or configuration()
+    connection = connection if connection and company_account(connection.email) else None
     granted = set(connection.scopes.split()) if connection else set()
     return {key: {"status": "unconfigured" if not config["configured"] else "available" if connection and (not connection.client_id or connection.client_id == config["client_id"]) and required <= granted else "authorization_required"} for key, required in SCOPES.items()}
 
@@ -68,7 +74,7 @@ def services(connection, config=None):
 def public_connection(user):
     config = configuration()
     connection = GoogleConnection.objects.filter(user=user).first() if config["configured"] else None
-    if connection and connection.client_id and connection.client_id != config["client_id"]:
+    if connection and (not company_account(connection.email) or connection.client_id and connection.client_id != config["client_id"]):
         connection = None
     from urllib.parse import urlparse
     callback = urlparse(settings.GOOGLE_WORKSPACE_REDIRECT_URI)

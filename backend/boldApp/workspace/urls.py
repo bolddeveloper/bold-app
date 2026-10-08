@@ -1,6 +1,6 @@
 from django.urls import path
 from .oauth import ConnectionView, StartView, CallbackView
-from .views import FilesView, FileView, CopyView, UploadView, DownloadView, DrivesView, PermissionsView, PermissionView, MoveView, AboutView, PreviewView
+from .views import FilesView, FileView, CopyView, UploadView, DownloadView, DrivesView, PermissionsView, PermissionView, MoveView, AboutView, PreviewView, ThumbnailView
 from .editors import EditorView
 from .office import OfficeView
 from .published import PublishedViewView
@@ -23,4 +23,5 @@ urlpatterns = [
     path("files/<str:identity>/permissions/<str:permission>/", PermissionView.as_view()),
     path("files/<str:identity>/move/", MoveView.as_view()),
     path("files/<str:identity>/preview/", PreviewView.as_view()),
+    path("files/<str:identity>/thumbnail/", ThumbnailView.as_view()),
 ]

@@ -9,7 +9,7 @@ import { createPermissionCache } from "./permission_cache.js";
 import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
 import { createSessionNotifications } from "./session_notifications.js";
-import {defaultNotificationSettings, containsNewUnreadNotification, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
+import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
 import { contentCanRefresh } from "./refresh_coordinator.js";
 const CoreContext = createContext(null);
 export function useCore() {
@@ -59,6 +59,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         });
     }
     const clearLocalSession = useCallback(() => {
+        window.dispatchEvent(new Event("bold:private-cache-suspend"));
         generation.current++;
         clearNotifications();
         enteredFromLogin.current = false;
@@ -206,9 +207,16 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             if (mounted && error?.name !== "AbortError") setNotificationSnapshot(current => ({ assignmentId, rows: current.assignmentId === assignmentId ? current.rows : [], error: error?.message || String(error) }));
         };
         let soundSettings = defaultNotificationSettings, settingsLoaded = false, previousRows = null;
+        let homeReady = false;
+        const entrySound = createEntryNotificationSound({visible: () => homeReady && !document.hidden});
+        const homeEntrance = event => {
+            homeReady = event.detail?.ready === true && event.detail?.assignmentId === assignmentId;
+            if (settingsLoaded) entrySound.update(previousRows, soundSettings);
+        };
+        window.addEventListener("bold:home-ready", homeEntrance);
         const soundController = new AbortController();
-        http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted) {soundSettings = value; settingsLoaded = true;}}).catch(() => {});
-        const changeSound = event => {soundSettings = event.detail; settingsLoaded = true;};
+        http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted) {soundSettings = value; settingsLoaded = true; entrySound.update(previousRows, soundSettings);}}).catch(() => {});
+        const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; entrySound.update(previousRows, soundSettings);};
         window.addEventListener("bold:notification-sound-changed", changeSound);
         const store = createSessionNotifications({ onChange: rows => {
             if (mounted) {
@@ -219,6 +227,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
                     for (const row of rows.filter(row => !row.is_read && !known.has(String(row.id))).slice(0,3)) {try {showDesktopNotification(row, soundSettings);} catch { /* Los permisos los administra el navegador. */ }}
                 }
                 previousRows = rows;
+                if (settingsLoaded) entrySound.update(rows, soundSettings);
                 setNotificationSnapshot({ assignmentId, rows, error: "" });
             }
         } });
@@ -257,7 +266,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const timer = setInterval(recover, 2_000);
         return () => {
             mounted = false; realtime.disconnect(); store.dispose(); clearInterval(timer);
-            soundController.abort(); stopNotificationSound();
+            soundController.abort(); entrySound.dispose(); stopNotificationSound();
+            window.removeEventListener("bold:home-ready", homeEntrance);
             window.removeEventListener("bold:notification-sound-changed", changeSound);
             if (notificationController.current === store) notificationController.current = null;
             window.removeEventListener("bold:permissions-revision", invalidate);
@@ -393,9 +403,9 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     function updateProfile(profile) {
         const current = getCoreState(), employeeId = current.account?.employee;
         const initials = profile.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("");
-        const change = row => row.personId === employeeId || row.employee === employeeId ? {...row, name: profile.name, employee_name: profile.name, initials} : row;
+        const change = row => row.personId === employeeId || row.employee === employeeId ? {...row, name: profile.name, employee_name: profile.name, initials, avatar_url: profile.avatar_url} : row;
         const assignments = current.assignments.map(change);
-        updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change)});
+        updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change), presence: current.presence ? {...current.presence, rows: current.presence.rows.map(row => row.employee_id === employeeId ? {...row, name: profile.name, avatar_url: profile.avatar_url} : row)} : null});
     }
     const value = { ...state, ...http.getSession(), updateProfile, notifications, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog

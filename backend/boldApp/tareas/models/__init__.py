@@ -7,6 +7,7 @@ from .projects import Project, ProjectMember, Section, TaskStatus
 from .tags import Tag, TaskTag
 from .tasks import Task, TaskDependency, TaskProject
 from .webhooks import WebhookDelivery, WebhookEndpoint
+from .workspaces import SharedWorkspaceFolder
 
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Project",
     "ProjectMember",
     "Section",
+    "SharedWorkspaceFolder",
     "Tag",
     "Task",
     "TaskDependency",
@@ -26,3 +28,4 @@ __all__ = [
     "WebhookDelivery",
     "WebhookEndpoint",
 ]
+

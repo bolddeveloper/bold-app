@@ -10,3 +10,14 @@ export function filterPresence(rows, unit = "", query = "") {
     const text = query.trim().toLocaleLowerCase("es");
     return (rows || []).filter(row => row.status !== "offline" && (!unit || row.units?.some(item => item.id === unit)) && (!text || `${row.name} ${presenceLabel(row)} ${row.description || ""}`.toLocaleLowerCase("es").includes(text)));
 }
+
+export function groupPresence(rows, query = "") {
+    const groups = new Map();
+    for (const row of filterPresence(rows, "", query)) {
+        for (const unit of new Map((row.units || []).map(unit => [unit.id, unit])).values()) {
+            if (!groups.has(unit.id)) groups.set(unit.id, { ...unit, people: [] });
+            groups.get(unit.id).people.push(row);
+        }
+    }
+    return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+}

@@ -18,6 +18,7 @@ export const workspaceApi = {
     edit: (id, body) => http.request(`${file(id)}editor/`, {method: "POST", body}),
     move: (id, parent) => http.request(`${file(id)}move/`, {method: "POST", body: {parent}}),
     preview: (id, options) => http.request(`${file(id)}preview/`, {responseType: "blob", ...options}),
+    thumbnail: (id, options) => http.request(`${file(id)}thumbnail/`, {responseType: "blob", ...options}),
     create: body => http.request(`${root}files/`, { method: "POST", body }),
     update: (id, body) => http.request(file(id), { method: "PATCH", body }),
     copy: id => http.request(`${file(id)}copy/`, { method: "POST", body: {} }),

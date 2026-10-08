@@ -1,0 +1,28 @@
+.task_text_editor .task_text_image_previews, .task_formatted_text .task_text_image_previews, .task_comments_composer .task_text_image_previews, .task_comments_history .task_text_image_previews { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; padding-top: 10px; }
+.task_text_image_previews > span { scroll-snap-align: start; }
+.task_text_image_previews > span > .task_image_thumbnail { position: static; display: block; width: 120px; height: 120px; min-width: 120px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: transparent; cursor: zoom-in; }
+.task_text_image_previews > span > .task_image_remove { position: absolute; top: -5px; right: -5px; }
+.task_image_viewer_overlay { margin: 0; border: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; box-sizing: border-box; color: white; position: fixed; inset: 0; z-index: 30000; display: grid; place-items: center; padding: 60px; background: rgb(0 0 0 / 82%); backdrop-filter: blur(3px); }
+.task_image_viewer { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 100%; }
+.task_image_viewer .task_image_full { display: block; width: auto; height: auto; max-width: min(920px, calc(100vw - 120px)); max-height: min(780px, calc(100dvh - 120px)); object-fit: contain; border-radius: 12px; box-shadow: 0 16px 64px #0008; }
+.task_image_viewer button { position: fixed; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid #ffffff30; border-radius: 50%; color: white; background: #24272dcc; cursor: pointer; }
+.task_image_viewer button:hover { background: #414650; }
+.task_image_viewer button:focus-visible, .task_image_thumbnail:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; }
+.task_image_viewer_close { top: 18px; right: 22px; }
+.task_image_viewer_previous { top: calc(50% - 22px); left: 16px; }
+.task_image_viewer_next { top: calc(50% - 22px); right: 16px; }
+.task_image_viewer_status { position: fixed; bottom: 18px; left: 60px; right: 60px; display: grid; justify-items: center; gap: 4px; color: white; font-size: 13px; text-align: center; }
+@media (max-width: 600px) { .task_image_viewer_overlay { padding: 60px 48px; } .task_image_viewer .task_image_full { max-width: calc(100vw - 96px); } .task_image_viewer button { width: 36px; height: 36px; } .task_image_viewer_previous { left: 6px; } .task_image_viewer_next { right: 6px; } }
+
+.task_image_zoom_stage { display: flex; align-items: center; justify-content: center; width: calc(100vw - 120px); height: calc(100dvh - 120px); overflow: hidden; touch-action: none; user-select: none; }
+.task_image_zoom_stage.is_zoomed { cursor: grab; }
+.task_image_zoom_stage.is_zoomed:active { cursor: grabbing; }
+.task_image_zoom_stage .task_image_full { flex-shrink: 0; }
+.task_image_viewer button, .task_image_viewer_status { z-index: 1; }
+.task_image_zoom_controls { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 1; }
+.task_image_zoom_controls button { position: static; }
+.task_image_zoom_controls .task_image_zoom_reset { width: 70px; border-radius: 22px; font-size: 13px; }
+.task_image_zoom_controls button:disabled { opacity: .4; cursor: default; }
+@media (max-width: 600px) { .task_image_zoom_stage { width: calc(100vw - 96px); } }
+
+.task_image_viewer_overlay::backdrop { background: transparent; }

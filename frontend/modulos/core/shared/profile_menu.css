@@ -64,22 +64,26 @@
 .bold_profile_card_content .bold_profile_action { display: flex; width: 100%; justify-content: flex-start; margin-top: 10px; }
 .bold_profile_action > svg:last-child:not(:first-child) { margin-left: auto; }
 /* Selector lateral de departamentos, separado del área desplazable de la ficha. */
-.bold_profile_departments { position: fixed; z-index: 2301; display: grid; gap: 6px; width: min(280px, calc(100vw - 24px)); box-sizing: border-box; max-height: calc(100dvh - 24px); overflow: auto; padding: 12px; border: 1px solid var(--bold_line); border-radius: 12px; color: var(--bold_text); background: var(--bold_surface); box-shadow: 0 12px 32px #0003; animation: bold_profile_enter 150ms ease-out; }
+.bold_profile_departments { position: fixed; z-index: 2301; display: grid; gap: 10px; width: min(280px, calc(100vw - 24px)); box-sizing: border-box; max-height: calc(100dvh - 24px); overflow: auto; padding: 16px; border: 1px solid var(--bold_line); border-radius: 12px; color: var(--bold_text); background: var(--bold_surface); box-shadow: 0 12px 32px #0003; animation: bold_profile_enter 150ms ease-out; }
 .bold_profile_departments header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--bold_line); }
 .bold_profile_departments header h3 { margin: 0; font-size: 14px; }
-.bold_profile_departments header button { width: auto; padding: 5px; }
-.bold_profile_departments > p { margin: 8px 0; color: var(--bold_muted); font-size: 12px; }
-.bold_profile_departments button { width: 100%; justify-content: space-between; text-align: left; }
+.bold_profile_departments header button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 8px; flex-shrink: 0; }
+.bold_profile_departments > p { margin: 4px 6px; color: var(--bold_muted); font-size: 12px; }
+.bold_profile_departments > button { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; min-height: 56px; padding: 12px 14px; justify-content: space-between; text-align: left; }
 .bold_profile_departments button[aria-pressed="true"] { color: var(--bold_red); }
-.bold_profile_departments span { display: grid; gap: 4px; }
+.bold_profile_departments > button > span { display: grid; gap: 5px; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+.bold_profile_departments > button > svg { flex-shrink: 0; }
 .bold_profile_departments small { color: var(--bold_muted); }
 @keyframes bold_profile_enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.bold_profile_submenu { position: fixed; z-index: 2302; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--bold_line); border-radius: 12px; background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 12px 32px #0004; }
-.bold_profile_submenu header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.bold_profile_submenu { display: grid; gap: 8px; position: fixed; z-index: 2302; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; box-sizing: border-box; padding: 14px; border: 1px solid var(--bold_line); border-radius: 12px; background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 12px 32px #0004; }
+.bold_profile_submenu header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 2px 6px; margin-bottom: 2px; }
 .bold_profile_submenu header h3 { margin: 0; color: var(--bold_text); font-size: 14px; }
-.bold_profile_submenu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px; border: 0; background: transparent; color: inherit; border-radius: 7px; }
-.bold_profile_submenu button > span:nth-child(2) { flex: 1; }
-.bold_profile_submenu header button { width: auto; }
+.bold_profile_submenu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; box-sizing: border-box; min-height: 42px; padding: 10px 12px; line-height: 1.4; border: 0; background: transparent; color: inherit; border-radius: 7px; }
+.bold_profile_submenu button > span:not(.bold_presence_dot) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.bold_profile_submenu header button { width: 36px; min-height: 36px; padding: 8px; flex-shrink: 0; justify-content: center; }
+.bold_profile_submenu button > svg { flex-shrink: 0; }
+.bold_profile_submenu button > svg:last-child { margin-left: auto; }
+.bold_profile_submenu button > .bold_presence_dot { flex-shrink: 0; }
 .bold_profile_submenu button:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--bold_red) 10%, var(--bold_surface)); }
 .bold_profile_submenu button:focus-visible { outline: 2px solid var(--bold_red); outline-offset: -2px; }
 .bold_profile_submenu button:disabled { opacity: .6; cursor: wait; }

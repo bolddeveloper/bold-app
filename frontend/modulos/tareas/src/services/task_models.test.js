@@ -2,6 +2,20 @@ import { isControlPlaneContext, normalizeAssignment, selectAssignment, selectEnt
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, normalizeProject, normalizeStatus, normalizeTask, normalizeTaskProject, projectTask, dateFromISO, toISODate, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./task_models.js";
+
+test("task audio and recurrence survive normalization and form payloads", () => {
+    const dto = { id: "task", unit: "unit", title: "Repeat", voice_notes: [{id: "audio", duration: 12}],
+        recurrence: {frequency: "weekly", interval: 2, until: "2026-12-31"}, recurrence_next_date: "2026-10-21" };
+    const statuses = [normalizeStatus({id: "todo", unit: "unit", name: "Por hacer", category: "todo", is_final: false})];
+    const task = normalizeTask({...dto, status: "todo"}, statuses);
+    assert.deepEqual(task.voice_notes, dto.voice_notes);
+    assert.deepEqual(task.recurrence, dto.recurrence);
+    const payload = taskPayload(task, statuses);
+    assert.deepEqual(payload.voice_notes, dto.voice_notes);
+    assert.deepEqual(payload.recurrence, dto.recurrence);
+    assert.equal(payload.status, "todo");
+    assert.equal("recurrence_next_date" in payload, false);
+});
 test("assignment selection handles none, one, several and stale stored selection", () => {
     assert.equal(selectAssignment([], "stale"), "");
     assert.equal(selectAssignment([{ id: "a" }]), "a");

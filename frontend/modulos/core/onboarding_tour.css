@@ -203,7 +203,7 @@
 @media (max-width: 1023px) {
 
     .mobile_header .mobile_header_row {
-        grid-template-columns: 44px minmax(0, 1fr) 96px;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
     }
 
     .mobile_tour_actions {

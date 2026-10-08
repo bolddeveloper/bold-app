@@ -12,7 +12,7 @@ export function useDialog(open, selector, onClose) {
         if (!dialogs.length) originalOverflow = document.body.style.overflow;
         dialogs.push(panel);
         document.body.style.overflow = "hidden";
-        const controls = () => [...panel.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')].filter(el => !el.closest('[inert]') && el.getClientRects().length);
+        const controls = () => [...panel.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [contenteditable="true"], [tabindex="0"]')].filter(el => !el.closest('[inert]') && el.getClientRects().length);
         panel.setAttribute("tabindex", "-1");
         (controls()[0] || panel).focus({ preventScroll: true });
         const keydown = event => {

@@ -54,7 +54,7 @@ function DocsHome({ creationRequest }) {
         finally {mutation.current = false; setWorking(false);}
     }
     return <section className="workspace_module">
-        {fileDrop && <div className="drive_drop_hint" role="status"><Upload size={36}/><strong>Suelta aquí para subir</strong><span>Solo Word, Excel y PowerPoint · Luego elige la carpeta · Máximo 20 MB por archivo</span></div>}
+        {fileDrop && <div className="drive_drop_hint" role="status"><Upload size={36}/><strong>Suelta aquí para subir</strong><span>Solo Word, Excel y PowerPoint · Luego elige la carpeta</span></div>}
         {connection?.connected && <p className="docs_drop_tip"><Upload size={16}/>Arrastra archivos de Word, Excel o PowerPoint aquí</p>}
         <input ref={uploadInput} type="file" hidden multiple accept={officeUploadAccept} onChange={event => {const items = Array.from(event.target.files || []); event.target.value = ""; receiveFiles(items);}}/>
         {droppedFiles && <DriveUploadDialog items={droppedFiles} connection={connection} close={() => setDroppedFiles(null)}/>}

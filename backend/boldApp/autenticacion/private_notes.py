@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import PrivateNote
+from django.db import transaction
+from boldApp.workspace.image_storage import store_instance_images
 
 
 class NoteSerializer(serializers.Serializer):
@@ -19,13 +21,19 @@ class PrivateNoteView(APIView):
         note = PrivateNote.objects.filter(user=request.user).first()
         return Response({"content": note.content if note else "", "version": note.version if note else 0})
 
+    @transaction.atomic
     def put(self, request):
         data = NoteSerializer(data=request.data)
         data.is_valid(raise_exception=True)
         note, _ = PrivateNote.objects.get_or_create(user=request.user)
+        note = PrivateNote.objects.select_for_update().get(pk=note.pk)
+        if note.version != data.validated_data["version"]:
+            return Response({"detail": "Las notas cambiaron en otro dispositivo. Copia tus cambios y vuelve a cargar."}, status=409)
+        note.content = data.validated_data["content"]
+        store_instance_images(note, request)
         changed = PrivateNote.objects.filter(pk=note.pk, version=data.validated_data["version"]).update(
-            content=data.validated_data["content"], version=F("version") + 1, updated_at=timezone.now(),
+            content=note.content, version=F("version") + 1, updated_at=timezone.now(),
         )
         if not changed:
             return Response({"detail": "Las notas cambiaron en otro dispositivo. Copia tus cambios y vuelve a cargar."}, status=409)
-        return Response({"version": data.validated_data["version"] + 1})
+        return Response({"version": data.validated_data["version"] + 1, "content": note.content})

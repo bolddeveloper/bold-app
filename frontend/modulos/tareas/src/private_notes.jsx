@@ -2,20 +2,9 @@ import {promptBold} from "../../core/shared/bold_dialog.js";
 import { useEffect, useRef, useState } from "react";
 import { http } from "../../core/http_client.js";
 import { Bold, Italic, Underline, Strikethrough, Undo2, Redo2, List, ListOrdered, IndentIncrease, Link, Plus, LockKeyhole } from "lucide-react";
+import { cleanHTML } from "./rich_text.js";
 
 const formats = [["Deshacer", "undo", Undo2], ["Rehacer", "redo", Redo2], ["Negrita", "bold", Bold], ["Cursiva", "italic", Italic], ["Subrayado", "underline", Underline], ["Tachado", "strikeThrough", Strikethrough], ["Lista", "insertUnorderedList", List], ["Lista numerada", "insertOrderedList", ListOrdered], ["Sangría", "indent", IndentIncrease]];
-function cleanHTML(html) {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    for (const node of [...doc.body.querySelectorAll("*")]) {
-        if (!["P", "DIV", "BR", "HR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "UL", "OL", "LI", "BLOCKQUOTE", "PRE", "CODE", "A", "TABLE", "TBODY", "TR", "TD", "TH", "IMG"].includes(node.tagName)) { node.replaceWith(...node.childNodes); continue; }
-        for (const attribute of [...node.attributes]) {
-            const safe = node.tagName === "A" && attribute.name === "href" && /^https?:\/\//i.test(attribute.value)
-                || node.tagName === "IMG" && attribute.name === "src" && /^data:image\/(png|jpeg|gif|webp);base64,/i.test(attribute.value);
-            if (!safe) node.removeAttribute(attribute.name);
-        }
-    }
-    return doc.body.innerHTML;
-}
 
 export default function PrivateNotes({ storageKey, preview = false, heading }) {
     const editor = useRef(null), file = useRef(null), range = useRef(null);
@@ -30,6 +19,7 @@ export default function PrivateNotes({ storageKey, preview = false, heading }) {
         try {
             const result = await http.request("/api/v2/auth/private-note/", { method: "PUT", body: { content, version: state.version } });
             state.version = result.version;
+            if (state.pending === null && state.active && result.content !== undefined && result.content !== content && editor.current) {editor.current.innerHTML = cleanHTML(result.content); range.current = null;}
             if (state.active) setStatus(state.pending === null ? "Guardado en tu cuenta" : "Guardando…");
         } catch (failure) {
             if (state.pending === null) state.pending = content;

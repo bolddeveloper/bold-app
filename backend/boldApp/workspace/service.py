@@ -1,5 +1,6 @@
 from datetime import timedelta
 import re
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from cryptography.fernet import InvalidToken
@@ -22,7 +23,7 @@ BASES = {
     "slides": "https://slides.googleapis.com/v1",
 }
 MIMES = {"docs": "application/vnd.google-apps.document", "sheets": "application/vnd.google-apps.spreadsheet", "slides": "application/vnd.google-apps.presentation", "folder": "application/vnd.google-apps.folder"}
-FILE_FIELDS = "id,name,mimeType,parents,modifiedTime,createdTime,viewedByMeTime,size,quotaBytesUsed,description,folderColorRgb,starred,trashed,webViewLink,capabilities,owners(displayName,emailAddress),shared,version,md5Checksum"
+FILE_FIELDS = "id,name,mimeType,driveId,parents,modifiedTime,createdTime,viewedByMeTime,size,quotaBytesUsed,description,folderColorRgb,starred,trashed,webViewLink,capabilities,owners(displayName,emailAddress),shared,version,md5Checksum,hasThumbnail,thumbnailLink"
 
 
 class GoogleUnavailable(APIException):
@@ -47,9 +48,11 @@ def file_id(value):
 
 
 def access_token(user):
-    from .google_config import credentials
+    from .google_config import credentials, company_account
     identity, secret = credentials()
     connection = GoogleConnection.objects.filter(user=user).first()
+    if connection and not company_account(connection.email):
+        raise Reconnect("Conecta tu cuenta corporativa de Google.")
     if not connection:
         raise Reconnect("Conecta tu cuenta de Google para usar Drive y Docs.")
     if connection.client_id and connection.client_id != identity:
@@ -111,6 +114,34 @@ def google(user, method, path, *, api="drive", params=None, body=None, files=Non
 
 def metadata(user, identity):
     return google(user, "GET", "/files/" + file_id(identity), params={"fields": FILE_FIELDS, "supportsAllDrives": "true"})
+
+
+def thumbnail(user, identity):
+    url = metadata(user, identity).get("thumbnailLink")
+    if not url:
+        raise NotFound("Google no tiene una miniatura disponible.")
+    token = access_token(user)
+    try:
+        for _ in range(4):
+            parsed = urlsplit(url)
+            host = parsed.hostname or ""
+            if parsed.scheme != "https" or parsed.port not in (None, 443) or parsed.username or not (
+                host.endswith(".googleusercontent.com") or host in ("drive.google.com", "docs.google.com")
+            ):
+                raise ValidationError("Dirección de miniatura inválida.")
+            response = requests.get(url, headers={"Authorization": "Bearer " + token}, timeout=15, allow_redirects=False)
+            if response.is_redirect:
+                url = urljoin(url, response.headers.get("Location", ""))
+                continue
+            response.raise_for_status()
+            if response.headers.get("Content-Type", "").split(";")[0] not in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+                raise NotFound("La miniatura no está disponible.")
+            return response
+    except requests.RequestException as exc:
+        raise GoogleUnavailable() from exc
+    except ValueError as exc:
+        raise ValidationError("Dirección de miniatura inválida.") from exc
+    raise GoogleUnavailable()
 
 
 def require_capability(user, identity, capability):

@@ -37,6 +37,7 @@ from .models import (
 from .permissions import HasActiveAssignment
 from .authorization_provider import participating_projects
 from .pagination import RecentCommentPagination, RecentAttachmentPagination
+from .voice_notes import audio_response
 from .serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
@@ -358,6 +359,10 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
 
 class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    @action(detail=True, methods=["get"], url_path="voice-note")
+    def voice_note(self, request, pk=None):
+        return audio_response(self.get_object().voice_notes, request.query_params.get("note"))
+
     serializer_class = TaskSerializer
 
     def get_queryset(self):
@@ -589,10 +594,19 @@ class TaskDependencyViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet)
 
 
 class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    @action(detail=True, methods=["get"], url_path="voice-note")
+    def voice_note(self, request, pk=None):
+        return audio_response(self.get_object().voice_notes, request.query_params.get("note"))
+
     serializer_class = CommentSerializer
 
     def get_queryset(self):
         queryset = Comment.objects.all()
+        section = self.request.query_params.get("image_section")
+        if section not in (None, "comments", "timeline"):
+            raise ValidationError({"image_section": "Usa comments o timeline."})
+        if section:
+            queryset = queryset.filter(image_section=section)
         recent = self.request.query_params.get("recent")
         mine = self.request.query_params.get("mine")
         if recent not in (None, "1") or mine not in (None, "1"):
@@ -601,6 +615,8 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
         if project_ids is not None:
             # Project membership is a filter, never a grant to read its tasks.
             projects = self.visible_projects().filter(pk__in=project_ids)
+            if section == "timeline":
+                queryset = queryset.filter(image_project_id__in=project_ids)
             queryset = queryset.filter(task_id__in=TaskProject.objects.filter(project__in=projects).values("task_id"))
         if mine == "1":
             assignment = self.request.assignment

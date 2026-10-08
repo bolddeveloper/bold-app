@@ -2,6 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeHomeLayout } from "./home_layout.js";
 
+test("removes the connected team widget from saved and default layouts", () => {
+    const saved = normalizeHomeLayout([{ id: "team", type: "presence" }, { id: "notes", type: "notes" }]);
+    assert.deepEqual(saved.map(widget => widget.type), ["notes"]);
+    assert.ok(normalizeHomeLayout(null).every(widget => widget.type !== "presence"));
+    assert.ok(normalizeHomeLayout([{ id: "team", type: "presence" }]).every(widget => widget.type !== "presence"));
+});
+
 test("keeps one widget per type except navigation shortcuts", () => {
     const layout = normalizeHomeLayout([
         { id: "metrics-1", type: "metrics", metrics: ["assigned"] },

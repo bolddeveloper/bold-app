@@ -1,6 +1,14 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {filterPresence, presenceLabel, presencePatch, presenceDurations, quickPresenceStatuses, editablePresenceStatuses} from "./presence.js";
+import {filterPresence, groupPresence, presenceLabel, presencePatch, presenceDurations, quickPresenceStatuses, editablePresenceStatuses} from "./presence.js";
+
+test("groups connected people by their departments without duplicate memberships", () => {
+    const it = {id: "it", name: "IT"}, sales = {id: "sales", name: "Ventas"};
+    const rows = [{name: "Ana", status: "online", units: [it, it, sales]}, {name: "Luis", status: "busy", units: [it]}, {name: "David", status: "offline", units: [sales]}];
+    assert.deepEqual(groupPresence(rows).map(group => [group.name, group.people.length]), [["IT", 2], ["Ventas", 1]]);
+    assert.deepEqual(groupPresence(rows, "luis").map(group => [group.name, group.people[0].name]), [["IT", "Luis"]]);
+    assert.deepEqual(groupPresence([], ""), []);
+});
 test("presence writes only editable fields and durations only for away/busy", () => {
     const value = {status: "busy", duration_minutes: "30", calendar_automatic: true, expires_at: "2099-01-01", user: "other"};
     assert.deepEqual(presencePatch(value), {status: "busy", duration_minutes: 30, calendar_automatic: true, title: "", description: ""});

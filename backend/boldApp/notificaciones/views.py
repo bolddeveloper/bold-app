@@ -18,6 +18,12 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [HasActiveAssignment]
     serializer_class = NotificationSerializer
 
+    def list(self, request, *args, **kwargs):
+        # Polling also covers local development without a Celery worker.
+        from boldApp.calendario.reminders import refresh_reminders
+        refresh_reminders(request.user)
+        return super().list(request, *args, **kwargs)
+
     def _visible_ids(self, queryset, permission_code):
         permission = Permission.objects.filter(code=permission_code, is_active=True).first()
         if not permission or (permission.requires_step_up_mfa and not request_has_recent_strong_mfa(self.request)):

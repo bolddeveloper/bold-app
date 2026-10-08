@@ -8,6 +8,7 @@ EVENT_TYPES = (
     "task.assigned", "task.collaborator_added", "task.updated", "task.status_changed", "task.due_changed",
     "project.created", "project.assigned", "project.member_added", "project.updated",
     "comment.created", "comment.mentioned",
+    "calendar.meeting_reminder",
 )
 DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False,
             "events": dict.fromkeys(EVENT_TYPES, True)}

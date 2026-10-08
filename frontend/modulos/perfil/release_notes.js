@@ -1,5 +1,75 @@
-// Notas de la demo local. Añadir las nuevas entradas al principio de la lista.
+// Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
+    {
+        id: "2026-10-08-community-patch", date: "2026-10-08", category: "Parche y mejoras", icon: "update",
+        title: "Mejoras solicitadas por usuarios: tareas, imágenes y equipo conectado",
+        summary: "Cambios del 8 de octubre: sugerencias, miembros conectados, imágenes en Drive, carpetas compartidas de Workspace y correcciones para trabajar con menos interrupciones.",
+        sections: [
+            {title: "Sugerencias y reportes de usuarios", items: [
+                "Envía problemas, ideas y mejoras visuales con título, descripción, módulo, prioridad y datos del navegador o dispositivo.",
+                "Consulta tus reportes y su estado. El equipo autorizado puede revisar, priorizar y registrar el seguimiento interno.",
+                "Las imágenes se agregan directamente en la descripción. Se retiró el apartado separado de Capturas; las capturas anteriores siguen disponibles dentro de la descripción.",
+                "Se corrigió el visor de imágenes para que aparezca delante del detalle del reporte.",
+            ]},
+            {title: "Miembros conectados y personas del proyecto", items: [
+                "El botón de miembros de la barra superior abre un panel lateral animado con las personas conectadas, agrupadas por departamento y con su cantidad.",
+                "Consulta la foto de perfil, el nombre y el estado de cada persona. Busca por persona o estado desde el panel.",
+                "El panel de miembros reemplaza el widget de equipo conectado. Se ajustaron su ancho, distribución y animaciones de apertura y cierre.",
+                "Al pulsar los avatares de un proyecto se abre una ventana pequeña animada con sus miembros. Busca por nombre o correo y agrega personas desde los resultados.",
+                "La lista de personas del proyecto permite quitar miembros y desplazarse cuando hay varias personas. Se ajustó el tamaño del botón de eliminar.",
+            ]},
+            {title: "Carpetas y accesos de Workspace", items: [
+                "Agrega carpetas de Drive desde la misma ventana donde seleccionas proyectos y tareas. El selector permite buscar, navegar y crear carpetas.",
+                "Los accesos a carpetas de Drive se abren dentro del módulo Drive de BOLD. Quitar un acceso del Workspace conserva la carpeta original.",
+                "Comparte las carpetas que creaste con personas de tu departamento. Busca por nombre o correo para agregarlas y usa el botón de eliminar para quitar su acceso.",
+                "Las personas seleccionadas ven la carpeta compartida y sus subcarpetas en modo consulta. El creador controla su organización y los cambios se actualizan en segundo plano.",
+                "Compartir una carpeta de Workspace mantiene los permisos existentes de proyectos, tareas y Google Drive.",
+                "Se ajustaron los botones de eliminar para que sean compactos. Las descripciones de carpetas y la creación de proyectos ya no ofrecen adjuntar imágenes.",
+            ]},
+            {title: "Tareas, subtareas y comentarios", items: [
+                "Las tareas y los comentarios con imágenes aparecen inmediatamente para quien los envía mientras el guardado y la sincronización continúan en segundo plano.",
+                "Los comentarios nuevos permanecen abajo durante la sincronización y después de guardarse. El aviso de sincronización se muestra arriba a la derecha, sin repetirlo dentro de cada comentario.",
+                "En comentarios, Enter envía y Shift + Enter agrega un nuevo renglón.",
+                "Cada subtarea tiene un botón de eliminar. Al pulsar el resto de su fila se abren sus detalles, conservando las acciones del nombre y la casilla de completado.",
+                "El cronograma muestra únicamente los comentarios enviados desde cronograma; ya no mezcla los comentarios de las tareas.",
+                "Los paneles de crear, consultar y editar tareas y proyectos usan un ancho inicial de 600 px, con tamaño ajustable dentro de sus límites.",
+            ]},
+            {title: "Imágenes, carrusel y zoom", items: [
+                "Las imágenes de las descripciones se muestran como miniaturas pequeñas, alineadas a la izquierda y con bordes redondeados.",
+                "Pulsa una miniatura para ampliar la imagen y recorrer el carrusel. El visor conserva las proporciones de imágenes horizontales y verticales.",
+                "Amplía hasta el 400 % con los botones o la rueda del mouse. Arrastra la imagen ampliada y restablece el zoom al 100 % cuando lo necesites.",
+                "Los comentarios disponen de carrusel para consultar sus imágenes. El carrusel del cronograma respeta la separación de sus comentarios.",
+                "Se corrigieron fotos de perfil que aparecían demasiado grandes en tareas y proyectos, y problemas de superposición del visor con otras ventanas.",
+            ]},
+            {title: "Almacenamiento de imágenes en Drive", items: [
+                "Administración → Conectores permite seleccionar la carpeta de Drive donde BOLD guarda las imágenes mediante la cuenta administradora conectada.",
+                "Las imágenes se organizan en subcarpetas por módulo, proyecto, tarea y usuario, separando descripción, comentarios y cronograma.",
+                "El selector de destino permite crear carpetas desde Administración y Docs.",
+                "La conexión personal de cada usuario al módulo Drive se mantiene independiente del almacenamiento de imágenes de BOLD.",
+                "Se ajustó el guardado de tareas con imágenes para evitar esperas que bloqueaban otras acciones. Los errores de guardado conservan un borrador recuperable.",
+            ]},
+            {title: "Archivos y vistas previas de Drive", items: [
+                "Descarga carpetas como archivos ZIP desde Drive en BOLD.",
+                "Las tarjetas de archivos muestran vistas previas cuando Drive las proporciona, con un icono de respaldo cuando no están disponibles.",
+                "Las miniaturas se conservan en el navegador por cuenta y versión del archivo para reutilizarlas y cargar las nuevas o modificadas.",
+                "Se retiraron límites adicionales de BOLD para las cargas y descargas; siguen aplicándose los límites de Google y del entorno donde se utiliza la aplicación.",
+            ]},
+            {title: "Avisos y acceso a Novedades", items: [
+                "Novedades tiene un botón junto a Ayuda y una animación cuando hay una publicación nueva por consultar.",
+                "Si entras con notificaciones pendientes, BOLD reproduce el sonido una vez en Inicio, después de la animación de entrada y según tus preferencias de sonido.",
+                "Los avisos de guardado, sincronización y confirmación utilizan los tres puntos animados de BOLD en rojo, adaptados a su tamaño y con un ciclo más rápido.",
+                "Los avisos flotantes se muestran sobre los paneles y carruseles para mantenerlos visibles durante el trabajo.",
+                "Los avisos de tareas cuyo guardado no pudo confirmarse incluyen Cerrar y No volver a mostrar. Esta última opción silencia el aviso de esa tarea en el navegador sin borrar su borrador.",
+                "Se restauró el acceso a Ayuda y se ajustaron los botones superiores. La campana conserva su animación y añade el contorno del modo oscuro.",
+                "La campana repite su animación mientras hay notificaciones sin leer y muestra el mismo punto rojo que Novedades, también en móvil.",
+            ]},
+            {title: "Correcciones del editor y presentación", items: [
+                "Se ajustó el cambio de estilo de texto para conservar el renglón y la selección al editar descripciones.",
+                "Se mejoraron la alineación de avatares, las miniaturas y los paneles para mantener una presentación consistente entre módulos.",
+                "Las nuevas animaciones respetan la preferencia de movimiento reducido del dispositivo.",
+            ]},
+        ],
+    },
     {
         id: "2026-10-05-major-update", date: "2026-10-05", category: "Actualización general", icon: "update",
         title: "Gran actualización de BOLD: Drive, Docs, Calendario y Perfil",

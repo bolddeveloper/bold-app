@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { eventDay, mergeEventScopeDraft, guestSuggestions, matchesDay, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
+import { eventDay, formatCalendarTime, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
+
+test("calendar times use AM/PM in the viewer zone, including noon and midnight", () => {
+    assert.equal(formatCalendarTime("2026-10-07T06:00:00Z", "America/Tegucigalpa"), "12:00 AM");
+    assert.equal(formatCalendarTime("2026-10-07T18:00:00Z", "America/Tegucigalpa"), "12:00 PM");
+    assert.equal(formatCalendarTime("2026-10-07T23:16:00Z", "America/Tegucigalpa"), "05:16 PM");
+});
+
+test("current time follows the viewer zone, including midnight", () => {
+    const now = new Date("2026-10-07T06:00:00Z");
+    assert.equal(minutesInZone(now, "America/Tegucigalpa"), 0);
+    assert.equal(minutesInZone(now, "Asia/Tokyo"), 900);
+});
 
 test("event dates follow the connected calendar time zone and all-day end is exclusive", () => {
     const zone = "America/Tegucigalpa";

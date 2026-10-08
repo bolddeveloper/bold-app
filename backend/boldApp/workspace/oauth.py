@@ -18,7 +18,7 @@ from boldApp.autenticacion.models import AuthSession
 from boldApp.autenticacion.services import encrypt_secret
 from .models import GoogleConnection
 from .service import configured
-from .google_config import SCOPES as SERVICE_SCOPES, credentials, configuration, public_connection
+from .google_config import SCOPES as SERVICE_SCOPES, credentials, configuration, public_connection, company_account
 
 class ConnectionView(APIView):
     def get(self, request):
@@ -48,14 +48,14 @@ class StartView(APIView):
         origin = origin if origin in settings.CORS_ALLOWED_ORIGINS else settings.FRONTEND_URL.rstrip("/")
         cache.set("bold-workspace-oauth:" + nonce, str(request.auth.pk), timeout=600)
         state = signing.dumps({"session": str(request.auth.pk), "nonce": nonce, "origin": origin, "service": service, "version": config["version"]}, salt="bold-workspace")
-        return Response({"authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": identity, "redirect_uri": settings.GOOGLE_WORKSPACE_REDIRECT_URI, "response_type": "code", "scope": "openid email " + " ".join(sorted(requested_scopes)), "include_granted_scopes": "true", "access_type": "offline", "prompt": "consent select_account", "login_hint": request.user.email, "state": state})})
+        return Response({"authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": identity, "redirect_uri": settings.GOOGLE_WORKSPACE_REDIRECT_URI, "response_type": "code", "scope": "openid email " + " ".join(sorted(requested_scopes)), "include_granted_scopes": "true", "access_type": "offline", "prompt": "consent select_account", "login_hint": request.user.email, "hd": settings.GOOGLE_WORKSPACE_COMPANY_DOMAIN, "state": state})})
 
 
 def popup(status, origin=None):
     origin = origin if origin in settings.CORS_ALLOWED_ORIGINS else settings.FRONTEND_URL.rstrip("/")
     label = "Tu cuenta Google quedó conectada. Puedes volver a BOLD." if status == "connected" else "No se completó la conexión. Vuelve a BOLD e inténtalo de nuevo."
     if status == "wrong_account":
-        label = "Esta cuenta Google no está permitida en BOLD. Usa una cuenta Google del dominio empresarial autorizado."
+        label = "Esta cuenta Google no está permitida en BOLD. Usa tu cuenta corporativa de Google."
     message = json.dumps({"type": "bold:workspace", "status": status})
     return HttpResponse(f'<html lang="es"><meta charset="utf-8"><title>Conectar Google · BOLD</title><p>{label}</p><script>window.opener?.postMessage({message},{json.dumps(origin)});if({json.dumps(status)}==="connected")window.close();</script></html>')
 
@@ -92,8 +92,7 @@ class CallbackView(APIView):
             account = profile.json()
             if not account.get("email_verified") or not account.get("sub"):
                 return popup("failed", origin)
-            company = account["email"].lower().endswith("@" + settings.GOOGLE_WORKSPACE_COMPANY_DOMAIN.lower())
-            if not company:
+            if not company_account(account["email"]):
                 return popup("wrong_account", origin)
             previous = GoogleConnection.objects.filter(user=session.user_account, subject=account["sub"]).first()
             refresh = encrypt_secret(token["refresh_token"]) if token.get("refresh_token") else previous.refresh_token_encrypted if previous and previous.client_id in ("", identity) else ""

@@ -5,10 +5,14 @@ export function cleanWorkspaces(value) {
     if (!Array.isArray(value)) throw new Error("Datos de carpetas inválidos.");
     const seen = new Set();
     const ids = value => Array.isArray(value) ? [...new Set(value.filter(id => typeof id === "string" && id))] : [];
+    const driveFolders = value => [...new Map((Array.isArray(value) ? value : []).filter(folder =>
+        folder && typeof folder.id === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(folder.id)
+        && typeof folder.name === "string" && folder.name.trim()
+    ).map(folder => [folder.id, {id: folder.id, name: folder.name.trim().slice(0, 255)}])).values()];
     const items = value.flatMap(item => {
         if (!item || typeof item.id !== "string" || !item.id || seen.has(item.id) || typeof item.name !== "string" || !item.name.trim()) return [];
         seen.add(item.id);
-        return [{ id: item.id, name: item.name.trim(), parentId: typeof item.parentId === "string" ? item.parentId : null, description: typeof item.description === "string" ? item.description : "", color: /^#[\da-f]{6}$/i.test(item.color) ? item.color : "#ef1f2d", projectIds: ids(item.projectIds), taskIds: ids(item.taskIds) }];
+        return [{ id: item.id, name: item.name.trim(), parentId: typeof item.parentId === "string" ? item.parentId : null, description: typeof item.description === "string" ? item.description : "", color: /^#[\da-f]{6}$/i.test(item.color) ? item.color : "#ef1f2d", projectIds: ids(item.projectIds), taskIds: ids(item.taskIds), driveFolders: driveFolders(item.driveFolders), ...(typeof item.ownerId === "string" ? {ownerId: item.ownerId} : {}) }];
     });
     const byId = new Map(items.map(item => [item.id, item]));
     for (const item of items) {

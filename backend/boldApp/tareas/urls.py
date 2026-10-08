@@ -1,3 +1,5 @@
+from django.urls import path
+from .workspace_sharing import WorkspaceSharingView
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -36,4 +38,4 @@ router.register(r"task-tags", TaskTagViewSet, basename="task-tag")
 router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-endpoint")
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 
-urlpatterns = router.urls
+urlpatterns = [path("workspace-sharing/", WorkspaceSharingView.as_view())] + router.urls

@@ -107,11 +107,13 @@ class NotificationModuleTests(TransactionTestCase):
         Notification.objects.all().delete()
         response = self.actor_client.post("/api/v2/comments/", {
             "task": task["id"],
-            "body": "Necesito tu revisión @ana@bold.gt",
+            "body": "<!--bold-rich-text--><p>Necesito <b>tu revisión</b></p><p>@ana@bold.gt &amp; equipo</p>",
         }, format="json")
         self.assertEqual(response.status_code, 201, response.data)
         notification = Notification.objects.get(recipient_assignment=self.recipient_assignment)
         self.assertEqual(notification.type, "comment.mentioned")
+        self.assertIn("Necesito tu revisión @ana@bold.gt & equipo", notification.body)
+        self.assertNotIn("<", notification.body)
         self.assertEqual(notification.route["comment_id"], response.data["id"])
 
     def test_project_creation_notifies_its_owner(self):

@@ -13,7 +13,10 @@ class Comment(UUIDPrimaryKeyModel, SoftDeleteModel):
         on_delete=models.PROTECT,
         related_name="task_comments",
     )
-    body = models.TextField()
+    body = models.TextField(blank=True)
+    image_project_id = models.UUIDField(null=True, blank=True)
+    image_section = models.CharField(max_length=20, default="comments", choices=[("comments", "Comentarios"), ("timeline", "Cronograma")])
+    voice_notes = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

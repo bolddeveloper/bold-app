@@ -22,6 +22,11 @@ class Suggestion(UUIDPrimaryKeyModel):
         "boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, related_name="suggestions"
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    title = models.CharField(max_length=180, blank=True)
+    priority = models.CharField(max_length=10, choices=[("low", "Baja"), ("medium", "Media"), ("high", "Alta")], default="medium")
+    environment = models.CharField(max_length=160, blank=True)
+    # ponytail: up to 900 KB per report; move image bytes to object storage if volume grows.
+    screenshots = models.JSONField(default=list, blank=True)
     message = models.TextField(max_length=2000)
     source_module = models.CharField(max_length=50, blank=True)
     source_view = models.CharField(max_length=80, blank=True)

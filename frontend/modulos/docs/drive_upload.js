@@ -11,7 +11,6 @@ export async function uploadDriveFiles(items, destination, {signal, status, api 
     for (let index = 0; index < items.length; index++) {
         if (signal.aborted) {status(index, "cancelado"); continue;}
         const file = items[index];
-        if (file.size > 20 * 1024 * 1024) {status(index, "error", "Supera 20 MB."); continue;}
         status(index, "subiendo");
         try {
             let key = "", target = destination;

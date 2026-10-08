@@ -1,13 +1,13 @@
 import json
 import re
 from datetime import datetime
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from boldApp.administrativo.services import record_system_event
-from .service import FILE_FIELDS, MIMES, google, file_id, metadata, require_capability
+from .service import FILE_FIELDS, MIMES, google, file_id, metadata, require_capability, thumbnail
 
 
 def audit(request, action, identity):
@@ -120,8 +120,8 @@ class CopyView(APIView):
 class UploadView(APIView):
     def post(self, request):
         upload = request.FILES.get("file")
-        if not upload or upload.size > 20 * 1024 * 1024:
-            raise ValidationError("Elige un archivo de hasta 20 MB.")
+        if not upload:
+            raise ValidationError("Elige un archivo para subir.")
         info = {"name": upload.name[:255]}
         if request.data.get("parent"):
             info["parents"] = [file_id(request.data["parent"])]
@@ -137,6 +137,11 @@ class UploadView(APIView):
 class DownloadView(APIView):
     def get(self, request, identity):
         item = require_capability(request.user, identity, "canDownload")
+        if item["mimeType"] == MIMES["folder"]:
+            from .folder_archive import folder_archive, archive_name
+            response = FileResponse(folder_archive(request.user, item), as_attachment=True, filename=archive_name(item["name"]) + ".zip", content_type="application/zip")
+            response["Cache-Control"] = "private, no-store"
+            return response
         kind = next((key for key, mime in MIMES.items() if mime == item["mimeType"]), None)
         exports = {"docs": {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}, "sheets": {"pdf": "application/pdf", "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}, "slides": {"pdf": "application/pdf", "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"}}
         from .office import office_kind, office_workspace
@@ -160,6 +165,15 @@ class DownloadView(APIView):
             result = google(request.user, "GET", "/files/" + file_id(identity), params={"alt": "media", "supportsAllDrives": "true"}, raw=True)
         response = HttpResponse(result.content, content_type=result.headers.get("Content-Type", "application/octet-stream"))
         response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class ThumbnailView(APIView):
+    def get(self, request, identity):
+        result = thumbnail(request.user, identity)
+        response = HttpResponse(result.content, content_type=result.headers["Content-Type"])
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 

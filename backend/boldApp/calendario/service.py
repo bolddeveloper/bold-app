@@ -51,7 +51,7 @@ def validate_event(data):
         if key in result and not isinstance(result[key], bool):
             raise ValidationError({key: "Valor inválido."})
     for key in ("summary", "description", "location"):
-        if key in result and (not isinstance(result[key], str) or len(result[key]) > (200 if key == "summary" else 8000)):
+        if key in result and (not isinstance(result[key], str) or len(result[key]) > (200 if key == "summary" else 2_000_000 if key == "description" else 8000)):
             raise ValidationError({key: "Texto inválido o demasiado largo."})
     for key in ("start", "end"):
         if key in result:

@@ -1,6 +1,24 @@
 export const notificationSounds = [["samsung", "Silbido Samsung"], ["post", "Nueva publicación"], ["melody", "SMS melódico"], ["delivered", "Mensaje entregado"], ["facebook", "Mensaje Facebook"]];
 export const defaultNotificationSettings = {enabled: true, sound: "post", volume: 60, custom_audio: "", custom_name: "", desktop_enabled: false};
 let audio, customTimer;
+
+export function createEntryNotificationSound({play = playNotificationSound, target = document, visible = () => !document.hidden} = {}) {
+    let rows = null, settings = null, finished = false, playing = false;
+    const events = ["pointerdown", "keydown", "visibilitychange"];
+    const dispose = () => { finished = true; events.forEach(event => target.removeEventListener(event, attempt)); };
+    async function attempt() {
+        if (finished || playing || !rows || !settings) return;
+        if (!rows.some(row => !row.is_read) || !settings.enabled || !settings.volume) { dispose(); return; }
+        if (!visible()) return;
+        playing = true;
+        try { await play(settings); dispose(); }
+        catch (error) { if (error.name !== "NotAllowedError") dispose(); }
+        finally { playing = false; }
+    }
+    events.forEach(event => target.addEventListener(event, attempt));
+    return { update(nextRows, nextSettings) { rows = nextRows; settings = nextSettings; return attempt(); }, dispose };
+}
+
 export function stopNotificationSound() {clearTimeout(customTimer); if (audio) {audio.pause(); audio = null;}}
 export async function playNotificationSound(settings = defaultNotificationSettings) {
     if (!settings.enabled || !settings.volume) return;
