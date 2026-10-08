@@ -1,4 +1,5 @@
 import WorkspaceShareDialog from "./workspace_share_dialog.jsx";
+import {removePersonAssignments} from "../../core/shared/people.js";
 import {useShell} from "../../core/app_shell.jsx";
 import {useCore} from "../../core/core_provider.jsx";
 import {membersForUnit} from "./services/task_models.js";
@@ -54,7 +55,7 @@ export default function WorkspacesModule({ accountId, shareRecords = [], onShare
     async function changeSharing(person, remove = false) {
         if (sharingBusy.current) return;
         sharingBusy.current = true; setSharing(true); setError("");
-        try {await onShare(shareFolder, remove ? shareIds.filter(id => id !== person.id) : [...new Set([...shareIds, person.id])]);}
+        try {await onShare(shareFolder, remove ? removePersonAssignments(shareIds, person.id, departmentMembers) : [...new Set([...shareIds, person.id])]);}
         catch (problem) {setError(problem.message);}
         finally {sharingBusy.current = false; setSharing(false);}
     }

@@ -439,3 +439,14 @@ El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracio
 - Publicados el directorio con personas desconectadas, prioridad del departamento activo y filtro por departamento.
 - Portada, JavaScript y CSS respondieron HTTP 200. Health confirmo PostgreSQL y Redis disponibles; la sesion anonima continuo sin autenticar.
 - No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario.
+
+### Tercera entrega del 8 de octubre de 2026: vistas locales y sincronizacion
+
+- Rama `Develop`, commit `d5debeafc0aa668aaf1136bb9b578b90efcfd500`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T152936Z.dump`.
+- Oracle: backend y Celery reconstruidos y recreados; servicios saludables. Migracion de tareas `0013_personaltaskboard` aplicada, sin migraciones pendientes.
+- Cloudflare Worker `boldapp`: version `00fe763f-5920-4441-b721-a2cfec508311`.
+- Publicadas las vistas locales por cuenta y cargo, sincronizacion en segundo plano, avisos flotantes, secciones personales, presencia por WebSocket, tutorial manual y selector de estados de Bandeja IT.
+- Compilacion de produccion completada con backend real y API en el mismo origen. Portada, JavaScript y CSS con HTTP 200; health confirmo PostgreSQL y Redis disponibles; sesion anonima sin autenticar.
+- Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`.
+- No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se modifico Google Cloud.

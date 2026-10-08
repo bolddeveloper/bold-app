@@ -1,4 +1,5 @@
 import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
+import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/shared/people.js";
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
@@ -510,10 +511,11 @@ function select_color(variant, value) {
 }
 
 function TaskSelect({ aria_label, class_name = "", default_value, disabled = false, name, on_change = () => {}, options = [], stop_propagation = false, value, variant = "neutral" }) {
-    const normalized_options = options.map(option => typeof option === "object" ? option : { value: option, label: option });
+    let normalized_options = options.map(option => typeof option === "object" ? option : { value: option, label: option });
     const controlled = value !== undefined;
     const [local_value, set_local_value] = use_state(default_value ?? normalized_options[0]?.value ?? "");
     const selected_value = controlled ? value : local_value;
+    if (variant === "person") normalized_options = uniquePeople(normalized_options.map(option => ({...(option.member || team_members.find(member => String(member.id) === String(option.value))), id: option.value, option})), [selected_value]).map(person => person.option);
     const selected_option = normalized_options.find(option => String(option.value) === String(selected_value)) || normalized_options[0] || { value: "", label: "Seleccionar" };
     const [is_open, set_is_open] = use_state(false);
     const [active_index, set_active_index] = use_state(0);
@@ -644,15 +646,15 @@ function ProjectMembersButton({project}) {
     const real = is_using_real_backend();
     if (real && !Array.isArray(project.member_ids)) return null;
     const members = real ? membersForUnit(core.directory, project.unitId || project.unit) : team_members;
-    const assigned = members.filter(member => project.member_ids?.includes(member.id) || project.owner_assignment === member.id);
+    const assigned = uniquePeople(members.filter(member => project.member_ids?.includes(member.id) || project.owner_assignment === member.id), [project.owner_assignment, ...(project.member_ids || [])]);
     const text = normalizeSearchText(query);
     const matches = member => normalizeSearchText(`${member.name} ${member.email || ""}`).includes(text);
-    const candidates = text ? members.filter(member => !assigned.some(person => person.id === member.id) && matches(member)) : [];
+    const candidates = text ? uniquePeople(members.filter(member => !assigned.some(person => personIdentity(person) === personIdentity(member)) && matches(member))) : [];
     async function updateMember(member, remove = false) {
         if (saving.current) return;
         saving.current = true; setBusy(true);
         try {
-            const ids = remove ? (project.member_ids || []).filter(id => id !== member.id) : [...new Set([...(project.member_ids || []), member.id])];
+            const ids = remove ? removePersonAssignments(project.member_ids || [], member.id, members) : [...new Set([...(project.member_ids || []), member.id])];
             await actions.saveProjectMembers(ids, project.id);
         }
         finally { saving.current = false; setBusy(false); }
@@ -1506,9 +1508,9 @@ function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, sel
     const [position, set_position] = use_state({ visibility: "hidden" });
     const popover = use_ref(null);
     const normalized = query.trim().toLocaleLowerCase("es");
-    const visible = team_members.filter(member => draft_ids.includes(member.id) || (normalized
+    const visible = uniquePeople(team_members.filter(member => draft_ids.includes(member.id) || (normalized
         ? member.name.toLocaleLowerCase("es").includes(normalized)
-        : !task.unitId || String(member.unitId) === String(task.unitId)));
+        : !task.unitId || String(member.unitId) === String(task.unitId))), [...draft_ids, ...team_members.filter(member => String(member.unitId) === String(task.unitId)).map(member => member.id)]);
     use_effect(() => {
         const place = () => {
             if (!anchor?.isConnected || !popover.current) return;
@@ -1529,7 +1531,7 @@ function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, sel
         <div className="quick_people_list">
         {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => set_draft_ids([])}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!draft_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
         {visible.map(member => <button type="button" className="quick_popover_item_btn" key={member.id} onClick={() => {
-            set_draft_ids(current => multiple ? current.includes(member.id) ? current.filter(id => id !== member.id) : [...current, member.id] : [member.id]);
+            set_draft_ids(current => multiple ? current.includes(member.id) ? removePersonAssignments(current, member.id, team_members) : [...current, member.id] : [member.id]);
         }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{draft_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
         {!visible.length && <p className="quick_people_empty">No se encontraron personas.</p>}
         </div>
@@ -1918,7 +1920,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [], members = team_me
 
     function toggle_member(member_id) {
         if (selected_ids.includes(member_id)) {
-            on_change(selected_ids.filter((id) => id !== member_id));
+            on_change(removePersonAssignments(selected_ids, member_id, members));
         } else {
             on_change([...selected_ids, member_id]);
         }
@@ -1926,11 +1928,11 @@ function CollaboratorsSelector({ on_change, selected_ids = [], members = team_me
 
     function remove_member(e, member_id) {
         e.stopPropagation();
-        on_change(selected_ids.filter((id) => id !== member_id));
+        on_change(removePersonAssignments(selected_ids, member_id, members));
     }
 
-    const assigned_members = selected_ids.map((id) => members.find(member => member.id === id)).filter(Boolean);
-    const visible_members = members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const assigned_members = uniquePeople(selected_ids.map((id) => members.find(member => member.id === id)).filter(Boolean), selected_ids);
+    const visible_members = uniquePeople(members.filter(member => selected_ids.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase())), selected_ids);
 
     return (
         <div className={`bold_field_group collaborators_field_group ${collapsible && !is_expanded ? "is_collapsed" : ""}`}>
@@ -3913,10 +3915,10 @@ function render_share_modal(set_active_modal, project, onMembers, onError) {
 function ShareProjectModal({ project, members, onClose, onSave, onError, pending }) {
     const [query, setQuery] = use_state("");
     const [selected, setSelected] = use_state(() => (project?.member_ids || []).filter(id => members.some(member => member.id === id)));
-    const visible = members.filter(member => selected.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const visible = uniquePeople(members.filter(member => selected.includes(member.id) || `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase())), selected);
     const url = new URL(window.location.href);
     if (project?.id) url.searchParams.set("project", project.id);
-    const toggle = id => setSelected(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
+    const toggle = id => setSelected(ids => ids.includes(id) ? removePersonAssignments(ids, id, members) : [...ids, id]);
     return <div className="modal_overlay"><section className="form_modal share_modal" role="dialog" aria-modal="true" aria-label="Compartir proyecto">
         <header className="modal_header"><h2>Compartir "{project?.label}"</h2><button type="button" aria-label="Cerrar" onClick={onClose}>{render_icon(x_icon, 22)}</button></header>
         <div className="share_content">
@@ -4036,7 +4038,7 @@ function render_project_modal(props) {
                                 set_project_owner_assignment_id(people[0]?.id || "");
                                 set_project_people_ids([]);
                             }} options={(props.units || []).map(unit => ({ value: unit.id, label: unit.name }))} /></label>
-                            <label>Responsable<TaskSelect aria_label="Responsable del proyecto" name="project_owner_assignment" value={project_owner_assignment_id} on_change={set_project_owner_assignment_id} options={unit_people.map(person => ({ value: person.id, label: person.name, description: person.job_role_title }))} /></label>
+                            <label>Responsable<TaskSelect aria_label="Responsable del proyecto" variant="person" name="project_owner_assignment" value={project_owner_assignment_id} on_change={set_project_owner_assignment_id} options={unit_people.map(person => ({ value: person.id, label: person.name, description: person.job_role_title, member: person }))} /></label>
                         </div>
                         {!unit_people.length && <p>No hay una plaza activa en este departamento para responsabilizarse del proyecto.</p>}
                     </section>}
