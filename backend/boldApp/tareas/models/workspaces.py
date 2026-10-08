@@ -13,3 +13,9 @@ class SharedWorkspaceFolder(UUIDPrimaryKeyModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["owner", "unit", "folder_id"], name="unique_shared_workspace_owner_folder")]
+
+
+class PersonalTaskBoard(models.Model):
+    assignment = models.OneToOneField("boldApp_core.PositionAssignment", primary_key=True, on_delete=models.CASCADE)
+    sections = models.JSONField(default=list)
+    task_sections = models.JSONField(default=dict)

@@ -1,3 +1,7 @@
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
+import {backgroundRefresh} from "../core/google_cache.js";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import { BoldSelect } from "../core/shared/bold_select.jsx";
 import { AvatarImage } from "../core/shared/avatar_image.jsx";
 import { TaskText, TaskTextEditor } from "../tareas/src/task_text_editor.jsx";
 import { plainRichText } from "../tareas/src/rich_text.js";
@@ -99,6 +103,9 @@ export default function SuggestionsModule() {
     const [loading, setLoading] = useState(true), [error, setError] = useState(""), [notice, setNotice] = useState("");
     const [busy, setBusy] = useState(false), [selected, setSelected] = useState(null), [revision, setRevision] = useState(0), [formVersion, setFormVersion] = useState(0);
     const assignmentId = core.activeAssignment?.id;
+    const cacheScope = moduleScope(core);
+    const [refreshing, setRefreshing] = useState(false);
+    const displayedCacheKey = useRef("");
     useEffect(() => {
         let active = true;
         setSelected(null); setTab("new"); setPage(1); setFilters(emptyFilters); setSearch(""); setCanManage(Boolean(core.account?.is_superuser));
@@ -111,12 +118,18 @@ export default function SuggestionsModule() {
     }, [search]);
     useEffect(() => {
         if (tab === "new") return;
-        const controller = new AbortController(); setLoading(true); setError("");
+        const cacheKey = `suggestions:${tab}:${page}:${JSON.stringify(filters)}`;
+        const saved = moduleCache.read(cacheScope, cacheKey), cacheGeneration = moduleCache.generation;
+        const controller = new AbortController();
+        if (saved) setResult(saved);
+        else if (displayedCacheKey.current !== cacheKey) setResult({results: [], count: 0, next: null});
+        setLoading(!saved && displayedCacheKey.current !== cacheKey); displayedCacheKey.current = cacheKey; setRefreshing(true); setError("");
         suggestionsApi.list({ ...filters, page, ...(tab === "mine" ? { author_assignment: assignmentId } : {}) }, { signal: controller.signal }).then(data => {
-            if (!controller.signal.aborted) setResult(data);
-        }).catch(caught => { if (caught.name !== "AbortError") { if (caught.status === 404 && page > 1) setPage(current => current - 1); else setError(readableError(caught)); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+            if (!controller.signal.aborted) { setResult(data); moduleCache.write(cacheScope, cacheKey, data, cacheGeneration); }
+        }).catch(caught => { if (caught.name !== "AbortError") { if ([401, 403].includes(caught.status)) {moduleCache.invalidate(cacheScope, "suggestions:"); setResult({results: [], count: 0, next: null});} if (caught.status === 404 && page > 1) setPage(current => current - 1); else setError(readableError(caught)); } }).finally(() => { if (!controller.signal.aborted) {setLoading(false); setRefreshing(false);} });
         return () => controller.abort();
     }, [tab, filters, page, assignmentId, revision]);
+    useEffect(() => { if (tab !== "new") return backgroundRefresh(() => setRevision(current => current + 1), {interval: 300000}); }, [tab]);
     const filter = (name, value) => { setFilters(current => ({ ...current, [name]: value })); setPage(1); };
     const resetFilters = () => { setFilters(emptyFilters); setSearch(""); setPage(1); };
     const changeTab = value => { setTab(value); resetFilters(); setError(""); };
@@ -125,29 +138,42 @@ export default function SuggestionsModule() {
         setBusy(true); setNotice("");
         try {
             const created = await suggestionsApi.create(payload);
+            moduleCache.invalidate(cacheScope, "suggestions:");
             setFormVersion(current => current + 1); setNotice(`Reporte ${referenceOf(created)} enviado. Puedes seguirlo en Mis reportes.`); setRevision(current => current + 1);
         } finally { setBusy(false); }
     }
     async function update(payload, review = false) {
         setBusy(true); setNotice("");
-        try { const updated = await (review ? suggestionsApi.review : suggestionsApi.update)(selected.id, payload); setSelected(updated); setRevision(current => current + 1); setNotice(review ? "Seguimiento actualizado." : "Reporte actualizado."); }
+        try { const updated = await (review ? suggestionsApi.review : suggestionsApi.update)(selected.id, payload); moduleCache.invalidate(cacheScope, "suggestions:"); setSelected(updated); setRevision(current => current + 1); setNotice(review ? "Seguimiento actualizado." : "Reporte actualizado."); }
         finally { setBusy(false); }
     }
     async function remove() {
         setBusy(true); setError("");
-        try { await suggestionsApi.remove(selected.id); setSelected(null); setRevision(current => current + 1); setNotice("Reporte eliminado."); }
+        try { await suggestionsApi.remove(selected.id); moduleCache.invalidate(cacheScope, "suggestions:"); setSelected(null); setRevision(current => current + 1); setNotice("Reporte eliminado."); }
+        finally { setBusy(false); }
+    }
+    async function changeStatus(row, status) {
+        if (busy || status === row.status) return;
+        setBusy(true); setError(""); setNotice("");
+        try {
+            await suggestionsApi.review(row.id, { status });
+            moduleCache.invalidate(cacheScope, "suggestions:");
+            setRevision(current => current + 1);
+            setNotice("Estado actualizado.");
+        } catch (caught) { setError(readableError(caught)); }
         finally { setBusy(false); }
     }
     return <div className="suggestions_module">
+        <BackgroundSyncNotice active={refreshing && tab !== "new"} label="Actualizando reportes…" />
         <header className="suggestions_header"><div><span className="suggestions_eyebrow"><Bug size={14} /> MEJORA CONTINUA</span><h1>Sugerencias y reportes</h1><p>Ayúdanos a hacer BOLD mejor, un detalle a la vez.</p></div>{tab !== "new" && <div className="suggestions_header_actions"><button type="button" aria-label="Actualizar reportes" disabled={loading} onClick={() => setRevision(current => current + 1)}><RefreshCw size={17} /></button><button type="button" className="suggestions_primary" onClick={() => changeTab("new")}><Plus size={17} />Nuevo reporte</button></div>}</header>
         <nav className="suggestions_tabs" aria-label="Vistas de sugerencias"><button type="button" aria-current={tab === "new" ? "page" : undefined} onClick={() => changeTab("new")}><Plus size={16} />Nuevo reporte</button><button type="button" aria-current={tab === "mine" ? "page" : undefined} onClick={() => changeTab("mine")}><Lightbulb size={16} />Mis reportes</button>{canManage && <button type="button" aria-current={tab === "it" ? "page" : undefined} onClick={() => changeTab("it")}><Inbox size={16} />Bandeja IT</button>}</nav>
         {notice && <div className="suggestions_success" role="status"><CheckCircle2 size={18} /><span>{notice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setNotice("")}><X size={16} /></button></div>}
         {error && <p className="suggestions_error" role="alert">{error}</p>}
         {tab === "new" ? <div className="suggestions_compose_layout"><ReportForm key={`${assignmentId}-${formVersion}`} busy={busy} onSave={create} /><aside className="suggestions_tips"><span className="suggestions_tip_icon"><Lightbulb size={23} /></span><h2>Los detalles hacen la diferencia</h2><p>Tu reporte llega al equipo de IT con el contexto que necesita para ayudarte.</p><ol><li><strong>Un título concreto</strong><span>Resume el problema o la idea en una frase.</span></li><li><strong>Cuéntanos cómo ocurre</strong><span>Incluye los pasos y el resultado que esperabas.</span></li><li><strong>Muéstranos el detalle</strong><span>Una captura ayuda a entenderlo más rápido.</span></li></ol><div className="suggestions_tip_footer"><CheckCircle2 size={17} /><p>Consulta el avance en <button type="button" onClick={() => changeTab("mine")}>Mis reportes</button>.</p></div></aside></div> : <section className="suggestions_board" aria-label={tab === "it" ? "Bandeja IT" : "Mis reportes"}>
-            <div className="suggestions_board_heading"><div><h2>{tab === "it" ? "Bandeja IT" : "Mis reportes"}</h2><p>{loading ? "Cargando…" : `${result.count} reporte${result.count === 1 ? "" : "s"}`}{tab === "it" && " · dentro de tu alcance de permisos"}</p></div><label className="suggestions_sort">Ordenar<select aria-label="Ordenar reportes" value={filters.order} onChange={event => filter("order", event.target.value)}><option value="newest">Más recientes</option><option value="oldest">Más antiguos</option><option value="priority">Mayor prioridad</option></select></label></div>
+            <div className="suggestions_board_heading"><div><h2>{tab === "it" ? "Bandeja IT" : "Mis reportes"}</h2><p>{`${result.count} reporte${result.count === 1 ? "" : "s"}`}{tab === "it" && " · dentro de tu alcance de permisos"}</p></div><label className="suggestions_sort">Ordenar<select aria-label="Ordenar reportes" value={filters.order} onChange={event => filter("order", event.target.value)}><option value="newest">Más recientes</option><option value="oldest">Más antiguos</option><option value="priority">Mayor prioridad</option></select></label></div>
             <div className="suggestions_toolbar"><label className="suggestions_search"><Search size={18} /><input type="search" aria-label="Buscar reportes" maxLength={120} value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar título, detalle, persona o referencia…" /></label><select aria-label="Filtrar por estado" value={filters.status} onChange={event => filter("status", event.target.value)}><option value="">Todos los estados</option>{options(statuses)}</select><select aria-label="Filtrar por prioridad" value={filters.priority} onChange={event => filter("priority", event.target.value)}><option value="">Toda prioridad</option>{options(priorities)}</select><details className="suggestions_filter_panel"><summary><SlidersHorizontal size={16} />Filtros{activeFilters > 0 && <span>{activeFilters}</span>}</summary><div><label>Tipo<select value={filters.category} onChange={event => filter("category", event.target.value)}><option value="">Todos los tipos</option>{options(categories)}</select></label><label>Módulo<select value={filters.source_module} onChange={event => filter("source_module", event.target.value)}><option value="">Todos los módulos</option>{options(modules)}</select></label>{tab === "it" && <label>Unidad<select value={filters.unit} onChange={event => filter("unit", event.target.value)}><option value="">Todas las unidades</option>{(core.units || []).map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>}<label>Desde<input type="date" value={filters.from} max={filters.to || undefined} onChange={event => filter("from", event.target.value)} /></label><label>Hasta<input type="date" value={filters.to} min={filters.from || undefined} onChange={event => filter("to", event.target.value)} /></label><button type="button" onClick={resetFilters}>Limpiar filtros</button></div></details></div>
             <div className="suggestions_status_chips" aria-label="Estados rápidos">{[["", "Todos"], ...Object.entries(statuses)].map(([value, label]) => <button type="button" key={value} aria-pressed={filters.status === value} onClick={() => filter("status", value)}>{label}</button>)}{(activeFilters > 0 || filters.search) && <button type="button" className="suggestions_reset" onClick={resetFilters}><X size={13} />Limpiar</button>}</div>
-            <div className="suggestions_report_list" aria-busy={loading}>{loading ? <div className="suggestions_empty"><RefreshCw size={25} /><h3>Cargando reportes…</h3></div> : result.results.length === 0 ? <div className="suggestions_empty"><Inbox size={32} /><h3>{activeFilters || filters.search ? "No encontramos reportes" : "Aún no hay reportes"}</h3><p>{activeFilters || filters.search ? "Prueba otros filtros o una búsqueda distinta." : "Las ideas y problemas aparecerán aquí."}</p>{(activeFilters > 0 || filters.search) && <button type="button" onClick={resetFilters}>Limpiar filtros</button>}</div> : result.results.map(row => { const Icon = categoryIcons[row.category] || CircleHelp; return <button type="button" key={row.id} className="suggestions_report_row" onClick={() => setSelected(row)} aria-label={`Abrir ${referenceOf(row)}: ${titleOf(row)}`}><span className="suggestions_report_icon" data-category={row.category}><Icon size={20} /></span><span className="suggestions_report_main"><span className="suggestions_report_title"><small>{referenceOf(row)}</small><strong>{titleOf(row)}</strong></span><span className="suggestions_report_preview">{plainRichText(row.message)}</span><span className="suggestions_report_meta">{row.author_name} <i>·</i> {modules[row.source_module] || row.source_module || "General"} <i>·</i> {dateOf(row.created_at)}</span></span><span className="suggestions_report_labels"><Badge kind="priority" value={row.priority}>{priorities[row.priority || "medium"]}</Badge><Badge kind="status" value={row.status}>{statuses[row.status]}</Badge></span><ChevronRight size={17} className="suggestions_row_arrow" /></button>; })}</div>
+            <div className="suggestions_report_list" aria-busy={loading}>{loading ? <div className="suggestions_empty" aria-busy="true" /> : result.results.length === 0 ? <div className="suggestions_empty"><Inbox size={32} /><h3>{activeFilters || filters.search ? "No encontramos reportes" : "Aún no hay reportes"}</h3><p>{activeFilters || filters.search ? "Prueba otros filtros o una búsqueda distinta." : "Las ideas y problemas aparecerán aquí."}</p>{(activeFilters > 0 || filters.search) && <button type="button" onClick={resetFilters}>Limpiar filtros</button>}</div> : result.results.map(row => { const Icon = categoryIcons[row.category] || CircleHelp; return <div key={row.id} className="suggestions_report_row"><button type="button" className="suggestions_report_open" onClick={() => setSelected(row)} aria-label={`Abrir ${referenceOf(row)}: ${titleOf(row)}`}><span className="suggestions_report_icon" data-category={row.category}><Icon size={20} /></span><span className="suggestions_report_main"><span className="suggestions_report_title"><small>{referenceOf(row)}</small><strong>{titleOf(row)}</strong></span><span className="suggestions_report_preview">{plainRichText(row.message)}</span><span className="suggestions_report_meta">{row.author_name} <i>·</i> {modules[row.source_module] || row.source_module || "General"} <i>·</i> {dateOf(row.created_at)}</span></span></button><div className="suggestions_report_labels"><Badge kind="priority" value={row.priority}>{priorities[row.priority || "medium"]}</Badge>{tab === "it" && row.can_manage ? <fieldset className="suggestions_status_select" disabled={busy} aria-busy={busy}><BoldSelect label={`Cambiar estado de ${referenceOf(row)}`} value={row.status} options={Object.entries(statuses).map(([value, label]) => ({ value, label: <Badge kind="status" value={value}>{label}</Badge> }))} onValueChange={value => changeStatus(row, value)} /></fieldset> : <Badge kind="status" value={row.status}>{statuses[row.status]}</Badge>}</div><button type="button" className="suggestions_report_arrow" aria-label={`Ver ${referenceOf(row)}`} onClick={() => setSelected(row)}><ChevronRight size={17} className="suggestions_row_arrow" /></button></div>; })}</div>
             <footer className="suggestions_pagination"><span>{result.count > 0 && !loading ? `${(page - 1) * 25 + 1}–${Math.min(page * 25, result.count)} de ${result.count}` : "0 reportes"}</span><div><button type="button" aria-label="Página anterior" disabled={page === 1 || loading} onClick={() => setPage(current => current - 1)}><ArrowLeft size={16} /></button><span>Página {page}</span><button type="button" aria-label="Página siguiente" disabled={!result.next || loading} onClick={() => setPage(current => current + 1)}><ArrowRight size={16} /></button></div></footer>
         </section>}
         {selected && <ReportDetail key={`${assignmentId}-${selected.id}`} row={selected} owner={String(selected.author_assignment) === String(assignmentId)} busy={busy} onReview={payload => update(payload, true)} onEdit={payload => update(payload)} onRemove={remove} onClose={() => setSelected(null)} />}

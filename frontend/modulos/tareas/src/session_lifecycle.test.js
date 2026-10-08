@@ -10,6 +10,14 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 const options = { coordinatorOptions: { delayMs: 0 } };
 const refresh = store => store.refresh({ immediate: true });
 
+test("cached notifications appear immediately and disappear when authorization becomes uncertain", async () => {
+    const store = createSessionNotifications({...options, initialRows: [{id: "cached", is_read: false}], client: {list: async () => []}});
+    assert.equal(store.getRows()[0].id, "cached");
+    await store.invalidate({uncertain: true});
+    assert.deepEqual(store.getRows(), []);
+    store.dispose();
+});
+
 test("sibling views and validated saved navigation do not bootstrap Tareas", () => {
     for (const module of ["administration", "permissions", "suggestions", "calendar"]) assert.equal(requiresTaskData(module), false);
     for (const module of ["home", "tasks", "projects", "department_projects", "inbox", "workspaces", "reports"]) assert.equal(requiresTaskData(module), true);

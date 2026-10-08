@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {moduleCache, moduleScope} from "./module_cache.js";
 import { http, is_using_real_backend } from "./http_client.js";
 import { coreApi } from "./core_api.js";
 import { normalizeAssignment, selectEntranceAssignment } from "./core_models.js";
@@ -203,10 +204,14 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         if (!real || state.sessionStatus !== "ready" || !state.activeAssignment?.id) return undefined;
         const assignmentId = state.activeAssignment.id;
         let mounted = true;
+        const cacheScope = moduleScope(state);
+        const savedNotifications = moduleCache.read(cacheScope, "notifications");
+        const cachedRows = !state.securityUncertain && Array.isArray(savedNotifications) ? savedNotifications : [];
+        setNotificationSnapshot({assignmentId, rows: cachedRows, error: ""});
         const report = error => {
             if (mounted && error?.name !== "AbortError") setNotificationSnapshot(current => ({ assignmentId, rows: current.assignmentId === assignmentId ? current.rows : [], error: error?.message || String(error) }));
         };
-        let soundSettings = defaultNotificationSettings, settingsLoaded = false, previousRows = null;
+        let soundSettings = defaultNotificationSettings, settingsLoaded = false, previousRows = cachedRows.length ? cachedRows : null;
         let homeReady = false;
         const entrySound = createEntryNotificationSound({visible: () => homeReady && !document.hidden});
         const homeEntrance = event => {
@@ -218,7 +223,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted) {soundSettings = value; settingsLoaded = true; entrySound.update(previousRows, soundSettings);}}).catch(() => {});
         const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; entrySound.update(previousRows, soundSettings);};
         window.addEventListener("bold:notification-sound-changed", changeSound);
-        const store = createSessionNotifications({ onChange: rows => {
+        const store = createSessionNotifications({initialRows: cachedRows, onChange: rows => {
             if (mounted) {
                 if (containsNewUnreadNotification(previousRows, rows)) window.dispatchEvent(new Event("bold:notification-arrived"));
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
@@ -229,6 +234,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
                 previousRows = rows;
                 if (settingsLoaded) entrySound.update(rows, soundSettings);
                 setNotificationSnapshot({ assignmentId, rows, error: "" });
+                if (!getCoreState().securityUncertain) moduleCache.write(cacheScope, "notifications", rows);
             }
         } });
         notificationController.current = store;

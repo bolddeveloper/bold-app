@@ -9,8 +9,9 @@ from boldApp.core.events import build_event_envelope
 from boldApp.core.security_control import security_snapshot as sync_security_snapshot
 
 security_snapshot = database_sync_to_async(sync_security_snapshot)
-from boldApp.autenticacion.presence import heartbeat_snapshot
+from boldApp.autenticacion.presence import heartbeat_snapshot, disconnect_presence
 presence_snapshot = database_sync_to_async(heartbeat_snapshot)
+presence_disconnected = database_sync_to_async(disconnect_presence)
 
 
 @database_sync_to_async
@@ -115,6 +116,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                 pass
         for group in getattr(self, "groups_joined", ()):
             await self.channel_layer.group_discard(group, self.channel_name)
+        if hasattr(self, "session_id"):
+            await presence_disconnected(self.session_id, self.channel_name)
 
     async def send_control(self, event_type="control.ready", force=False):
         snapshot = await security_snapshot(self.session_id, self.assignment_id)
@@ -127,7 +130,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.control_state = (snapshot["revision"], snapshot["state"])
         self.next_check_seconds = max(0.05, min(30, snapshot["boundary_ms"] / 1000))
         self.control_sequence += 1
-        presence = await presence_snapshot(self.session_id)
+        presence = await presence_snapshot(self.session_id, self.channel_name)
         await self.send_json(build_event_envelope(
             event_type, "security_control", self.control_channel,
             {**snapshot, "presence": presence, "assignment": self.assignment_id, "sequence": self.control_sequence,

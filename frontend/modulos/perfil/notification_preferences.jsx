@@ -1,6 +1,8 @@
 import {useEffect, useRef, useState} from "react";
 import {Play, Upload, Volume2} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import {http} from "../core/http_client.js";
 import {notificationSounds, playNotificationSound, stopNotificationSound} from "../core/notification_sound.js";
 const endpoint = "/api/v2/auth/notification-settings/";
@@ -15,9 +17,11 @@ export const notificationEvents = [
 export default function NotificationPreferences() {
     const core = useCore();
     const [permission, setPermission] = useState(globalThis.Notification?.permission || "unsupported");
-    const [settings, setSettings] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+    const cacheScope = moduleScope(core);
+    const [settings, setSettings] = useState(() => moduleCache.read(cacheScope, "notification-settings")), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+    const [refreshing, setRefreshing] = useState(false), settingsRef = useRef(settings); settingsRef.current = settings;
     const file = useRef(null), alive = useRef(true), ticket = useRef(0);
-    async function load() {try {const value = await http.request(endpoint); if (alive.current) {setSettings(value); setError("");}} catch (problem) {if (alive.current) setError(problem.message);}}
+    async function load() {const previous = settingsRef.current, cacheGeneration = moduleCache.generation; setRefreshing(true); try {const value = await http.request(endpoint); if (alive.current) {if (settingsRef.current === previous) {setSettings(value); moduleCache.write(cacheScope, "notification-settings", value, cacheGeneration);} setError("");}} catch (problem) {if (alive.current) setError(problem.message);} finally {if (alive.current) setRefreshing(false);}}
     useEffect(() => {alive.current = true; load(); return () => {alive.current = false; ticket.current++; stopNotificationSound();};}, []);
     async function preview() {try {await playNotificationSound({...settings, enabled: true});} catch {setError("No se pudo reproducir el sonido. Comprueba el archivo y los permisos de audio del navegador.");}}
     async function choose(event) {
@@ -37,7 +41,7 @@ export default function NotificationPreferences() {
     }
     async function save(event) {
         event.preventDefault(); setBusy(true); setError("");
-        try {const value = await http.request(endpoint, {method: "PATCH", body: settings}); if (!alive.current) return; setSettings(value); window.dispatchEvent(new CustomEvent("bold:notification-sound-changed", {detail: value})); setNotice("Preferencias de notificaciones guardadas.");}
+        try {const value = await http.request(endpoint, {method: "PATCH", body: settings}); if (!alive.current) return; settingsRef.current = value; setSettings(value); moduleCache.write(cacheScope, "notification-settings", value); window.dispatchEvent(new CustomEvent("bold:notification-sound-changed", {detail: value})); setNotice("Preferencias de notificaciones guardadas.");}
         catch (problem) {if (alive.current) setError(problem.message);}
         finally {if (alive.current) setBusy(false);}
     }
@@ -55,7 +59,7 @@ export default function NotificationPreferences() {
         catch (problem) {if (alive.current) setError(problem.message);}
         finally {if (alive.current) setBusy(false);}
     }
-    return <section className="bold_notification_preferences"><h2><Volume2 size={22}/>Notificaciones</h2><p>Elige el sonido de las nuevas notificaciones de BOLD. Se guarda en tu cuenta.</p>{error && <p role="alert">{error}<button type="button" onClick={load}>Reintentar</button></p>}{notice && <p role="status">{notice}</p>}{!settings ? <p>Cargando preferencias…</p> : <form onSubmit={save}>
+    return <section className="bold_notification_preferences"><BackgroundSyncNotice active={refreshing} label="Actualizando preferencias…" /><h2><Volume2 size={22}/>Notificaciones</h2><p>Elige el sonido de las nuevas notificaciones de BOLD. Se guarda en tu cuenta.</p>{error && <p role="alert">{error}<button type="button" onClick={load}>Reintentar</button></p>}{notice && <p role="status">{notice}</p>}{!settings ? <div aria-busy="true" /> : <form onSubmit={save}>
         <fieldset disabled={busy}><legend>Eventos que quiero recibir</legend><p>Controla los avisos nuevos dentro de BOLD y sus alertas. Los avisos anteriores se conservan.</p>{notificationEvents.map(([id, label]) => <label className="bold_notification_toggle" key={id}><input type="checkbox" checked={settings.events?.[id] !== false} onChange={event => setSettings(value => ({...value, events: {...value.events, [id]: event.target.checked}}))}/>{label}</label>)}</fieldset>
         <label className="bold_notification_toggle"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={event => setSettings({...settings, enabled: event.target.checked})}/>Sonido de notificaciones</label>
         <fieldset disabled={busy}><legend>Sonido</legend>{[...notificationSounds,["custom","Personalizado"]].map(([id,label]) => <label className="bold_notification_choice" key={id}><input type="radio" name="notification-sound" value={id} checked={settings.sound === id} disabled={id === "custom" && !settings.custom_audio} onChange={() => setSettings({...settings, sound: id})}/>{label}</label>)}</fieldset>

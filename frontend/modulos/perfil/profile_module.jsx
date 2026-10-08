@@ -1,4 +1,7 @@
 import NewsPreferences from "./news_preferences.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {backgroundRefresh} from "../core/google_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import {confirmBold} from "../core/shared/bold_dialog.js";
 import {useEffect, useRef, useState} from "react";
 import {Bell, Keyboard, Newspaper, Pencil, Plug, User, X} from "lucide-react";
@@ -18,7 +21,12 @@ import PresencePreferences from "./presence_preferences.jsx";
 export default function ProfileModule() {
     const core = useCore(), shell = useShell(), file = useRef(null);
     const tab = shell.profile_tab, setTab = shell.set_profile_tab;
-    const [profile, setProfile] = useState(null), [draft, setDraft] = useState(null);
+    const cacheScope = moduleScope(core);
+    const [profile, setProfile] = useState(() => moduleCache.read(cacheScope, "profile")), [draft, setDraft] = useState(profile);
+    const [refreshing, setRefreshing] = useState(false);
+    const editingRef = useRef(false); editingRef.current = shell.profile_editing;
+    const profileRef = useRef(profile); profileRef.current = profile;
+    const profileTicket = useRef(0);
     const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [password, setPassword] = useState(false);
     const alive = useRef(true);
     const [photoFile, setPhotoFile] = useState(null);
@@ -26,18 +34,21 @@ export default function ProfileModule() {
     useEffect(() => {shell.set_profile_dirty(Boolean(editing && profile && JSON.stringify(draft) !== JSON.stringify(profile))); return () => shell.set_profile_dirty(false);}, [editing, draft, profile]);
     useEffect(() => {if (editing) setTab("account");}, [editing]);
     async function load() {
-        try {const value = await http.request("/api/v2/auth/profile/"); if (alive.current) {setProfile(value); setDraft(value); setError("");}}
-        catch (problem) {if (alive.current) setError(problem.message);}
+        if (editingRef.current && profileRef.current) return;
+        const cacheGeneration = moduleCache.generation, ticket = profileTicket.current; setRefreshing(true);
+        try {const value = await http.request("/api/v2/auth/profile/"); if (alive.current && ticket === profileTicket.current) {if (!editingRef.current || !profileRef.current) setDraft(value); setProfile(value); setError(""); moduleCache.write(cacheScope, "profile", value, cacheGeneration);}}
+        catch (problem) {if (alive.current) {setError(problem.message); if ([401, 403].includes(problem.status)) {moduleCache.invalidate(cacheScope); setProfile(null); setDraft(null);}}}
+        finally {if (alive.current) setRefreshing(false);}
     }
-    useEffect(() => {alive.current = true; load(); return () => {alive.current = false;};}, []);
+    useEffect(() => {alive.current = true; load(); const stop = backgroundRefresh(load, {interval: 300000}); return () => {alive.current = false; stop();};}, []);
     useEffect(() => {
         if (!editing || !profile) return;
         const warn = event => {if (JSON.stringify(draft) !== JSON.stringify(profile)) {event.preventDefault(); event.returnValue = "";}};
         window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
     }, [editing, draft, profile]);
     async function save(event) {
-        event.preventDefault(); setBusy(true); setError("");
-        try {const value = await http.request("/api/v2/auth/profile/", {method: "PATCH", body: {name: draft.name, avatar_url: draft.avatar_url, banner_color: draft.banner_color}}); if (!alive.current) return; setProfile(value); setDraft(value); core.updateProfile(value); shell.set_profile_editing(false); setNotice("Perfil guardado.");}
+        event.preventDefault(); profileTicket.current++; setBusy(true); setError("");
+        try {const value = await http.request("/api/v2/auth/profile/", {method: "PATCH", body: {name: draft.name, avatar_url: draft.avatar_url, banner_color: draft.banner_color}}); if (!alive.current) return; setProfile(value); setDraft(value); moduleCache.write(cacheScope, "profile", value); core.updateProfile(value); shell.set_profile_editing(false); setNotice("Perfil guardado.");}
         catch (problem) {if (alive.current) setError(problem.message);}
         finally {if (alive.current) setBusy(false);}
     }
@@ -48,7 +59,7 @@ export default function ProfileModule() {
         setDraft(profile); shell.set_profile_editing(false); setTab(next);
     }
     const identity = core.activeAssignment, shown = editing ? draft : profile;
-    return <section className="bold_profile_module">
+    return <section className="bold_profile_module"><BackgroundSyncNotice active={refreshing} label="Actualizando perfil…" />
         <header className="bold_profile_header"><h1>Perfil</h1><button aria-label="Cerrar ajustes del perfil" onClick={leave}><X size={21}/></button></header>
         <div className="bold_profile_layout">
             <aside className="bold_profile_navigation"><div className="bold_profile_identity"><ProfileAvatar url={core.account?.avatar_url} initials={identity?.initials}/><strong>{profile?.name || identity?.name}</strong></div>
@@ -62,7 +73,7 @@ export default function ProfileModule() {
                 </nav>
             </aside>
             <main className="bold_profile_main">{error && <div className="bold_profile_error" role="alert">{error}{!profile && <button onClick={load}>Reintentar</button>}</div>}{notice && <p role="status">{notice}</p>}
-                {tab === "presence" ? <PresencePreferences/> : tab === "news" ? <NewsPreferences/> : tab === "shortcuts" ? <ShortcutPreferences/> : tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <p role="status">Cargando perfil…</p> : <>
+                {tab === "presence" ? <PresencePreferences/> : tab === "news" ? <NewsPreferences/> : tab === "shortcuts" ? <ShortcutPreferences/> : tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <div aria-busy="true" /> : <>
                     <div className="bold_profile_section_heading"><h2>{editing ? "Editar perfil" : "Información de cuenta"}</h2>{!editing && <button onClick={() => {setDraft(profile); shell.set_profile_editing(true); setNotice("");}}><Pencil size={16}/>Editar perfil</button>}</div>
                     <div className="bold_profile_editor">
                         <div className="bold_profile_account_fields"><dl><div><dt>Nombre</dt><dd>{profile.name}</dd></div><div><dt>Correo empresarial</dt><dd>{profile.email}</dd></div><div><dt>Departamento activo</dt><dd>{identity?.unit_name}</dd></div><div><dt>Cargo</dt><dd>{identity?.job_role_title}</dd></div></dl></div>

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import "./onboarding_tour.css";
 import { useCore } from "./core_provider.jsx";
 import { useShell } from "./app_shell.jsx";
-import { readOnboardingState, writeOnboardingState } from "./onboarding_state.js";
+import { writeOnboardingState } from "./onboarding_state.js";
 import { ONBOARDING_GUIDES, onboardingGuideId } from "./onboarding_guides.js";
 
 function visibleElement(selector) {
@@ -18,7 +18,6 @@ function visibleElement(selector) {
 
 export function OnboardingTour({ modal = null, detail = false }) {
     const core = useCore(), shell = useShell();
-    const attempted = useRef(new Set());
     const identity = core.activeAssignment || core.account;
     const identityKey = identity?.id || identity?.personId || "demo";
     const guideId = onboardingGuideId(shell.active_module, { modal, detail });
@@ -26,7 +25,7 @@ export function OnboardingTour({ modal = null, detail = false }) {
 
     useEffect(() => {
         if (!guideId || sidebarOpen) return;
-        const guide = ONBOARDING_GUIDES[guideId], visitKey = `${identityKey}:${guideId}`;
+        const guide = ONBOARDING_GUIDES[guideId];
         let disposed = false, closing = false, tour, timer, waitObserver, waitDeadline;
         let highlight, resizeObserver, frame, geometryTimer;
         const storage = () => { try { return window.localStorage; } catch { return null; } };
@@ -63,10 +62,9 @@ export function OnboardingTour({ modal = null, detail = false }) {
         const finish = status => {
             if (disposed || closing) return;
             writeOnboardingState(storage(), { id: identityKey }, status, guideId);
-            attempted.current.add(visitKey);
             destroy();
         };
-        const start = (manual = false, waiting = false) => {
+        const start = (waiting = false) => {
             clearTimeout(timer);
             if (!waiting) stopWaiting();
             if (disposed) return;
@@ -77,7 +75,7 @@ export function OnboardingTour({ modal = null, detail = false }) {
                 if (!waitObserver) {
                     // Bounded, mutation-driven readiness: no idle polling or requests.
                     waitObserver = new MutationObserver(() => {
-                        clearTimeout(timer); timer = setTimeout(() => start(manual, true), 300);
+                        clearTimeout(timer); timer = setTimeout(() => start(true), 300);
                     });
                     waitObserver.observe(document.body, { childList: true, subtree: true });
                     waitDeadline = setTimeout(stopWaiting, 10000);
@@ -134,11 +132,8 @@ export function OnboardingTour({ modal = null, detail = false }) {
             });
             tour.drive();
         };
-        const handleStart = () => start(true);
+        const handleStart = () => start();
         window.addEventListener("bold:onboarding:start", handleStart);
-        if (!attempted.current.has(visitKey) && !readOnboardingState(storage(), { id: identityKey }, guideId)) {
-            timer = setTimeout(() => start(), 850);
-        }
         return () => {
             disposed = true; stopWaiting(); destroy();
             window.removeEventListener("bold:onboarding:start", handleStart);

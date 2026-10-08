@@ -1,4 +1,7 @@
 import {confirmBold, promptBold} from "../core/shared/bold_dialog.js";
+import {useCore} from "../core/core_provider.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import { useEffect, useRef, useState } from "react";
 import { http } from "../core/http_client.js";
 import { clearGoogleCache } from "../core/google_cache.js";
@@ -9,10 +12,12 @@ import "../docs/workspace.css";
 // Una configuración cifrada por instalación; las autorizaciones siguen siendo personales.
 export default function Connectors() { return <><GoogleConfiguration/><ImageStorage/></>; }
 function GoogleConfiguration() {
-    const [config, setConfig] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false), [verification, setVerification] = useState(null);
+    const core = useCore(), cacheScope = moduleScope(core);
+    const [config, setConfig] = useState(() => moduleCache.read(cacheScope, "google-configuration")), [error, setError] = useState(""), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false), [verification, setVerification] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
     const input = useRef(null), alive = useRef(true), running = useRef(false);
     const root = "/api/v2/google/configuration/";
-    async function load() {try {const value = await http.request(root); if (alive.current) {setConfig(value); setError("");}} catch (problem) {if (alive.current) {if (problem.status === 403) setDenied(true); else setError(problem.message);}}}
+    async function load() {const cacheGeneration = moduleCache.generation; setRefreshing(true); try {const value = await http.request(root); if (alive.current) {setConfig(value); setError(""); moduleCache.write(cacheScope, "google-configuration", value, cacheGeneration);}} catch (problem) {if (alive.current) {if (problem.status === 403) {setDenied(true); setConfig(null); moduleCache.invalidate(cacheScope, "google-configuration");} else setError(problem.message);}} finally {if (alive.current) setRefreshing(false);}}
     useEffect(() => {alive.current = true; load(); return () => {alive.current = false;};}, []);
     async function operation(run, changed = false) {
         if (running.current) return;
@@ -24,7 +29,7 @@ function GoogleConfiguration() {
             if (!/^[0-9]{6}$/.test(code.trim())) throw new Error("Ingresa los seis dígitos de tu aplicación autenticadora.");
             await coreApi.stepUpMfa(code.trim());
             if (!alive.current) return;
-            const result = await run(); if (!alive.current) return; if (changed) {setConfig(result); setVerification(null); clearGoogleCache(); globalThis.dispatchEvent(new Event("bold:google-connection-changed"));} else setVerification(result);
+            const result = await run(); if (!alive.current) return; if (changed) {setConfig(result); moduleCache.write(cacheScope, "google-configuration", result); setVerification(null); clearGoogleCache(); globalThis.dispatchEvent(new Event("bold:google-connection-changed"));} else setVerification(result);
         }
         catch (problem) {if (alive.current) setError(problem.message);}
         finally {running.current = false; if (alive.current) setBusy(false); if (input.current) input.current.value = "";}
@@ -32,6 +37,7 @@ function GoogleConfiguration() {
     if (denied) return <p className="admin_connector_error" role="alert">Tu cuenta no está autorizada para gestionar los conectores globales. Se requiere una delegación individual y un cargo administrativo activo en Dirección.</p>;
     const labels = {unknown: "No comprobado", available: "Disponible", authorization_required: "Requiere autorización", unconfigured: "Sin configurar", api_disabled: "API deshabilitada", reconnect_required: "Reconectar", temporary_error: "Error temporal", permission_denied: "Permiso insuficiente"};
     return <section className="admin_connector">
+        <BackgroundSyncNotice active={refreshing} label="Actualizando conectores…" />
         <div className="admin_connector_intro"><h2>Configuración Google Cloud</h2><span className="admin_connector_badge">{config?.configured ? "Configurado" : "Sin configurar"}</span></div>
         <p>El propietario o una cuenta con autorización individual y cargo administrativo en Dirección configura una sola credencial OAuth. Cada empleado conecta su cuenta y autoriza los servicios que utiliza.</p>
         <p>Esta configuración afecta a toda BOLD. Las operaciones requieren MFA reciente y quedan auditadas; cambiar el cliente OAuth obliga a los empleados a reconectar.</p>

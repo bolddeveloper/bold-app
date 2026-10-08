@@ -64,7 +64,10 @@ def connected_account_ids():
     sessions = list(valid_sessions().values_list("id", "user_account_id"))
     beacons = caches["presence"].get_many([session_key(pk) for pk, _ in sessions])
     now = timezone.now().timestamp()
-    return {account_id for pk, account_id in sessions if 0 <= now - beacons.get(session_key(pk), 0) < HEARTBEAT_TTL}
+    def live(value):
+        stamps = value.values() if isinstance(value, dict) else [value]
+        return any(0 <= now - stamp < HEARTBEAT_TTL for stamp in stamps)
+    return {account_id for pk, account_id in sessions if live(beacons.get(session_key(pk), {}))}
 
 
 def effective_status(account, connection=None, now=None, schedule=None):
@@ -107,15 +110,39 @@ def presence_directory():
             "updated_at": timezone.now().isoformat(), "grace_seconds": HEARTBEAT_TTL}
 
 
-def heartbeat_snapshot(session_id):
+def heartbeat_snapshot(session_id, channel_id="legacy"):
     # Caller already verified session + active assignment in security_snapshot.
     try:
-        caches["presence"].set(session_key(session_id), timezone.now().timestamp(), HEARTBEAT_TTL)
+        now = timezone.now().timestamp()
+        # Lock the session so simultaneous tabs cannot overwrite each other's beacon.
+        with transaction.atomic():
+            AuthSession.objects.select_for_update().only("id").get(pk=session_id)
+            previous = caches["presence"].get(session_key(session_id), {})
+            previous = previous if isinstance(previous, dict) else {"legacy": previous}
+            channels = {key: stamp for key, stamp in previous.items() if 0 <= now - stamp < HEARTBEAT_TTL}
+            joined = not channels
+            channels[channel_id] = now
+            caches["presence"].set(session_key(session_id), channels, HEARTBEAT_TTL)
+        if joined:
+            announce_presence()
         return presence_directory()
     except Exception:
         # Cache outages must not invalidate authentication or fake an online roster.
         log.warning("Presence directory unavailable", exc_info=True)
         return None
+
+
+def disconnect_presence(session_id, channel_id):
+    try:
+        with transaction.atomic():
+            AuthSession.objects.select_for_update().only("id").get(pk=session_id)
+            channels = caches["presence"].get(session_key(session_id), {})
+            if isinstance(channels, dict):
+                channels.pop(channel_id, None)
+                caches["presence"].set(session_key(session_id), channels, HEARTBEAT_TTL)
+        announce_presence()
+    except Exception:
+        log.warning("Presence disconnect unavailable", exc_info=True)
 
 
 def announce_presence():

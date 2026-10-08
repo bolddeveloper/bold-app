@@ -1,15 +1,20 @@
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
+import {useCore} from "../core/core_provider.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import {http} from "../core/http_client.js";
 import {shortcutActions, defaultShortcuts, shortcutsEndpoint, shortcutFromEvent, shortcutError} from "../core/keyboard_shortcuts.js";
 import "./shortcut_preferences.css";
 
 export default function ShortcutPreferences() {
-    const [settings, setSettings] = useState(null), [recording, setRecording] = useState(null);
+    const cacheScope = moduleScope(useCore());
+    const [settings, setSettings] = useState(() => moduleCache.read(cacheScope, "shortcut-settings")), [recording, setRecording] = useState(null);
+    const [refreshing, setRefreshing] = useState(false), settingsRef = useRef(settings); settingsRef.current = settings;
     const [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
     const [attempt, setAttempt] = useState(0);
     useEffect(() => {
-        const controller = new AbortController();
-        http.request(shortcutsEndpoint, {signal: controller.signal}).then(setSettings).catch(problem => {if (!controller.signal.aborted) setError(problem.message);});
+        const controller = new AbortController(), previous = settingsRef.current, cacheGeneration = moduleCache.generation; setRefreshing(true);
+        http.request(shortcutsEndpoint, {signal: controller.signal}).then(value => {if (settingsRef.current === previous) {setSettings(value); moduleCache.write(cacheScope, "shortcut-settings", value, cacheGeneration);}}).catch(problem => {if (!controller.signal.aborted) setError(problem.message);}).finally(() => {if (!controller.signal.aborted) setRefreshing(false);});
         return () => controller.abort();
     }, [attempt]);
     async function save() {
@@ -17,16 +22,17 @@ export default function ShortcutPreferences() {
         try {
             const value = await http.request(shortcutsEndpoint, {method: "PUT", body: settings});
             setSettings(value);
+            moduleCache.write(cacheScope, "shortcut-settings", value);
             window.dispatchEvent(new CustomEvent("bold:shortcuts-changed", {detail: value}));
             setNotice("Atajos guardados para tu cuenta.");
         } catch (problem) {setError(problem.message);}
         finally {setBusy(false);}
     }
-    return <section className="bold_shortcut_preferences"><h2>Atajos de teclado</h2>
+    return <section className="bold_shortcut_preferences"><BackgroundSyncNotice active={refreshing} label="Actualizando atajos…" /><h2>Atajos de teclado</h2>
         <p>Selecciona Cambiar y presiona la combinación. Usa Ctrl (Windows) o Meta (Mac), con Alt o Shift opcionales. Escape cancela.</p>
         <p>Los atajos de navegación no se ejecutan mientras escribes o hay una ventana abierta. Cada módulo conserva sus permisos.</p>
         {error && <p role="alert" className="bold_profile_error">{error}</p>}{notice && <p role="status">{notice}</p>}
-        {!settings ? error ? <button onClick={() => {setError(""); setAttempt(value => value + 1);}}>Reintentar carga</button> : <p role="status">Cargando atajos…</p> : <>
+        {!settings ? error ? <button onClick={() => {setError(""); setAttempt(value => value + 1);}}>Reintentar carga</button> : <div aria-busy="true" /> : <>
             <div className="bold_shortcut_list">{shortcutActions.map(([id, label]) => <div className="bold_shortcut_row" key={id}>
                 <strong>{label}</strong>{recording === id ? <input autoFocus readOnly aria-label={`Nuevo atajo para ${label}`} placeholder="Presiona las teclas…" onBlur={() => setRecording(null)} onKeyDown={event => {
                     if (event.key === "Tab") {setRecording(null); return;}

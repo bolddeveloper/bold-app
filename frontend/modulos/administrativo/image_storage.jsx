@@ -1,4 +1,7 @@
 import {useEffect, useRef, useState} from "react";
+import {useCore} from "../core/core_provider.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import {createPortal} from "react-dom";
 import {useDialog} from "../core/shared/use_dialog.js";
 import {DriveFolderPicker} from "../docs/drive_module.jsx";
@@ -10,14 +13,18 @@ import GoogleConnection from "../docs/google_connection.jsx";
 
 const root = "/api/v2/google/image-storage/";
 export default function ImageStorage() {
-    const [config, setConfig] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+    const core = useCore(), cacheScope = moduleScope(core);
+    const [config, setConfig] = useState(() => moduleCache.read(cacheScope, "image-storage")), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [browsing, setBrowsing] = useState(false);
     const alive = useRef(true), running = useRef(false);
     const close = () => {if (!running.current) setBrowsing(false);};
     useDialog(browsing, ".image_storage_dialog", close);
     async function load() {
-        try {const result = await http.request(root); if (alive.current) {setConfig(result); setError("");}}
-        catch (problem) {if (alive.current) setError(problem.message);}
+        const cacheGeneration = moduleCache.generation; setRefreshing(true);
+        try {const result = await http.request(root); if (alive.current) {setConfig(result); setError(""); moduleCache.write(cacheScope, "image-storage", result, cacheGeneration);}}
+        catch (problem) {if (alive.current) {setError(problem.message); if ([401, 403].includes(problem.status)) {setConfig(null); moduleCache.invalidate(cacheScope, "image-storage");}}}
+        finally {if (alive.current) setRefreshing(false);}
     }
     useEffect(() => {
         alive.current = true; load();
@@ -34,11 +41,12 @@ export default function ImageStorage() {
             if (!/^[0-9]{6}$/.test(code.trim())) throw new Error("Ingresa los seis dígitos de tu aplicación autenticadora.");
             await coreApi.stepUpMfa(code.trim());
             const result = await http.request(root, {method: "PUT", body: {folder_id: folderId}});
-            if (alive.current) {setConfig(result); setBrowsing(false);}
+            if (alive.current) {setConfig(result); moduleCache.write(cacheScope, "image-storage", result); setBrowsing(false);}
         } catch (problem) {if (alive.current) setError(problem.message);}
         finally {running.current = false; if (alive.current) setBusy(false);}
     }
     return <section className="admin_connector">
+        <BackgroundSyncNotice active={refreshing} label="Actualizando almacenamiento…" />
         <div className="admin_connector_intro"><h2>Almacenamiento de imágenes</h2><span className="admin_connector_badge">{config?.folder ? config.storage_ready ? "Configurado" : "Pausado" : "Sin configurar"}</span></div>
         <p>Guarda las imágenes de perfiles, proyectos, tareas y otros módulos en una carpeta organizada de Drive.</p>
         {config?.folder && <div className="admin_connector_details"><div><strong>Carpeta</strong><span>{config.folder.name}</span></div><div><strong>Cuenta de almacenamiento</strong><span>{config.folder.account}</span></div><div><strong>Imágenes guardadas</strong><span>{config.stored_images}</span></div></div>}

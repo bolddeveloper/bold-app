@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from boldApp.core.models import Employee, UserAccount, OrganizationalUnit, JobRole, Position, PositionAssignment
 from boldApp.autenticacion.services import create_session
-from boldApp.autenticacion.presence import heartbeat_snapshot, presence_directory, effective_status, session_key, HEARTBEAT_TTL, settings_for
+from boldApp.autenticacion.presence import heartbeat_snapshot, disconnect_presence, presence_directory, effective_status, session_key, HEARTBEAT_TTL, settings_for
 from boldApp.calendario.presence import meeting_window, store_windows, refresh_meetings
 from boldApp.workspace.models import GoogleConnection
 from boldApp.calendario.service import CalendarUnavailable
@@ -105,6 +105,18 @@ class PresenceTests(TestCase):
         self.account.credentials_version += 1
         self.account.save(update_fields=["credentials_version"])
         self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
+
+    def test_socket_join_and_last_leave_push_presence_without_closing_other_tabs(self):
+        with patch("boldApp.autenticacion.presence.announce_presence") as announce:
+            heartbeat_snapshot(self.session.pk, "tab-one")
+            announce.assert_called_once()
+            heartbeat_snapshot(self.session.pk, "tab-two")
+            self.assertEqual(announce.call_count, 1)
+            disconnect_presence(self.session.pk, "tab-one")
+            self.assertEqual(presence_directory()["rows"][0]["status"], "online")
+            disconnect_presence(self.session.pk, "tab-two")
+            self.assertEqual(presence_directory()["rows"][0]["status"], "offline")
+            self.assertEqual(announce.call_count, 3)
 
     def test_directory_keeps_disconnected_preferences_and_excludes_inactive_people(self):
         other_unit = OrganizationalUnit.objects.create(name="Ventas", unit_type="department", sensitivity_level="normal")

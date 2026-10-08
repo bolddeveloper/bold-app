@@ -2,8 +2,8 @@ import { http } from "./http_client.js";
 import { contentCanRefresh, createRefreshCoordinator } from "./refresh_coordinator.js";
 
 // One store per authenticated assignment. No domain imports or cross-user cache.
-export function createSessionNotifications({ client = http, onChange = () => {}, canRun = contentCanRefresh, coordinatorOptions = {} } = {}) {
-    let rows = [], epoch = 0, writeRevision = 0, disposed = false, uncertain = false;
+export function createSessionNotifications({ client = http, onChange = () => {}, canRun = contentCanRefresh, coordinatorOptions = {}, initialRows = [] } = {}) {
+    let rows = initialRows, epoch = 0, writeRevision = 0, disposed = false, uncertain = false;
     let controller = new AbortController();
     const mutations = new Map();
     const committed = new Map();

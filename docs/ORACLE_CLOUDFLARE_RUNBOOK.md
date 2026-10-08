@@ -428,3 +428,14 @@ El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracio
 - Disponibilidad confirmada: portada, JavaScript y CSS con HTTP 200; health con base de datos y Redis disponibles; sesion anonima sin autenticar; Celery listo.
 - Callback activo: `https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/`; dominio corporativo `bold.gt`.
 - No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario. No se cambio el cliente OAuth guardado ni la configuracion de Google Cloud.
+
+
+### Segunda entrega del 8 de octubre de 2026: directorio del equipo
+
+- Rama `Develop`, commit `86087f4767504d76c650400ae8cd4395b4cd6e36`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T122017Z.dump`.
+- Backend y Celery reconstruidos y recreados; no quedaron migraciones pendientes.
+- Cloudflare Worker `boldapp`: version `f305d54f-2588-4b8a-9536-4088433edcf9`.
+- Publicados el directorio con personas desconectadas, prioridad del departamento activo y filtro por departamento.
+- Portada, JavaScript y CSS respondieron HTTP 200. Health confirmo PostgreSQL y Redis disponibles; la sesion anonima continuo sin autenticar.
+- No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario.

@@ -118,6 +118,15 @@
 .suggestions_report_meta { font-size: 10px; font-weight: 400; color: var(--report_muted); display: flex; gap: 6px; flex-wrap: wrap; }
 .suggestions_report_meta i { font-style: normal; opacity: .65; }
 .suggestions_report_labels { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.suggestions_report_row { align-items: center; }
+.suggestions_module .suggestions_report_open { display: flex; flex: 1; min-width: 0; gap: 16px; padding: 0; border: 0; background: transparent; text-align: left; }
+.suggestions_module .suggestions_report_arrow { padding: 5px; border: 0; background: transparent; }
+.suggestions_status_select .admin_select { position: relative; }
+.suggestions_status_select .admin_select_trigger { min-height: 0; padding: 0 5px 0 0 !important; gap: 4px; border: 0 !important; background: transparent !important; }
+.suggestions_status_select .admin_select_menu { left: auto; right: 0; min-width: 160px; background: var(--report_surface); border-color: var(--report_line); }
+.suggestions_status_select .admin_select_menu button { justify-content: space-between; background: transparent; }
+.suggestions_status_select .admin_select_menu button:hover { background: var(--report_soft); }
+.suggestions_status_select .admin_select_menu .suggestions_badge { font-size: 12px; }
 .suggestions_badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 5px 8px; font-size: 10px; line-height: 1.2; font-weight: 600; white-space: nowrap; background: var(--report_soft); }
 .suggestions_badge.is_priority { background: transparent; }
 .suggestions_badge.is_status[data-value=new] { color: #d19c33; background: color-mix(in srgb, #d6a035 10%, var(--report_surface)); }
@@ -190,6 +199,8 @@
     .suggestions_toolbar > select { font-size: 12px; }
     .suggestions_status_chips { padding: 14px 15px; gap: 5px; }
     .suggestions_report_row { padding: 16px 15px !important; gap: 10px !important; flex-wrap: wrap; }
+    .suggestions_module .suggestions_report_open { flex-basis: 100%; gap: 10px; }
+    .suggestions_module .suggestions_report_arrow { margin-left: auto; }
     .suggestions_report_icon { width: 32px; height: 32px; border-radius: 9px; }
     .suggestions_report_title { flex-wrap: wrap; gap: 4px 7px; }
     .suggestions_report_title > strong { flex-basis: 100%; }

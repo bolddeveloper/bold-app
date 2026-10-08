@@ -1,4 +1,7 @@
 import { AvatarImage } from "../core/shared/avatar_image.jsx";
+import {moduleCache, moduleScope} from "../core/module_cache.js";
+import {backgroundRefresh} from "../core/google_cache.js";
+import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import { TextEditorField, TaskText } from "../tareas/src/task_text_editor.jsx";
 import { BoldSelect as AdminSelect } from "../core/shared/bold_select.jsx";
 import Swal from "sweetalert2";
@@ -885,16 +888,18 @@ function Organization({ data }) {
 export default function AdministrationModule() {
     const core = useCore();
     const [active, setActive] = useState("dashboard");
-    const [data, setData] = useState(null);
+    const cacheScope = moduleScope(core);
+    const [data, setData] = useState(() => moduleCache.read(cacheScope, "administration"));
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNoticeState] = useState(null);
     const [auditLoading, setAuditLoading] = useState(false);
     const generation = useRef(0);
     const setNotice = (message, isError = false) => { setNoticeState({ message, isError }); setTimeout(() => setNoticeState(null), 6000); };
     const moduleAllowed = Boolean(core.activeUnit?.is_control_plane && (core.account?.is_superuser || core.activeAssignment?.administration_enabled));
-    async function load() { const gen = ++generation.current; if (core.securityUncertain || !moduleAllowed) return; setError(""); try { const [dashboard, employees, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.organization()]); if (gen === generation.current) setData({ dashboard, employees, audit: null, organization }); } catch (loadError) { if (gen === generation.current) setError(loadError.message); } }
-    async function loadAudit(page = 1) { const gen = generation.current; if (core.securityUncertain || !moduleAllowed) return; setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); if (gen === generation.current) setData(current => current ? ({ ...current, audit: { ...audit, page } }) : current); } catch (loadError) { if (gen === generation.current) setNotice(loadError.message, true); } finally { if (gen === generation.current) setAuditLoading(false); } }
-    useEffect(() => { setData(null); setAuditLoading(false); load(); return () => { generation.current++; }; }, [core.authorizationRevision, core.securityUncertain, core.activeAssignment?.id, moduleAllowed]);
+    async function load() { const gen = ++generation.current, cacheGeneration = moduleCache.generation; if (core.securityUncertain || !moduleAllowed) return; setError(""); setRefreshing(true); try { const [dashboard, employees, organization] = await Promise.all([adminApi.dashboard(), adminApi.employees(), adminApi.organization()]); if (gen === generation.current) {const next = { dashboard, employees, audit: null, organization }; setData(current => ({...next, audit: current?.audit || null})); moduleCache.write(cacheScope, "administration", next, cacheGeneration);} } catch (loadError) { if (gen === generation.current) {setError(loadError.message); if ([401, 403].includes(loadError.status)) {moduleCache.invalidate(cacheScope); setData(null);}} } finally {if (gen === generation.current) setRefreshing(false);} }
+    async function loadAudit(page = 1) { const gen = generation.current, cacheGeneration = moduleCache.generation, key = `administration:audit:${page}`; if (core.securityUncertain || !moduleAllowed) return; const saved = moduleCache.read(cacheScope, key); if (saved) setData(current => current ? {...current, audit: saved} : current); setAuditLoading(true); try { const audit = await adminApi.auditEvents(page); if (gen === generation.current) {const value = {...audit, page}; setData(current => current ? {...current, audit: value} : current); moduleCache.write(cacheScope, key, value, cacheGeneration);} } catch (loadError) { if (gen === generation.current) setNotice(loadError.message, true); } finally { if (gen === generation.current) setAuditLoading(false); } }
+    useEffect(() => { setData(core.securityUncertain || !moduleAllowed ? null : moduleCache.read(cacheScope, "administration")); setAuditLoading(false); load(); const stop = backgroundRefresh(load, {interval: 300000}); return () => { generation.current++; stop(); }; }, [core.authorizationRevision, core.securityUncertain, core.activeAssignment?.id, moduleAllowed]);
     useEffect(() => { if (active === "audit" && data && !data.audit && !auditLoading) loadAudit(); }, [active, data?.audit]);
     useEffect(() => {
         const navigate = event => {
@@ -908,6 +913,6 @@ export default function AdministrationModule() {
     if (core.securityUncertain) return <div className="admin_state"><p role="status">Verificando permisos. Las acciones sensibles están pausadas temporalmente.</p></div>;
     if (!core.activeUnit?.is_control_plane) return <div className="admin_state"><p>El módulo Administrativo está reservado a la unidad de Dirección.</p></div>;
     if (!core.account?.is_superuser && !core.activeAssignment?.administration_enabled) return <div className="admin_state"><p>Tu cargo no está autorizado para administrar la aplicación.</p></div>;
-    if (!data) return <Loading error={error} onRetry={load} />;
-    return <section className="administration_module"><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} temporaryPasswordEnabled={Boolean(data.dashboard.features?.temporary_password_provisioning)} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div className="admin_state"><p>Cargando los eventos más recientes…</p></div>)}{active === "organization" && <Organization data={data.organization} />}{active === "connectors" && <Connectors />}</section>;
+    if (!data) return <><BackgroundSyncNotice active={refreshing} label="Actualizando administración…" />{error ? <Loading error={error} onRetry={load} /> : <section className="administration_module" aria-busy="true" />}</>;
+    return <section className="administration_module"><BackgroundSyncNotice active={refreshing || auditLoading} label="Actualizando administración…" /><header className="admin_module_header"><div><h1>{title}</h1><p>Vista global, cuentas, seguridad y trazabilidad organizacional.</p></div><nav>{tabs.map(([id, label, Icon]) => <button className={active === id ? "is_active" : ""} type="button" key={id} onClick={() => setActive(id)}><Icon size={16} />{label}</button>)}</nav></header>{notice && <p className={`admin_notice ${notice.isError ? "is_error" : ""}`} role={notice.isError ? "alert" : "status"}>{notice.message}</p>}{active === "dashboard" && <Dashboard data={data.dashboard} setNotice={setNotice} />}{active === "employees" && <Employees rows={data.employees} organization={data.organization} reload={load} refreshDirectory={core.refreshDirectory} setNotice={setNotice} temporaryPasswordEnabled={Boolean(data.dashboard.features?.temporary_password_provisioning)} />}{active === "audit" && (data.audit ? <Audit page={data.audit} onPage={loadAudit} /> : <div aria-busy="true" />)}{active === "organization" && <Organization data={data.organization} />}{active === "connectors" && <Connectors />}</section>;
 }

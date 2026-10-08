@@ -1,3 +1,6 @@
+import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
+import {moduleCache, moduleScope} from "../../core/module_cache.js";
+import {usePersonalBoard} from "./personal_board.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
 import {backgroundRefresh} from "../../core/google_cache.js";
 import {CachedImage} from "../../core/shared/cached_image.jsx";
@@ -41,7 +44,6 @@ import {
     Link as link_icon,
     MessageCircle as message_circle_icon,
     MoreHorizontal as more_horizontal_icon,
-    Paperclip as paperclip_icon,
     Pencil as pencil_icon,
     Plus as plus_icon,
     Search as search_icon,
@@ -198,7 +200,6 @@ const today_iso = () => {
     const today = new Date();
     return toISODate(today.getFullYear(), today.getMonth(), today.getDate());
 };
-const attachment_later = () => Swal.fire({ icon: "info", title: "Próximamente", text: "Esta función estará disponible más adelante", confirmButtonColor: "#ef1f2d" });
 
 
 
@@ -2031,10 +2032,11 @@ function TaskIdentityFields({ data, unitId, assigneeId, onUnit, onAssignee }) {
 }
 
 function AttachmentLinks({ attachments, onChange }) {
-    return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}<button type="button" className="attachment_dropzone" onClick={attachment_later}>{render_icon(paperclip_icon, 18)}<span>Agregar archivos adjuntos</span></button></div>;
+    if (!attachments.length) return null;
+    return <div className="bold_field_group"><label className="bold_field_label">Archivos adjuntos</label>{attachments.map(item => <div key={item.id} className="attachment_item"><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a><button type="button" className="attachment_remove_btn" onClick={() => onChange(attachments.filter(row => row.id !== item.id))}>Quitar</button></div>)}</div>;
 }
 
-function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, handle_add_edit_attachment, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
+function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
     const real = is_using_real_backend();
     if (real) { board_columns = [...data.sections.filter(item => item.projectId === edit_draft.project_id), { id: "unsectioned", label: "Sin sección" }]; status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
@@ -2191,16 +2193,8 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                                     </button>
                                 </div>
                             ))}
-                            <button type="button" className="attachment_add_more_btn" onClick={handle_add_edit_attachment}>
-                                {render_icon(paperclip_icon, 14)} Agregar más archivos
-                            </button>
                         </div>
-                    ) : (
-                        <button type="button" className="attachment_dropzone" onClick={handle_add_edit_attachment}>
-                            {render_icon(paperclip_icon, 18)}
-                            <span>Agregar archivos adjuntos</span>
-                        </button>
-                    )}
+                    ) : null}
 
                     </>}
                     </div>
@@ -2425,18 +2419,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                         {render_icon(plus_icon, 14)} Agregar subtarea
                     </button>
 
-                    {real ? <AttachmentLinks attachments={attachments} onChange={set_attachments} /> : <>
-                    {/* Adjuntos */}
-                    <button
-                        type="button"
-                        className="attachment_dropzone"
-                        onClick={attachment_later}
-                    >
-                        {render_icon(paperclip_icon, 18)}
-                        <span>{attachments.length > 0 ? `${attachments.length} archivo(s) adjunto(s)` : "Agregar archivos adjuntos"}</span>
-                    </button>
-
-                    </>}
+                    <AttachmentLinks attachments={attachments} onChange={set_attachments} />
                     </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
@@ -4253,13 +4236,18 @@ function TaskAppContent({ externalModules = {} }) {
     task_activity.current = task_content_active;
     const switch_task_activity = use_ref(() => {});
     const real = is_using_real_backend();
-    const [data, set_data] = use_state(null);
+    const cache_scope = moduleScope(session);
+    const [cached_snapshot] = use_state(() => real ? moduleCache.read(cache_scope, "tasks") : null);
+    const cached_data = use_ref(cached_snapshot && Array.isArray(cached_snapshot.tasks) && Array.isArray(cached_snapshot.projects) && Array.isArray(cached_snapshot.statuses) ? cached_snapshot : null);
+    const [data, set_data] = use_state(cached_data.current);
+    const [refreshing_data, set_refreshing_data] = use_state(false);
     const [intro_finished, set_intro_finished] = use_state(false);
     use_effect(() => {
         const timer = window.setTimeout(() => set_intro_finished(true), 4000);
         return () => window.clearTimeout(timer);
     }, []);
     const [api_error, set_api_error] = use_state("");
+    const personal_board = usePersonalBoard(session.activeAssignment?.id, real, set_api_error, cache_scope);
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
     const mutation_generation = use_ref(0);
@@ -4341,7 +4329,7 @@ function TaskAppContent({ externalModules = {} }) {
     useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
     const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(false);
     const [search_query, set_search_query] = use_state("");
-    const [stored_tasks, set_tasks] = use_state(() => real ? [] : merge_saved_comments(starter_tasks));
+    const [stored_tasks, set_tasks] = use_state(() => real ? (cached_data.current?.tasks || []).filter(item => !item.parentTaskId || !cached_data.current.tasks.some(parent => parent.id === item.parentTaskId)) : merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);
     const [delete_target, set_delete_target] = use_state(null);
     const [edit_draft, set_edit_draft] = use_state(null);
@@ -4369,7 +4357,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [is_notifications_open, set_is_notifications_open] = use_state(false);
 
     const [projects, set_projects] = use_state(() => {
-        if (real) return [];
+        if (real) return cached_data.current?.projects || [];
         try {
             const saved_projects = JSON.parse(localStorage.getItem(projects_storage_key));
 
@@ -4467,7 +4455,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
     const [active_section, set_active_section] = use_state("tasks");
-    const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? "" : "launch_q4"));
+    const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
     const loaded_view_project = use_ref(null);
     use_effect(() => {
         if (!selected_project_id) return;
@@ -4490,7 +4478,7 @@ function TaskAppContent({ externalModules = {} }) {
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
     const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id).sort((a, b) => Number(a.position) - Number(b.position) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))) : mock_sections_by_project[selected_project_id] || [];
     const board_columns = task_scope !== "project" && real
-        ? [{ id: "unsectioned", label: task_scope === "workspace" ? active_workspace?.name || "Workspace" : "Mis tareas" }]
+        ? task_scope === "mine" ? [...personal_board.board.sections, {id: "unsectioned", label: "Sin sección"}] : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
         : !unsectioned_config.hidden || has_unsectioned_tasks
             ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id] ?? (real ? data?.projects.find(project => project.id === selected_project_id)?.unsectioned_index : undefined))
             : project_sections;
@@ -4766,6 +4754,15 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_column_drop(column_id, task_id = dragged_task_id) {
         const task_ids = task_id === dragged_task_id && dragged_task_ids.length ? dragged_task_ids : [task_id].filter(Boolean);
+        if (real && task_scope === "mine") {
+            void personal_board.update(board => {
+                const task_sections = {...board.task_sections};
+                for (const id of task_ids) {if (column_id === "unsectioned") delete task_sections[id]; else task_sections[id] = column_id;}
+                return {...board, task_sections};
+            });
+            set_dragged_task_id(null); set_dragged_task_ids([]); set_selected_task_ids([]);
+            return;
+        }
         if (real) {
             const links = task_ids.map(id => data.tasks.find(item => item.id === id)?.taskProjects.find(item => item.projectId === selected_project_id)).filter(Boolean);
             set_dragged_task_id(null);
@@ -4819,7 +4816,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_section_drag_start(event, section_id) {
-        if (task_scope !== "project" || board_columns.length < 2) { event.preventDefault(); return; }
+        if ((task_scope !== "project" && task_scope !== "mine") || board_columns.length < 2) { event.preventDefault(); return; }
         event.stopPropagation();
         event.dataTransfer.setData("application/x-bold-section", section_id);
         event.dataTransfer.effectAllowed = "move";
@@ -4846,6 +4843,11 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function reorder_section(source_id, target_id, after) {
+        if (real && task_scope === "mine") {
+            const next = reorderSections(board_columns, source_id, target_id, after);
+            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned")}));
+            return;
+        }
         if (task_scope !== "project" || source_id === target_id || real && mutation_pending.current) return;
         const next = reorderSections(board_columns, source_id, target_id, after);
         if (next === board_columns) return;
@@ -4894,6 +4896,12 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_add_column() {
+        if (real && task_scope === "mine") {
+            const label = new_column_name.trim();
+            if (label) void personal_board.update(board => ({...board, sections: [...board.sections, {id: crypto.randomUUID(), label}]})).then(saved => {if (saved) {set_new_column_name(""); set_is_adding_column(false);}});
+            return;
+        }
+        if (real && task_scope === "workspace") {set_api_error("Crea secciones desde Mis tareas o un proyecto."); return;}
         if (real) { if (new_column_name.trim()) mutate(() => api.create("sections", { project: selected_project_id, name: new_column_name.trim() }), () => { set_new_column_name(""); set_is_adding_column(false); }, undefined, undefined, ["sections"]); return; }
         const trimmed_name = new_column_name.trim();
         if (!trimmed_name) return;
@@ -4913,6 +4921,11 @@ function TaskAppContent({ externalModules = {} }) {
         if (real && mutation_pending.current) return;
         const label = editing_column_name.trim();
         if (!editing_column_id || !label) return;
+        if (real && task_scope === "mine") {
+            if (editing_column_id !== "unsectioned") void personal_board.update(board => ({...board, sections: board.sections.map(row => row.id === editing_column_id ? {...row, label} : row)})).then(saved => {if (saved) set_editing_column_id(null);});
+            else set_editing_column_id(null);
+            return;
+        }
         if (editing_column_id === "unsectioned") {
             if (task_scope !== "project") return;
             if (real) {
@@ -4939,6 +4952,10 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_delete_column(column_id) {
+        if (real && task_scope === "mine") {
+            if (column_id !== "unsectioned") void personal_board.update(board => ({...board, sections: board.sections.filter(row => row.id !== column_id), task_sections: Object.fromEntries(Object.entries(board.task_sections).filter(([, section]) => section !== column_id))}));
+            return;
+        }
         if (column_id === "unsectioned") {
             const hide = () => set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { ...(current[selected_project_id] || { label: "Sin sección" }), hidden: true } }));
             if (real) {
@@ -4999,7 +5016,7 @@ function TaskAppContent({ externalModules = {} }) {
             ? by_filters.filter((task_item) => isMyTask(task_item, current_user_id))
             : task_scope === "workspace" ? by_filters : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
+        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: task_scope === "mine" ? personal_board.board.task_sections[task.id] || "unsectioned" : "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
@@ -5008,7 +5025,8 @@ function TaskAppContent({ externalModules = {} }) {
         sort_field,
         task_scope,
         tasks,
-        workspace_tasks
+        workspace_tasks,
+        personal_board.board
     ]);
 
     const selected_project = use_memo(() => (
@@ -5063,6 +5081,9 @@ function TaskAppContent({ externalModules = {} }) {
         const canRefresh = () => task_activity.current && contentCanRefresh();
         const coordinator = createRefreshCoordinator({ canRun: canRefresh, run: async batch => {
                     if (securityUncertain || !task_activity.current) return;
+                    set_refreshing_data(true);
+                    const cacheGeneration = moduleCache.generation;
+                    try {
                     const version = dataGeneration;
                     const writeRevision = task_commit_revision.current;
                     const next = incremental ? await loader.load(batch.resources) : await loadTaskData(session, { catalogCache, notificationClient });
@@ -5079,6 +5100,7 @@ function TaskAppContent({ externalModules = {} }) {
                         next_tasks = applyOptimisticTaskStatus(next_tasks, task_id, mutation.desired);
                     }
                     const presented = { ...next, tasks: next_tasks };
+                    moduleCache.write(cache_scope, "tasks", next, cacheGeneration);
                     setPresentationData(presented);
                     set_data(presented); set_projects(next.projects);
                     confirm_local_comments(next_tasks.flatMap(task => (task.comments || []).map(comment => comment.id)));
@@ -5088,11 +5110,17 @@ function TaskAppContent({ externalModules = {} }) {
                     // Recovery also refreshes only mounted histories, never the full collection.
                     if (deferComments && batch.resources.includes("all")) notifyCommentViews();
                     if (deferAttachments && (batch.resources.includes("all") || batch.resources.some(resource => resource.split("@")[0] === "attachments"))) notifyAttachmentViews();
+                    } finally { if (mounted) set_refreshing_data(false); }
         } });
         refresh.current = (resources = TASK_RESOURCES) => coordinator.request({ reason: "mutation", resources, force: true });
         const report = error => {
             if (!mounted || error.name === "AbortError") return;
             set_api_error(error.message);
+            if ([401, 403].includes(error.status)) {
+                moduleCache.invalidate(cache_scope, "tasks");
+                set_tasks([]); set_projects([]); setPresentationData(null); set_data(null);
+                return;
+            }
             // El shell pertenece a Core: una caída de Tareas no debe impedir
             // abrir módulos hermanos como Permisos o Administración.
             set_data(current => current || {
@@ -5416,7 +5444,15 @@ function TaskAppContent({ externalModules = {} }) {
                     items = drafts.map(({ payload }) => payload);
                 } catch (error) { set_api_error(error.message); return false; }
                 const mutations = drafts.map(draft => ({ kind: "create", id: draft.id, task: previewTaskDraft(draft, null, data.statuses) }));
-                return start_task_crud(mutations, () => api.bulkTasks({ operation, items }), {
+                return start_task_crud(mutations, async () => {
+                    const result = await api.bulkTasks({operation, items});
+                    if (task_scope === "mine" && drafts.some(draft => draft.section !== "unsectioned")) await personal_board.update(board => {
+                        const task_sections = {...board.task_sections};
+                        drafts.forEach((draft, index) => {if (result.created[index] && board.sections.some(row => row.id === draft.section)) task_sections[result.created[index]] = draft.section;});
+                        return {...board, task_sections};
+                    });
+                    return result;
+                }, {
                     success_title,
                     on_failure: () => set_failed_task_creates(current => [...current, ...drafts.map(draft => {
                         const due = dateFromISO(draft.due_date);
@@ -6188,12 +6224,6 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    // Simulates picking a file from the "Agregar mas" dropzone in the
-    // "Editar tarea" modal (same placeholder behavior as the create modal).
-    function handle_add_edit_attachment() {
-        attachment_later();
-    }
-
     function handle_remove_edit_attachment(attachment_id) {
         set_edit_attachments((current_attachments) => current_attachments.filter((attachment_item) => attachment_item.id !== attachment_id));
     }
@@ -6323,7 +6353,6 @@ function TaskAppContent({ externalModules = {} }) {
                     board_columns={board_columns}
                     edit_attachments={edit_attachments}
                     edit_draft={edit_draft}
-                    handle_add_edit_attachment={handle_add_edit_attachment}
                     handle_add_edit_subtask={handle_add_edit_subtask}
                     handle_edit_field_change={handle_edit_field_change}
                     handle_edit_subtask_title_change={handle_edit_subtask_title_change}
@@ -6395,8 +6424,8 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && task_content_active && (!data || !intro_finished) && !api_error) return <LoginIntro />;
-    if (real && task_content_active && !data) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
+    if (real && !intro_finished && !api_error) return <LoginIntro />;
+    if (real && task_content_active && !data && api_error) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (
@@ -6416,12 +6445,12 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     <span>No se pudo confirmar el guardado de {visible_failed_task_creates.length} {visible_failed_task_creates.length === 1 ? "tarea" : "tareas"}. Comprueba si ya aparecen antes de reintentarlo.</span>
                     {visible_failed_task_creates.map(failed => <div className="task_failed_draft_actions" key={failed.id}><button type="button" onClick={() => restore_failed_task_draft(failed)}>Recuperar «{failed.title}»</button><button type="button" className="task_failed_draft_mute" aria-label={`No volver a mostrar el aviso de ${failed.title}`} onClick={() => mute_failed_task_notice(failed)}>No volver a mostrar</button></div>)}
                 </div>}
-                {(pending || syncing_task_count > 0 || syncing_comment_count > 0 || opening_edit) && <div className="task_saving_indicator" role="status" aria-live="polite"><span className="task_action_spinner" aria-hidden="true" /> {opening_edit ? "Cargando adjuntos para editar…" : syncing_comment_count > 0 ? `Sincronizando ${syncing_comment_count} ${syncing_comment_count === 1 ? "comentario" : "comentarios"}…` : syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : "Guardando cambios…"}</div>}
+                <BackgroundSyncNotice active={pending || syncing_task_count > 0 || syncing_comment_count > 0 || opening_edit || task_content_active && (refreshing_data || real && !data)} label={opening_edit ? "Cargando adjuntos para editar…" : syncing_comment_count > 0 ? `Sincronizando ${syncing_comment_count} ${syncing_comment_count === 1 ? "comentario" : "comentarios"}…` : syncing_task_count > 0 ? `Sincronizando ${syncing_task_count} ${syncing_task_count === 1 ? "tarea" : "tareas"}…` : pending ? "Guardando cambios…" : "Actualizando datos…"} />
                 </NoticeLayer>
             </>}
         >
                 <div className="module_transition" key={active_module}>
-                {externalModules[active_module] || (active_module === "home" ? <HomeModule
+                {real && task_content_active && !data ? <div aria-busy="true" /> : externalModules[active_module] || (active_module === "home" ? <HomeModule
                     currentUser={current_user}
                     notifications={notifications}
                     onCreateProject={() => set_active_modal("project")}
