@@ -5,6 +5,7 @@ import { register_service_worker } from "./service_worker.js";
 import "../tareas/src/styles.css";
 import "./shared/responsive.css";
 import "./app_shell.css";
+import "./pwa_updates.css";
 import "./login_screen.css";
 import "../tareas/src/tasks_mobile.css";
 import "../tareas/src/tasks_tablet.css";

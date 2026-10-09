@@ -30,7 +30,7 @@ test("session, calendar, task and Drive JSX have no unbound identifiers across c
     // Use the Babel parser shipped with the existing Vite React build toolchain.
     const { parse } = requireBuild("@babel/parser");
     const traverse = requireBuild("@babel/traverse").default;
-    const globals = new Set([...Object.getOwnPropertyNames(globalThis), "window", "document", "navigator", "location", "history", "localStorage", "sessionStorage", "requestAnimationFrame", "cancelAnimationFrame", "FileReader", "HTMLElement", "Image", "ResizeObserver", "Node", "getComputedStyle"]);
+    const globals = new Set([...Object.getOwnPropertyNames(globalThis), "window", "document", "navigator", "location", "history", "localStorage", "sessionStorage", "requestAnimationFrame", "cancelAnimationFrame", "FileReader", "HTMLElement", "Image", "ResizeObserver", "IntersectionObserver", "Node", "getComputedStyle"]);
     for (const file of [path.join(coreRoot, "core_provider.jsx"), path.join(modulesRoot, "calendario/calendar_module.jsx"), ...files(path.join(modulesRoot, "docs")).filter(file => file.endsWith(".jsx")), path.join(root, "task_app.jsx"), path.join(root, "paged_comments.jsx"), path.join(root, "task_pages.jsx"), path.join(root, "paged_attachments.jsx")]) {
         const ast = parse(readFileSync(file, "utf8"), { sourceType: "module", plugins: ["jsx"] });
         const unbound = [];
