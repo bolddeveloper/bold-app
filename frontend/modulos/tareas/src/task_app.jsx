@@ -3,6 +3,7 @@ import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
+import {confirmBold} from "../../core/shared/bold_dialog.js";
 import {backgroundRefresh} from "../../core/google_cache.js";
 import {CachedImage} from "../../core/shared/cached_image.jsx";
 import {normalizeSearchText} from "../../core/global_search.js";
@@ -4371,11 +4372,14 @@ function TaskAppContent({ externalModules = {} }) {
     visible_project_items = projects;
     const workspace_unit_id = session.activeUnit?.id || current_user?.unit_name || "demo";
     const load_workspace_state = () => {
+        if (real) return {unitId: workspace_unit_id, items: [], activeId: "all", error: ""};
         try { return { unitId: workspace_unit_id, items: readWorkspaces(localStorage, workspace_unit_id), activeId: localStorage.getItem(activeWorkspaceStorageKey(workspace_unit_id)) || "all", error: "" }; }
         catch { return { unitId: workspace_unit_id, items: [], activeId: "all", error: "No se pudieron cargar las carpetas. Los datos guardados se conservaron. Reintenta recargando la página." }; }
     };
     const [workspace_state, set_workspace_state] = use_state(load_workspace_state);
     const [workspace_assignment, set_workspace_assignment] = use_state(null);
+    const workspace_revision = use_ref(0), workspace_ready = use_ref(false), workspace_saving = use_ref(false), workspace_editing = use_ref(false);
+    const [workspace_save_pending, set_workspace_save_pending] = use_state(false);
     const sharing_scope = `${session.account?.id}:${workspace_unit_id}:${session.activeAssignment?.id}`;
     const sharing_context = use_ref(sharing_scope); sharing_context.current = sharing_scope;
     const sharing_queue = use_ref(Promise.resolve());
@@ -4384,23 +4388,33 @@ function TaskAppContent({ externalModules = {} }) {
     const workspaces = sharedWorkspaceFolders(workspace_state.items, share_records);
     use_effect(() => {
         if (!real || !session.activeAssignment?.id) return;
+        workspace_ready.current = false;
         let alive = true;
         const refresh = async () => {
+            if (workspace_editing.current) return;
             const pending = sharing_queue.current;
             try {
                 await pending.catch(() => {});
-                const result = await workspaceSharing.list();
-                if (alive && pending === sharing_queue.current) set_workspace_shares({scope: sharing_scope, items: result.items});
+                const [result, library] = await Promise.all([workspaceSharing.list(), workspaceSharing.library()]);
+                if (alive && !workspace_editing.current && !workspace_saving.current && pending === sharing_queue.current) {
+                    workspace_revision.current = library.revision;
+                    workspace_ready.current = true;
+                    set_workspace_state(state => ({...state, unitId: workspace_unit_id, items: library.folders.map(folder => ({...folder, ownerId: session.account?.id}))}));
+                    set_workspace_shares({scope: sharing_scope, items: result.items});
+                }
             } catch (problem) {if (alive) set_api_error(problem.message);}
         };
-        refresh(); const stop = backgroundRefresh(refresh);
+        refresh(); const stop = backgroundRefresh(refresh, {interval: 180000});
         return () => {alive = false; stop();};
     }, [real, sharing_scope]);
     async function share_workspace_folder(folder, ids) {
         const scope = sharing_scope;
         const operation = sharing_queue.current.catch(() => {}).then(async () => {
             if (scope !== sharing_context.current) return;
-            const saved = await workspaceSharing.save(workspaces, folder.id, ids);
+            const record = share_records.find(row => row.mine && row.folder_id === folder.id);
+            const saved = await workspaceSharing.save(workspaces, folder.id, ids, record?.revision);
+            const library = await workspaceSharing.library();
+            if (scope === sharing_context.current) workspace_revision.current = library.revision;
             if (scope === sharing_context.current) set_workspace_shares(state => ({scope, items: [...(state.scope === scope ? state.items : []).filter(row => row.id !== saved.id), saved]}));
         });
         sharing_queue.current = operation;
@@ -4531,8 +4545,60 @@ function TaskAppContent({ externalModules = {} }) {
         if (workspace_state.unitId !== workspace_unit_id) set_workspace_state(load_workspace_state());
     }, [workspace_state.unitId, workspace_unit_id]);
 
-    function save_workspace_items(items) {
+    async function import_workspace_items() {
+        try {
+            const legacy = readWorkspaces(localStorage, workspace_unit_id).filter(row => !row.ownerId || row.ownerId === session.account?.id);
+            if (!legacy.length) {set_api_error("No hay carpetas locales para importar desde este dispositivo."); return;}
+            if (!await confirmBold("¿Importar tus carpetas de este dispositivo al servidor? Verifica que fueron creadas por ti. El respaldo local no se eliminará.")) return;
+            const ids = new Set(workspaces.map(row => row.id));
+            await save_workspace_items([...workspaces, ...legacy.filter(row => !ids.has(row.id))]);
+        } catch (problem) {set_api_error(problem.message);}
+    }
+
+    async function save_workspace_items(items) {
         if (workspace_state.error) { set_api_error(workspace_state.error); return false; }
+        if (real) {
+            if (!workspace_ready.current || workspace_saving.current) {set_api_error("Las carpetas están cargando o guardándose. Espera un momento."); return false;}
+            const scope = sharing_scope;
+            workspace_saving.current = true; set_workspace_save_pending(true);
+            try {
+                await sharing_queue.current.catch(() => {});
+                if (scope !== sharing_context.current) return false;
+                if (active_workspace?.shared) {
+                    const record = share_records.find(row => row.id === active_workspace.shareRecordId);
+                    if (!record) throw new Error("La carpeta ya no está compartida contigo.");
+                    const prefix = `shared:${record.id}:`;
+                    const folders = items.filter(item => item.shareRecordId === record.id).map(item => ({...item,
+                        id: item.sourceFolderId || item.id.slice(prefix.length),
+                        parentId: item.parentId?.startsWith(prefix) ? item.parentId.slice(prefix.length) : null}));
+                    const saved = await workspaceSharing.edit(record, folders);
+                    if (scope === sharing_context.current) set_workspace_shares(state => ({scope, items: state.items.map(row => row.id === saved.id ? saved : row)}));
+                } else {
+                    const folders = items.filter(item => !item.shared);
+                    const result = await workspaceSharing.saveLibrary(folders, workspace_revision.current, share_records);
+                    if (scope !== sharing_context.current) return false;
+                    workspace_revision.current = result.revision;
+                    set_workspace_state(state => ({...state, items: result.folders.map(folder => ({...folder, ownerId: session.account?.id}))}));
+                    try {
+                        const resultShares = await workspaceSharing.list();
+                        if (scope === sharing_context.current) set_workspace_shares({scope, items: resultShares.items});
+                    } catch {if (scope === sharing_context.current) set_api_error("La biblioteca se guardó; la lista de colaboradores se actualizará al recuperar conexión.");}
+                }
+                app_toast.fire({icon: "success", title: "Workspace guardado en el servidor"});
+                return scope === sharing_context.current;
+            } catch (problem) {
+                if (scope === sharing_context.current) {
+                    set_api_error(problem.message);
+                    if (problem.status === 409) {
+                        try {
+                            const [library, records] = await Promise.all([workspaceSharing.library(), workspaceSharing.list()]);
+                            if (scope === sharing_context.current) {workspace_revision.current = library.revision; set_workspace_state(state => ({...state, items: library.folders})); set_workspace_shares({scope, items: records.items});}
+                        } catch { /* Preserve the editor and report the original conflict. */ }
+                    }
+                }
+                return false;
+            } finally {workspace_saving.current = false; if (scope === sharing_context.current) set_workspace_save_pending(false);}
+        }
         try {
             const saved = saveWorkspaces(localStorage, workspace_unit_id, items.filter(item => !item.shared));
             const records = share_records.filter(row => row.mine);
@@ -4669,6 +4735,15 @@ function TaskAppContent({ externalModules = {} }) {
         set_editing_project_id(null);
         set_active_modal(null);
     }
+
+    use_effect(() => {
+        const open = event => {
+            if (event.detail?.project) handle_project_select(event.detail.project);
+            if (event.detail?.task) {set_active_module("tasks"); set_active_section("tasks"); set_task_scope("mine"); set_selected_task_id(event.detail.task);}
+        };
+        window.addEventListener("bold:brand-resource", open);
+        return () => window.removeEventListener("bold:brand-resource", open);
+    }, [sharing_scope]);
 
     function handle_project_select(project_id) {
         remember_project(project_id);
@@ -6434,7 +6509,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && !intro_finished && !api_error) return <LoginIntro />;
+    if (real && !intro_finished && !api_error) return <LoginIntro name={session.employee?.full_name || session.activeAssignment?.name || current_user?.name || ""} />;
     if (real && task_content_active && !data && api_error) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
@@ -6480,7 +6555,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
-                    <WorkspacesModule accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
+                    <WorkspacesModule onEditing={value => {workspace_editing.current = value;}} savePending={workspace_save_pending} onImport={real ? import_workspace_items : null} accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
                     <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={handle_followers_change} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects"

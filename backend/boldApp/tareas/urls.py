@@ -1,5 +1,6 @@
 from django.urls import path
 from .workspace_sharing import WorkspaceSharingView
+from .workspace_library import WorkspaceLibraryView
 from .personal_board import PersonalBoardView
 from rest_framework.routers import DefaultRouter
 
@@ -39,4 +40,4 @@ router.register(r"task-tags", TaskTagViewSet, basename="task-tag")
 router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-endpoint")
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 
-urlpatterns = [path("workspace-sharing/", WorkspaceSharingView.as_view()), path("personal-board/", PersonalBoardView.as_view())] + router.urls
+urlpatterns = [path("workspace-library/", WorkspaceLibraryView.as_view()), path("workspace-sharing/", WorkspaceSharingView.as_view()), path("personal-board/", PersonalBoardView.as_view())] + router.urls

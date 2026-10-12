@@ -2,6 +2,10 @@ export const dayKey = date => `${date.getFullYear()}-${String(date.getMonth() + 
 export const fromDay = key => new Date(`${key}T12:00:00`);
 export const addDays = (date, count) => { const next = new Date(date); next.setDate(next.getDate() + count); return next; };
 export const weekStart = date => addDays(date, -((date.getDay() + 6) % 7));
+export function upcomingWeekDays(cursor, today) {
+    const days = Array.from({length: 7}, (_, index) => addDays(addDays(weekStart(cursor), -1), index));
+    return days.some(date => dayKey(date) === dayKey(today)) ? days.filter(date => dayKey(date) >= dayKey(today)) : days;
+}
 export const zoneDay = (value, zone) => {
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value)).map(part => [part.type, part.value]));
     return `${parts.year}-${parts.month}-${parts.day}`;

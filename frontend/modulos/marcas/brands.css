@@ -1,0 +1,23 @@
+.brands_module {padding: 24px; color: var(--text_primary, #27313b); min-width: 0;}
+.brands_module header, .brands_module footer, .brands_module nav {display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px;}
+.brands_layout {display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 22px;}
+.brands_layout aside, .brands_layout article {background: var(--surface_card, #fff); border: 1px solid var(--border_color, #d5d9df); border-radius: 12px; padding: 18px; min-width: 0;}
+.brands_module label {display: grid; gap: 6px; margin: 10px 0;}
+.brands_module input:not([type=checkbox]), .brands_module textarea {width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #8893a3; border-radius: 8px; color: inherit; background: transparent; font: inherit;}
+.brands_module textarea {min-height: 90px; resize: vertical;}
+.brands_module button {border: 1px solid #8893a3; border-radius: 8px; background: transparent; color: inherit; padding: 9px 12px; cursor: pointer; font: inherit; margin: 4px;}
+.brands_module button:disabled {opacity: .5; cursor: not-allowed;}
+.brands_module button:focus-visible {outline: 2px solid #ed1c24; outline-offset: 2px;}
+.brands_module .brand_card {display: grid; text-align: left; width: 100%; margin: 8px 0; gap: 8px;}
+.brand_card span {display: flex; align-items: center; gap: 10px; overflow-wrap: anywhere;}
+.brand_card img, .brand_logo {width: 64px; height: 64px; object-fit: contain; border-radius: 8px;}
+.brand_fields, .brands_module dl {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;}
+.brands_module dd {margin: 4px 0 14px; overflow-wrap: anywhere; white-space: pre-wrap;}
+.brands_module dt {font-weight: 600;}
+.brands_module .brand_check {display: flex; align-items: center; gap: 10px;}
+.brands_module fieldset {border: 1px solid #8893a3; border-radius: 8px; margin: 16px 0; min-width: 0;}
+.brand_description {white-space: pre-wrap; overflow-wrap: anywhere;}
+.brands_error {padding: 12px; border-radius: 8px; background: #ffe5e5; color: #9b171d;}
+.theme_dark .brands_module {color: #e8edf3;}
+.theme_dark .brands_layout aside, .theme_dark .brands_layout article {background: #22272f; border-color: #465261;}
+@media(max-width: 760px) {.brands_module {padding: 14px;} .brands_layout, .brand_fields, .brands_module dl {grid-template-columns: 1fr;}}

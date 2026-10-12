@@ -1796,5 +1796,12 @@
 
 /* Repeat the existing bell motion until unread notifications are cleared. */
 .bell_has_unread { position: relative; }
-.bell_has_unread .notification_bell_arrival svg { animation-iteration-count: infinite; }
+.bell_has_unread .notification_bell_arrival svg { animation: bold_bell_reminder 10.6s ease-in-out infinite; }
+@keyframes bold_bell_reminder {
+    0%, 6%, 100% { transform: rotate(0); }
+    1.5% { transform: rotate(12deg); }
+    3% { transform: rotate(-10deg); }
+    4.5% { transform: rotate(6deg); }
+}
+@media (prefers-reduced-motion: reduce) {.bell_has_unread .notification_bell_arrival svg {animation: none;}}
 .bell_unread_dot { top: 4px; right: 4px; width: 6px; height: 6px; border: 0; background: var(--bold_red); animation: none; }

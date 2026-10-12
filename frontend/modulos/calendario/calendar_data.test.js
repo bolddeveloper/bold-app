@@ -61,3 +61,14 @@ test("switching to a recurring series preserves unsaved fields without moving it
     const result=mergeEventScopeDraft(current,original,master);
     assert.equal(result.start,master.start);assert.equal(result.summary,"Nuevo nombre");assert.equal(result.repeat,"none");assert.equal(result.originalRepeat,"DAILY");
 });
+import {upcomingWeekDays} from "./calendar_data.js";
+
+test("current week starts today while historical/future weeks remain complete", () => {
+    const today = new Date(2026, 9, 7, 14);
+    const current = upcomingWeekDays(today, today);
+    assert.deepEqual(current.map(date => date.getDate()), [7, 8, 9, 10]);
+    assert.equal(upcomingWeekDays(new Date(2026, 8, 28), today).length, 7);
+    assert.equal(upcomingWeekDays(new Date(2026, 9, 15), today).length, 7);
+    assert.equal(upcomingWeekDays(new Date(2026, 9, 10), new Date(2026, 9, 10)).length, 1);
+    assert.equal(upcomingWeekDays(new Date(2026, 9, 11), new Date(2026, 9, 11)).length, 7);
+});

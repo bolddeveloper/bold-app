@@ -158,8 +158,8 @@ class AssignmentScopedViewSetMixin:
         ids = self._visible_resource_ids(Task.objects.all() if candidates is None else candidates, "tasks.task.read", "task")
         return Task.objects.filter(id__in=ids)
 
-    def visible_projects(self):
-        ids = self._visible_resource_ids(participating_projects(self.request.assignment), "tasks.project.read", "project")
+    def visible_projects(self, candidates=None):
+        ids = self._visible_resource_ids(participating_projects(self.request.assignment, candidates), "tasks.project.read", "project")
         return Project.objects.filter(id__in=ids)
 
 
@@ -178,7 +178,9 @@ class ProjectViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        queryset = self.stable_order(self.visible_projects())
+        ids = self.query_ids("ids")
+        candidates = Project.objects.filter(pk__in=ids) if ids is not None else None
+        queryset = self.stable_order(self.visible_projects(candidates))
         unit_id = self.request.query_params.get("unit")
         return queryset.filter(unit_id=unit_id) if unit_id else queryset
 

@@ -14,6 +14,7 @@ from boldApp.notificaciones.consumers import notification_resource_is_readable
 from boldApp.notificaciones.models import Notification
 from boldApp.tareas.models import Project, ProjectMember, TaskStatus, TaskFollower, Section
 from config.asgi import application
+from .socket_helpers import receive_event
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, DEBUG=True)
@@ -312,7 +313,7 @@ class NotificationModuleTests(TransactionTestCase):
                     "/api/v2/task-followers/", {"task": task["id"], "assignment": str(assignment.pk), "notification_level": "all"}, format="json",
                 )
                 self.assertEqual(response.status_code, 201, response.data)
-                event = await communicator.receive_json_from(timeout=5)
+                event = await receive_event(communicator, "notification.created", timeout=5)
                 self.assertEqual(event["event_type"], "notification.created")
                 self.assertEqual(event["payload"]["type"], "task.collaborator_added")
                 self.assertEqual(event["payload"]["route"]["task_id"], task["id"])

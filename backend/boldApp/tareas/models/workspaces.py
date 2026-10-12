@@ -10,6 +10,7 @@ class SharedWorkspaceFolder(UUIDPrimaryKeyModel):
     folders = models.JSONField(default=list)
     members = models.ManyToManyField("boldApp_core.PositionAssignment", blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+    revision = models.PositiveIntegerField(default=1)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["owner", "unit", "folder_id"], name="unique_shared_workspace_owner_folder")]
@@ -20,3 +21,14 @@ class PersonalTaskBoard(models.Model):
     sections = models.JSONField(default=list)
     task_sections = models.JSONField(default=dict)
     unsectioned_index = models.PositiveIntegerField(null=True, blank=True, default=None)
+
+
+class WorkspaceLibrary(UUIDPrimaryKeyModel):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    unit = models.ForeignKey("boldApp_core.OrganizationalUnit", on_delete=models.CASCADE)
+    folders = models.JSONField(default=list)
+    revision = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "unit"], name="unique_workspace_library_owner_unit")]

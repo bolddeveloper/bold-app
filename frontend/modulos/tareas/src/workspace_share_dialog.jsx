@@ -20,6 +20,6 @@ export default function WorkspaceShareDialog({folder, members, ids, onChange, bu
             <div className="folder_share_person"><span className="folder_share_avatar"><AvatarImage url={core.account?.avatar_url} initials={core.activeAssignment?.initials || "Tú"}/></span><span><strong>{core.activeAssignment?.name || "Tú"}</strong><small>{core.account?.email}</small></span><small>Propietario</small></div>
             {assigned.filter(matching).map(person => <div className="folder_share_person" key={person.id}>{personRow(person, true)}</div>)}
             {!!query.trim() && <><small>{candidates.length} personas para agregar</small>{candidates.map(person => <button type="button" className="folder_share_person" key={person.id} disabled={busy} onClick={() => onChange(person)}>{personRow(person, false)}</button>)}</>}
-        </div>{error && <p role="alert">{error}</p>}<small>Busca personas de tu departamento. Los permisos de proyectos y Drive se mantienen.</small>
+        </div>{error && <p role="alert">{error}</p>}<small>Busca empleados de cualquier departamento. Podrán editar el contexto compartido; los permisos de proyectos, tareas y Drive se mantienen.</small>
     </section></div>, document.body);
 }

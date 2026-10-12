@@ -7,6 +7,8 @@ from rest_framework.test import APITestCase
 
 from boldApp.core.models import Employee, JobRole, JobRolePermission, OrganizationalUnit, Permission, Position, PositionAssignment, UserAccount
 from boldApp.sugerencias.models import Suggestion, SuggestionEvent
+from boldApp.workspace.image_test_helpers import isolated_drive_storage
+from boldApp.workspace.models import ImageStorageRoot
 
 
 class SuggestionApiTests(APITestCase):
@@ -24,6 +26,7 @@ class SuggestionApiTests(APITestCase):
         self.position = Position.objects.create(unit=self.unit, job_role=self.role)
         self.employee = Employee.objects.create(full_name="Persona Demo")
         self.account = UserAccount.objects.create_user(email="persona@bold.gt", password="A-secure-pass-2026!", employee=self.employee)
+        self.drive = self.enterContext(isolated_drive_storage(self.account))
         self.assignment = PositionAssignment.objects.create(position=self.position, employee=self.employee)
         self.permission = Permission.objects.get(code="suggestions.feedback.create")
         JobRolePermission.objects.get_or_create(job_role=self.role, permission=self.permission, effect="allow", scope_type="own_unit")
@@ -49,6 +52,13 @@ class SuggestionApiTests(APITestCase):
         self.assertEqual(fetched.status_code, 200)
         self.assertEqual(fetched.content, webp)
         self.assertEqual(fetched["Cache-Control"], "private, no-store")
+        # A valid image ID is not enough: another author cannot read this report.
+        from rest_framework.test import APIClient
+        other = UserAccount.objects.create_user(email="other-capture@bold.gt", employee=Employee.objects.create(full_name="Otra persona"))
+        placement = PositionAssignment.objects.create(employee=other.employee, position=Position.objects.create(unit=self.unit, job_role=self.role))
+        visitor = APIClient(); visitor.force_authenticate(other)
+        visitor.credentials(HTTP_X_ASSIGNMENT_ID=str(placement.pk))
+        self.assertEqual(visitor.get(endpoint).status_code, 404)
         retained = self.client.patch(f"/api/v2/suggestions/{report_id}/", {"screenshots": [{"id": image_id}]}, format="json")
         self.assertEqual(retained.status_code, 200, retained.data)
         audit = SuggestionEvent.objects.get(suggestion_id=report_id, event_type="suggestion.updated")
@@ -58,6 +68,16 @@ class SuggestionApiTests(APITestCase):
         removed = self.client.patch(f"/api/v2/suggestions/{report_id}/", {"screenshots": []}, format="json")
         self.assertEqual(removed.status_code, 200)
         self.assertEqual(self.client.get(endpoint).status_code, 404)
+
+    def test_missing_storage_does_not_create_a_partial_report(self):
+        ImageStorageRoot.objects.all().delete()
+        response = self.client.post("/api/v2/suggestions/", {"category": "bug", "message": "No debe guardarse este reporte",
+            "screenshots": [{"name": "Captura", "data_url": "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"}]}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Conectores", str(response.data))
+        self.assertFalse(Suggestion.objects.exists())
+        self.assertFalse(SuggestionEvent.objects.exists())
+        self.drive.assert_not_called()
 
     def test_capture_validation_and_visibility_follow_report_permissions(self):
         payload = {"category": "bug", "message": "Descripción válida del error"}

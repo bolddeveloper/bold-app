@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "boldApp.tareas",
     "boldApp.notificaciones",
     "boldApp.sugerencias",
+    "boldApp.marcas",
     "boldApp.calendario",
 ]
 
