@@ -471,7 +471,6 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
             section = Section.objects.filter(pk=section_id, project=project).first() if section_id else None
             if section_id and not section:
                 raise ValidationError({"section": "La seccion no pertenece al proyecto."})
-            self.require_permission("tasks.project.manage", project.unit, project.pk)
         with transaction.atomic():
             for task in tasks:
                 if operation == "delete":
@@ -480,6 +479,10 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                     task.save(update_fields=["deleted_at", "updated_at"])
                 elif operation == "link":
                     self.require_permission("tasks.task.update", task.unit, task.pk)
+                    # Reorder an already-linked task without granting project
+                    # administration. New associations retain the manage guard.
+                    existing = TaskProject.objects.filter(task=task, project=project).exists()
+                    self.require_permission("tasks.project.read" if existing else "tasks.project.manage", project.unit, project.pk)
                     link, created = TaskProject.objects.get_or_create(
                         task=task, project=project,
                         defaults={"section": section, "position": 0, "added_by_assignment": request.assignment},
@@ -559,9 +562,17 @@ class TaskProjectViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         link = self.get_object()
-        self._require_link_write(link)
         new_task = serializer.validated_data.get("task")
         new_project = serializer.validated_data.get("project")
+        identities_unchanged = (
+            (new_task is None or new_task.id == link.task_id)
+            and (new_project is None or new_project.id == link.project_id)
+        )
+        if identities_unchanged:
+            self.require_permission("tasks.task.update", link.task.unit, link.task_id)
+            self.require_permission("tasks.project.read", link.project.unit, link.project_id)
+        else:
+            self._require_link_write(link)
         if new_task and new_task.id != link.task_id:
             self.require_permission("tasks.task.update", new_task.unit, new_task.id)
         if new_project and new_project.id != link.project_id:

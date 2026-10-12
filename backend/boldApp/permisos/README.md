@@ -158,15 +158,32 @@ El motor aplica este orden y se detiene en la primera coincidencia:
    o jerarquía inválida producen denegación.
 2. Si la cuenta es el dueño (`is_superuser`), concesión implícita del permiso
    activo sobre cualquier unidad válida.
-3. `deny` individual vigente (`AccessGrant`).
-4. `deny` del cargo (`JobRolePermission`).
-5. `allow` individual vigente.
-6. `allow` del cargo.
-7. Denegación por defecto.
+3. Guardas del recurso: participación en proyectos; para eliminar una tarea,
+   ser su creador o responsable directo. Una política amplia no supera esta
+   restricción de eliminación. El propietario conserva su acceso universal.
+4. `deny` individual vigente (`AccessGrant`).
+5. `deny` del cargo (`JobRolePermission`).
+6. `allow` individual vigente.
+7. `allow` del cargo.
+8. Participación explícita en la tarea: el responsable y las asignaciones
+   añadidas como colaboradores (`TaskFollower`) pueden editar, completar o
+   reabrir esa tarea. Creador/responsable pueden eliminarla. Se comprueba la
+   tarea real, no una unidad o relación declarada por el navegador.
+9. Denegación por defecto.
 
 Para las cuentas no propietarias, un `allow` individual no puede superar un
 `deny` del cargo y un `deny` individual prevalece sobre cualquier permiso
 base. Las reglas ligadas a `resource_id` solo aplican a ese recurso.
+
+La colaboración pertenece a la tarea, **no al cargo llamado Colaborador**.
+Esta concesión limitada puede permitir editar una tarea ajena aunque el cargo
+solo permita editar las creadas por sí mismo; no supera denegaciones explícitas,
+permisos desactivados ni el requisito MFA. Retirar al colaborador elimina esa
+concesión en la siguiente comprobación del servidor. No concede reasignar
+responsables o unidades ni administrar proyectos. Las secciones/posición de una
+vinculación existente se pueden modificar con edición de la tarea y lectura
+del proyecto; crear, trasladar o eliminar la vinculación sigue exigiendo
+administrar el proyecto. Las operaciones masivas aplican las mismas guardas.
 
 ### Diagrama de datos
 

@@ -115,7 +115,7 @@ class TasksV2ApiTests(TransactionTestCase):
             response = self.client.post(f"/api/v2/sections/{path}/", {"project": str(self.ops_project.pk), **body}, format="json")
             self.assertEqual(response.status_code, 403, response.data)
 
-    def test_cross_department_collaborator_reads_only_assigned_task(self):
+    def test_cross_department_collaborator_reads_and_edits_only_assigned_task(self):
         task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Colaboración entre áreas",
             priority="medium", created_by_assignment=self.david_assignment)
         other = Task.objects.create(unit=self.operations, status=self.ops_status, title="Privada",
@@ -137,7 +137,9 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(response.data["results"][0]["status_name"], self.ops_status.name)
         comments = client.get("/api/v2/comments/", {"tasks": str(task.id)})
         self.assertIn(str(comment.id), {str(row["id"]) for row in comments.data["results"]})
-        self.assertEqual(client.patch(f"/api/v2/tasks/{task.id}/", {"title": "No autorizado"}).status_code, 403)
+        self.assertEqual(client.patch(f"/api/v2/tasks/{task.id}/", {"title": "Colaboración autorizada"}).status_code, 200)
+        self.assertEqual(client.patch(f"/api/v2/tasks/{other.id}/", {"title": "No autorizado"}).status_code, 404)
+        self.assertEqual(client.delete(f"/api/v2/tasks/{task.id}/").status_code, 403)
         rule = JobRolePermission.objects.create(job_role=self.ana_assignment.position.job_role,
             permission=Permission.objects.get(code="tasks.task.read"), effect="deny",
             scope_type="specific_unit", target_unit=self.operations)
@@ -456,7 +458,7 @@ class TasksV2ApiTests(TransactionTestCase):
         )
         self.assertEqual(created.status_code, 201, created.data)
 
-    def test_collaborator_can_mutate_only_tasks_created_by_its_assignment(self):
+    def test_created_by_me_rules_restrict_unrelated_tasks_and_reassignment(self):
         collaborator_role = self.ana_assignment.position.job_role
         managed_codes = {
             "tasks.task.update",
@@ -489,7 +491,7 @@ class TasksV2ApiTests(TransactionTestCase):
         foreign_task = Task.objects.create(
             unit=self.marketing,
             created_by_assignment=carla_assignment,
-            assignee_assignment=self.ana_assignment,
+            assignee_assignment=carla_assignment,
             status=self.marketing_status,
             title="Tarea creada por Carla",
             priority="medium",
@@ -538,6 +540,7 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(foreign_edit.status_code, 403)
         self.assertIn("solo permite modificar tareas creadas", foreign_edit.data["detail"])
 
+        Task.objects.filter(pk=foreign_task.pk).update(assignee_assignment=self.ana_assignment)
         done = TaskStatus.objects.create(unit=self.marketing, name="Terminada por responsable", category="done", position=99, is_final=True)
         completed = client.patch(f"/api/v2/tasks/{foreign_task.id}/", {"status": str(done.id)}, format="json")
         self.assertEqual(completed.status_code, 200, completed.data)
@@ -545,13 +548,21 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(reopened.status_code, 200, reopened.data)
         bulk = client.post("/api/v2/tasks/bulk/", {"operation": "update", "ids": [str(foreign_task.id)], "changes": {"status": str(done.id)}}, format="json")
         self.assertEqual(bulk.status_code, 200, bulk.data)
-        for extra in [{"title": "No permitido"}, {"assignee_assignment": str(carla_assignment.id)}, {"created_by_assignment": str(self.ana_assignment.id)}]:
-            mixed = client.patch(f"/api/v2/tasks/{foreign_task.id}/", {"status": str(done.id), **extra}, format="json")
-            self.assertEqual(mixed.status_code, 403, mixed.data)
+        edited_by_responsible = client.patch(f"/api/v2/tasks/{foreign_task.id}/",
+            {"status": str(done.id), "title": "Tarea creada por Carla"}, format="json")
+        self.assertEqual(edited_by_responsible.status_code, 200, edited_by_responsible.data)
+        reassigned = client.patch(f"/api/v2/tasks/{foreign_task.id}/",
+            {"status": str(done.id), "assignee_assignment": str(carla_assignment.id)}, format="json")
+        self.assertEqual(reassigned.status_code, 403, reassigned.data)
+        forged_creator = client.patch(f"/api/v2/tasks/{foreign_task.id}/",
+            {"status": str(done.id), "created_by_assignment": str(self.ana_assignment.id)}, format="json")
+        self.assertEqual(forged_creator.status_code, 200, forged_creator.data)
+        foreign_task.refresh_from_db()
+        self.assertEqual(foreign_task.created_by_assignment_id, carla_assignment.id)
         Task.objects.filter(pk=foreign_task.pk).update(assignee_assignment=carla_assignment)
         TaskFollower.objects.get_or_create(task=foreign_task, assignment=self.ana_assignment, defaults={"added_by_assignment": carla_assignment})
-        denied = client.patch(f"/api/v2/tasks/{foreign_task.id}/", {"status": str(self.marketing_status.id)}, format="json")
-        self.assertEqual(denied.status_code, 403, denied.data)
+        supported = client.patch(f"/api/v2/tasks/{foreign_task.id}/", {"status": str(done.id)}, format="json")
+        self.assertEqual(supported.status_code, 200, supported.data)
         Task.objects.filter(pk=foreign_task.pk).update(assignee_assignment=self.ana_assignment)
         JobRolePermission.objects.create(job_role=collaborator_role, permission=update_permission,
                                          effect=JobRolePermission.EFFECT_DENY, scope_type=JobRolePermission.SCOPE_OWN_UNIT)
@@ -561,6 +572,7 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(foreign_task.status_id, done.id)
         self.assertEqual(foreign_task.title, "Tarea creada por Carla")
 
+        Task.objects.filter(pk=foreign_task.pk).update(assignee_assignment=carla_assignment)
         JobRolePermission.objects.create(
             job_role=collaborator_role,
             permission=Permission.objects.get(code="tasks.task.delete"),
