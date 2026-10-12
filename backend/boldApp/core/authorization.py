@@ -334,6 +334,7 @@ def resolve_access(
     at=None,
     context=None,
     resource_created_by_assignment_id=None,
+    task_status_only=False,
 ):
     """Resuelve acceso con deny-first y herencia implícita para el dueño.
 
@@ -449,6 +450,19 @@ def resolve_access(
                 context.policy_version,
             )
 
+    # Only a server-validated status-only mutation may use the assignee's narrow grant.
+    if task_status_only and permission.code == "tasks.task.update" and resource_id is not None:
+        from .resource_context import resolve_resource_context
+
+        if resolve_resource_context(permission, resource_id).get("task_assignee_assignment_id") == assignment.id:
+            return _decision(
+                True,
+                "El responsable puede cambiar el estado de su tarea asignada.",
+                "assigned_task_status",
+                "task_assignment",
+                policy_version=context.policy_version,
+            )
+
     for rule in applicable_direct:
         if rule.effect == AccessGrant.EFFECT_ALLOW:
             return _decision(
@@ -543,6 +557,7 @@ def apply_session_assurance(result, permission, request):
 def check_and_log(
     *, assignment, permission_code, target_unit, resource_id=None, resource_type="", request=None,
     resource_created_by_assignment_id=None,
+    task_status_only=False,
 ):
     permission = Permission.objects.get(code=permission_code.strip().lower())
     result = resolve_access(
@@ -551,6 +566,7 @@ def check_and_log(
         target_unit,
         resource_id=resource_id,
         resource_created_by_assignment_id=resource_created_by_assignment_id,
+        task_status_only=task_status_only,
     )
     result = apply_session_assurance(result, permission, request)
     account = None

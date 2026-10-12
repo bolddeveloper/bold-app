@@ -5,7 +5,28 @@ import { createPagedComments } from "./paged_comments.js";
 import { createTasksApi } from "./tasks_api.js";
 import { createHttpClient } from "../../../core/http_client.js";
 import { createTaskDataLoader } from "./task_data_loader.js";
+import { api } from "./tasks_api.js";
+import { saveTaskDraft } from "./task_service.js";
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test("editing a subtask's assignee and collaborators keeps its existing attachments", async () => {
+    const previous = {updateTask:api.updateTask,create:api.create,remove:api.remove}, writes=[];
+    const original={id:"child",parentTaskId:"parent",title:"Child",unitId:"unit",status:"Pendiente",subtasks:[],taskProjects:[],attachments:[],attachmentsLoaded:false};
+    const loader=createTaskEditLoader({list:async (_, query)=>{
+        assert.equal(query.tasks,"child");
+        return [{id:"file",task:"child",file_name:"Kept",file_url:"https://example.com/file"}];
+    }});
+    api.updateTask=async (id,payload)=>{writes.push([id,payload]);return {id,unit:"unit"};};
+    api.create=async (resource,payload)=>{assert.equal(resource,"task-followers");writes.push([resource,payload]);return {id:"follower"};};
+    api.remove=async ()=>assert.fail("Existing attachments must stay");
+    try {
+        const draft=await loader.load(original);
+        await saveTaskDraft({...draft,assignee_id:"responsible",collaborator_ids:["collaborator"]},
+            {statuses:[{id:"open",unitId:"unit",label:"Pendiente",isFinal:false}],tasks:[original],followers:[]},original);
+        assert.equal(writes[0][0],"child");assert.equal(writes[0][1].assignee_assignment,"responsible");
+        assert.equal(writes[1][1].task,"child");assert.equal(draft.attachments[0].id,"file");
+    } finally {Object.assign(api,previous);}
+});
 
 test("HTTP fixture: 5000 files cost 200 bootstrap pages before, zero after, one detail page", async () => {
     let reads = 0;

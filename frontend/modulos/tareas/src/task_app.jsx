@@ -1867,7 +1867,13 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                                 <span className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}>{sub.completed ? render_icon(check_icon, 11) : null}</span>
 
                             </button>
-                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}><InlineTaskTitle task={sub} on_save={title => taskActions.renameSubtask(selected_task.id, sub.id, title)} /></span>
+                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>
+                                <button type="button" className="task_name_button" onClick={() => handle_open_subtask(selected_task.id, sub.id)}>{sub.title}</button>
+                                <span className="subtask_people" aria-label="Personas asignadas">
+                                    {get_member(sub.assignee_id) && <span title={`Responsable: ${get_member(sub.assignee_id).name}`} aria-label={`Responsable: ${get_member(sub.assignee_id).name}`}>{render_avatar(get_member(sub.assignee_id), "avatar_small")}</span>}
+                                    {uniquePeople((sub.collaborator_ids || []).map(get_member).filter(Boolean)).map(member => <span key={member.id} title={`Colaborador: ${member.name}`} aria-label={`Colaborador: ${member.name}`}>{render_avatar(member, "avatar_small")}</span>)}
+                                </span>
+                            </span>
                             <button type="button" className="subtask_open_button" onClick={() => handle_open_subtask(selected_task.id, sub.id)} aria-label={`Abrir detalles de ${sub.title}`}>{render_icon(chevron_right_icon, 15)}</button>
                             <button type="button" className="subtask_open_button" onClick={() => taskActions.deleteSubtask(selected_task.id, sub.id)} aria-label={`Eliminar subtarea: ${sub.title}`} title="Eliminar subtarea">{render_icon(trash_icon, 15)}</button>
                         </div>
@@ -4449,7 +4455,7 @@ function TaskAppContent({ externalModules = {} }) {
     use_effect(() => {
         if (!quick_task_open) return;
         const close = event => {
-            if (event.type === "keydown" ? event.key === "Escape" : !document.querySelector(".quick_task_form")?.contains(event.target)) {
+            if (event.type === "keydown" ? event.key === "Escape" : !event.target.closest(".quick_task_form, .board_quick_task_form, .board_quick_add_button, .add_row_button")) {
                 set_quick_task_text("");
                 set_quick_task_open(false);
             }
@@ -5126,8 +5132,8 @@ function TaskAppContent({ externalModules = {} }) {
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
-        return tasks.find((task_item) => task_item.id === selected_task_id) || (editing_subtask_parent_id && edit_draft?.id === selected_task_id ? edit_draft : null);
-    }, [selected_task_id, tasks, editing_subtask_parent_id, edit_draft]);
+        return tasks.find((task_item) => task_item.id === selected_task_id) || all_workspace_tasks.find(task_item => task_item.id === selected_task_id) || null;
+    }, [selected_task_id, tasks, all_workspace_tasks]);
 
     use_effect(() => {
         if (selected_inbox_id || !notifications.length) return;
@@ -5895,7 +5901,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Opens the "Editar tarea" modal and seeds the draft.
     async function handle_open_edit_task(task_id) {
-        let task_item = tasks.find((t) => t.id === task_id);
+        let task_item = tasks.find((t) => t.id === task_id) || all_workspace_tasks.find(t => t.id === task_id);
         if (!task_item) return;
         const version = mutation_generation.current, attempt = ++edit_open_generation.current;
         if (real && task_crud_mutations.current.has(String(task_id))) {
@@ -5909,7 +5915,7 @@ function TaskAppContent({ externalModules = {} }) {
                     return;
                 }
                 if (version !== mutation_generation.current || attempt !== edit_open_generation.current || !task_activity.current) return;
-                if (pagedAttachmentsEnabled()) {
+                if (task_item.attachmentsLoaded === false || pagedAttachmentsEnabled()) {
                     set_opening_edit(true);
                     task_item = await edit_loader.current.load(task_item);
                 }
@@ -5921,7 +5927,7 @@ function TaskAppContent({ externalModules = {} }) {
             }
         }
         if (version !== mutation_generation.current || attempt !== edit_open_generation.current) return;
-        set_editing_subtask_parent_id(null);
+        set_editing_subtask_parent_id(real ? null : task_item.parentTaskId || null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
             title: task_item.title,
@@ -6235,35 +6241,8 @@ function TaskAppContent({ externalModules = {} }) {
         return true;
     }
 
-    function handle_open_subtask(parent_id, subtask_id) {
-        if (real && task_crud_mutations.current.has(String(parent_id))) { set_api_error("Espera a que se sincronice la tarea principal."); return; }
-        if (tasks.some(item => item.id === subtask_id)) {
-            handle_open_edit_task(subtask_id);
-            return;
-        }
-        const parent = tasks.find(item => item.id === parent_id);
-        const subtask = parent?.subtasks?.find(item => item.id === subtask_id);
-        if (!parent || !subtask) return;
-        set_editing_subtask_parent_id(parent_id);
-        set_selected_task_id(subtask_id);
-        set_edit_draft({
-            ...parent,
-            ...subtask,
-            id: subtask.id,
-            parentTaskId: parent_id,
-            description: subtask.description || "",
-            project_id: subtask.project_id || parent.project_id,
-            section: subtask.section || parent.section,
-            assignee_id: subtask.assignee_id || parent.assignee_id,
-            collaborator_ids: subtask.collaborator_ids || [],
-            due_day: subtask.due_day || null,
-            due_label: subtask.due_label || "",
-            priority: subtask.priority || "Media",
-            status: subtask.status || "Pend.",
-            subtasks: subtask.subtasks || []
-        });
-        set_edit_attachments([]);
-        set_active_modal("edit_task");
+    function handle_open_subtask(_parent_id, subtask_id) {
+        handle_task_select(subtask_id);
     }
 
     function handle_edit_subtask_title_change(subtask_id, title) {
@@ -6555,7 +6534,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
-                    <WorkspacesModule onEditing={value => {workspace_editing.current = value;}} savePending={workspace_save_pending} onImport={real ? import_workspace_items : null} accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
+                    <WorkspacesModule onEditing={value => {workspace_editing.current = value;}} savePending={workspace_save_pending} onImport={real ? import_workspace_items : null} accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={handle_open_edit_task} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
                     <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={handle_followers_change} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects"

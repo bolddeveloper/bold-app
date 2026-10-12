@@ -12660,7 +12660,11 @@ button {
 .detail_subtasks_block .subtask_check_row { grid-template-columns: 30px minmax(0, 1fr) 30px 30px; align-items: center; gap: 0; padding: 4px 0; cursor: pointer; }
 .detail_subtasks_block .subtask_check_row > :is(.subtask_toggle_area, .subtask_text) { background: var(--bold_surface_soft); min-height: 34px; }
 .detail_subtasks_block .subtask_toggle_area { width: 30px; padding: 7px 6px; border-radius: 9px 0 0 9px; }
-.detail_subtasks_block .subtask_check_row > .subtask_text { display: flex; align-items: center; border-radius: 0 9px 9px 0; }
+.detail_subtasks_block .subtask_check_row > .subtask_text { display: flex; align-items: center; gap: 8px; border-radius: 0 9px 9px 0; padding-right: 8px; }
+.detail_subtasks_block .subtask_text > .task_name_button { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.subtask_people { display: flex; align-items: center; gap: 3px; flex: 0 1 auto; max-width: 45%; overflow-x: auto; }
+.subtask_people > span { display: flex; flex: 0 0 auto; }
+.subtask_people .avatar_small { width: 24px; height: 24px; margin: 0; font-size: 10px; }
 .detail_subtasks_block .subtask_open_button { width: 30px; min-height: 34px; }
 @media (max-width: 760px) { .task_drawer_panel:has(.task_comments_section.is_expanded) { width: 100vw !important; } }
 .task_editor_content:empty::before { content: attr(data-placeholder); color: var(--bold_muted); opacity: .75; pointer-events: none; }

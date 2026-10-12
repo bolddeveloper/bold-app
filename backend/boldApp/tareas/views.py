@@ -91,13 +91,14 @@ class AssignmentScopedViewSetMixin:
         ordering = queryset.query.order_by or queryset.model._meta.ordering or ()
         return queryset.order_by(*ordering, "pk")
 
-    def require_permission(self, code, unit, resource_id=None):
+    def require_permission(self, code, unit, resource_id=None, *, task_status_only=False):
         result = check_and_log(
             assignment=self.request.assignment,
             permission_code=code,
             target_unit=unit,
             resource_id=resource_id,
             request=self.request,
+            task_status_only=task_status_only,
         )
         if not result.allowed:
             raise PermissionDenied(result.reason)
@@ -390,7 +391,8 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
 
     def perform_update(self, serializer):
         task = self.get_object()
-        self.require_permission("tasks.task.update", task.unit, task.id)
+        self.require_permission("tasks.task.update", task.unit, task.id,
+                                task_status_only=set(self.request.data) == set(serializer.validated_data) == {"status"})
         new_unit = serializer.validated_data.get("unit")
         unit_changed = new_unit is not None and new_unit.id != task.unit_id
         assignee_changed = (
@@ -486,7 +488,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                         link.section = section
                         link.save(update_fields=["section"])
                 else:
-                    self.require_permission("tasks.task.update", task.unit, task.pk)
+                    self.require_permission("tasks.task.update", task.unit, task.pk, task_status_only=set(changes) == {"status"})
                     serializer = self.get_serializer(task, data=changes, partial=True)
                     serializer.is_valid(raise_exception=True)
                     if (

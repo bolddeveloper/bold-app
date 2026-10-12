@@ -31,6 +31,7 @@ def task_authorization_context(resource_id):
         return {}
     return {
         "resource_created_by_assignment_id": row["created_by_assignment_id"],
+        "task_assignee_assignment_id": None if row["deleted_at"] else row["assignee_assignment_id"],
         "task_reader_assignment_ids": set() if row["deleted_at"] else {
             row["assignee_assignment_id"],
             *TaskFollower.objects.filter(task_id=resource_id).values_list("assignment_id", flat=True),
