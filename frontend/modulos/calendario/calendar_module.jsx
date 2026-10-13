@@ -1,7 +1,7 @@
 import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import { TaskText, TaskTextEditor } from "../tareas/src/task_text_editor.jsx";
 import { editorHTML, plainRichText, saveRichText } from "../tareas/src/rich_text.js";
-import { currentTimeMarker, formatCalendarTime } from "./calendar_data.js";
+import { currentTimeMarker, formatCalendarTime, initialCalendarNavigation } from "./calendar_data.js";
 import {confirmBold} from "../core/shared/bold_dialog.js";
 import {createContactSearch, mergeContactSuggestions} from "./contact_search.js";
 import { googleCache, cacheScope, backgroundRefresh, restoreGoogleConnection, cachedContentChanged, announceBackgroundUpdate } from "../core/google_cache.js";
@@ -365,8 +365,8 @@ export default function CalendarModule() {
     useEffect(() => {mounted.current = true; return () => {mounted.current = false; ++requestTicket.current; requestLock.current?.controller?.abort();};}, []);
     useLayoutEffect(() => {++requestTicket.current; requestLock.current?.controller?.abort(); snapshot.current = {events: [], tasks: [], lists: []}; setEvents([]); setTasks([]); setTaskLists([]); setEditing(null); setDetails(null); setTaskDetails(null);}, [namespace]);
     useEffect(() => {const clear = () => {++requestTicket.current; snapshot.current = {events: [], tasks: [], lists: []}; setEvents([]); setTasks([]); setTaskLists([]); setConnection(null);}; globalThis.addEventListener("bold:google-cache-cleared", clear); return () => globalThis.removeEventListener("bold:google-cache-cleared", clear);}, []);
-    useEffect(() => {let alive = true; if (namespace) googleCache.get(namespace, "calendar:navigation").then(saved => {if (!alive) return; setRestoredFor(namespace); if (saved && ["day", "week", "month", "agenda"].includes(saved.view) && !Number.isNaN(Date.parse(saved.cursor))) {setView(saved.view); setCursor(new Date(saved.cursor));}}); return () => {alive = false;};}, [namespace]);
-    useEffect(() => {if (namespace && restoredFor === namespace) googleCache.put(namespace, "calendar:navigation", {view, cursor: cursor.toISOString()});}, [namespace, restoredFor, view, cursor]);
+    useEffect(() => {let alive = true; if (namespace) googleCache.get(namespace, "calendar:navigation").then(saved => {if (!alive) return; const initial = initialCalendarNavigation(saved); setRestoredFor(namespace); setView(initial.view); setCursor(initial.cursor);}); return () => {alive = false;};}, [namespace]);
+    useEffect(() => {if (namespace && restoredFor === namespace) googleCache.put(namespace, "calendar:navigation", {view});}, [namespace, restoredFor, view]);
     useEffect(() => {let alive = true; const load = () => restoreGoogleConnection(`account:${core.account?.id}:${core.activeAssignment?.id}`, "calendar", () => calendarApi.connection(), value => {if (alive) setConnection(value);}).catch(problem => {if (alive) setError(problem.message);}); load(); globalThis.addEventListener("bold:google-connection-changed", load); return () => {alive = false; globalThis.removeEventListener("bold:google-connection-changed", load);};}, [core.account?.id, core.activeAssignment?.id]);
     useEffect(() => {
         const navigate = event => {

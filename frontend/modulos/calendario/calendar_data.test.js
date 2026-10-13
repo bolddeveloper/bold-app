@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { currentTimeMarker, fromDay, eventDay, formatCalendarTime, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
+import { currentTimeMarker, fromDay, eventDay, formatCalendarTime, initialCalendarNavigation, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
 
 test("calendar times use AM/PM in the viewer zone, including noon and midnight", () => {
     assert.equal(formatCalendarTime("2026-10-07T06:00:00Z", "America/Tegucigalpa"), "12:00 AM");
@@ -62,6 +62,25 @@ test("switching to a recurring series preserves unsaved fields without moving it
     assert.equal(result.start,master.start);assert.equal(result.summary,"Nuevo nombre");assert.equal(result.repeat,"none");assert.equal(result.originalRepeat,"DAILY");
 });
 import {dayKey, upcomingWeekDays} from "./calendar_data.js";
+
+test("calendar opens today while retaining the preferred view, including legacy navigation", () => {
+    const now = new Date(2026, 9, 13, 11, 10);
+    for (const view of ["day", "week", "month", "agenda"]) {
+        const saved = {view, cursor: "2026-10-09T12:00:00Z"};
+        const initial = initialCalendarNavigation(saved, now);
+        assert.equal(initial.view, view);
+        assert.equal(initial.cursor.getTime(), now.getTime());
+        assert.notEqual(initial.cursor, now);
+        assert.equal(saved.cursor, "2026-10-09T12:00:00Z");
+    }
+    for (const saved of [null, {}, {view: "unknown"}, {view: "week", cursor: "invalid"}]) {
+        const initial = initialCalendarNavigation(saved, now);
+        assert.equal(initial.view, "week");
+        assert.equal(dayKey(initial.cursor), "2026-10-13");
+        assert.deepEqual(upcomingWeekDays(initial.cursor, now).map(dayKey), ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
+    }
+    assert.equal(dayKey(initialCalendarNavigation({view: "week"}, new Date(2026, 9, 14)).cursor), "2026-10-14");
+});
 
 test("current week starts today while historical/future weeks remain complete", () => {
     const today = new Date(2026, 9, 7, 14);

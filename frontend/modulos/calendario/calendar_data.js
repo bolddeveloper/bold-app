@@ -2,6 +2,10 @@ export const dayKey = date => `${date.getFullYear()}-${String(date.getMonth() + 
 export const fromDay = key => new Date(`${key}T12:00:00`);
 export const addDays = (date, count) => { const next = new Date(date); next.setDate(next.getDate() + count); return next; };
 export const weekStart = date => addDays(date, -((date.getDay() + 6) % 7));
+// Restore the preferred layout, never the previously browsed date.
+export function initialCalendarNavigation(saved, now = new Date()) {
+    return {view: ["day", "week", "month", "agenda"].includes(saved?.view) ? saved.view : "week", cursor: new Date(now)};
+}
 export function upcomingWeekDays(cursor, today) {
     const days = Array.from({length: 7}, (_, index) => addDays(addDays(cursor, -cursor.getDay()), index));
     return days.some(date => dayKey(date) === dayKey(today)) ? days.filter(date => dayKey(date) >= dayKey(today)) : days;
