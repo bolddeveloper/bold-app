@@ -3,7 +3,7 @@ export const fromDay = key => new Date(`${key}T12:00:00`);
 export const addDays = (date, count) => { const next = new Date(date); next.setDate(next.getDate() + count); return next; };
 export const weekStart = date => addDays(date, -((date.getDay() + 6) % 7));
 export function upcomingWeekDays(cursor, today) {
-    const days = Array.from({length: 7}, (_, index) => addDays(addDays(weekStart(cursor), -1), index));
+    const days = Array.from({length: 7}, (_, index) => addDays(addDays(cursor, -cursor.getDay()), index));
     return days.some(date => dayKey(date) === dayKey(today)) ? days.filter(date => dayKey(date) >= dayKey(today)) : days;
 }
 export const zoneDay = (value, zone) => {
@@ -18,6 +18,12 @@ export const minutesInZone = (value, zone) => {
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value)).map(part => [part.type, part.value]));
     return Number(parts.hour) * 60 + Number(parts.minute);
 };
+
+export function currentTimeMarker(days, now, zone) {
+    const key = zoneDay(now, zone);
+    const column = days.findIndex(date => dayKey(date) === key);
+    return column < 0 ? null : {key, column, top: minutesInZone(now, zone) / 60 * 52};
+}
 
 export const timedEventLayout = (events, key, zone) => {
     const rows = events.filter(event => event.start?.dateTime && matchesDay(event, key, zone)).map(event => {

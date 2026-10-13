@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { eventDay, formatCalendarTime, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
+import { currentTimeMarker, fromDay, eventDay, formatCalendarTime, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
 
 test("calendar times use AM/PM in the viewer zone, including noon and midnight", () => {
     assert.equal(formatCalendarTime("2026-10-07T06:00:00Z", "America/Tegucigalpa"), "12:00 AM");
@@ -61,7 +61,7 @@ test("switching to a recurring series preserves unsaved fields without moving it
     const result=mergeEventScopeDraft(current,original,master);
     assert.equal(result.start,master.start);assert.equal(result.summary,"Nuevo nombre");assert.equal(result.repeat,"none");assert.equal(result.originalRepeat,"DAILY");
 });
-import {upcomingWeekDays} from "./calendar_data.js";
+import {dayKey, upcomingWeekDays} from "./calendar_data.js";
 
 test("current week starts today while historical/future weeks remain complete", () => {
     const today = new Date(2026, 9, 7, 14);
@@ -70,5 +70,22 @@ test("current week starts today while historical/future weeks remain complete", 
     assert.equal(upcomingWeekDays(new Date(2026, 8, 28), today).length, 7);
     assert.equal(upcomingWeekDays(new Date(2026, 9, 15), today).length, 7);
     assert.equal(upcomingWeekDays(new Date(2026, 9, 10), new Date(2026, 9, 10)).length, 1);
-    assert.equal(upcomingWeekDays(new Date(2026, 9, 11), new Date(2026, 9, 11)).length, 7);
+    assert.deepEqual(upcomingWeekDays(new Date(2026, 9, 11), new Date(2026, 9, 11)).map(dayKey), ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
+    assert.deepEqual(upcomingWeekDays(new Date(2026, 9, 4), new Date(2026, 9, 6)).map(dayKey), ["2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10"]);
+});
+
+test("current marker uses the displayed date and zone, not the host date", () => {
+    const now = new Date("2026-10-14T02:30:00Z");
+    assert.deepEqual(currentTimeMarker([fromDay("2026-10-13")], now, "America/Guatemala"), {key: "2026-10-13", column: 0, top: 1066});
+    assert.equal(currentTimeMarker([fromDay("2026-10-14")], now, "America/Guatemala"), null);
+    assert.deepEqual(currentTimeMarker([fromDay("2026-10-14")], now, "Asia/Tokyo"), {key: "2026-10-14", column: 0, top: 598});
+    assert.equal(currentTimeMarker([], now, "America/Guatemala"), null);
+});
+
+test("current marker moves with local minutes and does not appear in other weeks", () => {
+    const days = [fromDay("2026-10-12"), fromDay("2026-10-13")];
+    const marker = currentTimeMarker(days, new Date("2026-10-13T18:15:00Z"), "America/Guatemala");
+    assert.equal(marker.column, 1);
+    assert.equal(marker.top, 637);
+    assert.equal(currentTimeMarker(days, new Date("2026-10-20T18:15:00Z"), "America/Guatemala"), null);
 });

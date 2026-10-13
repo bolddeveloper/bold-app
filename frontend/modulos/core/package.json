@@ -10,6 +10,7 @@
         "test": "node --test shared/image_controls.test.js shared/bold_dialog.test.js shared/presence.test.js shared/people.test.js startup_greeting.test.js keyboard_shortcuts.test.js google_cache.test.js module_cache.test.js onboarding*.test.js ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../marcas/*.test.js ../docs/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js",
         "test:pwa": "node --test pwa_updates.test.js",
         "test:brands-ui": "node tests/brands_ui.mjs",
+        "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",
         "test:worker": "node --test worker/*.test.js",
         "check:sync-capacity": "node tools/check_sync_capacity.mjs",
         "probe:public-health": "node tools/probe_public_health.mjs",

@@ -1993,5 +1993,6 @@
     }
 }
 
-.bold_calendar_now_line { position: absolute; left: 0; right: 0; height: 2px; background: #ea4335; z-index: 4; pointer-events: none; }
+.bold_calendar_now_line { position: absolute; left: 0; right: 0; height: 2px; background: #ea4335; z-index: 4; pointer-events: none; box-shadow: 0 0 0 1px var(--cal-surface); }
 .bold_calendar_now_line::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #ea4335; }
+.theme_dark .bold_calendar_now_line, .theme_dark .bold_calendar_now_line::before { background: #ff6b63; }
