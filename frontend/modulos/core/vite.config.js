@@ -4,8 +4,14 @@ import react from "@vitejs/plugin-react";
 
 // Defines the Vite host shared by every Bold frontend module.
 export default define_config({
+    cacheDir: ".vite-local",
     resolve: {
         dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]
+    },
+    optimizeDeps: {
+        // Discover the lazy spreadsheet and its plugins before serving cached dependency URLs.
+        entries: ["index.html", "sheets_grid.jsx", "sheets_locales.js"],
+        include: ["@casualoffice/sheets/sheets", "@casualoffice/sheets/chrome", "@casualoffice/sheets/styles", "@univerjs/sheets-data-validation/facade", "@univerjs/sheets-table-ui"]
     },
     server: {
         port: 5174,

@@ -2,10 +2,12 @@ import Swal from "sweetalert2";
 
 // Avisos de BOLD: texto plano, foco contenido y cancelación con Escape.
 function dialog(options) {
+    const target = [...(globalThis.document?.querySelectorAll?.("dialog[open]") || [])].at(-1);
     return Swal.fire({
         title: "BOLD", confirmButtonText: "Aceptar", cancelButtonText: "Cancelar",
         showCancelButton: true, focusCancel: true, allowOutsideClick: false,
         customClass: {container: "bold_dialog_container", popup: "bold_dialog", confirmButton: "bold_dialog_confirm", cancelButton: "bold_dialog_cancel"},
+        ...(target ? {target} : {}),
         ...options,
     });
 }

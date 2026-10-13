@@ -13,6 +13,7 @@ import { useCore } from "./core_provider.jsx";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
 import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
+import { startNotificationBellReminder } from "./notification_bell.js";
 const icon_map = { profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
@@ -143,12 +144,18 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     useEffect(() => setMembersOpen(false), [core.activeAssignment?.id]);
     const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews };
     const [bellPulse, setBellPulse] = useState(0);
+    const [bellReminder, setBellReminder] = useState(false);
+    const hasUnreadNotifications = topBarProps.notifications.some(item => !item.is_read);
+    const bellInterval = core.notifications.settings.bell_interval_minutes ?? 5;
+    useEffect(() => setBellPulse(0), [core.activeAssignment?.id]);
     useEffect(() => {
-        setBellPulse(0);
-        const ring = () => setBellPulse(value => value + 1);
-        window.addEventListener("bold:notification-arrived", ring);
-        return () => window.removeEventListener("bold:notification-arrived", ring);
-    }, [core.activeAssignment?.id]);
+        setBellReminder(false);
+        if (!hasUnreadNotifications) return;
+        return startNotificationBellReminder(bellInterval, ringing => {
+            setBellReminder(ringing);
+            if (ringing) setBellPulse(value => value + 1);
+        });
+    }, [core.activeAssignment?.id, hasUnreadNotifications, bellInterval]);
     useEffect(() => setProfileAnchor(null), [shell.active_module]);
     const profileActions = {onQuickProfile: event => {const anchor = event.currentTarget; setProfileAnchor(old => old === anchor ? null : anchor); globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", {detail: "profile"}));}, onOpenProfile: shell.open_profile};
     const compact = useMediaQuery("(max-width: 1023px)");
@@ -165,8 +172,8 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
-            {render_mobile_header({ ...profileActions, ...membersActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, handle_toggle_notifications })}
-            <TopBar {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} handle_toggle_notifications={handle_toggle_notifications} />
+            {render_mobile_header({ ...profileActions, ...membersActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, bellReminder, handle_toggle_notifications })}
+            <TopBar {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} bellReminder={bellReminder} handle_toggle_notifications={handle_toggle_notifications} />
             {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{<NotificationsPanel {...topBarProps}/>}</div></ResponsiveOverlay>}
             {children}
         </main>
@@ -418,7 +425,7 @@ function TopBar(props) {
                         aria-label="Notificaciones"
                         onClick={handle_toggle_notifications}
                     >
-                        <span key={props.bellPulse} className={has_unread_notifications || props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 18)}</span>
+                        <span key={props.bellPulse} className={props.bellPulse ? `notification_bell_arrival${props.bellReminder ? " notification_bell_reminder" : ""}` : undefined}>{render_icon(bell_icon, 18)}</span>
                         {has_unread_notifications ? <span className="bell_unread_dot"></span> : null}
                     </button>
 
@@ -460,7 +467,7 @@ function render_mobile_header(props) {
                     <button className={`mobile_more_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}>{render_icon(newspaper_icon, 22)}</button>
                 <button className="mobile_more_button" type="button" aria-label="Mostrar lista de miembros" title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 22)}</button>
                 <button className={`mobile_more_button${props.notifications.some(item => !item.is_read) ? " bell_has_unread" : ""}`} data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
-                    <span key={props.bellPulse} className={props.notifications.some(item => !item.is_read) || props.bellPulse ? "notification_bell_arrival" : undefined}>{render_icon(bell_icon, 22)}</span>
+                    <span key={props.bellPulse} className={props.bellPulse ? `notification_bell_arrival${props.bellReminder ? " notification_bell_reminder" : ""}` : undefined}>{render_icon(bell_icon, 22)}</span>
                     {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
                 </button>
                 </div>

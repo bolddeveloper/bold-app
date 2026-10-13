@@ -56,7 +56,7 @@ def _actor_name(actor):
     return actor.employee.full_name if actor else "Bold"
 
 
-def create_notification(*, recipient, event_type, title, body="", actor=None, task=None, project=None, route=None, metadata=None, dedupe_key=None):
+def create_notification(*, recipient, event_type, title, body="", actor=None, task=None, project=None, route=None, metadata=None, dedupe_key=None, resource_type="", resource_id=None):
     if actor and recipient.id == actor.id:
         return None
     if not event_preferences(recipient.employee.user_account.notification_settings).get(event_type, True):
@@ -67,8 +67,8 @@ def create_notification(*, recipient, event_type, title, body="", actor=None, ta
         "project": project,
         "type": event_type,
         "module": (route or {}).get("module", "tasks"),
-        "resource_type": "task" if task else "project" if project else "",
-        "resource_id": task.id if task else project.id if project else None,
+        "resource_type": "task" if task else "project" if project else resource_type,
+        "resource_id": task.id if task else project.id if project else resource_id,
         "title": title[:180],
         "body": body,
         "route": route or {},

@@ -12,3 +12,7 @@ deploy/oracle/backups/
 deploy/oracle/*.dump
 deploy/oracle/*.dump.sha256
 frontend/modulos/tareas/.vite/
+frontend/modulos/core/.vite-local/
+**/node_modules/
+**/.vite/
+**/.vite-local/

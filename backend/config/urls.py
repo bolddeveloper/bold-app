@@ -12,6 +12,7 @@ from boldApp.workspace.image_views import ImageStorageConfigurationView, ImageSt
 # El nucleo (organigrama y seguridad) vive en api/core/; tareas mantiene su
 # prefijo api/ actual hasta que se reescriba para integrarse con el nucleo.
 urlpatterns = [
+    path("api/v2/sheets/", include("boldApp.hojas.urls")),
     path("api/v2/google/image-storage/", ImageStorageConfigurationView.as_view()),
     path("api/v2/google/image-storage/folders/", ImageStorageFoldersView.as_view()),
     path("api/v2/media/workspace-description/", WorkspaceImageDocumentView.as_view()),

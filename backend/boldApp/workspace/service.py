@@ -104,6 +104,7 @@ def google(user, method, path, *, api="drive", params=None, body=None, files=Non
     if response.status_code == 412:
         error = APIException("El archivo original cambió. Vuelve a cargar antes de guardar.")
         error.status_code = 409
+        error.google_code = "precondition_failed"
         raise error
     if response.status_code == 429 or response.status_code >= 500:
         raise GoogleUnavailable()

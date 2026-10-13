@@ -1,5 +1,5 @@
 export const notificationSounds = [["samsung", "Silbido Samsung"], ["post", "Nueva publicación"], ["melody", "SMS melódico"], ["delivered", "Mensaje entregado"], ["facebook", "Mensaje Facebook"]];
-export const defaultNotificationSettings = {enabled: true, sound: "post", volume: 60, custom_audio: "", custom_name: "", desktop_enabled: false};
+export const defaultNotificationSettings = {enabled: true, sound: "post", volume: 60, custom_audio: "", custom_name: "", desktop_enabled: false, bell_interval_minutes: 5};
 let audio, customTimer;
 
 export function createEntryNotificationSound({play = playNotificationSound, target = document, visible = () => !document.hidden} = {}) {

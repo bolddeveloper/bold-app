@@ -2,6 +2,10 @@
 
 Este módulo concentra las notificaciones internas de la aplicación. La entrega inicial cubre eventos de tareas, comentarios y proyectos sin acoplar el buzón al módulo de tareas.
 
+En Ajustes del perfil → Notificaciones → Campana se puede elegir un intervalo de 1 a 60 minutos, guardado por cuenta. El valor predeterminado es de cinco minutos, también para cuentas existentes. Mientras haya avisos sin leer, la campana usa su movimiento habitual durante dos segundos en cada intervalo; permanece quieta entre recordatorios. El intervalo no se reinicia con las actualizaciones de la lista. Leer o limpiar todos los avisos cancela el recordatorio. Se aplica en computadora y móvil, respeta el movimiento reducido y omite los recordatorios mientras la pestaña está oculta. El sonido y las alertas de Windows conservan sus preferencias independientes.
+
+Las pruebas del intervalo, su duración, la limpieza de temporizadores y la persistencia por cuenta están preparadas, sin ejecutar por indicación del usuario.
+
 ## Eventos iniciales
 
 - Asignación y cambios relevantes de tareas.

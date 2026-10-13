@@ -4217,7 +4217,7 @@ class TaskAppErrorBoundary extends react_component {
             return (
                 <div className="app_error_fallback">
                     <strong>No se pudo mostrar esta vista.</strong>
-                    <button type="button" onClick={() => this.setState({ has_error: false })}>
+                    <button type="button" onClick={() => window.location.reload()}>
                         Reintentar
                     </button>
                 </div>
@@ -5600,6 +5600,12 @@ function TaskAppContent({ externalModules = {} }) {
         if (real && !notification_item.is_read) queue_notification_read(notification_item.id, true);
         else set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
         const route = notification_item.route || {};
+        if (route.module === "sheets" && route.file_id) {
+            window.sessionStorage.setItem("bold:sheets:open", route.file_id);
+            handle_module_change("sheets");
+            window.dispatchEvent(new CustomEvent("bold:sheets:open", {detail: route.file_id}));
+            return;
+        }
         if (route.task_id) {
             set_active_module("tasks");
             set_active_section("tasks");

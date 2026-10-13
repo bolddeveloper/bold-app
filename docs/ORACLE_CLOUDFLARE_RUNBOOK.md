@@ -472,3 +472,14 @@ El despliegue del 8 de octubre de 2026 confirmo este callback en la configuracio
 - Compilacion completada. Portada, JavaScript, CSS y sesion anonima con HTTP 200; health confirmo PostgreSQL y Redis disponibles.
 - Callback corporativo activo confirmado. No se modifico Google Cloud.
 - No se ejecutaron suites de pruebas ni se grabo audio desde un navegador autenticado, siguiendo la indicacion del usuario.
+
+### Sexta entrega del 8 de octubre de 2026: secciones personales
+
+- Rama `Develop`, commit `7736983eb9fab2bb3a5a1d9665e88815ba68c94a`.
+- Respaldo previo: `/opt/bold-app/deploy/oracle/backups/boldapp-20261008T161512Z.dump`.
+- Oracle: backend y Celery reconstruidos y recreados; servicios saludables. Migracion `0014_personaltaskboard_unsectioned_index` aplicada, sin migraciones pendientes.
+- Cloudflare Worker `boldapp`: version `e761e36a-25f0-4531-9487-e9c7a2fccbbb`.
+- Publicados el orden persistente de Sin seccion, renombrado con sus tareas y el indicador de arrastre en modo claro.
+- Compilacion completada. Portada y nuevos assets con HTTP 200; health confirmo PostgreSQL y Redis disponibles; sesion anonima sin autenticar.
+- Callback corporativo confirmado; `microphone=(self)` permanece activo en la respuesta publica.
+- No se ejecutaron suites de pruebas ni recorridos autenticados, siguiendo la indicacion del usuario.

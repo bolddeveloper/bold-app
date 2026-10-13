@@ -38,3 +38,16 @@ class NotificationSettingsTests(TestCase):
             self.assertEqual(self.client.patch(self.url, {"events": invalid}, format="json").status_code, 400)
         self.client.force_authenticate(self.users[1])
         self.assertTrue(self.client.get(self.url).data["events"]["task.updated"])
+
+    def test_bell_interval_defaults_to_five_minutes_and_is_saved_per_account(self):
+        self.assertEqual(self.client.get(self.url).data["bell_interval_minutes"], 5)
+        result = self.client.patch(self.url, {"bell_interval_minutes": 10}, format="json")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(self.client.get(self.url).data["bell_interval_minutes"], 10)
+        self.client.patch(self.url, {"volume": 30}, format="json")
+        self.assertEqual(self.client.get(self.url).data["bell_interval_minutes"], 10)
+        for value in [0, -1, 61, 1.5, "invalid"]:
+            self.assertEqual(self.client.patch(self.url, {"bell_interval_minutes": value}, format="json").status_code, 400)
+        self.assertEqual(self.client.get(self.url).data["bell_interval_minutes"], 10)
+        self.client.force_authenticate(self.users[1])
+        self.assertEqual(self.client.get(self.url).data["bell_interval_minutes"], 5)

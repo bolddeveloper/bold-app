@@ -9,6 +9,9 @@ import WorkspaceModule from "../docs/workspace_module.jsx?docs-uploads";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
+import {lazy, Suspense, useEffect, useState} from "react";
+import {sheetsCache} from "../hojas/sheets_cache.js";
+const SheetsModule = lazy(() => import("../hojas/sheets_module.jsx"));
 
 const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
@@ -25,11 +28,20 @@ const mockIdentity = { directory: team_members, assignments: team_members, activ
 
 function ApplicationWorkspace() {
     const core = useCore();
+    const [canSheets, setCanSheets] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        const update = async () => {try {const allowed = await core.permissions.can("sheets.file.read"); if (alive) {setCanSheets(allowed); if (!allowed && core.account?.id) {window.dispatchEvent(new CustomEvent("bold:sheets:revoked"));sheetsCache.clear(core.account.id).catch(() => {});}}} catch {if (alive) setCanSheets(false);}};
+        setCanSheets(false); update();
+        window.addEventListener("bold:permissions-revision", update);
+        return () => {alive = false; window.removeEventListener("bold:permissions-revision", update);};
+    }, [core.account?.id, core.activeAssignment?.id, core.permissions.can]);
     const canAdminister = canUseManagementModule("administration", core.account, core.activeUnit, core.activeAssignment);
     const canManagePermissions = canUseManagementModule("permissions", core.account, core.activeUnit, core.activeAssignment);
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
+        ...(canSheets ? [{id: "sheets", label: "Hojas", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
@@ -39,6 +51,7 @@ function ApplicationWorkspace() {
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,
         suggestions: <SuggestionsModule />,
+        ...(canSheets ? {sheets: <Suspense fallback={<p>Abriendo editor de Hojas…</p>}><SheetsModule/></Suspense>} : {}),
         ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };

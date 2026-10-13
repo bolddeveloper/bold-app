@@ -50,12 +50,17 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         project_ids = base.exclude(project_id__isnull=True).values_list("project_id", flat=True)
         visible_tasks = self._visible_ids(Task.objects.filter(id__in=task_ids), "tasks.task.read")
         visible_projects = self._visible_ids(Project.objects.filter(id__in=project_ids), "tasks.project.read")
+        from boldApp.hojas.access import accessible, module_allowed
+        sheet_ids = base.filter(module="sheets", resource_type="file").values_list("resource_id", flat=True)
+        visible_sheets = accessible(self.request.assignment).filter(pk__in=sheet_ids, deleted_at__isnull=True).values_list("pk", flat=True) if sheet_ids.exists() and module_allowed(self.request.assignment) else []
         return base.select_related(
             "actor_assignment__employee", "recipient_assignment", "task", "project"
         ).filter(
             Q(task__isnull=True) | Q(task_id__in=visible_tasks),
         ).filter(
             Q(project__isnull=True) | Q(project_id__in=visible_projects),
+        ).filter(
+            ~Q(module="sheets") | Q(resource_type="file", resource_id__in=visible_sheets),
         ).order_by("-created_at", "pk")
 
     @action(detail=False, methods=["post"], url_path="clear")

@@ -10,7 +10,7 @@ EVENT_TYPES = (
     "comment.created", "comment.mentioned",
     "calendar.meeting_reminder",
 )
-DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False,
+DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False, "bell_interval_minutes": 5,
             "events": dict.fromkeys(EVENT_TYPES, True)}
 
 
@@ -21,6 +21,7 @@ class NotificationSettingsSerializer(serializers.Serializer):
     events = serializers.DictField(child=serializers.BooleanField(), required=False)
     enabled = serializers.BooleanField(required=False)
     desktop_enabled = serializers.BooleanField(required=False)
+    bell_interval_minutes = serializers.IntegerField(min_value=1, max_value=60, required=False)
     sound = serializers.ChoiceField(choices=["samsung", "post", "melody", "delivered", "facebook", "custom"], required=False)
     volume = serializers.IntegerField(min_value=0, max_value=100, required=False)
     custom_name = serializers.CharField(max_length=120, allow_blank=True, required=False)

@@ -27,6 +27,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const enteredFromLogin = useRef(false);
     const notificationController = useRef(null);
     const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
+    const [notificationPreferences, setNotificationPreferences] = useState({assignmentId: null, settings: defaultNotificationSettings});
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
     const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
     const clearNotifications = useCallback(() => {
@@ -220,12 +221,11 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         };
         window.addEventListener("bold:home-ready", homeEntrance);
         const soundController = new AbortController();
-        http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted) {soundSettings = value; settingsLoaded = true; entrySound.update(previousRows, soundSettings);}}).catch(() => {});
-        const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; entrySound.update(previousRows, soundSettings);};
+        http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted && !settingsLoaded) {soundSettings = value; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: value}); entrySound.update(previousRows, soundSettings);}}).catch(() => {});
+        const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: soundSettings}); entrySound.update(previousRows, soundSettings);};
         window.addEventListener("bold:notification-sound-changed", changeSound);
         const store = createSessionNotifications({initialRows: cachedRows, onChange: rows => {
             if (mounted) {
-                if (containsNewUnreadNotification(previousRows, rows)) window.dispatchEvent(new Event("bold:notification-arrived"));
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
                     playNotificationSound(soundSettings).catch(() => {});
                     const known = new Set(previousRows.map(row => String(row.id)));
@@ -405,7 +405,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", getRows: notificationRows, setRead: setNotificationRead, clear: () => notificationController.current?.clear() || Promise.resolve() };
+    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", settings: notificationPreferences.assignmentId === active ? notificationPreferences.settings : defaultNotificationSettings, getRows: notificationRows, setRead: setNotificationRead, clear: () => notificationController.current?.clear() || Promise.resolve() };
     function updateProfile(profile) {
         const current = getCoreState(), employeeId = current.account?.employee;
         const initials = profile.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("");

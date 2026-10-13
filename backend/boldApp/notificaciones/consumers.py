@@ -74,6 +74,9 @@ def notification_resource_is_readable(assignment_id, notification_id):
     ).filter(pk=notification_id, recipient_assignment_id=assignment_id).first()
     if not notification:
         return False
+    if notification.module == "sheets":
+        from boldApp.hojas.access import readable
+        return notification.resource_type == "file" and notification.resource_id is not None and readable(notification.recipient_assignment, notification.resource_id)
     for resource, permission in ((notification.task, "tasks.task.read"), (notification.project, "tasks.project.read")):
         if resource and (resource.deleted_at or not _readable_assignments([notification.recipient_assignment], permission, resource)):
             return False

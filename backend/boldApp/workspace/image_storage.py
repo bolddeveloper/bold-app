@@ -53,10 +53,11 @@ def resource(kind, identity):
     from boldApp.autenticacion.models import PrivateNote
     from boldApp.tareas.models import Task, Project, Comment, Attachment
     from boldApp.sugerencias.models import Suggestion
+    from boldApp.hojas.models import Workbook
     from .models import ImageDocument
     if kind == "note":
         return PrivateNote.objects.filter(user_id=identity).first()
-    model = {"profile": UserAccount, "task": Task, "project": Project, "comment": Comment, "attachment": Attachment, "suggestion": Suggestion, "role": JobRole, "document": ImageDocument}.get(kind)
+    model = {"profile": UserAccount, "task": Task, "project": Project, "comment": Comment, "attachment": Attachment, "suggestion": Suggestion, "role": JobRole, "document": ImageDocument, "workbook": Workbook}.get(kind)
     return model.objects.filter(pk=identity).first() if model else None
 
 
@@ -78,6 +79,9 @@ def can_read(request, kind, instance, field=None, image=None):
     from boldApp.core.permissions import HasActiveAssignment
     if not HasActiveAssignment().has_permission(request, None):
         return False
+    if kind == "workbook":
+        from boldApp.hojas.access import readable
+        return readable(request.assignment, instance.pk)
     if kind == "role":
         return True
     if kind == "suggestion":

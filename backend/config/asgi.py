@@ -21,10 +21,13 @@ django.setup()
 from boldApp.core.routing import websocket_urlpatterns as core_websocket_urlpatterns  # noqa: E402
 from boldApp.notificaciones.routing import websocket_urlpatterns as notification_websocket_urlpatterns  # noqa: E402
 from boldApp.tareas.routing import websocket_urlpatterns as tareas_websocket_urlpatterns  # noqa: E402
+from django.urls import path  # noqa: E402
+from boldApp.hojas.consumers import SheetConsumer  # noqa: E402
 from django.conf import settings  # noqa: E402
 
 
 websocket_urlpatterns = core_websocket_urlpatterns + notification_websocket_urlpatterns + tareas_websocket_urlpatterns
+websocket_urlpatterns += [path("ws/sheets/<uuid:workbook_id>/", SheetConsumer.as_asgi())]
 
 
 # Define el enrutador de protocolos: HTTP va a la app de Django de siempre,

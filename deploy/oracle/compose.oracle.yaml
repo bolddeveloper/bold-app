@@ -38,6 +38,8 @@ x-backend-environment: &backend-environment
   SEED_DEMO_ACCOUNTS: "${SEED_DEMO_ACCOUNTS:-false}"
   SEED_PRIVILEGED_DEMO_ACCOUNTS: "${SEED_PRIVILEGED_DEMO_ACCOUNTS:-false}"
   CELERY_TASK_ALWAYS_EAGER: "${CELERY_TASK_ALWAYS_EAGER:-false}"
+  SHEETS_ENGINE_URL: "http://sheets-engine:8010"
+  SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:-${SECRET_KEY}}"
   SECURE_HSTS_SECONDS: "${SECURE_HSTS_SECONDS:-31536000}"
   SECURE_HSTS_INCLUDE_SUBDOMAINS: "${SECURE_HSTS_INCLUDE_SUBDOMAINS:-false}"
   EMAIL_BACKEND: "${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}"
@@ -65,6 +67,25 @@ x-default-logging: &default-logging
     max-file: "3"
 
 services:
+  sheets-engine:
+    build:
+      context: ../../services/sheets-engine
+    restart: unless-stopped
+    init: true
+    environment:
+      DJANGO_DEBUG: "false"
+      SHEETS_ENGINE_HOST: "0.0.0.0"
+      SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:-${SECRET_KEY}}"
+    expose:
+      - "8010"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
@@ -123,6 +144,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      sheets-engine:
+        condition: service_started
     logging: *default-logging
 
   worker:

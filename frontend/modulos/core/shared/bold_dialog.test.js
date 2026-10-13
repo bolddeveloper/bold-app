@@ -27,3 +27,20 @@ test("Los avisos BOLD esperan confirmación y conservan cancelación, texto plan
         assert.equal(calls[0].customClass.popup, "bold_dialog");
     } finally {Swal.fire = original;}
 });
+
+// Preparado; no ejecutar mientras siga vigente la indicación de no probar.
+test("Las confirmaciones dentro de un diálogo nativo usan su capa visible", async () => {
+    const originalFire = Swal.fire, originalDocument = globalThis.document;
+    const first = {}, last = {};
+    globalThis.document = {querySelectorAll: () => [first, last]};
+    let options;
+    Swal.fire = async value => {options = value; return {isConfirmed: true};};
+    try {
+        assert.equal(await confirmBold("¿Restaurar versión?"), true);
+        assert.equal(options.target, last);
+    } finally {
+        Swal.fire = originalFire;
+        if (originalDocument === undefined) delete globalThis.document;
+        else globalThis.document = originalDocument;
+    }
+});

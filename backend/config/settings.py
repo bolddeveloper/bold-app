@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "boldApp.notificaciones",
     "boldApp.sugerencias",
     "boldApp.calendario",
+    "boldApp.hojas",
 ]
 
 
@@ -135,6 +136,10 @@ DATABASES = {
 
 
 # Define el modelo de usuario personalizado del proyecto.
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    # Local background saves must acquire the write lock before reading in an atomic block.
+    DATABASES["default"].setdefault("OPTIONS", {}).update(transaction_mode="IMMEDIATE", timeout=20)
+
 AUTH_USER_MODEL = "boldApp_core.UserAccount"
 
 
@@ -276,6 +281,7 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "recover-sheet-sync": {"task": "boldApp.hojas.tasks.recover_pending", "schedule": 15.0},
     "send-calendar-reminders": {
         "task": "boldApp.calendario.tasks.send_calendar_reminders",
         "schedule": 60.0,
@@ -293,6 +299,9 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
     },
 }
+SHEETS_ENGINE_URL = os.environ.get("SHEETS_ENGINE_URL", "http://127.0.0.1:8010")
+SHEETS_ENGINE_TOKEN = os.environ.get("SHEETS_ENGINE_TOKEN", SECRET_KEY if DEBUG else "")
+SHEETS_AGENDA_SOURCE = os.environ.get("SHEETS_AGENDA_SOURCE", "")
 
 # Presence has its own namespace; do not change authentication/throttling caches.
 CACHES = {

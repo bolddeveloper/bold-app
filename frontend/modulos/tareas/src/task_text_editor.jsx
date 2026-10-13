@@ -22,7 +22,7 @@ export function TextEditorField({ name, defaultValue = "", value, onChange, maxL
     return <div className="app_text_editor_field"><TaskTextEditor {...props} maxLength={maxLength} value={current} onChange={next => { setDraft(next); onChange?.(next); }} />{name && <input type="hidden" name={name} value={current} />}</div>;
 }
 
-export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true }) {
+export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true, allowVoiceNotes = true }) {
     const editor = useRef(null), selection = useRef(null), lastValue = useRef(value), controls = useRef(null), styleMenu = useRef(null);
     const [linkOpen, setLinkOpen] = useState(false), [link, setLink] = useState("https://"), [linkError, setLinkError] = useState("");
     const [style, setStyle] = useState("Texto normal");
@@ -84,7 +84,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
             if ((event.ctrlKey || event.metaKey) && ["b", "i", "u"].includes(event.key.toLowerCase())) { event.preventDefault(); command(({ b: "bold", i: "italic", u: "underline" })[event.key.toLowerCase()]); }
         }} />
         {limitReached && <small className="task_editor_limit" role="alert">Se alcanzó el límite de texto de este campo.</small>}
-        <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />
+        {allowVoiceNotes && <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />}
         <div className="task_editor_footer"><div className="task_editor_insert" ref={controls}>
             {allowImages && <label className="detail_comment_image_button" title="Adjuntar imagen"><ImagePlus size={17} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Adjuntar imágenes" disabled={disabled || imagesBusy} onChange={async event => {
                 const files = [...event.target.files]; remember(); setImageError(""); setImagesBusy(true); onBusyChange?.(true);
