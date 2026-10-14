@@ -1,6 +1,89 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-14-sections-comments-patch", date: "2026-10-14", category: "Parche y mejoras", icon: "update",
+        title: "Tus secciones, comentarios más ágiles y tableros sin desbordamientos",
+        summary: "Organiza las tareas sin una sección obligatoria, comparte enlaces e imágenes con menos pasos y consulta tarjetas que respetan el tamaño del tablero.",
+        sections: [
+            {title: "Secciones bajo tu control", items: [
+                "Sin sección sigue siendo el grupo inicial. Al renombrarlo conserva sus tareas y ya no aparece otro grupo Sin sección automáticamente.",
+                "Puedes quitar Sin sección si existe otra sección; sus tareas se trasladan sin eliminarse. La última sección disponible permanece protegida.",
+                "Nueva tarea recuerda la última sección utilizada al crear correctamente una tarea, por cargo activo y proyecto o tablero personal, en ese navegador. Si ya no existe, elige la primera sección visible; un borrador conserva su selección válida.",
+            ]},
+            {title: "Enlaces e imágenes en comentarios", items: [
+                "Solo el autor puede editar o eliminar sus comentarios, aunque otra persona sea responsable, colaboradora o propietaria. Tener acceso para leer y comentar no permite cambiar mensajes ajenos; la regla también se aplica en el cronograma.",
+                "El editor compartido reconoce direcciones HTTP, HTTPS y www. al escribirlas o pegarlas, sin necesitar el botón Enlace.",
+                "El botón Enlace permite añadir un alias opcional para mostrar un nombre corto en lugar de una dirección larga.",
+                "Pega una captura desde el portapapeles o arrastra un archivo PNG, JPEG, GIF o WebP al editor. Utiliza la misma previsualización y carga del botón de imágenes; no descarga imágenes remotas del HTML pegado.",
+                "Los enlaces conservan los controles de seguridad del editor y los permisos existentes de la aplicación.",
+            ]},
+            {title: "Tarjetas que encajan en su sección", items: [
+                "Se corrigió el desbordamiento de las tarjetas en el modo Tablero de Mis tareas.",
+                "Los textos y enlaces largos se ajustan al ancho disponible, sin empujar las fechas ni ampliar la columna, en modos claro y oscuro.",
+            ]},
+        ],
+    },
+    {
+        id: "2026-10-13-calendar-header-patch", date: "2026-10-13", category: "Parche y mejoras", icon: "update",
+        title: "Un calendario situado en hoy y una barra superior más consistente",
+        summary: "El calendario abre en la fecha actual, la línea de hora acompaña al día de hoy y la campana recupera su contorno circular.",
+        sections: [
+            {title: "La fecha correcta al entrar", items: [
+                "Al ingresar al calendario se utiliza la fecha actual, manteniendo el tipo de vista elegido. Ya no se recupera una semana antigua como fecha de entrada.",
+                "En la semana actual se muestran hoy y los días restantes, sin ocupar columnas con días ya pasados. Las semanas históricas y futuras continúan disponibles para consulta.",
+                "Se restauró la referencia visual de la hora actual, limitada a la columna de hoy en lugar de atravesar toda la semana. No se muestra en semanas donde hoy no está presente.",
+            ]},
+            {title: "Notificaciones en la barra superior", items: [
+                "La campana utiliza el mismo contorno circular que los demás botones, adaptado a los modos claro y oscuro.",
+                "Se mantienen el indicador de notificaciones pendientes y las preferencias de cada usuario.",
+            ]},
+        ],
+    },
+    {
+        id: "2026-10-12-brands-workspaces-update", date: "2026-10-12", category: "Actualización general", icon: "update",
+        title: "Marcas, workspaces entre dispositivos y colaboración en tareas",
+        summary: "Un lugar para el contexto de cada marca, carpetas personales guardadas en servidor y colaboración explícita en tareas sin conceder permiso para eliminarlas.",
+        sections: [
+            {title: "El contexto de tus marcas", items: [
+                "Marcas permite guardar logo, descripción, contacto del cliente, preferencias de comunicación, pauta y presupuesto, información audiovisual, diseñador, trafficker, notas de relevo y características adicionales.",
+                "Asocia proyectos y tareas existentes y abre los que tienes autorizados. Archivar una marca conserva sus proyectos y tareas originales.",
+                "El creador o propietario puede compartir una marca con empleados activos de otros departamentos. Los colaboradores pueden editar cuando su cargo lo permite.",
+                "Los permisos de Marcas deben habilitarse para los cargos correspondientes. Compartir su contexto no concede automáticamente acceso a los proyectos o tareas asociados.",
+            ]},
+            {title: "Workspaces persistentes y compartidos", items: [
+                "La biblioteca personal de carpetas se guarda en servidor por cuenta y unidad, para recuperarla entre dispositivos.",
+                "Importar carpetas de este dispositivo solicita confirmación antes de incorporar carpetas que estaban guardadas solo localmente, conservando su respaldo local.",
+                "Las carpetas compartidas pueden incluir empleados de otros departamentos. Los colaboradores pueden modificar nombre, descripción y asociaciones; el creador administra los participantes y la eliminación.",
+                "Si otra persona modifica una carpeta mientras la editas, BOLD conserva el formulario y avisa del conflicto, en lugar de sobrescribir sus cambios silenciosamente. No es coedición de texto carácter por carácter.",
+                "Los permisos originales de tareas, proyectos y Drive siguen aplicándose a los elementos asociados.",
+            ]},
+            {title: "Trabajar en equipo en una tarea", items: [
+                "Los responsables y colaboradores agregados explícitamente a una tarea pueden editarla, marcarla como finalizada, reabrirla y mover sus vínculos existentes entre secciones, respetando denegaciones explícitas y las verificaciones de seguridad.",
+                "Ser colaborador de una tarea no concede permiso para eliminarla. La eliminación queda reservada al creador o responsable con autorización, además del acceso protegido del propietario.",
+                "Se corrigieron acciones de completado y subtareas. La colaboración de una tarea no depende de tener un cargo llamado Colaborador.",
+            ]},
+            {title: "Pequeños detalles del uso diario", items: [
+                "La animación de entrada saluda con el primer nombre de la persona autenticada; sin identidad conserva el mensaje general.",
+                "La campana deja unos diez segundos de reposo entre movimientos y respeta la preferencia de movimiento reducido.",
+                "Se corrigieron problemas de guardado en organización, marcas y tareas recurrentes, y se agrupan ráfagas de avisos de presencia sin retrasar las revocaciones de acceso.",
+            ]},
+        ],
+    },
+    {
+        id: "2026-10-09-pwa-updates-patch", date: "2026-10-09", category: "Parche y mejoras", icon: "update",
+        title: "Actualiza la aplicación instalada sin reinstalarla",
+        summary: "BOLD detecta nuevas versiones y te permite aplicarlas cuando hayas guardado tu trabajo, tanto en la web como en la PWA.",
+        sections: [
+            {title: "Una actualización visible y controlada", items: [
+                "Cada compilación identifica su versión de recursos. La aplicación comprueba novedades al iniciar y al recuperar foco o conexión, con comprobaciones periódicas moderadas mientras está visible y conectada.",
+                "Cuando hay una versión nueva, aparece el aviso Actualizar. Confirma después de guardar tu trabajo: una ventana abierta no se recarga automáticamente sin consentimiento.",
+                "Si otra ventana aplica la actualización, las demás reciben un aviso en lugar de perder sus formularios abiertos.",
+                "No necesitas desinstalar ni volver a instalar la PWA. Una instalación que todavía ejecuta una versión anterior a este mecanismo puede necesitar cerrarse y abrirse o recargarse una vez para recibirlo.",
+                "Sin conexión se utiliza la versión disponible del contenido estático. Este almacenamiento no incluye respuestas de las API ni conexiones WebSocket.",
+            ]},
+        ],
+    },
+    {
         id: "2026-10-08-community-patch", date: "2026-10-08", category: "Parche y mejoras", icon: "update",
         title: "Mejoras solicitadas por usuarios: tareas, imágenes y equipo conectado",
         summary: "Cambios del 8 de octubre: sugerencias, miembros conectados, imágenes en Drive, carpetas compartidas de Workspace y correcciones para trabajar con menos interrupciones.",

@@ -1,4 +1,5 @@
 from django.contrib import admin
+from boldApp.core.admin import ReadOnlySecurityAdminMixin
 
 from .models import (
     ActivityLog,
@@ -57,8 +58,9 @@ class TaskDependencyAdmin(admin.ModelAdmin):
 
 
 @admin.register(Comment)
-class CommentAdmin(admin.ModelAdmin):
+class CommentAdmin(ReadOnlySecurityAdminMixin, admin.ModelAdmin):
     list_display = ("task", "author_assignment", "created_at")
+    actions = None
 
 
 @admin.register(Attachment)

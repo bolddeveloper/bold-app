@@ -331,7 +331,13 @@ class TaskDependencySerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(DriveImagesMixin, serializers.ModelSerializer):
+    can_manage = serializers.SerializerMethodField()
     voice_notes = VoiceNotesField(required=False)
+
+    def get_can_manage(self, obj):
+        request = self.context.get("request")
+        employee_id = getattr(getattr(request, "user", None), "employee_id", None)
+        return employee_id is not None and obj.author_assignment.employee_id == employee_id
 
     def validate(self, attrs):
         task = attrs.get("task", getattr(self.instance, "task", None))

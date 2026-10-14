@@ -53,5 +53,19 @@ try {
     [...document.querySelectorAll("button")].find(button => button.textContent === "Insertar").click(); await settle();
     assert.ok([...editor.querySelectorAll("a")].some(a => a.textContent === "Guía" && a.getAttribute("href") === "https://example.com/long"));
     render(true); await settle(); transferEvent("paste", {files: [image]}, editor); await settle(); assert.equal(received.length, 2);
-    console.log("Comment editor UI: pasted URL, alias, image paste/drop, no duplicate image processing, unsafe formats and disabled editor passed.");
+    const {CommentItem, TaskActionsContext} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/comment_item.jsx").replaceAll("\\", "/")}`);
+    let allowed = true;
+    const renderComment = () => root.render(React.createElement(TaskActionsContext.Provider, {value: {canManageComment: () => allowed}},
+        React.createElement(CommentItem, {comment: {id: "test-comment", body: "Mi texto", created_at: "2026-10-14T12:00:00Z"}, author: "Autor"})));
+    renderComment(); await settle();
+    assert.ok(document.querySelector('[aria-label="Editar comentario"]'));
+    assert.ok(document.querySelector('[aria-label="Eliminar comentario"]'));
+    document.querySelector('[aria-label="Editar comentario"]').click(); await settle();
+    assert.ok(document.querySelector('[role="textbox"]'));
+    allowed = false; renderComment(); await settle();
+    assert.equal(document.querySelector('[aria-label="Editar comentario"]'), null);
+    assert.equal(document.querySelector('[aria-label="Eliminar comentario"]'), null);
+    assert.equal(document.querySelector('[role="textbox"]'), null);
+    assert.match(document.querySelector("article").textContent, /Mi texto/);
+    console.log("Comment UI: editor links/images and author-only actions, including permission loss during editing, passed.");
 } finally {root.unmount(); await server.close(); dom.window.close();}

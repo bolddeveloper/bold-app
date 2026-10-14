@@ -641,7 +641,7 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = CommentSerializer
 
     def get_queryset(self):
-        queryset = Comment.objects.all()
+        queryset = Comment.objects.select_related("author_assignment")
         section = self.request.query_params.get("image_section")
         if section not in (None, "comments", "timeline"):
             raise ValidationError({"image_section": "Usa comments o timeline."})
@@ -672,18 +672,21 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]
+        self.require_permission("tasks.task.read", task.unit, task.id)
         self.require_permission("tasks.comment.create", task.unit, task.id)
         serializer.save(author_assignment=self.request.assignment)
 
     def _require_comment_write(self, comment):
-        if comment.author_assignment_id != self.request.assignment.id:
-            self.require_permission("tasks.task.update", comment.task.unit, comment.task_id)
+        # Authorship belongs to the person, not their current position or task role.
+        if comment.author_assignment.employee_id != self.request.user.employee_id:
+            raise PermissionDenied("Solo puedes editar o eliminar los comentarios que escribiste.")
 
     def perform_update(self, serializer):
         comment = self.get_object()
         self._require_comment_write(comment)
         new_task = serializer.validated_data.get("task")
         if new_task and new_task.id != comment.task_id:
+            self.require_permission("tasks.task.read", new_task.unit, new_task.id)
             self.require_permission("tasks.task.update", new_task.unit, new_task.id)
         serializer.save()
 

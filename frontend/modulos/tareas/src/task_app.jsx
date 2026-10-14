@@ -92,6 +92,7 @@ import { requiresTaskData } from "./services/task_activity.js";
 import { ImageGallery } from "./image_gallery.jsx";
 import { CommentsSection, PagedComments } from "./paged_comments.jsx";
 import { mergeLocalComments } from "./services/local_comments.js";
+import { canManageComment } from "./comment_permissions.js";
 import { CommentItem, TaskActionsContext } from "./comment_item.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
 import { TaskText, TaskTextEditor, TextEditorField } from "./task_text_editor.jsx";
@@ -6053,6 +6054,7 @@ function TaskAppContent({ externalModules = {} }) {
             id: `comment_${Date.now()}`,
             task_id,
             author_name: current_user.name,
+            author_assignment: current_user_id,
             body,
             images, voice_notes,
             created_at: new Date().toISOString()
@@ -6074,6 +6076,10 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function change_comment(comment, changes, remove = false) {
+        if (!canManageComment(comment, current_user_id, !real)) {
+            set_api_error("Solo puedes editar o eliminar los comentarios que escribiste.");
+            return false;
+        }
         const task_id = comment.task || comment.task_id;
         if (real) return mutate(async () => {
             const result = remove ? await api.remove("comments", comment.id) : await api.update("comments", comment.id, changes);
@@ -6509,7 +6515,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Returns the full shell with the focused tasks module.
     return (
-        <TaskActionsContext.Provider value={{ saveProjectMembers: (ids, id) => handle_save_project_members(ids, id, false), localComments: visible_local_comments, confirmComments: confirm_local_comments, retryComment: comment => comment.retry?.(), changeComment: (comment, changes) => change_comment(comment, changes), deleteComment: comment => change_comment(comment, {}, true), renameSubtask: rename_subtask, deleteSubtask: (parent_id, subtask_id) => handle_request_delete_task(subtask_id, parent_id) }}><ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour modal={active_modal} detail={Boolean(selected_task)} /><AppShell latestNewsId={releaseNotes[0]?.id} membersContent={<PresenceWidget />}
+        <TaskActionsContext.Provider value={{ canManageComment: comment => canManageComment(comment, current_user_id, !real), saveProjectMembers: (ids, id) => handle_save_project_members(ids, id, false), localComments: visible_local_comments, confirmComments: confirm_local_comments, retryComment: comment => comment.retry?.(), changeComment: (comment, changes) => change_comment(comment, changes), deleteComment: comment => change_comment(comment, {}, true), renameSubtask: rename_subtask, deleteSubtask: (parent_id, subtask_id) => handle_request_delete_task(subtask_id, parent_id) }}><ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour modal={active_modal} detail={Boolean(selected_task)} /><AppShell latestNewsId={releaseNotes[0]?.id} membersContent={<PresenceWidget />}
 sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
