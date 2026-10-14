@@ -71,7 +71,7 @@ import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, 
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
-import { insertUnsectioned, reorderSections, materializePersonalSection } from "./section_order.js";
+import { insertUnsectioned, reorderSections, materializePersonalSection, visibleSections, projectSectionOptions, preferredSection, removePersonalSection } from "./section_order.js";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
@@ -2047,7 +2047,7 @@ function AttachmentLinks({ attachments, onChange }) {
 
 function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
     const real = is_using_real_backend();
-    if (real) { board_columns = [...data.sections.filter(item => item.projectId === edit_draft.project_id), { id: "unsectioned", label: "Sin sección" }]; status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
+    if (real) { board_columns = projectSectionOptions(data, edit_draft.project_id); status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
     const [audio_busy, set_audio_busy] = use_state(false);
     const subtasks = Array.isArray(edit_draft.subtasks) ? edit_draft.subtasks : [];
@@ -2228,7 +2228,7 @@ function read_task_creation_draft(storage_key) {
 }
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
+function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
     const real = is_using_real_backend();
     const initial_draft = use_ref(read_task_creation_draft(draft_storage_key)).current;
     const today = use_ref(new Date()).current;
@@ -2259,16 +2259,19 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     const unit_initialized = use_ref(false);
 
     if (real) {
-        board_columns = [...data.sections.filter(item => item.projectId === project_id), { id: "unsectioned", label: "Sin sección" }];
+        board_columns = project_id ? projectSectionOptions(data, project_id) : personal_columns || board_columns;
         status_options = data.statuses.filter(item => !item.unitId || item.unitId === unitId).map(item => item.label);
     }
     use_effect(() => {
         if (!project_initialized.current) {
             project_initialized.current = true;
-            if (real && initial_draft.section && data.sections.some(item => item.id === initial_draft.section && item.projectId === project_id)) return;
+            if (real && board_columns.some(item => item.id === initial_draft.section)) return;
         }
-        if (real) set_section(data.sections.find(item => item.projectId === project_id)?.id || "unsectioned");
+        if (real) set_section(preferredSection(board_columns, last_sections[project_id || "personal"]));
     }, [project_id]);
+    use_effect(() => {
+        if (real) set_section(current => board_columns.some(row => row.id === current) ? current : preferredSection(board_columns, last_sections[project_id || "personal"]));
+    }, [real, project_id, board_columns.map(row => row.id).join(",")]);
     use_effect(() => {
         if (!unit_initialized.current) {
             unit_initialized.current = true;
@@ -2286,14 +2289,15 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
         e.preventDefault();
         if (pending || audio_busy) return;
         if (!title.trim()) return;
-        const col = board_columns.find((c) => c.id === section);
+        const resolved_section = board_columns.some(row => row.id === section) ? section : preferredSection(board_columns, last_sections[project_id || "personal"]);
+        const col = board_columns.find((c) => c.id === resolved_section);
         const new_task = {
             id: `task_${crypto.randomUUID()}`,
             created_at: new Date().toISOString(),
             created_by_assignment: currentAssignmentId,
             title: title.trim(),
             project_id,
-            section,
+            section: resolved_section,
             assignee_id: real ? assignee_id || null : collaborator_ids[0] || null,
             unitId,
             collaborator_ids,
@@ -2303,7 +2307,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
             due_label: due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : null,
             priority,
             status: real ? status : col?.status || status,
-            completed: section === "completed",
+            completed: resolved_section === "completed",
             description: description.trim(),
             voice_notes, recurrence,
             subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ ...s, completed: false })),
@@ -2348,7 +2352,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))} on_change={set_project_id} />
+                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={[...(real ? [{value: "", label: "Sin proyecto"}] : []), ...projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))]} on_change={set_project_id} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
@@ -4467,6 +4471,13 @@ function TaskAppContent({ externalModules = {} }) {
     const [editing_column_id, set_editing_column_id] = use_state(null);
     const [editing_column_name, set_editing_column_name] = use_state("");
     const [unsectioned_by_project, set_unsectioned_by_project] = use_state({});
+    const last_section_key = `bold_last_task_section:${session.activeAssignment?.id || "demo"}`;
+    const [last_task_sections, set_last_task_sections] = use_state(() => {
+        try { const saved = JSON.parse(localStorage.getItem(last_section_key)); return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}; } catch { return {}; }
+    });
+    function remember_task_section(projectId, sectionId) {
+        set_last_task_sections(current => { const next = {...current, [projectId || "personal"]: sectionId}; try { localStorage.setItem(last_section_key, JSON.stringify(next)); } catch { /* Conserva la preferencia durante la sesión. */ } return next; });
+    }
     const unsectioned_order_key = `bold_unsectioned_order:${session.activeAssignment?.id || "demo"}`;
     const [unsectioned_order_by_project, set_unsectioned_order_by_project] = use_state(() => {
         try { return JSON.parse(localStorage.getItem(unsectioned_order_key)) || {}; } catch { return {}; }
@@ -4495,13 +4506,12 @@ function TaskAppContent({ externalModules = {} }) {
     const [task_scope, set_task_scope] = use_state("project");
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
     const all_workspace_tasks = use_memo(() => real ? (data?.tasks || []).map(task => projectTask(task, null)) : stored_tasks.flatMap(task => [task, ...(task.subtasks || []).map(child => ({ ...child, parentTaskId: task.id, project_id: child.project_id || task.project_id, unitId: child.unitId || task.unitId }))]), [real, data?.tasks, stored_tasks]);
-    const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
-    const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
+    const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: real && Boolean(data?.projects.find(project => project.id === selected_project_id)?.unsectioned_hidden) };
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
     const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id).sort((a, b) => Number(a.position) - Number(b.position) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))) : mock_sections_by_project[selected_project_id] || [];
     const board_columns = task_scope !== "project" && real
-        ? task_scope === "mine" ? insertUnsectioned(personal_board.board.sections, {id: "unsectioned", label: "Sin sección"}, personal_board.board.unsectioned_index) : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
-        : !unsectioned_config.hidden || has_unsectioned_tasks
+        ? task_scope === "mine" ? visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index) : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
+        : !unsectioned_config.hidden
             ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id] ?? (real ? data?.projects.find(project => project.id === selected_project_id)?.unsectioned_index : undefined))
             : project_sections;
     const section_positions = use_ref(new Map());
@@ -4929,7 +4939,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real && task_scope === "mine") {
             const next = reorderSections(board_columns, source_id, target_id, after);
             if (next === board_columns) return;
-            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned"), unsectioned_index: next.findIndex(row => row.id === "unsectioned")}));
+            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned"), unsectioned_index: next.some(row => row.id === "unsectioned") ? next.findIndex(row => row.id === "unsectioned") : null}));
             return;
         }
         if (task_scope !== "project" || source_id === target_id || real && mutation_pending.current) return;
@@ -5018,7 +5028,7 @@ function TaskAppContent({ externalModules = {} }) {
             if (task_scope !== "project") return;
             if (real) {
                 mutate(() => api.materializeUnsectioned({ project: selected_project_id, name: label }), () => {
-                    set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
+                    set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: true } }));
                     set_unsectioned_order_by_project(current => {const next = {...current}; delete next[selected_project_id]; return next;});
                     set_editing_column_id(null);
                     set_editing_column_name("");
@@ -5028,7 +5038,7 @@ function TaskAppContent({ externalModules = {} }) {
             const id = `col_${Date.now()}`;
             set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: [...(current[selected_project_id] || []), { id, label }] }));
             set_tasks(current => current.map(task => task.project_id === selected_project_id && task.section === "unsectioned" ? { ...task, section: id } : task));
-            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
+            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: true } }));
             set_editing_column_id(null);
             set_editing_column_name("");
             return;
@@ -5040,23 +5050,15 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_delete_column(column_id) {
+        if (board_columns.length < 2) { set_api_error("Crea otra sección antes de eliminar la última."); return; }
         if (real && task_scope === "mine") {
-            if (column_id !== "unsectioned") void personal_board.update(board => {
-                const index = board.sections.findIndex(row => row.id === column_id);
-                return {...board, sections: board.sections.filter(row => row.id !== column_id), task_sections: Object.fromEntries(Object.entries(board.task_sections).filter(([, section]) => section !== column_id)), unsectioned_index: Number.isInteger(board.unsectioned_index) && index >= 0 && index < board.unsectioned_index ? board.unsectioned_index - 1 : board.unsectioned_index};
-            });
+            void personal_board.update(board => removePersonalSection(board, column_id));
             return;
         }
         if (column_id === "unsectioned") {
             const hide = () => set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { ...(current[selected_project_id] || { label: "Sin sección" }), hidden: true } }));
             if (real) {
-                const links = data.links.filter(link => link.projectId === selected_project_id && !link.sectionId);
-                if (!links.length) { hide(); return; }
-                mutate(async () => {
-                    const existing = data.sections.find(section => section.projectId === selected_project_id);
-                    const target = existing || await api.create("sections", { project: selected_project_id, name: "General", position: "1000" });
-                    for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: target.id, position: String((index + 1) * 1000) });
-                }, hide, undefined, undefined, ["sections", "links"]);
+                mutate(() => api.hideUnsectioned({project: selected_project_id}), hide, undefined, undefined, ["projects", "sections", "links"]);
                 return;
             }
             const sections = mock_sections_by_project[selected_project_id] || [];
@@ -5067,9 +5069,10 @@ function TaskAppContent({ externalModules = {} }) {
             return;
         }
         if (real) { mutate(() => api.remove("sections", column_id), undefined, undefined, undefined, ["sections", "links"]); return; }
+        const target = board_columns.find(row => row.id !== column_id)?.id || "unsectioned";
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).filter(column_item => column_item.id !== column_id) }));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
-            task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: "unsectioned", status: "Pend.", completed: false } : task_item
+            task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: target } : task_item
         )));
     }
 
@@ -5107,7 +5110,7 @@ function TaskAppContent({ externalModules = {} }) {
             ? by_filters.filter((task_item) => isMyTask(task_item, current_user_id))
             : task_scope === "workspace" ? by_filters : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: task_scope === "mine" ? personal_board.board.task_sections[task.id] || "unsectioned" : "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
+        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: task_scope === "mine" ? personal_board.board.task_sections[task.id] || (personal_board.board.unsectioned_hidden ? personal_board.board.sections[0]?.id : "unsectioned") : "unsectioned" } : task.section === "unsectioned" && unsectioned_config.hidden ? {...task, section: project_sections[0]?.id} : task) : scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
@@ -5117,7 +5120,8 @@ function TaskAppContent({ externalModules = {} }) {
         task_scope,
         tasks,
         workspace_tasks,
-        personal_board.board
+        personal_board.board,
+        unsectioned_config.hidden, project_sections.map(row => row.id).join(",")
     ]);
 
     const selected_project = use_memo(() => (
@@ -5525,6 +5529,8 @@ function TaskAppContent({ externalModules = {} }) {
                         throw new Error("Espera a que se sincronice la tarea principal antes de agregar subtareas.");
                     }
                     drafts = values.items.map(item => {
+                        const columns = item.project_id ? projectSectionOptions(data, item.project_id) : visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index);
+                        item = {...item, section: columns.some(row => row.id === item.section) ? item.section : preferredSection(columns, last_task_sections[item.project_id || "personal"])};
                         const unitId = item.unitId || session.activeUnit?.id;
                         const payload = taskPayload({ ...item, unitId, parent_task: item.parentTaskId || null, follow_creator: true }, data.statuses, { create: true, unitId });
                         const status = data.statuses.find(row => row.id === payload.status);
@@ -5545,6 +5551,7 @@ function TaskAppContent({ externalModules = {} }) {
                     return result;
                 }, {
                     success_title,
+                    on_success: () => drafts.forEach(draft => remember_task_section(draft.project_id, draft.section)),
                     on_failure: () => set_failed_task_creates(current => [...current, ...drafts.map(draft => {
                         const due = dateFromISO(draft.due_date);
                         return { id: draft.id, title: draft.title, snapshot: JSON.stringify({ ...draft,
@@ -6362,6 +6369,7 @@ function TaskAppContent({ externalModules = {} }) {
                     draft_storage_key={`bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`}
                     drawer={drawer}
                     board_columns={board_columns}
+                    personal_columns={visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index)} last_sections={last_task_sections}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
                         if (real) {
@@ -6373,8 +6381,16 @@ function TaskAppContent({ externalModules = {} }) {
                             try { snapshot = sessionStorage.getItem(draftKey) || ""; } catch { /* El formulario sigue funcionando. */ }
                             const preview = previewTaskDraft(new_task, null, data.statuses);
                             const mutation = { kind: "create", id: new_task.id, task: preview };
-                            const started = start_task_crud(mutation, () => saveTaskDraft(new_task, data, null, { onCreated: dto => { mutation.serverId = dto.id; } }), {
+                            const started = start_task_crud(mutation, async () => {
+                                const dto = await saveTaskDraft(new_task, data, null, { onCreated: dto => { mutation.serverId = dto.id; } });
+                                if (!new_task.project_id && new_task.section !== "unsectioned") {
+                                    const saved = await personal_board.update(board => ({...board, task_sections: {...board.task_sections, [dto.id]: new_task.section}}));
+                                    if (!saved) throw Object.assign(new Error("La tarea se creó, pero no se pudo guardar su sección personal."), {partialDraft: {...new_task, id: dto.id}});
+                                }
+                                return dto;
+                            }, {
                                 success_title: "Tarea creada",
+                                on_success: () => remember_task_section(new_task.project_id, new_task.section),
                                 on_failure: error => {
                                     if (!error.partialDraft) set_failed_task_creates(items => [...items, { id: new_task.id, title: new_task.title, snapshot: snapshot || JSON.stringify(new_task) }]);
                                 },
@@ -6402,7 +6418,7 @@ function TaskAppContent({ externalModules = {} }) {
                         return true;
                     }}
                     projects={projects}
-                    selected_project_id={selected_project_id}
+                    selected_project_id={task_scope === "project" ? selected_project_id : ""}
                     status_options={status_options}
                 />
             );

@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 
 from boldApp.core.models import OrganizationalUnit, PositionAssignment
 
@@ -84,6 +84,17 @@ class TaskProject(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["task", "project"], name="unique_task_project"),
         ]
+
+    def save(self, *args, **kwargs):
+        # Serialize null-section placement with renaming/removal on the project.
+        with transaction.atomic():
+            if self.section_id is None:
+                project = Project.objects.select_for_update().get(pk=self.project_id)
+                if project.unsectioned_hidden:
+                    self.section = project.sections.order_by("position", "created_at", "pk").first()
+                    if kwargs.get("update_fields") is not None:
+                        kwargs["update_fields"] = set(kwargs["update_fields"]) | {"section"}
+            return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.task_id} -> {self.project_id}"

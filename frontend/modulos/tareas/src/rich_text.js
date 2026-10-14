@@ -1,4 +1,5 @@
 import {isStoredImageUrl} from "../../core/shared/media_urls.js";
+import {linkifyElement, normalizedLink} from "./editor_links.js";
 export const richTextPrefix = "<!--bold-rich-text-->";
 export const inlineTextClasses = { 2: "task_text_quote", 3: "task_text_normal", 4: "task_text_subtitle", 5: "task_text_title" };
 
@@ -30,6 +31,11 @@ export function editorHTML(value = "") {
 // Keep gallery images in the document without making hidden editor images fetch again.
 export function editorDisplayHTML(value, editable = false) {
     const doc = new DOMParser().parseFromString(editorHTML(value), "text/html");
+    if (editable) for (const anchor of doc.body.querySelectorAll("a")) {
+        try { if (normalizedLink(anchor.textContent) === normalizedLink(anchor.getAttribute("href"))) anchor.dataset.boldAutolink = "true"; } catch { /* El alias manual se conserva. */ }
+    }
+    linkifyElement(doc.body);
+    for (const anchor of doc.body.querySelectorAll("a")) { anchor.target = "_blank"; anchor.rel = "noopener noreferrer"; }
     for (const image of doc.body.querySelectorAll("img")) {
         if (editable) {image.setAttribute("data-bold-image", image.getAttribute("src") || ""); image.removeAttribute("src");}
         else image.remove();
@@ -42,7 +48,8 @@ export function saveRichText(html) {
     for (const image of draft.body.querySelectorAll("img[data-bold-image]")) image.setAttribute("src", image.getAttribute("data-bold-image"));
     const cleaned = cleanHTML(draft.body.innerHTML);
     const doc = new DOMParser().parseFromString(cleaned, "text/html");
-    return doc.body.textContent.trim() || doc.body.querySelector("img") ? richTextPrefix + cleaned : "";
+    linkifyElement(doc.body);
+    return doc.body.textContent.trim() || doc.body.querySelector("img") ? richTextPrefix + doc.body.innerHTML : "";
 }
 
 export function appendRichImages(value, images = []) {

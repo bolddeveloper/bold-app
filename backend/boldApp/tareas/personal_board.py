@@ -15,8 +15,14 @@ class PersonalBoardSerializer(serializers.Serializer):
     sections = PersonalSectionSerializer(many=True, max_length=200)
     task_sections = serializers.DictField(child=serializers.UUIDField())
     unsectioned_index = serializers.IntegerField(min_value=0, allow_null=True, required=False, default=None)
+    unsectioned_hidden = serializers.BooleanField(required=False)
 
     def validate(self, data):
+        previous = PersonalTaskBoard.objects.filter(assignment=self.context["request"].assignment).first()
+        # A stale client must not resurrect the default group after its removal.
+        hidden = bool(previous and previous.unsectioned_hidden) or data.get("unsectioned_hidden", False)
+        if hidden and not data["sections"]:
+            raise serializers.ValidationError({"sections": "No se puede eliminar la última sección."})
         if data["unsectioned_index"] is not None and data["unsectioned_index"] > len(data["sections"]):
             raise serializers.ValidationError({"unsectioned_index": "Indica una posición válida para Sin sección."})
         ids = {row["id"] for row in data["sections"]}
@@ -31,7 +37,7 @@ class PersonalBoardSerializer(serializers.Serializer):
             raise serializers.ValidationError("Identificador de tarea inválido.")
         if any(section not in ids for section in data["task_sections"].values()):
             raise serializers.ValidationError("La sección de destino no existe.")
-        return {"sections": [{"id": str(row["id"]), "label": row["label"]} for row in data["sections"]], "task_sections": mapping, "unsectioned_index": data["unsectioned_index"]}
+        return {"sections": [{"id": str(row["id"]), "label": row["label"]} for row in data["sections"]], "task_sections": mapping, "unsectioned_index": data["unsectioned_index"], "unsectioned_hidden": hidden}
 
 
 class PersonalBoardView(APIView):
@@ -39,10 +45,10 @@ class PersonalBoardView(APIView):
 
     def get(self, request):
         row = PersonalTaskBoard.objects.filter(assignment=request.assignment).first()
-        return Response({"sections": row.sections, "task_sections": row.task_sections, "unsectioned_index": row.unsectioned_index} if row else {"sections": [], "task_sections": {}, "unsectioned_index": None})
+        return Response({"sections": row.sections, "task_sections": row.task_sections, "unsectioned_index": row.unsectioned_index, "unsectioned_hidden": row.unsectioned_hidden} if row else {"sections": [], "task_sections": {}, "unsectioned_index": None, "unsectioned_hidden": False})
 
     def put(self, request):
-        serializer = PersonalBoardSerializer(data=request.data)
+        serializer = PersonalBoardSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         row, _ = PersonalTaskBoard.objects.update_or_create(assignment=request.assignment, defaults=serializer.validated_data)
-        return Response({"sections": row.sections, "task_sections": row.task_sections, "unsectioned_index": row.unsectioned_index})
+        return Response({"sections": row.sections, "task_sections": row.task_sections, "unsectioned_index": row.unsectioned_index, "unsectioned_hidden": row.unsectioned_hidden})

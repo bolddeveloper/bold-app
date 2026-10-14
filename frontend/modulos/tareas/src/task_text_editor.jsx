@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Bold, ChevronDown, ImagePlus, Italic, Link, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { ImageGallery } from "./image_gallery.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
-import { editorDisplayHTML, inlineTextClasses, richTextPrefix, saveRichText, richImageSources } from "./rich_text.js";
+import { editorDisplayHTML, inlineTextClasses, saveRichText, richImageSources } from "./rich_text.js";
+import {linkifyEditor, linkMarkup, normalizedLink} from "./editor_links.js";
+import {transferredFiles, validateEditorImages} from "./editor_media.js";
 
 const formats = [["Deshacer", "undo", Undo2], ["Rehacer", "redo", Redo2], ["Negrita", "bold", Bold], ["Cursiva", "italic", Italic], ["Tachado", "strikeThrough", Strikethrough], ["Subrayado", "underline", Underline], ["Lista", "insertUnorderedList", List], ["Lista numerada", "insertOrderedList", ListOrdered]];
 const textStyles = [["3", "Texto normal"], ["5", "Título"], ["4", "Subtítulo"], ["2", "Cita"]];
 
 export function TaskText({ value, className = "", imageTaskId, imageHistory = false, imageSection, imageProjectId }) {
-    if (!value?.startsWith(richTextPrefix)) return <div className={`task_formatted_text ${className}`}>{value}</div>;
-    const images = richImageSources(value);
+    const images = richImageSources(value || "");
     return <div className={`task_formatted_text ${className}`}>
         <ImageGallery images={images} taskId={imageTaskId} history={imageHistory} imageSection={imageSection} imageProjectId={imageProjectId}/>
-        <div className="task_text_body" dangerouslySetInnerHTML={{__html: editorDisplayHTML(value)}}/>
+        <div className="task_text_body" dangerouslySetInnerHTML={{__html: editorDisplayHTML(value || "")}}/>
     </div>;
 }
 
@@ -25,6 +26,8 @@ export function TextEditorField({ name, defaultValue = "", value, onChange, maxL
 export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true }) {
     const editor = useRef(null), selection = useRef(null), lastValue = useRef(value), controls = useRef(null), styleMenu = useRef(null);
     const [linkOpen, setLinkOpen] = useState(false), [link, setLink] = useState("https://"), [linkError, setLinkError] = useState("");
+    const [linkAlias, setLinkAlias] = useState("");
+    const imagesInFlight = useRef(false);
     const [style, setStyle] = useState("Texto normal");
     const [limitReached, setLimitReached] = useState(false);
     const [imageError, setImageError] = useState("");
@@ -50,7 +53,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
             setStyle(textStyles.find(([id]) => id === size)?.[1] || "Texto normal");
         }
     };
-    const save = () => { const next = saveRichText(editor.current.innerHTML); if (maxLength && editor.current.textContent.length > maxLength) { editor.current.innerHTML = editorDisplayHTML(lastValue.current, true); selection.current = null; setLimitReached(true); return; } setLimitReached(false); lastValue.current = next; onChange(next); remember(); };
+    const save = () => { linkifyEditor(editor.current); const next = saveRichText(editor.current.innerHTML); if (maxLength && editor.current.textContent.length > maxLength) { editor.current.innerHTML = editorDisplayHTML(lastValue.current, true); selection.current = null; setLimitReached(true); return; } setLimitReached(false); lastValue.current = next; onChange(next); remember(); };
     const command = (name, argument) => {
         if (disabled) return;
         editor.current.focus();
@@ -63,21 +66,43 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         styleMenu.current.open = false;
     };
     function insertLink() {
+        if (disabled) return;
         let url;
-        try { url = new URL(link); } catch { setLinkError("Introduce un enlace válido."); return; }
-        if (!["http:", "https:"].includes(url.protocol)) { setLinkError("Usa http:// o https://."); return; }
-        if (selection.current?.collapsed) command("insertText", url.href);
-        else command("createLink", url.href);
-        setLinkOpen(false); setLinkError("");
+        try { url = normalizedLink(link.trim()); } catch { setLinkError("Introduce un enlace válido con http:// o https://."); return; }
+        const node = selection.current?.commonAncestorContainer;
+        const existing = (node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement)?.closest("a");
+        if (existing && editor.current.contains(existing)) {
+            existing.href = url; existing.textContent = linkAlias.trim() || url; delete existing.dataset.boldAutolink;
+            editor.current.focus(); const range = document.createRange(); range.setStartAfter(existing); range.collapse(true);
+            const current = window.getSelection(); current.removeAllRanges(); current.addRange(range); save();
+        }
+        else if (linkAlias.trim() || !selection.current || selection.current.collapsed) command("insertHTML", linkMarkup(url, linkAlias));
+        else command("createLink", url);
+        setLinkOpen(false); setLinkError(""); setLinkAlias("");
+    }
+    async function insertImages(files) {
+        if (disabled || !allowImages || imagesInFlight.current) return;
+        remember(); setImageError("");
+        try { validateEditorImages(files); } catch (error) { setImageError(error.message); return; }
+        imagesInFlight.current = true; setImagesBusy(true); onBusyChange?.(true);
+        try {
+            if (onFiles) { await onFiles({target: {files, value: ""}}); return; }
+            const images = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+                const reader = new FileReader(); reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+                reader.onload = () => { const image = document.createElement("img"); image.setAttribute("data-bold-image", reader.result); resolve(image.outerHTML); }; reader.readAsDataURL(file);
+            })));
+            if (editor.current) command("insertHTML", images.join(""));
+        } catch (error) { setImageError(error.message); }
+        finally { imagesInFlight.current = false; setImagesBusy(false); onBusyChange?.(false); }
     }
     return <div className={`task_text_editor${compact ? " task_comment_editor" : ""}${disabled ? " is_disabled" : ""}`}>
         <div className="task_editor_toolbar" role="toolbar" aria-label={`Formato de ${label.toLowerCase()}`} onMouseDown={event => { remember(); if (!event.target.closest("summary")) event.preventDefault(); }}>
             <details className="task_editor_style task_select" ref={styleMenu} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; } }}><summary aria-label="Estilo de texto" aria-disabled={disabled} onClick={event => disabled && event.preventDefault()}>{style}<ChevronDown size={13} /></summary><div className="task_select_menu">{textStyles.map(([tag, name]) => <button type="button" className="task_select_option" aria-label={name} key={tag} disabled={disabled} onClick={() => changeStyle(tag)}>{name}</button>)}</div></details>
-            <span className="task_editor_divider" />{formats.map(([name, action, Icon]) => <button type="button" key={action} title={name} aria-label={name} disabled={disabled} onClick={() => command(action)}><Icon size={15} /></button>)}<button type="button" title="Enlace" aria-label="Insertar enlace" disabled={disabled} onClick={() => { setLinkOpen(current => !current); setLinkError(""); }}><Link size={15} /></button>
+            <span className="task_editor_divider" />{formats.map(([name, action, Icon]) => <button type="button" key={action} title={name} aria-label={name} disabled={disabled} onClick={() => command(action)}><Icon size={15} /></button>)}<button type="button" title="Enlace" aria-label="Insertar enlace" disabled={disabled} onClick={() => { setLinkAlias(selection.current?.toString() || ""); setLinkOpen(current => !current); setLinkError(""); }}><Link size={15} /></button>
         </div>
-        {linkOpen && <div className="task_editor_link"><input type="url" aria-label="Dirección del enlace" value={link} onChange={event => setLink(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setLinkOpen(false); editor.current.focus(); } }} /><button type="button" disabled={disabled} onClick={insertLink}>Insertar</button><button type="button" onClick={() => setLinkOpen(false)}>Cancelar</button>{linkError && <small role="alert">{linkError}</small>}</div>}
+        {linkOpen && <div className="task_editor_link"><input type="url" aria-label="Dirección del enlace" value={link} onChange={event => setLink(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setLinkOpen(false); editor.current.focus(); } }} /><input type="text" aria-label="Alias del enlace" placeholder="Alias (opcional)" maxLength={120} value={linkAlias} onChange={event => setLinkAlias(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } }} /><button type="button" disabled={disabled} onClick={insertLink}>Insertar</button><button type="button" onClick={() => setLinkOpen(false)}>Cancelar</button>{linkError && <small role="alert">{linkError}</small>}</div>}
         <ImageGallery images={images} disabled={disabled || imagesBusy} onRemove={index => {const image = editor.current?.querySelectorAll("img")[index]; if (image) {image.remove(); selection.current = null; save();}}}/>
-        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder} onInput={save} onKeyUp={remember} onMouseUp={remember} onBlur={remember} onPaste={event => { event.preventDefault(); remember(); command("insertText", event.clipboardData.getData("text/plain")); }} onKeyDown={event => {
+        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder} onInput={event => { if (!event.nativeEvent.isComposing) save(); }} onCompositionEnd={save} onKeyUp={remember} onMouseUp={remember} onBlur={remember} onPaste={event => { event.preventDefault(); if (disabled) return; const files = transferredFiles(event.clipboardData); if (files.length) { void insertImages(files); return; } remember(); command("insertText", event.clipboardData.getData("text/plain")); }} onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }} onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
             if (event.nativeEvent.isComposing) return;
             if (event.key === "Enter" && !event.shiftKey && onSubmit) { event.preventDefault(); event.stopPropagation(); if (!submitDisabled && !disabled && !imagesBusy && !event.repeat) onSubmit(); return; }
             if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && ["Título", "Subtítulo"].includes(style)) { event.preventDefault(); remember(); command("insertParagraph"); command("fontSize", "3"); }
@@ -86,19 +111,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         {limitReached && <small className="task_editor_limit" role="alert">Se alcanzó el límite de texto de este campo.</small>}
         <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />
         <div className="task_editor_footer"><div className="task_editor_insert" ref={controls}>
-            {allowImages && <label className="detail_comment_image_button" title="Adjuntar imagen"><ImagePlus size={17} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Adjuntar imágenes" disabled={disabled || imagesBusy} onChange={async event => {
-                const files = [...event.target.files]; remember(); setImageError(""); setImagesBusy(true); onBusyChange?.(true);
-                try {
-                    if (onFiles) {await onFiles(event); return;}
-                    event.target.value = "";
-                    const images = await Promise.all(files.map(file => new Promise((resolve, reject) => {
-                        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) return reject(new Error("Usa PNG, JPEG, GIF o WebP."));
-                        const reader = new FileReader(); reader.onerror = () => reject(new Error("No se pudo leer la imagen.")); reader.onload = () => {const image = document.createElement("img"); image.setAttribute("data-bold-image", reader.result); resolve(image.outerHTML);}; reader.readAsDataURL(file);
-                    })));
-                    if (editor.current) command("insertHTML", images.join(""));
-                } catch (error) {setImageError(error.message);}
-                finally {setImagesBusy(false); onBusyChange?.(false);}
-            }} /></label>}
+            {allowImages && <label className="detail_comment_image_button" title="Adjuntar imagen"><ImagePlus size={17} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Adjuntar imágenes" disabled={disabled || imagesBusy} onChange={event => { const files = Array.from(event.target.files); event.target.value = ""; void insertImages(files); }} /></label>}
         </div>{onSubmit ? <button type="button" className="task_editor_send" title="Enviar comentario (Enter). Nueva línea: Shift+Enter" aria-label="Enviar comentario" disabled={disabled || imagesBusy || submitDisabled} onClick={onSubmit}><ArrowUp size={16} /></button> : <small>{label}</small>}</div>
         {imageError && <small role="alert">{imageError}</small>}
     </div>;

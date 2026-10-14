@@ -264,14 +264,35 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         # One transaction: no partially renamed group or task status changes.
         with transaction.atomic():
             project = self.locked_project(request.data.get("project"))
+            if project.unsectioned_hidden:
+                raise ValidationError({"section": "Sin sección ya fue renombrada o eliminada. Actualiza la vista."})
             serializer = self.get_serializer(data={"project": str(project.pk), "name": request.data.get("name")})
             serializer.is_valid(raise_exception=True)
             last = project.sections.aggregate(last=Max("position"))["last"] or 0
             section = serializer.save(position=last + 1000)
+            if project.unsectioned_index is not None:
+                rows = list(project.sections.exclude(pk=section.pk).order_by("position", "created_at", "pk"))
+                rows.insert(min(project.unsectioned_index, len(rows)), section)
+                for index, row in enumerate(rows):
+                    row.position = (index + 1) * 1000
+                Section.objects.bulk_update(rows, ["position"])
             TaskProject.objects.filter(project=project, section__isnull=True).update(section=section)
-            Project.objects.filter(pk=project.pk).update(unsectioned_index=None)
+            Project.objects.filter(pk=project.pk).update(unsectioned_index=None, unsectioned_hidden=True)
             # Section's post-save invalidation is delivered after the entire move commits.
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="hide-unsectioned")
+    def hide_unsectioned(self, request):
+        with transaction.atomic():
+            project = self.locked_project(request.data.get("project"))
+            target = project.sections.order_by("position", "created_at", "pk").first()
+            if not target:
+                raise ValidationError({"section": "Crea otra sección antes de eliminar la última."})
+            TaskProject.objects.filter(project=project, section__isnull=True).update(section=target)
+            Project.objects.filter(pk=project.pk).update(unsectioned_hidden=True, unsectioned_index=None)
+            transaction.on_commit(lambda: dispatch_resource_invalidation(
+                [project.unit_id], "project.changed", "project", project.id, {}))
+        return Response({"unsectioned_hidden": True})
 
     @action(detail=False, methods=["post"])
     def reorder(self, request):
@@ -314,7 +335,11 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self.require_permission("tasks.project.manage", instance.project.unit, instance.project_id)
         with transaction.atomic():
-            Project.objects.select_for_update().get(pk=instance.project_id)
+            project = Project.objects.select_for_update().get(pk=instance.project_id)
+            target = project.sections.exclude(pk=instance.pk).order_by("position", "created_at", "pk").first()
+            if project.unsectioned_hidden and not target:
+                raise ValidationError({"section": "No se puede eliminar la última sección."})
+            TaskProject.objects.filter(section=instance).update(section=target)
             instance.delete()
 
 

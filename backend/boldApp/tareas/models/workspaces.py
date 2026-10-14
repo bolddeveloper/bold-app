@@ -21,6 +21,7 @@ class PersonalTaskBoard(models.Model):
     sections = models.JSONField(default=list)
     task_sections = models.JSONField(default=dict)
     unsectioned_index = models.PositiveIntegerField(null=True, blank=True, default=None)
+    unsectioned_hidden = models.BooleanField(default=False, db_default=False)
 
 
 class WorkspaceLibrary(UUIDPrimaryKeyModel):

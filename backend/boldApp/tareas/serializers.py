@@ -42,7 +42,7 @@ class ProjectSerializer(DriveImagesMixin, serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = "__all__"
-        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "unsectioned_index"]
+        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "unsectioned_index", "unsectioned_hidden"]
         validators = []
 
     def validate_name(self, value):

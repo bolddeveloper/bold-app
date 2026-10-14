@@ -11,6 +11,7 @@
         "test:pwa": "node --test pwa_updates.test.js",
         "test:brands-ui": "node tests/brands_ui.mjs",
         "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",
+        "test:comment-editor-ui": "node tests/comment_editor_ui.mjs",
         "test:worker": "node --test worker/*.test.js",
         "check:sync-capacity": "node tools/check_sync_capacity.mjs",
         "probe:public-health": "node tools/probe_public_health.mjs",

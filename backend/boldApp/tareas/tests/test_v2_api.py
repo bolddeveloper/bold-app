@@ -77,12 +77,65 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(link.position, 1250)
         self.assertEqual(task.status_id, self.ops_status.pk)
         self.assertEqual(self.client.get(f"/api/v2/sections/{link.section_id}/").data["name"], "Nombre persistente")
+        self.assertTrue(self.client.get(f"/api/v2/projects/{project.pk}/").data["unsectioned_hidden"])
         fresh = Task.objects.create(unit=self.operations, status=self.ops_status, title="Nueva sin sección", priority="high", created_by_assignment=self.actor_assignment)
         fresh_link = TaskProject.objects.create(task=fresh, project=project, section=None, position="2250", added_by_assignment=self.actor_assignment)
-        self.assertIsNone(fresh_link.section_id)
+        self.assertIsNotNone(fresh_link.section_id)
         duplicate = self.client.post("/api/v2/sections/materialize-unsectioned/", {"project": str(project.pk), "name": "Nombre persistente"}, format="json")
         self.assertEqual(duplicate.status_code, 400)
-        fresh_link.refresh_from_db(); self.assertIsNone(fresh_link.section_id)
+        fresh_link.refresh_from_db(); self.assertIsNotNone(fresh_link.section_id)
+
+    def test_hide_unsectioned_moves_tasks_and_survives_reload_without_changing_status(self):
+        project = self.ops_project
+        task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Mover sin borrar", priority="high", created_by_assignment=self.actor_assignment)
+        link = TaskProject.objects.create(task=task, project=project, section=None, position="1250", added_by_assignment=self.actor_assignment)
+        target = project.sections.order_by("position", "created_at", "pk").first()
+        response = self.client.post("/api/v2/sections/hide-unsectioned/", {"project": str(project.pk)}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        link.refresh_from_db(); task.refresh_from_db()
+        self.assertEqual(link.section_id, target.pk)
+        self.assertEqual(link.position, 1250)
+        self.assertEqual(task.status_id, self.ops_status.pk)
+        self.assertIsNone(task.deleted_at)
+        self.assertTrue(self.client.get(f"/api/v2/projects/{project.pk}/").data["unsectioned_hidden"])
+        payload = self.task_payload(); payload["section"] = None
+        created = self.client.post("/api/v2/tasks/", payload, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(TaskProject.objects.get(task_id=created.data["id"]).section_id, target.pk)
+
+    def test_section_removal_moves_tasks_and_protects_last_section(self):
+        project = self.ops_project
+        first = project.sections.order_by("position", "created_at", "pk").first()
+        Project.objects.filter(pk=project.pk).update(unsectioned_hidden=True)
+        task = Task.objects.create(unit=self.operations, status=self.ops_status, title="Conservar tarea", priority="high", created_by_assignment=self.actor_assignment)
+        link = TaskProject.objects.create(task=task, project=project, section=first, position="750", added_by_assignment=self.actor_assignment)
+        response = self.client.delete(f"/api/v2/sections/{first.pk}/")
+        self.assertEqual(response.status_code, 204)
+        link.refresh_from_db(); task.refresh_from_db()
+        self.assertIsNotNone(link.section_id)
+        self.assertEqual(link.position, 750)
+        self.assertEqual(task.status_id, self.ops_status.pk)
+        for section in list(project.sections.order_by("position"))[:-1]:
+            self.assertEqual(self.client.delete(f"/api/v2/sections/{section.pk}/").status_code, 204)
+        last = project.sections.get()
+        self.assertEqual(self.client.delete(f"/api/v2/sections/{last.pk}/").status_code, 400)
+
+    def test_hide_unsectioned_requires_another_section(self):
+        project = Project.objects.create(unit=self.operations, name="Inicial vacío", owner_assignment=self.actor_assignment, created_by_assignment=self.actor_assignment, status="active")
+        response = self.client.post("/api/v2/sections/hide-unsectioned/", {"project": str(project.pk)}, format="json")
+        self.assertEqual(response.status_code, 400)
+        project.refresh_from_db(); self.assertFalse(project.unsectioned_hidden)
+
+    def test_materialized_default_keeps_order_and_rejects_stale_second_rename(self):
+        project = self.ops_project
+        Project.objects.filter(pk=project.pk).update(unsectioned_index=0)
+        response = self.client.post("/api/v2/sections/materialize-unsectioned/", {"project": str(project.pk), "name": "Primera"}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(project.sections.order_by("position").first().pk), response.data["id"])
+        count = project.sections.count()
+        stale = self.client.post("/api/v2/sections/materialize-unsectioned/", {"project": str(project.pk), "name": "Otra desde vista antigua"}, format="json")
+        self.assertEqual(stale.status_code, 400)
+        self.assertEqual(project.sections.count(), count)
 
     def test_sections_append_in_creation_order_and_reorder_atomically(self):
         project = self.ops_project
@@ -111,7 +164,7 @@ class TasksV2ApiTests(TransactionTestCase):
     def test_section_operations_enforce_management_permission(self):
         self.client.force_authenticate(self.ana)
         self.client.credentials(HTTP_X_ASSIGNMENT_ID=str(self.ana_assignment.pk))
-        for path, body in (("materialize-unsectioned", {"name": "No autorizado"}), ("reorder", {"sections": []})):
+        for path, body in (("materialize-unsectioned", {"name": "No autorizado"}), ("hide-unsectioned", {}), ("reorder", {"sections": []})):
             response = self.client.post(f"/api/v2/sections/{path}/", {"project": str(self.ops_project.pk), **body}, format="json")
             self.assertEqual(response.status_code, 403, response.data)
 
@@ -688,16 +741,17 @@ class TasksV2ApiTests(TransactionTestCase):
         self.assertEqual(invalid.status_code, 400)
         self.assertIn("end_date", invalid.data)
 
-    def test_section_delete_unsections_tasks_and_task_titles_are_trimmed(self):
+    def test_section_delete_relocates_tasks_and_task_titles_are_trimmed(self):
         response = self.client.post("/api/v2/tasks/", {**self.task_payload(), "title": "  Tarea limpia  "}, format="json")
         self.assertEqual(response.status_code, 201, response.data)
         task = Task.objects.get(id=response.data["id"])
         link = TaskProject.objects.get(task=task)
         self.assertEqual(task.title, "Tarea limpia")
+        target = self.ops_project.sections.exclude(pk=self.ops_section.pk).order_by("position", "created_at", "pk").first()
         deleted = self.client.delete(f"/api/v2/sections/{self.ops_section.id}/")
         self.assertEqual(deleted.status_code, 204)
         link.refresh_from_db()
-        self.assertIsNone(link.section_id)
+        self.assertEqual(link.section_id, target.pk)
 
         invalid = self.client.post("/api/v2/tasks/", {**self.task_payload(), "section": None, "title": "   "}, format="json")
         self.assertEqual(invalid.status_code, 400)

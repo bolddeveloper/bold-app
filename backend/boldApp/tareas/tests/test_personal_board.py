@@ -22,12 +22,12 @@ class PersonalBoardTests(TestCase):
 
     def test_sections_and_task_placement_survive_reload_and_are_private(self):
         section, task = str(uuid4()), str(uuid4())
-        board = {"sections": [{"id": section, "label": "Hoy"}], "task_sections": {task: section}, "unsectioned_index": 0}
+        board = {"sections": [{"id": section, "label": "Hoy"}], "task_sections": {task: section}, "unsectioned_index": 0, "unsectioned_hidden": False}
         response = self.client.put(self.endpoint, board, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(self.client.get(self.endpoint).data, board)
         self.login(self.other)
-        self.assertEqual(self.client.get(self.endpoint).data, {"sections": [], "task_sections": {}, "unsectioned_index": None})
+        self.assertEqual(self.client.get(self.endpoint).data, {"sections": [], "task_sections": {}, "unsectioned_index": None, "unsectioned_hidden": False})
         self.login(self.owner)
         self.client.put(self.endpoint, {"sections": [], "task_sections": {}}, format="json")
         self.assertEqual(self.client.get(self.endpoint).data["task_sections"], {})
@@ -43,9 +43,23 @@ class PersonalBoardTests(TestCase):
             self.assertEqual(self.client.put(self.endpoint, board, format="json").status_code, 400)
         self.assertEqual(self.client.get(self.endpoint).data["sections"], [])
 
+    def test_hidden_default_survives_reload_and_cannot_remove_last_section(self):
+        section = {"id": str(uuid4()), "label": "Hoy"}
+        board = {"sections": [section], "task_sections": {}, "unsectioned_hidden": True}
+        self.assertEqual(self.client.put(self.endpoint, board, format="json").status_code, 200)
+        self.assertTrue(self.client.get(self.endpoint).data["unsectioned_hidden"])
+        self.assertEqual(self.client.put(self.endpoint, {"sections": [], "task_sections": {}}, format="json").status_code, 400)
+        self.assertTrue(self.client.get(self.endpoint).data["unsectioned_hidden"])
+        self.assertEqual(self.client.get(self.endpoint).data["sections"], [section])
+        self.assertEqual(self.client.put(self.endpoint, {**board, "unsectioned_hidden": False}, format="json").status_code, 200)
+        self.assertTrue(self.client.get(self.endpoint).data["unsectioned_hidden"])
+        self.login(self.other)
+        self.assertFalse(self.client.get(self.endpoint).data["unsectioned_hidden"])
+
     def test_order_and_renamed_section_keep_task_placement(self):
         first, second, task = str(uuid4()), str(uuid4()), str(uuid4())
-        board = {"sections": [{"id": second, "label": "Renombrada"}, {"id": first, "label": "Hoy"}], "task_sections": {task: second}, "unsectioned_index": 1}
+        board = {"sections": [{"id": second, "label": "Renombrada"}, {"id": first, "label": "Hoy"}], "task_sections": {task: second}, "unsectioned_index": 1, "unsectioned_hidden": False}
+
         self.assertEqual(self.client.put(self.endpoint, board, format="json").status_code, 200)
         self.assertEqual(self.client.get(self.endpoint).data, board)
         for invalid in [-1, 3, True, "invalid"]:
