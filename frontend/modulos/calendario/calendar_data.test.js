@@ -61,7 +61,7 @@ test("switching to a recurring series preserves unsaved fields without moving it
     const result=mergeEventScopeDraft(current,original,master);
     assert.equal(result.start,master.start);assert.equal(result.summary,"Nuevo nombre");assert.equal(result.repeat,"none");assert.equal(result.originalRepeat,"DAILY");
 });
-import {dayKey, upcomingWeekDays} from "./calendar_data.js";
+import {dayKey, weekDays} from "./calendar_data.js";
 
 test("calendar opens today while retaining the preferred view, including legacy navigation", () => {
     const now = new Date(2026, 9, 13, 11, 10);
@@ -77,20 +77,26 @@ test("calendar opens today while retaining the preferred view, including legacy 
         const initial = initialCalendarNavigation(saved, now);
         assert.equal(initial.view, "week");
         assert.equal(dayKey(initial.cursor), "2026-10-13");
-        assert.deepEqual(upcomingWeekDays(initial.cursor, now).map(dayKey), ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
+        assert.deepEqual(weekDays(initial.cursor).map(dayKey), ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
     }
     assert.equal(dayKey(initialCalendarNavigation({view: "week"}, new Date(2026, 9, 14)).cursor), "2026-10-14");
 });
 
-test("current week starts today while historical/future weeks remain complete", () => {
-    const today = new Date(2026, 9, 7, 14);
-    const current = upcomingWeekDays(today, today);
-    assert.deepEqual(current.map(date => date.getDate()), [7, 8, 9, 10]);
-    assert.equal(upcomingWeekDays(new Date(2026, 8, 28), today).length, 7);
-    assert.equal(upcomingWeekDays(new Date(2026, 9, 15), today).length, 7);
-    assert.equal(upcomingWeekDays(new Date(2026, 9, 10), new Date(2026, 9, 10)).length, 1);
-    assert.deepEqual(upcomingWeekDays(new Date(2026, 9, 11), new Date(2026, 9, 11)).map(dayKey), ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
-    assert.deepEqual(upcomingWeekDays(new Date(2026, 9, 4), new Date(2026, 9, 6)).map(dayKey), ["2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10"]);
+test("every day opens its full Sunday-to-Saturday week, including month and year boundaries", () => {
+    for (const start of [new Date(2026, 9, 11), new Date(2026, 8, 27), new Date(2026, 11, 27)]) {
+        const expected = Array.from({length: 7}, (_, index) => {
+            const date = new Date(start);
+            date.setDate(date.getDate() + index);
+            return dayKey(date);
+        });
+        for (let offset = 0; offset < 7; offset++) {
+            const cursor = new Date(start);
+            cursor.setDate(cursor.getDate() + offset);
+            const original = cursor.getTime();
+            assert.deepEqual(weekDays(cursor).map(dayKey), expected);
+            assert.equal(cursor.getTime(), original);
+        }
+    }
 });
 
 test("current marker uses the displayed date and zone, not the host date", () => {

@@ -1,14 +1,13 @@
 export const dayKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export const fromDay = key => new Date(`${key}T12:00:00`);
 export const addDays = (date, count) => { const next = new Date(date); next.setDate(next.getDate() + count); return next; };
-export const weekStart = date => addDays(date, -((date.getDay() + 6) % 7));
+export const weekStart = date => addDays(date, -date.getDay());
 // Restore the preferred layout, never the previously browsed date.
 export function initialCalendarNavigation(saved, now = new Date()) {
     return {view: ["day", "week", "month", "agenda"].includes(saved?.view) ? saved.view : "week", cursor: new Date(now)};
 }
-export function upcomingWeekDays(cursor, today) {
-    const days = Array.from({length: 7}, (_, index) => addDays(addDays(cursor, -cursor.getDay()), index));
-    return days.some(date => dayKey(date) === dayKey(today)) ? days.filter(date => dayKey(date) >= dayKey(today)) : days;
+export function weekDays(cursor) {
+    return Array.from({length: 7}, (_, index) => addDays(weekStart(cursor), index));
 }
 export const zoneDay = (value, zone) => {
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value)).map(part => [part.type, part.value]));

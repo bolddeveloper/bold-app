@@ -13,11 +13,10 @@ import { CalendarDateField } from "../tareas/src/task_app.jsx";
 import { calendarApi } from "./calendar_api.js";
 import { createDraftSync } from "./draft_sync.js";
 import { addDays, dayKey, eventDay, fromDay, guestSuggestions, matchesDay, mergeEventScopeDraft, selectedTimeRange, timedEventLayout, weekStart } from "./calendar_data.js";
-import {upcomingWeekDays} from "./calendar_data.js";
+import {weekDays} from "./calendar_data.js";
 import "./calendar.css";
 
 const weekdays = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const sundayStart = date => addDays(weekStart(date), -1);
 const googleColors = ["#7986cb", "#33b679", "#8e24aa", "#e67c73", "#f6c026", "#f5511d", "#039be5", "#616161", "#3f51b5", "#0b8043", "#d50000"];
 const eventTime = (event, zone) => event.start?.date ? "Todo el día" : formatCalendarTime(event.start.dateTime, zone);
 const eventTimeRange = (event, zone) => `${eventTime(event, zone)} – ${formatCalendarTime(event.end.dateTime, zone)}`;
@@ -322,7 +321,7 @@ function EventEditor({ event, date, endDate, zone, quick = false, onClose, onSav
 }
 
 function MiniCalendar({ cursor, onSelect }) {
-    const first = sundayStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+    const first = weekStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
     const days = Array.from({ length: 42 }, (_, index) => addDays(first, index));
     return <div className="bold_calendar_mini"><div className="bold_calendar_mini_head"><strong>{new Intl.DateTimeFormat("es", { month: "long", year: "numeric" }).format(cursor)}</strong><button aria-label="Mes anterior" onClick={() => onSelect(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}><ChevronLeft size={16} /></button><button aria-label="Mes siguiente" onClick={() => onSelect(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}><ChevronRight size={16} /></button></div><div className="bold_calendar_mini_grid">{weekdays.map(day => <span key={day}>{day[0]}</span>)}{days.map(date => <button key={dayKey(date)} className={`${date.getMonth() !== cursor.getMonth() ? "is_other" : ""} ${dayKey(date) === dayKey(cursor) ? "is_selected" : ""} ${dayKey(date) === dayKey(new Date()) ? "is_today" : ""}`} onClick={() => onSelect(date)} aria-label={new Intl.DateTimeFormat("es", { dateStyle: "full" }).format(date)}>{date.getDate()}</button>)}</div></div>;
 }
@@ -371,17 +370,20 @@ export default function CalendarModule() {
     useEffect(() => {
         const navigate = event => {
             if (event.detail?.module !== "calendar") return;
-            if (["day", "week", "month", "agenda"].includes(event.detail.view)) setView(event.detail.view);
+            if (["day", "week", "month", "agenda"].includes(event.detail.view)) {
+                setView(event.detail.view);
+                if (event.detail.view === "week") setCursor(new Date());
+            }
         };
         globalThis.addEventListener("bold:global-search:navigate", navigate);
         return () => globalThis.removeEventListener("bold:global-search:navigate", navigate);
     }, []);
     const days = useMemo(() => {
-        if (view === "week") return upcomingWeekDays(cursor, now);
-        const first = view === "month" ? sundayStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1)) : view === "week" ? sundayStart(cursor) : cursor;
-        const count = view === "month" ? 42 : view === "week" ? 7 : view === "agenda" ? 30 : 1;
+        if (view === "week") return weekDays(cursor);
+        const first = view === "month" ? weekStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1)) : cursor;
+        const count = view === "month" ? 42 : view === "agenda" ? 30 : 1;
         return Array.from({ length: count }, (_, index) => addDays(first, index));
-    }, [cursor, view, dayKey(now)]);
+    }, [cursor, view]);
     async function refreshCalendar(force = false) {
         if (!namespace || !connection?.connected) {setLoading(false); return;}
         const start = new Date(Date.UTC(days[0].getFullYear(), days[0].getMonth(), days[0].getDate() - 1)).toISOString();
@@ -448,7 +450,7 @@ export default function CalendarModule() {
         <header className="bold_calendar_header"><CalendarDays size={27} /><div><h1>Calendario</h1><p>{connection?.connected ? `${connection.email} · Hora local: ${formatCalendarTime(now, zone)}` : "Conecta Google Calendar para ver tus eventos."}</p></div></header>
         {!connection ? <div className="bold_calendar_state">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(""); calendarApi.connection().then(setConnection).catch(problem => setError(problem.message)); }}>Reintentar</button></> : "Comprobando la conexión…"}</div> : !connection.connected ? <GoogleConnection onConnected={() => calendarApi.connection().then(setConnection).catch(problem => setError(problem.message))}/> : <div className="bold_calendar_layout">
             <aside className="bold_calendar_sidebar"><div className="bold_calendar_create_wrap"><button className="bold_calendar_create" aria-expanded={createMenu} onClick={() => setCreateMenu(value => !value)}><Plus size={23} /> Crear <ChevronDown size={14} /></button>{createMenu && <div className="bold_calendar_create_menu"><button onClick={() => { setCreateMenu(false); open(null); }}>Evento</button><button onClick={() => { setCreateMenu(false); setEditing({ event: null, date: new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), 9), quick: true, task: true, anchor: { x: 260, y: 110 } }); }}>Tarea</button></div>}</div><MiniCalendar cursor={cursor} onSelect={setCursor} /><div className="bold_calendar_sources"><h3>Mis calendarios</h3><label><input type="checkbox" checked={showPrimary} onChange={change => setShowPrimary(change.target.checked)} /><span>{connection.email}</span></label></div></aside>
-            <main className="bold_calendar_main"><div className="bold_calendar_toolbar"><div className="bold_calendar_move"><button onClick={() => setCursor(new Date())}>Hoy</button><button aria-label="Período anterior" onClick={() => shift(-1)}><ChevronLeft size={18} /></button><button aria-label="Período siguiente" onClick={() => shift(1)}><ChevronRight size={18} /></button><h2>{title}</h2></div><div className="bold_calendar_controls"><label className="bold_calendar_search"><Search size={16} /><input aria-label="Buscar eventos" placeholder="Buscar eventos" value={search} onChange={change => setSearch(change.target.value)} /></label><button aria-label="Actualizar eventos" title="Actualizar" onClick={() => setRevision(current => current + 1)}><RefreshCw size={17} /></button><div className="bold_calendar_views" role="tablist" aria-label="Vista del calendario">{[["day", "Día"], ["week", "Semana"], ["month", "Mes"], ["agenda", "Agenda"]].map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? "is_active" : ""} onClick={() => setView(id)}>{label}</button>)}</div></div></div>
+            <main className="bold_calendar_main"><div className="bold_calendar_toolbar"><div className="bold_calendar_move"><button onClick={() => setCursor(new Date())}>Hoy</button><button aria-label="Período anterior" onClick={() => shift(-1)}><ChevronLeft size={18} /></button><button aria-label="Período siguiente" onClick={() => shift(1)}><ChevronRight size={18} /></button><h2>{title}</h2></div><div className="bold_calendar_controls"><label className="bold_calendar_search"><Search size={16} /><input aria-label="Buscar eventos" placeholder="Buscar eventos" value={search} onChange={change => setSearch(change.target.value)} /></label><button aria-label="Actualizar eventos" title="Actualizar" onClick={() => setRevision(current => current + 1)}><RefreshCw size={17} /></button><div className="bold_calendar_views" role="tablist" aria-label="Vista del calendario">{[["day", "Día"], ["week", "Semana"], ["month", "Mes"], ["agenda", "Agenda"]].map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? "is_active" : ""} onClick={() => { setView(id); if (id === "week") setCursor(new Date()); }}>{label}</button>)}</div></div></div>
             <BackgroundSyncNotice active={refreshing || loading} label="Actualizando calendario…" />{error && <div className="bold_calendar_error" role="alert">{error}<button onClick={() => setRevision(current => current + 1)}>Reintentar</button></div>}
             {taskError && <div className="bold_calendar_error" role="alert">Google Tasks: {taskError} <button onClick={() => setRevision(current => current + 1)}>Reintentar</button>{connection.services?.tasks?.status !== "available" && <details><summary>Autorizar Google Tasks</summary><GoogleConnection service="tasks" onConnected={() => calendarApi.connection().then(setConnection).catch(problem => setError(problem.message))}/></details>}</div>}
             {calendarBody()}
