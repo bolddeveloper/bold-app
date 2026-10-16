@@ -8,6 +8,7 @@ import {uniquePeople} from "../core/shared/people.js";
 import {brandsApi} from "./brands_api.js";
 import {brandFields, emptyBrand, brandDraft, toggleBrandLink} from "./brand_fields.js";
 import "./brands.css";
+import "../docs/development_notice.css";
 
 export default function BrandsModule() {
     const core = useCore();
@@ -109,6 +110,7 @@ export default function BrandsModule() {
                 {shareOpen && <section><h3>Colaboradores</h3><p>Selecciona empleados de cualquier departamento. Para editar necesitan también el permiso de marcas de su cargo.</p><input aria-label="Buscar colaboradores" placeholder="Nombre o correo" value={personQuery} onChange={event => setPersonQuery(event.target.value)}/>{people.map(person => <label className="brand_check" key={person.id}><input type="checkbox" disabled={busy} checked={selected.member_ids.includes(person.id)} onChange={() => run(async () => {const value = await brandsApi.share(selected, toggleBrandLink(selected.member_ids, person.id)); if (mounted.current) {setSelected(value); setRows(items => items.map(row => row.id === value.id ? value : row));}})}/>{person.name} · {person.unit_name}</label>)}</section>}
             </> : <p>Selecciona una marca para consultar su contexto o crea una nueva.</p>}
         </article></div>
+        <aside className="docs_development_notice" role="note"><p><strong>Se está trabajando en este módulo.</strong></p><img src="/bold-loader.svg" alt="" aria-hidden="true" width="210" height="122"/></aside>
         {logoFile && draft && <AvatarEditor file={logoFile} onClose={() => setLogoFile(null)} onApply={value => {setDraft(current => ({...current, logo: value})); setLogoFile(null);}}/>}
     </section>;
 }
