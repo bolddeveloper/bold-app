@@ -379,6 +379,14 @@ def resolve_access(
             "system",
             policy_version=context.policy_version,
         )
+    if permission.code.startswith("sheets.") and settings.SHEETS_PILOT_ENABLED and str(assignment.position.unit_id) not in settings.SHEETS_PILOT_UNIT_IDS:
+        return _decision(
+            False,
+            "Sheets está disponible únicamente para las unidades autorizadas del piloto de IT.",
+            "sheets_pilot_restricted",
+            "system",
+            policy_version=context.policy_version,
+        )
     if assignment.employee.user_account.is_superuser:
         return _decision(
             True,

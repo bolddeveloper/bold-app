@@ -61,6 +61,58 @@ límite de archivo una garantía para cualquier combinación de tamaño, fórmul
 imágenes o tablas dinámicas. Probar un archivo representativo con los recursos y
 límites reales de Oracle antes de abrir el servicio a usuarios.
 
+## Piloto exclusivo para Equipo de IT
+
+La preparación limita **solo Sheets**. Equipo y Estados mantienen sus permisos
+habituales para toda la empresa; no se aplica esta restricción a Tareas ni a otros
+módulos.
+
+En Oracle configurar:
+
+```dotenv
+SHEETS_PILOT_ENABLED=true
+SHEETS_PILOT_UNIT_IDS=UUID_REAL_DEL_EQUIPO_DE_IT
+```
+
+Obtener el UUID de **Equipo de IT** en la base de Oracle mediante el comando de
+solo lectura, usando la imagen de esta entrega y las migraciones aplicadas:
+
+```sh
+docker compose --env-file deploy/oracle/.env.oracle -f deploy/oracle/compose.oracle.yaml run --rm backend python manage.py sheets_preflight --list-units
+```
+
+La unidad es Equipo de IT; «Desarrollador Full Stack Junior» es el cargo, no el
+nombre de la unidad. No copiar el UUID de la base SQLite local: puede ser distinto.
+No seleccionar toda la empresa ni una unidad padre. Se exige pertenencia directa
+del cargo activo a los UUID indicados. Una persona con varios cargos debe entrar
+con su cargo de IT. Ni compartir un archivo, ni un permiso global, ni ser
+propietario de la aplicación permite saltar esta restricción fuera de IT.
+
+La lista vacía bloquea Sheets para todos. El filtro no concede permisos: en
+Administración/Permisos, conservar las reglas actuales y asignar las acciones de
+Sheets necesarias a los cargos de Equipo de IT con alcance específico a esa unidad.
+Lectura permite ver el módulo; creación, edición, asignación, compartir, exportación
+y eliminación se administran por separado. No modificar los permisos de Equipo,
+Estados o del resto de módulos para habilitar este piloto.
+
+Antes de publicar el frontend, con backend, motor y worker de esta entrega en el
+entorno de verificación, ejecutar:
+
+```sh
+docker compose --env-file deploy/oracle/.env.oracle -f deploy/oracle/compose.oracle.yaml exec backend python manage.py sheets_preflight
+```
+
+El comando exige unidad existente, integrantes activos y permisos básicos; prueba
+una fórmula, exportación XLSX y reimportación por HTTP autenticado al motor. No
+crea archivos, no toca Drive y no concede permisos. Si falla, detener la publicación.
+Después verificar con una cuenta normal IT y otra ajena: Sheets visible solo para
+IT, acceso directo a su API rechazado fuera de IT, Equipo y Estados accesibles
+según sus permisos normales. Verificar dos sesiones y descarga/reapertura de un
+Excel de prueba. Para abrir Sheets a toda la empresa en el futuro, desactivar el
+piloto expresamente; los permisos habituales seguirán aplicándose.
+
+Esta preparación no ejecuta estos comandos en Oracle ni publica Cloudflare.
+
 ## Comprobaciones locales sin desplegar
 
 Desde la raíz del repositorio:

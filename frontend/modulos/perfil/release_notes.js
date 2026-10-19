@@ -1,6 +1,16 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-sheets-it-pilot", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Prueba de Sheets con Equipo de IT",
+        summary: "Sheets incorpora un acceso limitado por equipo para su prueba inicial.",
+        sections: [{title: "Acceso durante el piloto", items: [
+            "Cuando el piloto está activo, Sheets solo está disponible desde un cargo del equipo autorizado y con los permisos correspondientes.",
+            "Compartir un archivo no permite acceder a Sheets desde otro equipo durante el piloto.",
+            "Equipo, Estados y los demás módulos conservan sus permisos habituales.",
+        ]}],
+    },
+    {
         id: "2026-10-19-sheets-template-management", date: "2026-10-19", category: "Mejoras", icon: "update",
         title: "Administra tus plantillas de Sheets",
         summary: "Crea, edita y elimina plantillas directamente desde Plantillas.",

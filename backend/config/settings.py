@@ -303,6 +303,9 @@ CELERY_BEAT_SCHEDULE = {
 SHEETS_ENGINE_URL = os.environ.get("SHEETS_ENGINE_URL", "http://127.0.0.1:8010")
 SHEETS_ENGINE_TOKEN = os.environ.get("SHEETS_ENGINE_TOKEN", SECRET_KEY if DEBUG else "")
 SHEETS_AGENDA_SOURCE = os.environ.get("SHEETS_AGENDA_SOURCE", "")
+# En producción Sheets permanece cerrado hasta configurar las unidades del piloto.
+SHEETS_PILOT_ENABLED = os.environ.get("SHEETS_PILOT_ENABLED", "false" if DEBUG else "true").lower() in {"true", "1"}
+SHEETS_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("SHEETS_PILOT_UNIT_IDS", "").split(",") if value.strip())
 
 # Presence has its own namespace; do not change authentication/throttling caches.
 CACHES = {
