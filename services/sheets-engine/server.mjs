@@ -21,6 +21,11 @@ const server = createServer(async (request, response) => {
     response.end();
     return;
   }
+  if (request.method === 'GET' && request.url === '/health') {
+    response.writeHead(200, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
+    response.end(JSON.stringify({status: 'ok'}));
+    return;
+  }
   if (request.method !== 'POST' || !['/calculate', '/export', '/import', '/shift', '/reorder', '/columns', '/sheet', '/recreate'].includes(request.url)) {
     response.writeHead(404);
     response.end();

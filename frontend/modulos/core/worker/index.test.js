@@ -85,3 +85,29 @@ test("oculta los detalles internos cuando el VPC no responde", async () => {
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.deepEqual(await response.json(), { detail: "El backend no esta disponible temporalmente." });
 });
+
+
+test("Sheets conserva cookies, revisión y Excel binario al atravesar el Worker", async () => {
+    const {calls, env} = create_environment();
+    const data = new Uint8Array([80, 75, 3, 4, 0, 255]);
+    const request = new Request("https://boldapp.example.workers.dev/api/v2/sheets/files/book/import/", {
+        method: "POST", headers: {Cookie: "bold_session=test-only", "X-Assignment-Id": "assignment", "Content-Type": "application/octet-stream", "If-Match": "revision-7"}, body: data,
+    });
+    env.BACKEND.fetch = async forwarded => {calls.backend.push(forwarded);return new Response(data,{headers:{"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=test.xlsx"}});};
+    const response = await worker.fetch(request,env);
+    assert.equal(calls.assets.length,0);
+    assert.equal(calls.backend[0].headers.get("cookie"),"bold_session=test-only");
+    assert.equal(calls.backend[0].headers.get("x-assignment-id"),"assignment");
+    assert.equal(calls.backend[0].headers.get("if-match"),"revision-7");
+    assert.deepEqual(new Uint8Array(await calls.backend[0].arrayBuffer()),data);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()),data);
+    assert.match(response.headers.get("content-disposition"),/test.xlsx/);
+});
+
+test("Sheets conserva la conexión de colaboración WebSocket", async () => {
+    const {calls,env}=create_environment();
+    await worker.fetch(new Request("https://boldapp.example.workers.dev/ws/sheets/book/?ticket=one-use",{headers:{Upgrade:"websocket",Connection:"Upgrade"}}),env);
+    assert.equal(calls.backend[0].url,"http://backend/ws/sheets/book/?ticket=one-use");
+    assert.equal(calls.backend[0].headers.get("upgrade"),"websocket");
+    assert.equal(calls.assets.length,0);
+});

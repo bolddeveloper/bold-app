@@ -11,3 +11,9 @@ htmlcov/
 staticfiles/
 Diagramas/
 docs/
+
+venv/
+.venv/
+.venv*/
+*.bak
+local_backend.sqlite3

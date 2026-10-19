@@ -15,6 +15,9 @@ x-backend-environment: &backend-environment
   ALLOWED_HOSTS: "${ALLOWED_HOSTS:-api.bold.gt}"
   CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-https://app.bold.gt}"
   FRONTEND_URL: "${FRONTEND_URL:-https://app.bold.gt}"
+  GOOGLE_WORKSPACE_CLIENT_ID: "${GOOGLE_WORKSPACE_CLIENT_ID:-}"
+  GOOGLE_WORKSPACE_CLIENT_SECRET: "${GOOGLE_WORKSPACE_CLIENT_SECRET:-}"
+  GOOGLE_WORKSPACE_COMPANY_DOMAIN: "${GOOGLE_WORKSPACE_COMPANY_DOMAIN:-bold.gt}"
   GOOGLE_WORKSPACE_REDIRECT_URI: "${GOOGLE_WORKSPACE_REDIRECT_URI:-https://boldapp.boldapp-93b.workers.dev/api/v2/workspace/oauth/callback/}"
   GOOGLE_CALENDAR_CLIENT_ID: "${GOOGLE_CALENDAR_CLIENT_ID:-}"
   GOOGLE_CALENDAR_CLIENT_SECRET: "${GOOGLE_CALENDAR_CLIENT_SECRET:-}"
@@ -39,7 +42,7 @@ x-backend-environment: &backend-environment
   SEED_PRIVILEGED_DEMO_ACCOUNTS: "${SEED_PRIVILEGED_DEMO_ACCOUNTS:-false}"
   CELERY_TASK_ALWAYS_EAGER: "${CELERY_TASK_ALWAYS_EAGER:-false}"
   SHEETS_ENGINE_URL: "http://sheets-engine:8010"
-  SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:-${SECRET_KEY}}"
+  SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:?SHEETS_ENGINE_TOKEN requerido}"
   SECURE_HSTS_SECONDS: "${SECURE_HSTS_SECONDS:-31536000}"
   SECURE_HSTS_INCLUDE_SUBDOMAINS: "${SECURE_HSTS_INCLUDE_SUBDOMAINS:-false}"
   EMAIL_BACKEND: "${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}"
@@ -68,6 +71,7 @@ x-default-logging: &default-logging
 
 services:
   sheets-engine:
+    image: "bold-app-sheets-engine:${BOLD_APP_IMAGE_TAG:-latest}"
     build:
       context: ../../services/sheets-engine
     restart: unless-stopped
@@ -75,9 +79,15 @@ services:
     environment:
       DJANGO_DEBUG: "false"
       SHEETS_ENGINE_HOST: "0.0.0.0"
-      SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:-${SECRET_KEY}}"
+      SHEETS_ENGINE_TOKEN: "${SHEETS_ENGINE_TOKEN:?SHEETS_ENGINE_TOKEN requerido}"
     expose:
       - "8010"
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -145,7 +155,7 @@ services:
       redis:
         condition: service_healthy
       sheets-engine:
-        condition: service_started
+        condition: service_healthy
     logging: *default-logging
 
   worker:
