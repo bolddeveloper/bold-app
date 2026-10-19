@@ -36,6 +36,8 @@ test("pipeline completion applies the confirmed status before announcing refresh
         const completion={id:"other-unit-final",isFinal:true};
         globalThis.__pipelineRequest=async()=>({project_managed:false,projects:[],personal:{pipeline:{stages}},completion_status:completion});
         await togglePipelineCompletion({id:"shared",completed:false},null,status=>assert.equal(status,completion));
+        globalThis.__pipelineRequest=async()=>({project_managed:true,projects:[],can_complete_without_project:true,completion_status:completion});
+        await togglePipelineCompletion({id:"assigned-private-project",completed:false},null,status=>assert.equal(status,completion));
     } finally {
         globalThis.window=previousWindow;globalThis.CustomEvent=previousEvent;delete globalThis.__pipelineRequest;
         await rm(directory,{recursive:true,force:true});

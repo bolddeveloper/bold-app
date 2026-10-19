@@ -426,4 +426,5 @@ class TaskPipelinesView(PipelineView):
             projects.append({"project": str(link.project_id), "project_name": link.project.name, "pipeline": self.pack(link.pipeline), "stage": str(link.pipeline_stage)})
         opposite = TaskStatus.objects.filter(unit=task.unit, is_final=not task.status.is_final).order_by("position", "pk").first()
         completion_status = {"id": str(opposite.pk), "label": opposite.name, "category": opposite.category, "isFinal": opposite.is_final} if opposite else None
-        return Response({"personal": personal, "projects": projects, "project_managed": project_managed, "completion_status": completion_status})
+        can_complete_without_project = project_managed and task.assignee_assignment_id == assignment.pk and task.task_projects.filter(project__deleted_at__isnull=True).count() == 1
+        return Response({"personal": personal, "projects": projects, "project_managed": project_managed, "completion_status": completion_status, "can_complete_without_project": can_complete_without_project})

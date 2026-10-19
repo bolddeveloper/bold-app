@@ -1,6 +1,16 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-cross-department-responsibles", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Responsables de otros departamentos",
+        summary: "Puedes asignar tareas a personas de otros departamentos y buscarlas por nombre o correo.",
+        sections: [{title: "Responsables", items: [
+            "Los selectores de responsables incluyen personas de todos los departamentos, con búsqueda por nombre y correo interno.",
+            "Cambiar el responsable conserva el equipo de la tarea. La persona asignada puede consultar y completar esa tarea sin obtener acceso a otros proyectos privados.",
+            "Las actualizaciones avisan también al equipo del responsable. Se conservan los permisos de asignación y las denegaciones explícitas.",
+        ]}],
+    },
+    {
         id: "2026-10-19-task-loading-completion", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Carga de tareas y confirmación al completar",
         summary: "Las tareas compartidas cargan con menos consultas y la marca de completado refleja la respuesta del servidor.",

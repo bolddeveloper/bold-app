@@ -140,6 +140,53 @@ class TaskCollaborationTests(TestCase):
         unrelated = Task.objects.create(unit=self.unit, title="No compartida", status=self.todo, created_by_assignment=self.creator)
         self.assertEqual(client.get(f"/api/v2/tasks/{unrelated.pk}/").status_code, 404)
 
+    def test_cross_department_responsible_keeps_task_unit_and_can_complete_private_project_task(self):
+        owner = self.client_for(self.owner)
+        response = owner.patch(self.url, {"assignee_assignment": str(self.cross.pk)}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.unit_id, self.unit.pk)
+        client = self.client_for(self.cross)
+        context = client.get(f"/api/v2/task-pipelines/{self.task.pk}/")
+        self.assertEqual(context.status_code, 200, context.data)
+        self.assertEqual(context.data["projects"], [])
+        self.assertTrue(context.data["can_complete_without_project"])
+        self.assertEqual(client.get(f"/api/v2/projects/{self.project.pk}/").status_code, 404)
+        result = client.patch(self.url, {"status": str(self.done.pk)}, format="json")
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(client.patch(self.url, {"assignee_assignment": str(self.member.pk)}, format="json").status_code, 403)
+        unrelated = Task.objects.create(unit=self.unit, title="Privada", status=self.todo, created_by_assignment=self.creator)
+        self.assertEqual(client.get(f"/api/v2/tasks/{unrelated.pk}/").status_code, 404)
+
+    def test_create_with_cross_department_responsible(self):
+        response = self.client_for(self.owner).post("/api/v2/tasks/", {
+            "unit": str(self.unit.pk), "title": "Entre departamentos", "status": str(self.todo.pk), "priority": "medium",
+            "assignee_assignment": str(self.cross.pk),
+        }, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        task = Task.objects.get(pk=response.data["id"])
+        self.assertEqual(task.unit_id, self.unit.pk)
+        self.assertEqual(task.assignee_assignment_id, self.cross.pk)
+        self.cross.is_active = False
+        self.cross.save(update_fields=["is_active"])
+        rejected = self.client_for(self.owner).patch(self.url, {"assignee_assignment": str(self.cross.pk)}, format="json")
+        self.assertEqual(rejected.status_code, 400, rejected.data)
+
+    def test_responsible_reassignment_invalidates_both_external_units_without_task_details(self):
+        from unittest.mock import patch
+        old = self.identity("previous", unit=self.other_unit)
+        third_unit = OrganizationalUnit.objects.create(name="Tercer equipo", sensitivity_level="low", unit_type="department")
+        new = self.identity("next", unit=third_unit)
+        self.task.assignee_assignment = old
+        self.task.save()
+        with patch("boldApp.tareas.signals.dispatch_resource_invalidation") as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.task.assignee_assignment = new
+                self.task.save()
+        args = dispatch.call_args.args
+        self.assertEqual(set(args[0]), {self.other_unit.pk, third_unit.pk})
+        self.assertEqual(args[2:], ("task", self.task.pk, {}))
+
     def test_cross_department_comment_requires_shared_task_own_policy_and_no_deny(self):
         permission = Permission.objects.get(code="tasks.comment.create")
         JobRolePermission.objects.create(job_role=self.role,permission=permission,effect="allow",scope_type="own_unit")

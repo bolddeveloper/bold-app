@@ -83,6 +83,7 @@ export function TaskPipelineState({taskId, projectId}) {
 export async function togglePipelineCompletion(task, projectId, fallback, onSaved) {
     const context = await http.request(`${base}task-pipelines/${task.id}/`);
     const active = projectId ? context.projects.find(item=>item.project === projectId) : context.projects.length === 1 ? context.projects[0] : null;
+    if (!active && context.can_complete_without_project && !context.projects.length) return fallback(context.completion_status);
     if (!active && context.project_managed && !context.projects.length) throw new Error("El estado de esta tarea se gestiona en su proyecto. Solicita acceso al proyecto para cambiarlo.");
     if (!active && context.projects.length) throw new Error("Esta tarea participa en varios pipelines. Selecciona cada proyecto en Estados y llévala a Completada en todos para finalizarla.");
     if (!active) {

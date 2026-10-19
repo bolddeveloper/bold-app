@@ -525,19 +525,23 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
     if (variant === "person") normalized_options = uniquePeople(normalized_options.map(option => ({...(option.member || team_members.find(member => String(member.id) === String(option.value))), id: option.value, option})), [selected_value]).map(person => person.option);
     const selected_option = normalized_options.find(option => String(option.value) === String(selected_value)) || normalized_options[0] || { value: "", label: "Seleccionar" };
     const [is_open, set_is_open] = use_state(false);
+    const [search, set_search] = use_state("");
+    const visible_options = variant === "person" ? normalized_options.filter(option => normalizeSearchText(`${option.label} ${option.description || ""} ${option.member?.email || ""}`).includes(normalizeSearchText(search))) : normalized_options;
     const [active_index, set_active_index] = use_state(0);
-    const root_ref = use_ref(null), trigger_ref = use_ref(null), menu_ref = use_ref(null);
+    const root_ref = use_ref(null), trigger_ref = use_ref(null), menu_ref = use_ref(null), search_ref = use_ref(null);
     useAnchoredPopover(is_open, trigger_ref, menu_ref, {minWidth: class_name.includes("task_select_compact") ? 110 : 210});
     const listbox_id = use_id();
 
     use_effect(() => {
         if (!is_open) return undefined;
+        if (variant === "person") search_ref.current?.focus();
         const close = event => { if (!root_ref.current?.contains(event.target)) set_is_open(false); };
         document.addEventListener("pointerdown", close);
         return () => document.removeEventListener("pointerdown", close);
     }, [is_open]);
 
     function open() {
+        set_search("");
         set_active_index(Math.max(0, normalized_options.findIndex(option => String(option.value) === String(selected_value))));
         set_is_open(true);
     }
@@ -554,16 +558,17 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
         if (disabled) return;
         if (event.key === "Escape" && is_open) { event.preventDefault(); event.stopPropagation(); set_is_open(false); trigger_ref.current?.focus(); return; }
         if (event.key === "Tab") { set_is_open(false); return; }
+        if (event.target === search_ref.current && [" ", "Home", "End"].includes(event.key)) return;
         if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
             event.preventDefault();
             if (!is_open) open();
-            const last = normalized_options.length - 1;
+            const last = visible_options.length - 1;
             set_active_index(index => event.key === "Home" ? 0 : event.key === "End" ? last : Math.max(0, Math.min(last, index + (event.key === "ArrowDown" ? 1 : -1))));
             return;
         }
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            if (is_open) choose(normalized_options[active_index]); else open();
+            if (is_open) choose(visible_options[active_index]); else open();
         }
     }
 
@@ -581,11 +586,12 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
             {render_option(selected_option, true)}
             {render_icon(chevron_down_icon, 16)}
         </button>
-        {is_open ? <div ref={menu_ref} popover="manual" className="task_select_menu" id={listbox_id} role="listbox" aria-label={aria_label}>
-            {normalized_options.map((option, index) => <button className={`task_select_option ${index === active_index ? "task_select_option_focused" : ""}`} id={`${listbox_id}-${index}`} key={option.value} style={{ "--select_color": option.color || select_color(variant, option.label) || "#ef1f2d" }} type="button" role="option" aria-selected={String(option.value) === String(selected_value)} disabled={option.disabled} onMouseEnter={() => set_active_index(index)} onClick={() => choose(option)}>
+        {is_open ? <div ref={menu_ref} popover="manual" className="task_select_menu">
+            {variant === "person" && <label className="quick_people_search task_select_search">{render_icon(search_icon, 14)}<input ref={search_ref} type="search" aria-label={`Buscar ${aria_label?.toLocaleLowerCase("es") || "persona"}`} placeholder="Buscar nombre o correo" value={search} onChange={event => {set_search(event.target.value); set_active_index(0);}}/></label>}
+            <div id={listbox_id} role="listbox" aria-label={aria_label}>{visible_options.map((option, index) => <button className={`task_select_option ${index === active_index ? "task_select_option_focused" : ""}`} id={`${listbox_id}-${index}`} key={option.value} style={{ "--select_color": option.color || select_color(variant, option.label) || "#ef1f2d" }} type="button" role="option" aria-selected={String(option.value) === String(selected_value)} disabled={option.disabled} onMouseEnter={() => set_active_index(index)} onClick={() => choose(option)}>
                 {render_option(option)}
                 {String(option.value) === String(selected_value) ? <span className="task_select_check">{render_icon(check_icon, 15)}</span> : null}
-            </button>)}
+            </button>)}{!visible_options.length && <p className="quick_people_empty" role="status">No se encontraron personas.</p>}</div>
         </div> : null}
     </div>;
 }
@@ -1520,10 +1526,8 @@ function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, sel
     const [draft_ids, set_draft_ids] = use_state(selected_ids);
     const [position, set_position] = use_state({ visibility: "hidden" });
     const popover = use_ref(null);
-    const normalized = query.trim().toLocaleLowerCase("es");
-    const visible = uniquePeople(team_members.filter(member => draft_ids.includes(member.id) || (normalized
-        ? member.name.toLocaleLowerCase("es").includes(normalized)
-        : !task.unitId || String(member.unitId) === String(task.unitId))), [...draft_ids, ...team_members.filter(member => String(member.unitId) === String(task.unitId)).map(member => member.id)]);
+    const normalized = normalizeSearchText(query);
+    const visible = uniquePeople(team_members.filter(member => !normalized || normalizeSearchText(`${member.name} ${member.email || ""} ${member.unit_name || ""}`).includes(normalized)), [...draft_ids, ...team_members.filter(member => String(member.unitId) === String(task.unitId)).map(member => member.id)]);
     use_effect(() => {
         const place = () => {
             if (!anchor?.isConnected || !popover.current) return;
@@ -1540,12 +1544,12 @@ function QuickPeoplePopover({ anchor, multiple = false, on_change, on_close, sel
         return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
     }, [anchor, visible.length]);
     return createPortal(<div ref={popover} className="quick_popover_bubble quick_people_popover" style={position} role="dialog" aria-label={multiple ? "Cambiar colaboradores" : "Cambiar responsable"} onClick={event => event.stopPropagation()}>
-        <label className="quick_people_search">{render_icon(search_icon, 14)}<input autoFocus type="search" value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar persona…" /></label>
+        <label className="quick_people_search">{render_icon(search_icon, 14)}<input autoFocus type="search" aria-label={multiple ? "Buscar colaboradores" : "Buscar responsable"} value={query} onChange={event => set_query(event.target.value)} placeholder="Buscar nombre o correo" /></label>
         <div className="quick_people_list">
         {!multiple && <button type="button" className="quick_popover_item_btn" onClick={() => set_draft_ids([])}><span className="avatar_small quick_empty_avatar">+</span><span>Sin responsable</span>{!draft_ids.length && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>}
         {visible.map(member => <button type="button" className="quick_popover_item_btn" key={member.id} onClick={() => {
             set_draft_ids(current => multiple ? current.includes(member.id) ? removePersonAssignments(current, member.id, team_members) : [...current, member.id] : [member.id]);
-        }}>{render_avatar(member, "avatar_small")}<span>{member.name}</span>{draft_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
+        }}>{render_avatar(member, "avatar_small")}<span className="quick_person_identity"><strong>{member.name}</strong><small>{[member.email, member.unit_name].filter(Boolean).join(" · ")}</small></span>{draft_ids.includes(member.id) && <span className="quick_popover_check_icon">{render_icon(check_icon, 13)}</span>}</button>)}
         {!visible.length && <p className="quick_people_empty">No se encontraron personas.</p>}
         </div>
         <button type="button" className="quick_people_done" onClick={() => { on_change(multiple ? draft_ids : draft_ids[0] || ""); on_close(); }}>Listo</button>
@@ -2050,7 +2054,7 @@ function CollaboratorsSelector({ on_change, selected_ids = [], members = team_me
 function TaskIdentityFields({ data, unitId, assigneeId, onUnit, onAssignee }) {
     return <div className="bold_field_row_2">
         <label className="bold_field_group">Equipo responsable<TaskSelect aria_label="Equipo responsable" variant="team" value={unitId} options={data.units.map(item => ({ value: item.id, label: item.name, badge: item.name?.[0]?.toUpperCase(), disabled: !data.statuses.some(status => !status.unitId || status.unitId === item.id) }))} on_change={onUnit} /></label>
-        <label className="bold_field_group">Responsable<TaskSelect aria_label="Responsable" variant="person" value={assigneeId || ""} options={[{ value: "", label: "Sin responsable" }, ...data.directory.filter(item => item.unitId === unitId).map(member => ({ value: member.id, label: member.name, description: member.job_role_title, member }))]} on_change={onAssignee} /></label>
+        <label className="bold_field_group">Responsable<TaskSelect aria_label="Responsable" variant="person" value={assigneeId || ""} options={[{ value: "", label: "Sin responsable" }, ...data.directory.map(member => ({ value: member.id, label: member.name, description: [member.email, member.unit_name || member.job_role_title].filter(Boolean).join(" · "), member }))]} on_change={onAssignee} /></label>
     </div>;
 }
 
@@ -6055,14 +6059,6 @@ function TaskAppContent({ externalModules = {} }) {
             if (real) { mutate(() => saveFollowers(task_id, value, data), undefined, undefined, undefined, [`followers@${task_id}`]); return; }
             set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: value } : task));
             return;
-        }
-        if (real && field === "assignee_id" && value) {
-            const task = data.tasks.find(item => item.id === task_id), assignee = team_members.find(member => member.id === value);
-            if (task && assignee && String(assignee.unitId) !== String(task.unitId)) {
-                const status = data.statuses.find(item => String(item.unitId) === String(assignee.unitId) && item.isFinal === task.completed);
-                mutate(() => status ? api.moveTask(task_id, { unit: assignee.unitId, status: status.id, assignee_assignment: value }) : Promise.reject(new Error("El área elegida no tiene un estado compatible para esta tarea.")), () => set_active_quick_popover(null));
-                return;
-            }
         }
         if (real) {
             const task = data.tasks.find(item => item.id === task_id);

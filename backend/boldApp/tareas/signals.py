@@ -36,7 +36,8 @@ def capture_previous_task_state(sender, instance, **kwargs):
         instance._previous_deleted_at = None
         return
 
-    previous = Task.all_objects.filter(pk=instance.pk).values("status_id", "unit_id", "deleted_at").first()
+    previous = Task.all_objects.filter(pk=instance.pk).values("status_id", "unit_id", "deleted_at", "assignee_assignment_id").first()
+    instance._previous_assignee_assignment_id = previous["assignee_assignment_id"] if previous else None
     instance._previous_status_id = previous["status_id"] if previous else None
     instance._previous_unit_id = previous["unit_id"] if previous else None
     instance._previous_deleted_at = previous["deleted_at"] if previous else None
@@ -51,6 +52,7 @@ def dispatch_task_events(sender, instance, created, **kwargs):
     if instance._previous_unit_id and instance._previous_unit_id != instance.unit_id:
         unit_ids.insert(0, instance._previous_unit_id)
     reader_units = list(TaskFollower.objects.filter(task=instance).values_list("assignment__position__unit_id", flat=True))
+    reader_units += list(PositionAssignment.objects.filter(pk__in=[instance.assignee_assignment_id, instance.created_by_assignment_id, getattr(instance, "_previous_assignee_assignment_id", None)]).values_list("position__unit_id", flat=True))
     reader_units = list(set(reader_units) - set(unit_ids))
     if reader_units:
         # Cross-department readers receive identifiers only, then an authorized HTTP read.
