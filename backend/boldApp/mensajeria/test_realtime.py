@@ -9,7 +9,7 @@ from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
-from django.test import RequestFactory, TransactionTestCase
+from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from config.asgi import application
@@ -20,6 +20,7 @@ from .events import pending_event
 from .models import DirectConversation, DirectMessage
 
 
+@override_settings(MESSAGING_PILOT_ENABLED=False)
 class RealtimeChatTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
@@ -161,3 +162,36 @@ class RealtimeChatTests(TransactionTestCase):
             self.assertFalse(event["payload"]["messages"][0]["can_edit"])
             await socket.disconnect()
         async_to_sync(scenario)()
+
+    def test_non_it_socket_keeps_control_but_has_no_chat_backlog_or_messages(self):
+        unit = self.people[0][1].position.unit
+        outside = OrganizationalUnit.objects.create(name="Fuera del piloto", unit_type="department", sensitivity_level="low")
+        position = self.people[1][1].position
+        position.unit = outside; position.save(update_fields=["unit"])
+        message = DirectMessage.objects.create(conversation=self.conversation, author=self.people[0][0].employee, client_id=uuid.uuid4(), body="No filtrar")
+        with self.settings(MESSAGING_PILOT_ENABLED=True, MESSAGING_PILOT_UNIT_IDS=(str(unit.pk),)):
+            socket = self.socket_for(1)
+            async def scenario():
+                self.assertTrue((await socket.connect())[0])
+                await receive_event(socket, "control.ready")
+                await self.no_chat(socket)
+                # Even a wrongly routed internal event may not reveal history.
+                await get_channel_layer().group_send(f"messaging_employee_{self.people[1][0].employee_id}", {"type":"messaging.changed", "conversation_id":str(self.conversation.pk), "kind":"message.created", "message_ids":[str(message.pk)]})
+                await self.no_chat(socket)
+                await socket.disconnect()
+            async_to_sync(scenario)()
+
+    def test_open_socket_loses_chat_when_its_active_assignment_leaves_it(self):
+        unit = self.people[0][1].position.unit
+        outside = OrganizationalUnit.objects.create(name="Otra unidad", unit_type="department", sensitivity_level="low")
+        with self.settings(MESSAGING_PILOT_ENABLED=True, MESSAGING_PILOT_UNIT_IDS=(str(unit.pk),)):
+            socket = self.socket_for(1)
+            async def move():
+                await database_sync_to_async(lambda: Position.objects.filter(pk=self.people[1][1].position_id).update(unit=outside))()
+            async def scenario():
+                self.assertTrue((await socket.connect())[0]); await receive_event(socket, "control.ready")
+                await move()
+                message = await database_sync_to_async(DirectMessage.objects.create)(conversation=self.conversation, author=self.people[0][0].employee, client_id=uuid.uuid4(), body="Evento tras salir de IT")
+                await get_channel_layer().group_send(f"messaging_employee_{self.people[1][0].employee_id}", {"type":"messaging.changed", "conversation_id":str(self.conversation.pk), "kind":"message.created", "message_ids":[str(message.pk)]})
+                await self.no_chat(socket); await socket.disconnect()
+            async_to_sync(scenario)()

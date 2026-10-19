@@ -132,7 +132,8 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{base_dir / 'db.sqlite3'}",
-        conn_max_age=600,
+        # ASGI requests must release their thread's connection when they finish.
+        conn_max_age=0,
     )
 }
 
@@ -307,6 +308,10 @@ SHEETS_AGENDA_SOURCE = os.environ.get("SHEETS_AGENDA_SOURCE", "")
 # En producción Sheets permanece cerrado hasta configurar las unidades del piloto.
 SHEETS_PILOT_ENABLED = os.environ.get("SHEETS_PILOT_ENABLED", "false" if DEBUG else "true").lower() in {"true", "1"}
 SHEETS_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("SHEETS_PILOT_UNIT_IDS", "").split(",") if value.strip())
+# A missing allowlist closes Chat, including for owners. Open to everyone only
+# after the separately approved public launch.
+MESSAGING_PILOT_ENABLED = os.environ.get("MESSAGING_PILOT_ENABLED", "true").lower() in {"true", "1"}
+MESSAGING_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("MESSAGING_PILOT_UNIT_IDS", "").split(",") if value.strip())
 
 # Presence has its own namespace; do not change authentication/throttling caches.
 CACHES = {

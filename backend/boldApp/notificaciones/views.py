@@ -12,6 +12,7 @@ from boldApp.tareas.models import Project, Task
 
 from .models import Notification
 from .serializers import NotificationSerializer
+from .events import dispatch_invalidation
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -66,6 +67,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"], url_path="clear")
     def clear(self, request):
         updated = self.get_queryset().update(dismissed_at=timezone.now())
+        if updated:
+            dispatch_invalidation(request.assignment.pk)
         return Response({"updated": updated})
 
     @action(detail=True, methods=["post"], url_path="mark-read")
@@ -75,6 +78,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             notification.is_read = True
             notification.read_at = timezone.now()
             notification.save(update_fields=["is_read", "read_at"])
+            dispatch_invalidation(request.assignment.pk)
         return Response(self.get_serializer(notification).data)
 
     @action(detail=True, methods=["post"], url_path="mark-unread")
@@ -84,12 +88,15 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             notification.is_read = False
             notification.read_at = None
             notification.save(update_fields=["is_read", "read_at"])
+            dispatch_invalidation(request.assignment.pk)
         return Response(self.get_serializer(notification).data)
 
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
         now = timezone.now()
         updated = self.get_queryset().filter(is_read=False).update(is_read=True, read_at=now)
+        if updated:
+            dispatch_invalidation(request.assignment.pk)
         return Response({"updated": updated})
 
     @action(detail=False, methods=["get"], url_path="unread-count")

@@ -12,10 +12,11 @@ export function installMessagingFixture(target = globalThis) {
     ];
     const fixture = {actor, peer, conversation, calls, enterBehavior:"send", sendDelay: null, failSend: false, getRows: () => rows};
     target.__messagingCore = {
-        account: {id: "fixture-account", employee: actor}, employee: {id: actor}, activeAssignment: {id: "fixture-assignment", personId: actor}, directory: [],
-        presence: {rows: [{...peer, status: "online"}], units: []},
+        account: {id: "fixture-account", employee: actor}, employee: {id: actor}, activeAssignment: {id: "fixture-assignment", personId: actor, chat_enabled: true},
+        directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}],
+        presence: {rows: [{...peer, status: "online", units:[{id:"it", name:"Equipo de IT"}]}], units: [{id:"it", name:"Equipo de IT"}]},
     };
-    target.__messagingShell = {chat_target: {employee_id: peerId}};
+    target.__messagingShell = {chat_target: {employee_id: peerId}, open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
     target.__messagingApi = {
         preferences: async () => ({enter_behavior:fixture.enterBehavior}),
         savePreferences: async value => {fixture.enterBehavior=value; return {enter_behavior:value};},

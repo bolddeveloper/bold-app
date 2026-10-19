@@ -9,6 +9,21 @@
 .home_presence_list { max-height: 225px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .home_presence_person { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; border-radius: 7px; padding: 7px 6px; }
 .home_presence_person:hover { background: var(--bold_surface_soft); }
+.home_presence_person[data-chat="true"]:hover, .home_presence_person[data-chat="true"]:focus-within { background: color-mix(in srgb, var(--bold_red) 8%, var(--bold_surface)); }
+.home_presence_open_chat { align-self: stretch; min-height: 44px; padding: 4px 0; width: 100%; border: 0; background: transparent; color: inherit; text-align: start; font: inherit; cursor: pointer; border-radius: 6px; }
+.home_presence_open_chat:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
+.home_presence_profile_overlay { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; padding: 20px; background: #0008; }
+.home_presence_profile { position: relative; box-sizing: border-box; width: min(100%, 400px); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 28px; border: 1px solid var(--bold_line); border-radius: 22px; background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 20px 70px #0004; }
+.home_presence_profile .home_presence_avatar { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: color-mix(in srgb, var(--bold_red) 10%, var(--bold_surface)); overflow: hidden; }
+.home_presence_profile_close { position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; display: grid; place-items: center; background: transparent; color: var(--bold_text); border: 0; border-radius: 50%; cursor: pointer; }
+.home_presence_profile_close:focus-visible { outline: 2px solid var(--bold_red); }
+.home_presence_profile h2 { margin: 16px 0 6px; font-size: 22px; overflow-wrap: anywhere; }
+.home_presence_profile p, .home_presence_profile dt { color: var(--bold_muted); }
+.home_presence_profile dl { display: grid; gap: 10px; margin: 24px 0 0; }
+.home_presence_profile dd { margin: 0 0 12px; overflow-wrap: anywhere; }
+.home_presence_profile dd div { display: grid; gap: 4px; margin-bottom: 12px; }
+.home_presence_profile dd span { color: var(--bold_muted); }
+.home_presence_profile dd a { display: block; color: var(--bold_red); }
 .home_presence_department + .home_presence_department { margin-top: 18px; }
 .home_presence_department h3 { display: flex; gap: 5px; margin: 10px 6px 7px; color: var(--bold_muted); font-size: 12px; font-weight: 500; }
 .home_presence_department h3 span { flex-shrink: 0; }

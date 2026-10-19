@@ -7,7 +7,7 @@ export function selectEntranceAssignment(assignments, savedId, enteredFromLogin)
 export const isControlPlaneContext = (activeUnit, activeAssignment) => activeUnit
     ? Boolean(activeUnit.is_control_plane)
     : ["Dirección", "Direccion"].includes(activeAssignment?.unit_name);
-const restrictedShellModules = new Set(["administration", "permissions"]);
+const restrictedShellModules = new Set(["administration", "permissions", "messaging"]);
 export function canUseManagementModule(module, account, activeUnit, activeAssignment) {
     return isControlPlaneContext(activeUnit, activeAssignment)
         && Boolean(account?.is_superuser || activeAssignment?.[`${module}_enabled`]);

@@ -1,9 +1,10 @@
 from django.db.models import Prefetch
 from boldApp.core.models import Employee, PositionAssignment
+from .access import eligible_people
 
 
 def people():
-    return Employee.objects.select_related("user_account").prefetch_related(
+    return eligible_people(Employee.objects.select_related("user_account")).prefetch_related(
         Prefetch("position_assignments", queryset=PositionAssignment.objects.filter(
             is_active=True, released_at__isnull=True
         ).select_related("position__unit"), to_attr="chat_assignments")

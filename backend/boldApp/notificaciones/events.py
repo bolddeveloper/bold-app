@@ -1,11 +1,25 @@
 import uuid
+import logging
 from datetime import datetime, timezone
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 
 
 NOTIFICATION_CREATED = "notification.created"
+
+
+def dispatch_invalidation(assignment_id):
+    """Private hint only; every tab still obtains its authorized projection."""
+    def send():
+        try:
+            layer = get_channel_layer()
+            if layer:
+                async_to_sync(layer.group_send)(f"notifications_assignment_{assignment_id}", {"type": "notification.invalidated"})
+        except Exception:
+            logging.getLogger(__name__).warning("Notification state push unavailable; recovery remains scheduled")
+    transaction.on_commit(send, robust=True)
 
 
 def build_notification_envelope(notification):

@@ -21,7 +21,8 @@ import MessagingPreferences from "./messaging_preferences.jsx";
 
 export default function ProfileModule() {
     const core = useCore(), shell = useShell(), file = useRef(null);
-    const tab = shell.profile_tab, setTab = shell.set_profile_tab;
+    const canChat = core.activeAssignment?.chat_enabled === true;
+    const tab = shell.profile_tab === "messaging" && !canChat ? "account" : shell.profile_tab, setTab = shell.set_profile_tab;
     const cacheScope = moduleScope(core);
     const [profile, setProfile] = useState(() => moduleCache.read(cacheScope, "profile")), [draft, setDraft] = useState(profile);
     const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +70,7 @@ export default function ProfileModule() {
                     <button aria-current={tab === "presence" ? "page" : undefined} onClick={() => switchTab("presence")}><User size={18}/>Mi disponibilidad</button>
                     <button aria-current={tab === "connectors" ? "page" : undefined} onClick={() => switchTab("connectors")}><Plug size={18}/>Conectores</button>
                     <button aria-current={tab === "notifications" ? "page" : undefined} onClick={() => switchTab("notifications")}><Bell size={18}/>Notificaciones</button>
-                    <button aria-current={tab === "messaging" ? "page" : undefined} onClick={() => switchTab("messaging")}><Keyboard size={18}/>Mensajería</button>
+                    {canChat && <button aria-current={tab === "messaging" ? "page" : undefined} onClick={() => switchTab("messaging")}><Keyboard size={18}/>Chat</button>}
                     <button aria-current={tab === "shortcuts" ? "page" : undefined} onClick={() => switchTab("shortcuts")}><Keyboard size={18}/>Atajos</button>
                     <button aria-current={tab === "news" ? "page" : undefined} onClick={() => switchTab("news")}><Newspaper size={18}/>Novedades</button>
                 </nav>

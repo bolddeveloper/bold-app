@@ -698,7 +698,7 @@ class TasksV2ApiTests(TransactionTestCase):
             set(response.data["results"][0]),
             {
                 "id", "employee", "employee_name", "employee_email", "avatar_url", "unit", "unit_name",
-                "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled",
+                "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled", "chat_enabled",
             },
         )
 

@@ -30,7 +30,8 @@ def publish_change(conversation, kind, message_ids):
 
 
 def _conversations(employee_id):
-    return DirectConversation.objects.filter(Q(first_employee_id=employee_id) | Q(second_employee_id=employee_id))
+    return DirectConversation.objects.filter(Q(first_employee_id=employee_id) | Q(second_employee_id=employee_id),
+        first_employee__in=people().values("pk"), second_employee__in=people().values("pk"))
 
 
 def private_event(employee_id, event):

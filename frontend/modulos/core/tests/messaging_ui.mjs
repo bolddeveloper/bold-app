@@ -10,6 +10,7 @@ const replacements = [
     ["/core/app_shell.jsx", "export const useShell = () => globalThis.__messagingShell;"],
     ["/core/http_client.js", "export const is_using_real_backend = () => true; export const http = {request: async () => {throw Error('No network in fixture');}};"],
     ["/mensajeria/messaging_api.js", "export const messagingApi = globalThis.__messagingApi;"],
+    ["/tareas/src/task_text_editor.jsx", "export const TaskText = ({value}) => value;"],
 ];
 const server = await createServer({configFile: false, plugins: [{name: "isolated-messaging", enforce: "pre", transform(_, id) {
     return replacements.find(([suffix]) => id.replaceAll("\\", "/").endsWith(suffix))?.[1];
@@ -85,6 +86,25 @@ if (process.argv.includes("--serve")) {
         assert.match(document.querySelector('[role="status"]').textContent,/guardada/);
         root.unmount(); root = createRoot(document.getElementById("root")); root.render(React.createElement(Preferences)); await settle();
         assert.equal(document.querySelector('input[value="newline"]').checked,true); root.unmount();
+        const {default: Presence} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/presence_widget.jsx").replaceAll("\\", "/")}`);
+        root = createRoot(document.getElementById("root")); root.render(React.createElement(Presence));
+        await waitFor(() => document.querySelector('[aria-label^="Abrir chat con"]'));
+        const beforeCard = fixture.calls.length;
+        document.querySelector('[aria-label^="Ver perfil de"]').click(); await settle();
+        assert.match(document.querySelector('[role="dialog"]').textContent, /Analista/);
+        assert.match(document.querySelector('[role="dialog"]').textContent, /Equipo de IT/);
+        assert.equal(document.querySelector('[role="dialog"] a').href, "mailto:fixture.peer@bold.gt");
+        assert.equal(fixture.calls.length, beforeCard, "avatar must not open chat");
+        document.querySelector('[aria-label="Cerrar información del empleado"]').click(); await settle();
+        document.querySelector('[aria-label^="Abrir chat con"]').click(); await settle();
+        assert.equal(fixture.calls.at(-1), `card:${fixture.peer.employee_id}`);
+        document.querySelector('.home_presence_person').click(); await settle();
+        assert.equal(fixture.calls.length, beforeCard + 2, "card padding also opens chat once");
+        root.unmount(); globalThis.__messagingCore.activeAssignment.chat_enabled = false;
+        root = createRoot(document.getElementById("root")); root.render(React.createElement(Presence)); await settle();
+        assert.equal(document.querySelector('[aria-label^="Abrir chat con"]'), null);
+        assert.ok(document.querySelector('[aria-label^="Ver perfil de"]'), "profile remains usable outside IT");
+        root.unmount();
         console.log("Messaging UI: private conversation entry, safe links/HTML, presence, edit ownership, dates, no idle polling, double-submit prevention, reset and failure draft retention passed.");
     } finally {await server.close(); dom.window.close();}
     process.exit(0); // Existing private-image cache owns a BroadcastChannel in Node.

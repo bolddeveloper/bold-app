@@ -9,6 +9,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from boldApp.core.permissions import HasActiveAssignment
+from .access import CanUseChatPilot
 
 from .models import DirectConversation, DirectMessage, MessagingPreferences
 from .serializers import EditMessageSerializer, OpenConversationSerializer, SendMessageSerializer, ReceiptSerializer, PreferencesSerializer
@@ -53,7 +54,7 @@ class MessagePagination(CursorPagination):
 
 
 class PrivateChatView(APIView):
-    permission_classes = [HasActiveAssignment]
+    permission_classes = [HasActiveAssignment, CanUseChatPilot]
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
@@ -73,7 +74,8 @@ class PrivateChatView(APIView):
     def conversations(self):
         actor_id = self.actor()
         # Deliberately no hierarchy/owner override: membership is the read boundary.
-        return DirectConversation.objects.filter(Q(first_employee_id=actor_id) | Q(second_employee_id=actor_id))
+        return DirectConversation.objects.filter(Q(first_employee_id=actor_id) | Q(second_employee_id=actor_id),
+            first_employee__in=people().values("pk"), second_employee__in=people().values("pk"))
 
     def conversation(self, conversation_id, *, lock=False):
         rows = self.conversations()

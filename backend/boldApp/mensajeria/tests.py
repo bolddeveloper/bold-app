@@ -13,6 +13,7 @@ from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position,
 from .models import DirectConversation, DirectMessage
 
 
+@override_settings(MESSAGING_PILOT_ENABLED=False)
 class DirectChatTests(TestCase):
     root = "/api/v2/messaging/conversations/"
 

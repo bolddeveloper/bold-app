@@ -74,6 +74,7 @@ class PositionAssignmentSerializer(serializers.ModelSerializer):
 
 
 class AssignmentDirectorySerializer(serializers.ModelSerializer):
+    chat_enabled = serializers.SerializerMethodField()
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     avatar_url = serializers.SerializerMethodField()
     employee_email = serializers.SerializerMethodField()
@@ -89,8 +90,12 @@ class AssignmentDirectorySerializer(serializers.ModelSerializer):
         model = PositionAssignment
         fields = [
             "id", "employee", "employee_name", "employee_email", "avatar_url", "unit", "unit_name",
-            "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled",
+            "job_role", "job_role_title", "account_is_superuser", "administration_enabled", "permissions_enabled", "chat_enabled",
         ]
+
+    def get_chat_enabled(self, assignment):
+        from boldApp.mensajeria.access import assignment_can_chat
+        return assignment_can_chat(assignment)
 
     def get_employee_email(self, assignment):
         account = getattr(assignment.employee, "user_account", None)

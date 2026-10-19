@@ -169,6 +169,10 @@ class NotificationModuleTests(TransactionTestCase):
 
     def test_bad_members_do_not_create_a_project_or_notifications(self):
         other = PositionAssignment.objects.get(employee__user_account__email="david@bold.gt", is_active=True)
+        # Cross-department collaboration is now supported; inactive assignments
+        # remain invalid and must not leave a project or notification behind.
+        other.is_active = False
+        other.save(update_fields=["is_active"])
         response = self.actor_client.post("/api/v2/projects/", {
             "unit": str(self.marketing.pk), "owner_assignment": str(self.recipient_assignment.pk),
             "name": "No debe existir", "status": "active", "member_ids": [str(other.pk)],

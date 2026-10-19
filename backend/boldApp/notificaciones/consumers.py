@@ -42,7 +42,17 @@ def authorize_notification_ticket(ticket_key):
         )
     except (AuthSession.DoesNotExist, PositionAssignment.DoesNotExist, KeyError, ValueError):
         return None
-    return {"session": str(session.id), "assignment": str(assignment.id), "employee": str(session.user_account.employee_id)}
+    from boldApp.mensajeria.access import assignment_can_chat
+    return {"session": str(session.id), "assignment": str(assignment.id), "employee": str(session.user_account.employee_id),
+            "chat_allowed": assignment_can_chat(assignment)}
+
+
+@database_sync_to_async
+def chat_assignment_is_allowed(assignment_id):
+    from boldApp.core.models import PositionAssignment
+    from boldApp.mensajeria.access import assignment_can_chat
+    assignment = PositionAssignment.objects.select_related("position", "employee").filter(pk=assignment_id).first()
+    return assignment_can_chat(assignment)
 
 
 @database_sync_to_async
@@ -99,7 +109,9 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.notification_group = f"notifications_assignment_{self.assignment_id}"
         self.session_group = f"session_{self.session_id}"
         self.groups_joined = (self.notification_group, self.session_group,
-                              f"assignment_{self.assignment_id}", "permission_watch", "presence_watch", f"messaging_employee_{self.employee_id}")
+                              f"assignment_{self.assignment_id}", "permission_watch", "presence_watch")
+        if identity["chat_allowed"]:
+            self.groups_joined += (f"messaging_employee_{self.employee_id}",)
         for group in self.groups_joined:
             await self.channel_layer.group_add(group, self.channel_name)
         self.control_channel = str(uuid.uuid4())
@@ -116,8 +128,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             # Bounded recovery on the same authenticated socket, not another
             # timer/socket per chat. Old clients can safely ignore these envelopes.
             from boldApp.mensajeria.events import pending_event
-            backlog = await database_sync_to_async(pending_event)(self.employee_id)
-            if backlog and await notification_identity_is_active(self.session_id, self.assignment_id):
+            backlog = await database_sync_to_async(pending_event)(self.employee_id) if identity["chat_allowed"] else None
+            if backlog and await chat_assignment_is_allowed(self.assignment_id) and await notification_identity_is_active(self.session_id, self.assignment_id):
                 await self.send_json(backlog)
 
     async def disconnect(self, close_code):
@@ -231,6 +243,15 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             return
         await self.send_json(event["envelope"])
 
+    async def notification_invalidated(self, event):
+        if self.closing:
+            return
+        if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
+            await self.close(code=4403)
+            return
+        await self.send_json(build_event_envelope("notification.invalidated", "notification_collection", self.assignment_id, {}))
+
     async def session_revoked(self, event):
         self.closing = True
         if self.security_task:
@@ -239,6 +260,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
     async def messaging_changed(self, event):
         if self.closing:
+            return
+        if not await chat_assignment_is_allowed(self.assignment_id):
             return
         if not await notification_identity_is_active(self.session_id, self.assignment_id):
             self.closing = True

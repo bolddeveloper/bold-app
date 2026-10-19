@@ -1,6 +1,17 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-notification-push-recovery", date: "2026-10-19", category: "Mejoras", icon: "bell",
+        title: "Notificaciones en directo con menos consultas de fondo",
+        summary: "Los avisos siguen llegando en tiempo real, con una recuperación más espaciada cuando la conexión necesita comprobarse.",
+        sections: [{title: "Sincronización y recuperación", items: [
+            "Las notificaciones nuevas siguen actualizándose mediante la conexión en vivo de BOLD, sin consultar la lista cada dos segundos.",
+            "Si se pierde la conexión, la aplicación comprueba las novedades con un respaldo limitado. Al volver a la ventana recupera los avisos pendientes.",
+            "Las pestañas ocultas evitan consultas periódicas. Los avisos de escritorio habilitados conservan su funcionamiento cuando llega un evento nuevo.",
+            "Ante errores temporales o límites del servidor, los reintentos se espacian para no multiplicar las solicitudes.",
+        ]}],
+    },
+    {
         id: "2026-10-19-permissions-dark-contrast", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Contraste en Permisos y políticas",
         summary: "El modo oscuro mantiene legibles las acciones y descripciones de las políticas.",
@@ -90,46 +101,6 @@ export const releaseNotes = [
             "Compartir un archivo no permite acceder a Sheets desde otro equipo durante el piloto.",
             "Equipo, Estados y los demás módulos conservan sus permisos habituales.",
         ]}],
-    },
-    {
-        id: "2026-10-19-live-messaging-receipts", date: "2026-10-19", category: "Mejoras", icon: "update",
-        title: "Chats en tiempo real, confirmaciones y una interfaz más suave",
-        summary: "Recibe mensajes sin actualizar la página, distingue entrega de lectura y elige cómo funciona Enter en tus conversaciones.",
-        sections: [
-            {title: "Conversaciones que se mantienen al día", items: [
-                "Los mensajes nuevos y las ediciones aparecen en directo. Al volver la conexión se recupera el historial reciente; Ver mensajes anteriores permite consultar el resto.",
-                "Un anillo gris confirma que el servidor guardó el mensaje; dos anillos grises indican recepción en el dispositivo; los dos anillos rojos confirman lectura.",
-                "La lectura se confirma cuando el mensaje es visible en la conversación enfocada, no por estar conectado ni por recibir una notificación.",
-                "Se mantiene el acceso exclusivo de los dos participantes y el límite original de diez minutos para editar mensajes propios.",
-            ]},
-            {title: "El chat a tu manera", items: [
-                "Las burbujas y el panel tienen esquinas más redondeadas, colores BOLD más presentes y ya no llevan el contorno gris exterior, tanto en modo claro como oscuro.",
-                "En Perfil → Mensajería puedes elegir si Enter envía o inserta un salto de línea. La preferencia se guarda en tu cuenta para otros dispositivos.",
-                "Si Enter envía, Mayús+Enter añade una línea. Si Enter añade una línea, puedes enviar con el botón Enviar o Ctrl+Enter en Windows y ⌘+Enter en Mac.",
-            ]},
-        ],
-    },
-    {
-        id: "2026-10-19-direct-messaging-foundation", date: "2026-10-19", category: "Nueva función", icon: "update",
-        title: "Mensajería directa: primeras conversaciones privadas en BOLD",
-        summary: "Inicia un chat de texto con un compañero desde Equipo o Mensajería, sin mezclar la conversación con tus cargos o departamentos.",
-        sections: [
-            {title: "Una conversación entre dos personas", items: [
-                "Selecciona el avatar de un compañero en Equipo o abre Mensajería → Nuevo chat. Las conversaciones y sus mensajes se guardan en el servidor.",
-                "Solo sus dos participantes pueden acceder al chat desde BOLD. Ser propietario o administrador no concede lectura automática de conversaciones ajenas.",
-                "Cambiar de cargo no crea otro chat con la misma persona. Se necesita una cuenta y una plaza activas para usar Mensajería.",
-            ]},
-            {title: "Mensajes claros y edición limitada", items: [
-                "Envía texto y emojis; los enlaces HTTP, HTTPS y www. se reconocen sin interpretar código HTML. Cada mensaje muestra su autor, hora y fecha cuando corresponde.",
-                "Puedes editar exclusivamente tus mensajes durante los primeros diez minutos desde el envío original. Editarlos no reinicia ese plazo.",
-                "Los reintentos del mismo envío no crean mensajes duplicados. Si falla una operación, el formulario conserva el texto mientras permanezcas en el módulo.",
-            ]},
-            {title: "Alcance de esta primera entrega", items: [
-                "Utiliza Actualizar para consultar mensajes nuevos. La sincronización en vivo y los avisos de entrega o lectura aún no están incluidos.",
-                "El anillo gris indica únicamente que BOLD guardó el mensaje en el servidor; no confirma que el compañero lo haya recibido o leído.",
-                "Imágenes, audios, reacciones, carga desde el teléfono y archivos de Drive se incorporarán en entregas posteriores. Esta versión todavía no sube archivos.",
-            ]},
-        ],
     },
     {
         id: "2026-10-19-sheets-template-management", date: "2026-10-19", category: "Mejoras", icon: "update",

@@ -12,6 +12,7 @@
         "preview": "vite preview --configLoader runner --host 0.0.0.0",
         "test": "node --test shared/image_controls.test.js shared/bold_dialog.test.js shared/presence.test.js shared/people.test.js startup_greeting.test.js keyboard_shortcuts.test.js google_cache.test.js module_cache.test.js onboarding*.test.js ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../marcas/*.test.js ../docs/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js ../perfil/release_notes.test.js ../hojas/*.test.js",
         "test:pwa": "node --test pwa_updates.test.js",
+        "test:notification-sync": "node --test notification_sync.test.js ../tareas/src/session_lifecycle.test.js",
         "test:brands-ui": "node tests/brands_ui.mjs",
         "test:messaging": "node --test messaging_session.test.js ../mensajeria/*.test.js && node tests/messaging_ui.mjs",
         "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",

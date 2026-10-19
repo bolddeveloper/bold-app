@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {releaseNotes} from "./release_notes.js";
 
+test("el chat piloto no se anuncia como lanzamiento público", () => {
+    assert.equal(releaseNotes.some(note => ["2026-10-19-live-messaging-receipts", "2026-10-19-direct-messaging-foundation"].includes(note.id)), false);
+    assert.ok(releaseNotes.some(note => note.id === "2026-10-19-notification-push-recovery"));
+});
+
 test("las notas conservan campos completos, identificadores únicos y fechas válidas", () => {
     assert.ok(releaseNotes.length > 0);
     assert.equal(new Set(releaseNotes.map(note => note.id)).size, releaseNotes.length);

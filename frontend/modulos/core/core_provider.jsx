@@ -11,8 +11,8 @@ import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
 import {createMessagingSession} from "./messaging_session.js";
 import { createSessionNotifications } from "./session_notifications.js";
+import {createNotificationSync} from "./notification_sync.js";
 import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
-import { contentCanRefresh } from "./refresh_coordinator.js";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -252,23 +252,21 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onError: error => {if (mounted && [401, 403].includes(error.status)) window.dispatchEvent(new Event("bold:unauthorized"));},
         });
         messagingController.current = chat;
+        const sync = createNotificationSync({onError: report, refresh: (reason, background) =>
+            store.refresh({reason, force: background, immediate: reason === "notification-bootstrap"})});
         const reconcile = (reason, desktopEvent = false) => {
-            const background = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
+            const force = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
                 && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
-            if (contentCanRefresh() || background) store.refresh({ reason, force: background, immediate: reason === "notification-focus-or-poll" }).catch(report);
+            return sync.request(reason, {force, event: desktopEvent || reason === "notification-event"});
         };
-        const recover = () => reconcile("notification-focus-or-poll");
         // Retry exhausted receipt batches only on real connectivity events,
         // never from the notification coordinator's existing periodic timer.
         const recoverChat = () => chat.recover();
         const invalidate = event => {previousRows = null; store.invalidate(event.detail || {}).catch(report); previousRows = null;};
         window.addEventListener("bold:permissions-revision", invalidate);
-        window.addEventListener("focus", recover);
-        window.addEventListener("online", recover);
         window.addEventListener("online", recoverChat);
-        document.addEventListener("visibilitychange", recover);
         realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
-            onNotification: () => reconcile("notification-event", true),
+            onNotification: envelope => reconcile("notification-event", envelope.event_type === "notification.created"),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
             onMessaging: envelope => chat.receive(envelope),
@@ -278,6 +276,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
                 window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
             },
             onState: status => {
+                sync.connection(status);
                 if (mounted) setMessagingConnection(status);
                 if (mounted && status !== "open") { updateCore({presence: null}); window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId } })); }
             },
@@ -286,19 +285,16 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             },
             onError: report,
         }).catch(report);
-        store.refresh({ reason: "notification-bootstrap", immediate: true }).catch(report);
-        const timer = setInterval(recover, 2_000);
+        reconcile("notification-bootstrap");
         return () => {
-            mounted = false; realtime.disconnect(); store.dispose(); chat.dispose(); clearInterval(timer);
+            mounted = false; sync.dispose(); realtime.disconnect(); store.dispose(); chat.dispose();
             if (messagingController.current === chat) messagingController.current = null;
             soundController.abort(); entrySound.dispose(); stopNotificationSound();
             window.removeEventListener("bold:home-ready", homeEntrance);
             window.removeEventListener("bold:notification-sound-changed", changeSound);
             if (notificationController.current === store) notificationController.current = null;
             window.removeEventListener("bold:permissions-revision", invalidate);
-            window.removeEventListener("focus", recover); window.removeEventListener("online", recover);
             window.removeEventListener("online", recoverChat);
-            document.removeEventListener("visibilitychange", recover);
         };
     }, [real, state.sessionStatus, state.activeAssignment?.id]);
     async function login(event) {

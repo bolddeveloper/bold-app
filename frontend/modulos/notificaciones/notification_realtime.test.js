@@ -29,6 +29,8 @@ test("notification realtime requests its own channel and forwards valid events",
     sockets[0].listeners.message({ data: JSON.stringify({ event_version: 2, event_type: "notification.created", event_id: "1" }) });
     sockets[0].listeners.message({ data: "{}" });
     assert.equal(received.length, 1);
+    sockets[0].listeners.message({data: JSON.stringify({event_version: 2, event_type: "notification.invalidated", event_id: "2"})});
+    assert.equal(received.length, 2);
     realtime.disconnect();
 });
 

@@ -22,7 +22,7 @@ export function createNotificationRealtime(dependencies = {}) {
                 try {
                     const event = JSON.parse(message.data);
                     if (event?.event_version !== 2) return;
-                    if (event.event_type === "notification.created") onNotification(event);
+                    if (["notification.created", "notification.invalidated"].includes(event.event_type)) onNotification(event);
                     else if (event.event_type?.startsWith("messaging.")) onMessaging(event);
                     else if (["control.ready", "permissions.revision", "assignment.changed"].includes(event.event_type)) onControl(event);
                 } catch { /* Invalid envelope */ }

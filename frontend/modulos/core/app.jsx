@@ -20,7 +20,6 @@ const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
     { id: "tasks", label: "Tareas", icon: "check", brand: true, group: "work" },
     { id: "inbox", label: "Bandeja de entrada", icon: "inbox", group: "work" },
-    { id: "messaging", label: "Mensajería", icon: "messaging", group: "work" },
     { id: "calendar", label: "Calendario", icon: "calendar", group: "work" },
     { id: "docs", label: "Docs", icon: "docs", group: "work" },
     { id: "drive", label: "Drive", icon: "drive", group: "work" },
@@ -33,6 +32,7 @@ const mockIdentity = { directory: team_members, assignments: team_members, activ
 
 function ApplicationWorkspace() {
     const core = useCore();
+    const canChat = core.activeAssignment?.chat_enabled === true;
     const permissionContext = `${core.account?.id || "demo"}:${core.activeAssignment?.id || "demo"}`;
     const [sheetsPermission, setSheetsPermission] = useState(null);
     const canSheets = sheetsPermission?.context === permissionContext && sheetsPermission.allowed;
@@ -48,13 +48,14 @@ function ApplicationWorkspace() {
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
+        ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work"}] : []),
         ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
     const externalModules = {
         profile: <ProfileModule/>,
-        messaging: <Suspense fallback={<p role="status">Cargando mensajería…</p>}><MessagingModule key={core.account?.id || "messaging"}/></Suspense>,
+        ...(canChat ? {messaging: <Suspense fallback={<p role="status">Cargando chat…</p>}><MessagingModule key={permissionContext}/></Suspense>} : {}),
         calendar: <CalendarModule key="calendar" />,
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,
