@@ -206,3 +206,46 @@ Para volver atrás, conservar imágenes anteriores de backend y motor y evaluar 
 compatibilidad de las migraciones. Restaurar un backup solo con un procedimiento
 acordado que contemple los cambios posteriores. No borrar volúmenes ni reemplazar
 PostgreSQL con la base SQLite local.
+
+## Despliegue autorizado del 19 de octubre de 2026
+
+Se publicó la revisión `66964c0f` en Oracle ARM64 y el frontend en
+[la aplicación pública](https://boldapp.boldapp-93b.workers.dev).
+Versión de Cloudflare: `fa1d21d7-67a5-4fd8-b7d0-262ac7207a7c`.
+Este registro posterior sustituye las limitaciones de la preparación anterior
+respecto a la construcción y las comprobaciones realizadas en Oracle.
+
+- Antes de migrar se creó un dump PostgreSQL en formato custom. Se guardaron
+  también la configuración privada, el Compose anterior y una etiqueta de la
+  imagen anterior. Ningún volumen se borró ni se reemplazó la base por SQLite.
+- El dump se copió fuera de la VM y se compararon los SHA-256. Se restauró
+  íntegramente en un contenedor PostgreSQL aislado, sin red: 70 tablas recuperadas.
+- Tras migrar, se comprobó que las identidades originales de los 63 modelos
+  registrados antes del despliegue seguían presentes. Las nuevas migraciones
+  añaden tablas y campos y organizan las tareas existentes en pipelines.
+- El piloto está activo para la unidad exacta «Equipo de IT» de Oracle, con seis
+  asignaciones activas. Se habilitaron las siete acciones de Sheets para sus
+  cargos, con alcance específico a esa unidad. El filtro del piloto impide acceso
+  a Sheets desde otras unidades incluso si comparten cargo o tienen permisos
+  globales. Los permisos de los demás módulos se conservaron.
+- Motor y backend saludables; PostgreSQL y Redis saludables. El worker respondió
+  a `celery inspect ping`. El comando `sheets_preflight` verificó en Oracle una
+  fórmula, exportación XLSX y reimportación por HTTP autenticado al motor.
+- En una transacción temporal, una cuenta IT normal creó y editó una plantilla
+  y descargó un XLSX íntegro con las seis hojas de Agenda. Se verificó rechazo
+  para las asignaciones ajenas a IT. Se revirtió únicamente esa transacción de
+  prueba: no quedaron archivos de prueba ni se modificaron archivos reales.
+- La URL pública y sus JS/CSS respondieron 200; `/health/` confirmó base de datos
+  y Redis. La sesión anónima funcionó y Sheets rechazó acceso anónimo.
+- Pruebas previas: backend 212 casos, 211 aprobados y uno omitido; frontend de
+  Sheets/notas 84 aprobados; motor/proxy 53 aprobados; compilación frontend y
+  construcción de ambas imágenes ARM64 correctas.
+
+No se comprobó visualmente el editor publicado porque el uso local del navegador
+estaba desactivado en Work. La prueba del servidor no sustituye revisar la
+interfaz, la colaboración entre dos sesiones ni un guardado real en Drive desde
+la sesión de cada usuario. Se conservaron los secretos y la configuración
+existente de Drive; no se modificaron archivos de Drive para estas comprobaciones.
+
+Los respaldos privados permanecen fuera de Git. Conservarlos para reversión y no
+restaurarlos sobre producción sin contemplar los cambios posteriores al dump.
