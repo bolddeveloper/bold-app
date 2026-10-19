@@ -3069,6 +3069,7 @@ function render_task_group(props) {
             onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "list"); else handle_column_drop?.(section_item.id); }}
         >
             <div className="task_group_header" role="button" aria-expanded={!is_collapsed} tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
                 if (event.key === "Enter" || event.key === " ") {event.preventDefault(); handle_toggle_section(section_item.id);}
             }}>
                 <SectionDragHandle id={section_item.id} label={section_item.label} view="list" disabled={!can_reorder_sections} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
