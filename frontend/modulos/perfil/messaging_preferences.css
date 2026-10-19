@@ -1,0 +1,8 @@
+.bold_messaging_preferences fieldset {border: 0; padding: 0; margin: 24px 0; display: grid; gap: 12px;}
+.bold_messaging_preferences legend {font-weight: 700; margin-bottom: 16px;}
+.bold_messaging_preferences .bold_messaging_choice {display: flex; align-items: flex-start; gap: 14px; padding: 20px; border-radius: 20px; border: 1px solid var(--bold_line); background: var(--bold_surface); cursor: pointer;}
+.bold_messaging_choice:has(:checked) {border-color: var(--bold_red); background: color-mix(in srgb, var(--bold_red) 8%, var(--bold_surface));}
+.bold_messaging_choice input {width: 20px; min-height: 20px; flex: 0 0 20px; margin-top: 2px; accent-color: var(--bold_red);}
+.bold_messaging_choice span {display: grid; gap: 8px; min-width: 0;}
+.bold_messaging_choice small {line-height: 1.7; color: color-mix(in srgb, var(--bold_text) 80%, var(--bold_surface));}
+.bold_messaging_choice:focus-within {outline: 3px solid var(--bold_red); outline-offset: 3px;}

@@ -9,6 +9,7 @@ import { MfaManagementDialog } from "./mfa_management.jsx";
 import { createPermissionCache } from "./permission_cache.js";
 import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
+import {createMessagingSession} from "./messaging_session.js";
 import { createSessionNotifications } from "./session_notifications.js";
 import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
 import { contentCanRefresh } from "./refresh_coordinator.js";
@@ -26,6 +27,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const permissionCache = useRef(null);
     const enteredFromLogin = useRef(false);
     const notificationController = useRef(null);
+    const messagingController = useRef(null);
+    const [messagingConnection, setMessagingConnection] = useState("disconnected");
+    const markDelivered = useCallback((conversation, ids) => messagingController.current?.delivered(conversation, ids), []);
+    const markRead = useCallback((conversation, ids) => messagingController.current?.read(conversation, ids), []);
     const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
     const [notificationPreferences, setNotificationPreferences] = useState({assignmentId: null, settings: defaultNotificationSettings});
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
@@ -64,6 +69,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         window.dispatchEvent(new Event("bold:private-cache-suspend"));
         generation.current++;
         clearNotifications();
+        messagingController.current?.dispose(); messagingController.current = null; setMessagingConnection("disconnected");
         enteredFromLogin.current = false;
         setMfaChallenge("");
         setPasswordChangeRequired(false);
@@ -240,27 +246,39 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         notificationController.current = store;
         if (getCoreState().securityUncertain) store.invalidate({ uncertain: true }).catch(report);
         const realtime = createNotificationRealtime();
+        const chat = createMessagingSession({employeeId: state.account.employee,
+            acknowledge: (conversation, ids, status, options) => http.request(`/api/v2/messaging/conversations/${conversation}/receipts/`, {...options, method: "POST", body: {message_ids: ids, state: status}}),
+            emit: envelope => {if (mounted) window.dispatchEvent(new CustomEvent("bold:messaging-event", {detail: envelope}));},
+            onError: error => {if (mounted && [401, 403].includes(error.status)) window.dispatchEvent(new Event("bold:unauthorized"));},
+        });
+        messagingController.current = chat;
         const reconcile = (reason, desktopEvent = false) => {
             const background = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
                 && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
             if (contentCanRefresh() || background) store.refresh({ reason, force: background, immediate: reason === "notification-focus-or-poll" }).catch(report);
         };
         const recover = () => reconcile("notification-focus-or-poll");
+        // Retry exhausted receipt batches only on real connectivity events,
+        // never from the notification coordinator's existing periodic timer.
+        const recoverChat = () => chat.recover();
         const invalidate = event => {previousRows = null; store.invalidate(event.detail || {}).catch(report); previousRows = null;};
         window.addEventListener("bold:permissions-revision", invalidate);
         window.addEventListener("focus", recover);
         window.addEventListener("online", recover);
+        window.addEventListener("online", recoverChat);
         document.addEventListener("visibilitychange", recover);
         realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
             onNotification: () => reconcile("notification-event", true),
             onConnected: () => reconcile("notification-connected"),
-            onReconnect: () => reconcile("notification-reconnect"),
+            onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
+            onMessaging: envelope => chat.receive(envelope),
             onControl: envelope => {
                 if (!mounted) return;
                 updateCore({presence: Array.isArray(envelope.payload?.presence?.rows) ? envelope.payload.presence : null});
                 window.dispatchEvent(new CustomEvent("bold:control-message", { detail: { envelope } }));
             },
             onState: status => {
+                if (mounted) setMessagingConnection(status);
                 if (mounted && status !== "open") { updateCore({presence: null}); window.dispatchEvent(new CustomEvent("bold:control-disconnected", { detail: { assignmentId } })); }
             },
             onTerminal: error => {
@@ -271,13 +289,15 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         store.refresh({ reason: "notification-bootstrap", immediate: true }).catch(report);
         const timer = setInterval(recover, 2_000);
         return () => {
-            mounted = false; realtime.disconnect(); store.dispose(); clearInterval(timer);
+            mounted = false; realtime.disconnect(); store.dispose(); chat.dispose(); clearInterval(timer);
+            if (messagingController.current === chat) messagingController.current = null;
             soundController.abort(); entrySound.dispose(); stopNotificationSound();
             window.removeEventListener("bold:home-ready", homeEntrance);
             window.removeEventListener("bold:notification-sound-changed", changeSound);
             if (notificationController.current === store) notificationController.current = null;
             window.removeEventListener("bold:permissions-revision", invalidate);
             window.removeEventListener("focus", recover); window.removeEventListener("online", recover);
+            window.removeEventListener("online", recoverChat);
             document.removeEventListener("visibilitychange", recover);
         };
     }, [real, state.sessionStatus, state.activeAssignment?.id]);
@@ -413,7 +433,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const assignments = current.assignments.map(change);
         updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change), presence: current.presence ? {...current.presence, rows: current.presence.rows.map(row => row.employee_id === employeeId ? {...row, name: profile.name, avatar_url: profile.avatar_url} : row)} : null});
     }
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, messaging: {connection: messagingConnection, markDelivered, markRead}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

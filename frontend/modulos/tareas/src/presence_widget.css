@@ -23,6 +23,12 @@
 .home_presence_list { max-height: 360px; }
 .home_presence_person > .home_presence_avatar { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: visible; background: color-mix(in srgb, var(--bold_red) 10%, var(--bold_surface)); color: var(--bold_text); font-size: 13px; font-weight: 700; }
 .home_presence_avatar .bold_presence_dot { position: absolute; right: -1px; bottom: -1px; border: 2px solid var(--bold_surface); box-sizing: content-box; }
+.home_presence_chat {padding: 0; border: 1px solid var(--bold_line); cursor: pointer; font: inherit;}
+.home_presence_chat:not(:disabled):hover {border-color: var(--bold_red);}
+.home_presence_chat:focus-visible {outline: 3px solid var(--bold_red); outline-offset: 3px;}
+.home_presence_chat:disabled {cursor: default;}
+.home_presence_person:has(.home_presence_chat) {grid-template-columns: 44px minmax(0, 1fr);}
+.home_presence_person > .home_presence_chat {width: 44px; height: 44px;}
 .home_presence_person > .home_presence_identity { display: grid; gap: 2px; min-width: 0; }
 .home_presence_identity strong { line-height: 1.4; color: var(--bold_text); overflow-wrap: anywhere; }
 .home_presence_identity .home_presence_status { font-size: 12px; line-height: 1.4; color: var(--bold_muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

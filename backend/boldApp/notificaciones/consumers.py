@@ -42,7 +42,7 @@ def authorize_notification_ticket(ticket_key):
         )
     except (AuthSession.DoesNotExist, PositionAssignment.DoesNotExist, KeyError, ValueError):
         return None
-    return {"session": str(session.id), "assignment": str(assignment.id)}
+    return {"session": str(session.id), "assignment": str(assignment.id), "employee": str(session.user_account.employee_id)}
 
 
 @database_sync_to_async
@@ -95,10 +95,11 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             return
         self.session_id = identity["session"]
         self.assignment_id = identity["assignment"]
+        self.employee_id = identity["employee"]
         self.notification_group = f"notifications_assignment_{self.assignment_id}"
         self.session_group = f"session_{self.session_id}"
         self.groups_joined = (self.notification_group, self.session_group,
-                              f"assignment_{self.assignment_id}", "permission_watch", "presence_watch")
+                              f"assignment_{self.assignment_id}", "permission_watch", "presence_watch", f"messaging_employee_{self.employee_id}")
         for group in self.groups_joined:
             await self.channel_layer.group_add(group, self.channel_name)
         self.control_channel = str(uuid.uuid4())
@@ -112,6 +113,12 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         await self.accept()
         if await self.send_control("control.ready"):
             self.security_task = asyncio.create_task(self.watch_security())
+            # Bounded recovery on the same authenticated socket, not another
+            # timer/socket per chat. Old clients can safely ignore these envelopes.
+            from boldApp.mensajeria.events import pending_event
+            backlog = await database_sync_to_async(pending_event)(self.employee_id)
+            if backlog and await notification_identity_is_active(self.session_id, self.assignment_id):
+                await self.send_json(backlog)
 
     async def disconnect(self, close_code):
         self.closing = True
@@ -229,6 +236,18 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         if self.security_task:
             self.security_task.cancel()
         await self.close(code=4401)
+
+    async def messaging_changed(self, event):
+        if self.closing:
+            return
+        if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
+            await self.close(code=4403)
+            return
+        from boldApp.mensajeria.events import private_event
+        envelope = await database_sync_to_async(private_event)(self.employee_id, event)
+        if envelope:
+            await self.send_json(envelope)
 
     async def assignment_changed(self, event):
         await self.send_control("assignment.changed")

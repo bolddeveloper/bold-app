@@ -1,4 +1,5 @@
 const childEntries = {
+    messaging: [{id: "messaging-direct", label: "Chats directos", keywords: "mensajes conversaciones equipo empleados chat privado"}],
     home: [
         { id: "home-summary", label: "Resumen de inicio", keywords: "dashboard actividad reciente accesos rápidos" },
     ],

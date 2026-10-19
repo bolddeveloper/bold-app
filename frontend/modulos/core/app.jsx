@@ -10,14 +10,17 @@ import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import BrandsModule from "../marcas/brands_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
+
 import {lazy, Suspense, useEffect, useState} from "react";
 import {sheetsCache} from "../hojas/sheets_cache.js";
+const MessagingModule = lazy(() => import("../mensajeria/messaging_module.jsx"));
 const SheetsModule = lazy(() => import("../hojas/sheets_module.jsx"));
 
 const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
     { id: "tasks", label: "Tareas", icon: "check", brand: true, group: "work" },
     { id: "inbox", label: "Bandeja de entrada", icon: "inbox", group: "work" },
+    { id: "messaging", label: "Mensajería", icon: "messaging", group: "work" },
     { id: "calendar", label: "Calendario", icon: "calendar", group: "work" },
     { id: "docs", label: "Docs", icon: "docs", group: "work" },
     { id: "drive", label: "Drive", icon: "drive", group: "work" },
@@ -51,6 +54,7 @@ function ApplicationWorkspace() {
     ];
     const externalModules = {
         profile: <ProfileModule/>,
+        messaging: <Suspense fallback={<p role="status">Cargando mensajería…</p>}><MessagingModule key={core.account?.id || "messaging"}/></Suspense>,
         calendar: <CalendarModule key="calendar" />,
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,

@@ -17,6 +17,7 @@ import "./profile.css";
 import NotificationPreferences from "./notification_preferences.jsx";
 import ShortcutPreferences from "./shortcut_preferences.jsx";
 import PresencePreferences from "./presence_preferences.jsx";
+import MessagingPreferences from "./messaging_preferences.jsx";
 
 export default function ProfileModule() {
     const core = useCore(), shell = useShell(), file = useRef(null);
@@ -68,12 +69,13 @@ export default function ProfileModule() {
                     <button aria-current={tab === "presence" ? "page" : undefined} onClick={() => switchTab("presence")}><User size={18}/>Mi disponibilidad</button>
                     <button aria-current={tab === "connectors" ? "page" : undefined} onClick={() => switchTab("connectors")}><Plug size={18}/>Conectores</button>
                     <button aria-current={tab === "notifications" ? "page" : undefined} onClick={() => switchTab("notifications")}><Bell size={18}/>Notificaciones</button>
+                    <button aria-current={tab === "messaging" ? "page" : undefined} onClick={() => switchTab("messaging")}><Keyboard size={18}/>Mensajería</button>
                     <button aria-current={tab === "shortcuts" ? "page" : undefined} onClick={() => switchTab("shortcuts")}><Keyboard size={18}/>Atajos</button>
                     <button aria-current={tab === "news" ? "page" : undefined} onClick={() => switchTab("news")}><Newspaper size={18}/>Novedades</button>
                 </nav>
             </aside>
             <main className="bold_profile_main">{error && <div className="bold_profile_error" role="alert">{error}{!profile && <button onClick={load}>Reintentar</button>}</div>}{notice && <p role="status">{notice}</p>}
-                {tab === "presence" ? <PresencePreferences/> : tab === "news" ? <NewsPreferences/> : tab === "shortcuts" ? <ShortcutPreferences/> : tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <div aria-busy="true" /> : <>
+                {tab === "messaging" ? <MessagingPreferences/> : tab === "presence" ? <PresencePreferences/> : tab === "news" ? <NewsPreferences/> : tab === "shortcuts" ? <ShortcutPreferences/> : tab === "notifications" ? <NotificationPreferences/> : tab === "connectors" ? <><h2>Conectores</h2><p>Conexiones personales de tu cuenta BOLD.</p><GoogleConnection/></> : !profile ? <div aria-busy="true" /> : <>
                     <div className="bold_profile_section_heading"><h2>{editing ? "Editar perfil" : "Información de cuenta"}</h2>{!editing && <button onClick={() => {setDraft(profile); shell.set_profile_editing(true); setNotice("");}}><Pencil size={16}/>Editar perfil</button>}</div>
                     <div className="bold_profile_editor">
                         <div className="bold_profile_account_fields"><dl><div><dt>Nombre</dt><dd>{profile.name}</dd></div><div><dt>Correo empresarial</dt><dd>{profile.email}</dd></div><div><dt>Departamento activo</dt><dd>{identity?.unit_name}</dd></div><div><dt>Cargo</dt><dd>{identity?.job_role_title}</dd></div></dl></div>

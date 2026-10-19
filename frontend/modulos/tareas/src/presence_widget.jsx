@@ -3,12 +3,14 @@ import { TaskText } from "./task_text_editor.jsx";
 import {useState} from "react";
 import {Filter} from "lucide-react";
 import {useCore} from "../../core/core_provider.jsx";
+import {useShell} from "../../core/app_shell.jsx";
 import {groupPresence, presenceLabel} from "../../core/shared/presence.js";
 import "../../core/shared/presence.css";
 import "./presence_widget.css";
 
 export default function PresenceWidget({heading}) {
     const core = useCore();
+    const shell = useShell();
     const [query, setQuery] = useState("");
     const [unit, setUnit] = useState("");
     const [filterOpen, setFilterOpen] = useState(false);
@@ -23,7 +25,7 @@ export default function PresenceWidget({heading}) {
             {groups.map(group => <section className="home_presence_department" key={group.id} aria-label={`${group.name}: ${group.people.length} personas`}>
                 <h3>{group.name}<span>— {group.people.length}</span></h3>
                 <div role="list">{group.people.map(row => <div className="home_presence_person" key={row.employee_id} role="listitem">
-                    <div className="home_presence_avatar" aria-hidden="true"><AvatarImage url={row.avatar_url} initials={row.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()} /><span className={`bold_presence_dot bold_presence_${row.status}`}/></div>
+                    <button type="button" className="home_presence_avatar home_presence_chat" disabled={!shell?.open_direct_chat || row.employee_id === (core.employee?.id || core.activeAssignment?.personId)} aria-label={row.employee_id === (core.employee?.id || core.activeAssignment?.personId) ? "Tu perfil" : `Abrir chat con ${row.name}`} title={`Conversar con ${row.name}`} onClick={() => shell?.open_direct_chat(row)}><AvatarImage url={row.avatar_url} initials={row.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()} /><span className={`bold_presence_dot bold_presence_${row.status}`} aria-hidden="true"/></button>
                     <div className="home_presence_identity"><strong title={row.name}>{row.name}</strong><span className="home_presence_status" title={presenceLabel(row)}>{presenceLabel(row)}</span>{row.description && <TaskText className="home_presence_description" value={row.description} />}</div>
                 </div>)}</div>
                 {!group.people.length && <p className="home_presence_hint">Sin personas asignadas.</p>}
