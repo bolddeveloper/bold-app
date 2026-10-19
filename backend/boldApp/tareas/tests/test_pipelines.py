@@ -34,6 +34,15 @@ class PipelineTests(TestCase):
     def make_project(self, name):
         return Project.objects.create(unit=self.owner.position.unit, name=name, status="active", owner_assignment=self.owner, created_by_assignment=self.owner)
 
+    def test_moving_link_to_another_project_uses_its_pipeline(self):
+        project = self.make_project("Destination")
+        pipeline = ensure_project_pipeline(project)
+        response = self.client.patch(f"/api/v2/task-projects/{self.link.pk}/", {"project":str(project.pk),"section":None}, format="json")
+        self.assertEqual(response.status_code,200,response.data)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.pipeline_id,pipeline.pk)
+        self.assertEqual(str(self.link.pipeline_stage),pipeline.stages[0]["id"])
+
     def move(self, pipeline, stage, task=None):
         return self.client.put(f"/api/v2/pipelines/{pipeline.pk}/tasks/{(task or self.task).pk}/", {"stage": stage["id"]}, format="json")
 

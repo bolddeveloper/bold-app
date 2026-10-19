@@ -4,6 +4,9 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from boldApp.core.models import UserAccount
+from boldApp.workspace.image_storage import image_id
+from boldApp.workspace.image_test_helpers import isolated_drive_storage
+from boldApp.workspace.models import ImageStorageRoot, StoredImage
 
 
 @override_settings(DEBUG=True, PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
@@ -12,24 +15,45 @@ class ProfileTests(TestCase):
         call_command("seed_demo_data", stdout=io.StringIO())
         self.user = UserAccount.objects.get(email="samuel@bold.gt")
         self.other = UserAccount.objects.get(email="luis@bold.gt")
+        self.drive = self.enterContext(isolated_drive_storage(self.user))
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.url = "/api/v2/auth/profile/"
 
     def test_profile_is_private_and_updates_only_current_account(self):
-        avatar = "data:image/webp;base64," + base64.b64encode(b"RIFF" + b"\x00" * 4 + b"WEBP" + b"test").decode()
+        avatar = "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
         result = self.client.patch(self.url, {"name": "Nombre nuevo", "biography": "Mi biografía", "avatar_url": avatar}, format="json")
-        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.status_code, 200, result.data)
         self.user.refresh_from_db(); self.other.refresh_from_db()
         self.assertEqual(self.user.employee.full_name, "Nombre nuevo")
         self.assertEqual(self.user.biography, "Mi biografía")
-        self.assertEqual(self.user.avatar_url, avatar)
+        self.assertIsNotNone(image_id(self.user.avatar_url))
+        self.assertNotIn("data:image", self.user.avatar_url)
+        stored = StoredImage.objects.get(pk=image_id(self.user.avatar_url))
+        self.assertTrue(stored.bindings.filter(resource_kind="profile", resource_id=self.user.pk).exists())
+        photo = self.client.get(self.user.avatar_url)
+        self.assertEqual(photo.status_code, 200)
+        self.assertEqual(photo.content, base64.b64decode(avatar.split(",", 1)[1]))
+        self.assertEqual(photo["Cache-Control"], "private, no-store")
         self.assertFalse(self.other.biography)
         self.assertEqual(self.client.get(self.url).data["id"], str(self.user.pk))
         self.assertNotIn("password", self.client.get(self.url).data)
         self.assertEqual(self.client.patch(self.url, {"avatar_url": None}, format="json").status_code, 200)
         self.assertIsNone(self.client.get(self.url).data["avatar_url"])
+        self.assertEqual(self.client.get(f"/api/v2/media/images/{stored.pk}/").status_code, 404)
         self.assertEqual(APIClient().get(self.url).status_code, 401)
+
+    def test_missing_image_storage_rolls_back_profile_and_explains_configuration(self):
+        ImageStorageRoot.objects.all().delete()
+        original = self.user.employee.full_name
+        result = self.client.patch(self.url, {"name": "No debe guardarse", "biography": "Tampoco",
+            "avatar_url": "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"}, format="json")
+        self.assertEqual(result.status_code, 400)
+        self.assertIn("Conectores", str(result.data))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.employee.full_name, original)
+        self.assertFalse(self.user.biography)
+        self.drive.assert_not_called()
 
     def test_invalid_photos_and_privileged_fields_never_change_identity(self):
         for fields in ({"name": " "}, {"biography": "a" * 501}, {"email": "other@bold.gt"}, {"id": str(self.other.pk)}, {"is_superuser": True}, {"avatar_url": "data:image/svg+xml;base64,c2NyaXB0"}, {"avatar_url": "data:image/webp;base64,broken"}, {"avatar_url": "data:image/webp;base64," + "a" * 410000}):

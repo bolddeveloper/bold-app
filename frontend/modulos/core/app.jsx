@@ -7,6 +7,7 @@ import CalendarModule from "../calendario/calendar_module.jsx";
 import ProfileModule from "../perfil/profile_module.jsx";
 import WorkspaceModule from "../docs/workspace_module.jsx?docs-uploads";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
+import BrandsModule from "../marcas/brands_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
 import {lazy, Suspense, useEffect, useState} from "react";
@@ -21,6 +22,7 @@ const baseNavigation = [
     { id: "docs", label: "Docs", icon: "docs", group: "work" },
     { id: "drive", label: "Drive", icon: "drive", group: "work" },
     { id: "suggestions", label: "Sugerencias", icon: "suggestions", group: "work" },
+    { id: "brands", label: "Marcas", icon: "brands", group: "work" },
     { id: "reports", label: "Informes", icon: "reports", group: "management" },
 ];
 
@@ -54,6 +56,7 @@ function ApplicationWorkspace() {
         drive: <WorkspaceModule key="drive" mode="drive" />,
         suggestions: <SuggestionsModule />,
         ...(canSheets ? {sheets: <Suspense fallback={<p>Abriendo editor de Sheets…</p>}><SheetsModule/></Suspense>} : {}),
+        brands: <BrandsModule key={core.activeAssignment?.id || "brands"} />,
         ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };

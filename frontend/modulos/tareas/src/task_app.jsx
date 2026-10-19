@@ -7,6 +7,7 @@ import {readTaskNavigation} from "./task_navigation.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import TeamPanel, {TeamSharingContext, SharingEye, useTeamSharing} from "./team.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
+import {confirmBold} from "../../core/shared/bold_dialog.js";
 import {backgroundRefresh} from "../../core/google_cache.js";
 import {CachedImage} from "../../core/shared/cached_image.jsx";
 import {normalizeSearchText} from "../../core/global_search.js";
@@ -74,7 +75,7 @@ import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, 
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
 import HomeModule from "./home_module.jsx";
-import { insertUnsectioned, reorderSections, materializePersonalSection } from "./section_order.js";
+import { insertUnsectioned, reorderSections, materializePersonalSection, visibleSections, projectSectionOptions, preferredSection, removePersonalSection } from "./section_order.js";
 import {
     add_comment as add_comment_request,
     create_task as create_task_request,
@@ -95,6 +96,7 @@ import { requiresTaskData } from "./services/task_activity.js";
 import { ImageGallery } from "./image_gallery.jsx";
 import { CommentsSection, PagedComments } from "./paged_comments.jsx";
 import { mergeLocalComments } from "./services/local_comments.js";
+import { canManageComment } from "./comment_permissions.js";
 import { CommentItem, TaskActionsContext } from "./comment_item.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
 import { TaskText, TaskTextEditor, TextEditorField } from "./task_text_editor.jsx";
@@ -1878,7 +1880,13 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
                                 <span className={`subtask_circle_btn ${sub.completed ? "subtask_circle_done" : ""}`}>{sub.completed ? render_icon(check_icon, 11) : null}</span>
 
                             </button>
-                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}><InlineTaskTitle task={sub} on_save={title => taskActions.renameSubtask(selected_task.id, sub.id, title)} /></span>
+                            <span className={`subtask_text ${sub.completed ? "subtask_text_done" : ""}`}>
+                                <button type="button" className="task_name_button" onClick={() => handle_open_subtask(selected_task.id, sub.id)}>{sub.title}</button>
+                                <span className="subtask_people" aria-label="Personas asignadas">
+                                    {get_member(sub.assignee_id) && <span title={`Responsable: ${get_member(sub.assignee_id).name}`} aria-label={`Responsable: ${get_member(sub.assignee_id).name}`}>{render_avatar(get_member(sub.assignee_id), "avatar_small")}</span>}
+                                    {uniquePeople((sub.collaborator_ids || []).map(get_member).filter(Boolean)).map(member => <span key={member.id} title={`Colaborador: ${member.name}`} aria-label={`Colaborador: ${member.name}`}>{render_avatar(member, "avatar_small")}</span>)}
+                                </span>
+                            </span>
                             <button type="button" className="subtask_open_button" onClick={() => handle_open_subtask(selected_task.id, sub.id)} aria-label={`Abrir detalles de ${sub.title}`}>{render_icon(chevron_right_icon, 15)}</button>
                             <button type="button" className="subtask_open_button" onClick={() => taskActions.deleteSubtask(selected_task.id, sub.id)} aria-label={`Eliminar subtarea: ${sub.title}`} title="Eliminar subtarea">{render_icon(trash_icon, 15)}</button>
                         </div>
@@ -2052,7 +2060,7 @@ function AttachmentLinks({ attachments, onChange }) {
 
 function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, handle_add_edit_subtask, handle_edit_field_change, handle_edit_subtask_title_change, handle_remove_edit_attachment, handle_remove_edit_subtask, handle_toggle_edit_subtask, on_cancel, on_save, projects = project_items, status_options, data, pending }) {
     const real = is_using_real_backend();
-    if (real) { board_columns = [...data.sections.filter(item => item.projectId === edit_draft.project_id), { id: "unsectioned", label: "Sin sección" }]; status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
+    if (real) { board_columns = projectSectionOptions(data, edit_draft.project_id); status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
     const [audio_busy, set_audio_busy] = use_state(false);
     const subtasks = Array.isArray(edit_draft.subtasks) ? edit_draft.subtasks : [];
@@ -2234,7 +2242,7 @@ function read_task_creation_draft(storage_key) {
 }
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
+function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
     const real = is_using_real_backend();
     const initial_draft = use_ref(read_task_creation_draft(draft_storage_key)).current;
     const today = use_ref(new Date()).current;
@@ -2266,16 +2274,19 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     const unit_initialized = use_ref(false);
 
     if (real) {
-        board_columns = [...data.sections.filter(item => item.projectId === project_id), { id: "unsectioned", label: "Sin sección" }];
+        board_columns = project_id ? projectSectionOptions(data, project_id) : personal_columns || board_columns;
         status_options = data.statuses.filter(item => !item.unitId || item.unitId === unitId).map(item => item.label);
     }
     use_effect(() => {
         if (!project_initialized.current) {
             project_initialized.current = true;
-            if (real && initial_draft.section && data.sections.some(item => item.id === initial_draft.section && item.projectId === project_id)) return;
+            if (real && board_columns.some(item => item.id === initial_draft.section)) return;
         }
-        if (real) set_section(data.sections.find(item => item.projectId === project_id)?.id || "unsectioned");
+        if (real) set_section(preferredSection(board_columns, last_sections[project_id || "personal"]));
     }, [project_id]);
+    use_effect(() => {
+        if (real) set_section(current => board_columns.some(row => row.id === current) ? current : preferredSection(board_columns, last_sections[project_id || "personal"]));
+    }, [real, project_id, board_columns.map(row => row.id).join(",")]);
     use_effect(() => {
         if (!unit_initialized.current) {
             unit_initialized.current = true;
@@ -2293,7 +2304,8 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
         e.preventDefault();
         if (pending || audio_busy) return;
         if (!title.trim()) return;
-        const col = board_columns.find((c) => c.id === section);
+        const resolved_section = board_columns.some(row => row.id === section) ? section : preferredSection(board_columns, last_sections[project_id || "personal"]);
+        const col = board_columns.find((c) => c.id === resolved_section);
         const new_task = {
             id: `task_${crypto.randomUUID()}`,
             created_at: new Date().toISOString(),
@@ -2301,7 +2313,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
             title: title.trim(),
             project_id,
             pipeline: pipeline_choice?.pipeline, pipeline_stage: pipeline_choice?.pipeline_stage,
-            section,
+            section: resolved_section,
             assignee_id: real ? assignee_id || null : collaborator_ids[0] || null,
             unitId,
             collaborator_ids,
@@ -2311,7 +2323,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
             due_label: due_day ? `${due_day} ${month_abbrev_es[due_month]} ${due_year}` : null,
             priority,
             status: real ? status : col?.status || status,
-            completed: section === "completed",
+            completed: resolved_section === "completed",
             description: description.trim(),
             voice_notes, recurrence,
             subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ ...s, completed: false })),
@@ -2356,7 +2368,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                     <div className="bold_field_row_2">
                         <div className="bold_field_group">
                             <label className="bold_field_label">Proyecto</label>
-                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))} on_change={set_project_id} />
+                            <TaskSelect aria_label="Proyecto" variant="project" value={project_id} options={[...(real ? [{value: "", label: "Sin proyecto"}] : []), ...projects.map(project => ({ value: project.id, label: project.label, color: project.color, image: project.avatar_data_url }))]} on_change={set_project_id} />
                         </div>
                         <div className="bold_field_group">
                             <label className="bold_field_label">Sección</label>
@@ -4414,11 +4426,14 @@ function TaskAppContent({ externalModules = {} }) {
     visible_project_items = projects;
     const workspace_unit_id = session.activeUnit?.id || current_user?.unit_name || "demo";
     const load_workspace_state = () => {
+        if (real) return {unitId: workspace_unit_id, items: [], activeId: "all", error: ""};
         try { return { unitId: workspace_unit_id, items: readWorkspaces(localStorage, workspace_unit_id), activeId: localStorage.getItem(activeWorkspaceStorageKey(workspace_unit_id)) || "all", error: "" }; }
         catch { return { unitId: workspace_unit_id, items: [], activeId: "all", error: "No se pudieron cargar las carpetas. Los datos guardados se conservaron. Reintenta recargando la página." }; }
     };
     const [workspace_state, set_workspace_state] = use_state(load_workspace_state);
     const [workspace_assignment, set_workspace_assignment] = use_state(null);
+    const workspace_revision = use_ref(0), workspace_ready = use_ref(false), workspace_saving = use_ref(false), workspace_editing = use_ref(false);
+    const [workspace_save_pending, set_workspace_save_pending] = use_state(false);
     const sharing_scope = `${session.account?.id}:${workspace_unit_id}:${session.activeAssignment?.id}`;
     const sharing_context = use_ref(sharing_scope); sharing_context.current = sharing_scope;
     const sharing_queue = use_ref(Promise.resolve());
@@ -4427,23 +4442,33 @@ function TaskAppContent({ externalModules = {} }) {
     const workspaces = sharedWorkspaceFolders(workspace_state.items, share_records);
     use_effect(() => {
         if (!real || !session.activeAssignment?.id) return;
+        workspace_ready.current = false;
         let alive = true;
         const refresh = async () => {
+            if (workspace_editing.current) return;
             const pending = sharing_queue.current;
             try {
                 await pending.catch(() => {});
-                const result = await workspaceSharing.list();
-                if (alive && pending === sharing_queue.current) set_workspace_shares({scope: sharing_scope, items: result.items});
+                const [result, library] = await Promise.all([workspaceSharing.list(), workspaceSharing.library()]);
+                if (alive && !workspace_editing.current && !workspace_saving.current && pending === sharing_queue.current) {
+                    workspace_revision.current = library.revision;
+                    workspace_ready.current = true;
+                    set_workspace_state(state => ({...state, unitId: workspace_unit_id, items: library.folders.map(folder => ({...folder, ownerId: session.account?.id}))}));
+                    set_workspace_shares({scope: sharing_scope, items: result.items});
+                }
             } catch (problem) {if (alive) set_api_error(problem.message);}
         };
-        refresh(); const stop = backgroundRefresh(refresh);
+        refresh(); const stop = backgroundRefresh(refresh, {interval: 180000});
         return () => {alive = false; stop();};
     }, [real, sharing_scope]);
     async function share_workspace_folder(folder, ids) {
         const scope = sharing_scope;
         const operation = sharing_queue.current.catch(() => {}).then(async () => {
             if (scope !== sharing_context.current) return;
-            const saved = await workspaceSharing.save(workspaces, folder.id, ids);
+            const record = share_records.find(row => row.mine && row.folder_id === folder.id);
+            const saved = await workspaceSharing.save(workspaces, folder.id, ids, record?.revision);
+            const library = await workspaceSharing.library();
+            if (scope === sharing_context.current) workspace_revision.current = library.revision;
             if (scope === sharing_context.current) set_workspace_shares(state => ({scope, items: [...(state.scope === scope ? state.items : []).filter(row => row.id !== saved.id), saved]}));
         });
         sharing_queue.current = operation;
@@ -4478,7 +4503,7 @@ function TaskAppContent({ externalModules = {} }) {
     use_effect(() => {
         if (!quick_task_open) return;
         const close = event => {
-            if (event.type === "keydown" ? event.key === "Escape" : !document.querySelector(".quick_task_form")?.contains(event.target)) {
+            if (event.type === "keydown" ? event.key === "Escape" : !event.target.closest(".quick_task_form, .board_quick_task_form, .board_quick_add_button, .add_row_button")) {
                 set_quick_task_text("");
                 set_quick_task_open(false);
             }
@@ -4490,6 +4515,13 @@ function TaskAppContent({ externalModules = {} }) {
     const [editing_column_id, set_editing_column_id] = use_state(null);
     const [editing_column_name, set_editing_column_name] = use_state("");
     const [unsectioned_by_project, set_unsectioned_by_project] = use_state({});
+    const last_section_key = `bold_last_task_section:${session.activeAssignment?.id || "demo"}`;
+    const [last_task_sections, set_last_task_sections] = use_state(() => {
+        try { const saved = JSON.parse(localStorage.getItem(last_section_key)); return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}; } catch { return {}; }
+    });
+    function remember_task_section(projectId, sectionId) {
+        set_last_task_sections(current => { const next = {...current, [projectId || "personal"]: sectionId}; try { localStorage.setItem(last_section_key, JSON.stringify(next)); } catch { /* Conserva la preferencia durante la sesión. */ } return next; });
+    }
     const unsectioned_order_key = `bold_unsectioned_order:${session.activeAssignment?.id || "demo"}`;
     const [unsectioned_order_by_project, set_unsectioned_order_by_project] = use_state(() => {
         try { return JSON.parse(localStorage.getItem(unsectioned_order_key)) || {}; } catch { return {}; }
@@ -4528,13 +4560,12 @@ function TaskAppContent({ externalModules = {} }) {
     }, [navigation_key, task_scope, selected_project_id, active_section, active_view]);
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
     const all_workspace_tasks = use_memo(() => real ? (data?.tasks || []).map(task => projectTask(task, null)) : stored_tasks.flatMap(task => [task, ...(task.subtasks || []).map(child => ({ ...child, parentTaskId: task.id, project_id: child.project_id || task.project_id, unitId: child.unitId || task.unitId }))]), [real, data?.tasks, stored_tasks]);
-    const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
-    const has_unsectioned_tasks = tasks.some(task => task.project_id === selected_project_id && task.section === "unsectioned");
+    const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: real && Boolean(data?.projects.find(project => project.id === selected_project_id)?.unsectioned_hidden) };
     const unsectioned_column = { id: "unsectioned", label: unsectioned_config.label, manageable: true };
     const project_sections = real ? (data?.sections || []).filter(item => item.projectId === selected_project_id).sort((a, b) => Number(a.position) - Number(b.position) || String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id))) : mock_sections_by_project[selected_project_id] || [];
     const board_columns = task_scope !== "project" && real
-        ? task_scope === "mine" ? insertUnsectioned(personal_board.board.sections, {id: "unsectioned", label: "Sin sección"}, personal_board.board.unsectioned_index) : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
-        : !unsectioned_config.hidden || has_unsectioned_tasks
+        ? task_scope === "mine" ? visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index) : [{id: "unsectioned", label: active_workspace?.name || "Workspace"}]
+        : !unsectioned_config.hidden
             ? insertUnsectioned(project_sections, unsectioned_column, unsectioned_order_by_project[selected_project_id] ?? (real ? data?.projects.find(project => project.id === selected_project_id)?.unsectioned_index : undefined))
             : project_sections;
     const section_positions = use_ref(new Map());
@@ -4584,8 +4615,60 @@ function TaskAppContent({ externalModules = {} }) {
         if (workspace_state.unitId !== workspace_unit_id) set_workspace_state(load_workspace_state());
     }, [workspace_state.unitId, workspace_unit_id]);
 
-    function save_workspace_items(items) {
+    async function import_workspace_items() {
+        try {
+            const legacy = readWorkspaces(localStorage, workspace_unit_id).filter(row => !row.ownerId || row.ownerId === session.account?.id);
+            if (!legacy.length) {set_api_error("No hay carpetas locales para importar desde este dispositivo."); return;}
+            if (!await confirmBold("¿Importar tus carpetas de este dispositivo al servidor? Verifica que fueron creadas por ti. El respaldo local no se eliminará.")) return;
+            const ids = new Set(workspaces.map(row => row.id));
+            await save_workspace_items([...workspaces, ...legacy.filter(row => !ids.has(row.id))]);
+        } catch (problem) {set_api_error(problem.message);}
+    }
+
+    async function save_workspace_items(items) {
         if (workspace_state.error) { set_api_error(workspace_state.error); return false; }
+        if (real) {
+            if (!workspace_ready.current || workspace_saving.current) {set_api_error("Las carpetas están cargando o guardándose. Espera un momento."); return false;}
+            const scope = sharing_scope;
+            workspace_saving.current = true; set_workspace_save_pending(true);
+            try {
+                await sharing_queue.current.catch(() => {});
+                if (scope !== sharing_context.current) return false;
+                if (active_workspace?.shared) {
+                    const record = share_records.find(row => row.id === active_workspace.shareRecordId);
+                    if (!record) throw new Error("La carpeta ya no está compartida contigo.");
+                    const prefix = `shared:${record.id}:`;
+                    const folders = items.filter(item => item.shareRecordId === record.id).map(item => ({...item,
+                        id: item.sourceFolderId || item.id.slice(prefix.length),
+                        parentId: item.parentId?.startsWith(prefix) ? item.parentId.slice(prefix.length) : null}));
+                    const saved = await workspaceSharing.edit(record, folders);
+                    if (scope === sharing_context.current) set_workspace_shares(state => ({scope, items: state.items.map(row => row.id === saved.id ? saved : row)}));
+                } else {
+                    const folders = items.filter(item => !item.shared);
+                    const result = await workspaceSharing.saveLibrary(folders, workspace_revision.current, share_records);
+                    if (scope !== sharing_context.current) return false;
+                    workspace_revision.current = result.revision;
+                    set_workspace_state(state => ({...state, items: result.folders.map(folder => ({...folder, ownerId: session.account?.id}))}));
+                    try {
+                        const resultShares = await workspaceSharing.list();
+                        if (scope === sharing_context.current) set_workspace_shares({scope, items: resultShares.items});
+                    } catch {if (scope === sharing_context.current) set_api_error("La biblioteca se guardó; la lista de colaboradores se actualizará al recuperar conexión.");}
+                }
+                app_toast.fire({icon: "success", title: "Workspace guardado en el servidor"});
+                return scope === sharing_context.current;
+            } catch (problem) {
+                if (scope === sharing_context.current) {
+                    set_api_error(problem.message);
+                    if (problem.status === 409) {
+                        try {
+                            const [library, records] = await Promise.all([workspaceSharing.library(), workspaceSharing.list()]);
+                            if (scope === sharing_context.current) {workspace_revision.current = library.revision; set_workspace_state(state => ({...state, items: library.folders})); set_workspace_shares({scope, items: records.items});}
+                        } catch { /* Preserve the editor and report the original conflict. */ }
+                    }
+                }
+                return false;
+            } finally {workspace_saving.current = false; if (scope === sharing_context.current) set_workspace_save_pending(false);}
+        }
         try {
             const saved = saveWorkspaces(localStorage, workspace_unit_id, items.filter(item => !item.shared));
             const records = share_records.filter(row => row.mine);
@@ -4722,6 +4805,15 @@ function TaskAppContent({ externalModules = {} }) {
         set_editing_project_id(null);
         set_active_modal(null);
     }
+
+    use_effect(() => {
+        const open = event => {
+            if (event.detail?.project) handle_project_select(event.detail.project);
+            if (event.detail?.task) {set_active_module("tasks"); set_active_section("tasks"); set_task_scope("mine"); set_selected_task_id(event.detail.task);}
+        };
+        window.addEventListener("bold:brand-resource", open);
+        return () => window.removeEventListener("bold:brand-resource", open);
+    }, [sharing_scope]);
 
     function handle_project_select(project_id) {
         remember_project(project_id);
@@ -4901,7 +4993,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real && task_scope === "mine") {
             const next = reorderSections(board_columns, source_id, target_id, after);
             if (next === board_columns) return;
-            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned"), unsectioned_index: next.findIndex(row => row.id === "unsectioned")}));
+            void personal_board.update(board => ({...board, sections: next.filter(row => row.id !== "unsectioned"), unsectioned_index: next.some(row => row.id === "unsectioned") ? next.findIndex(row => row.id === "unsectioned") : null}));
             return;
         }
         if (task_scope !== "project" || source_id === target_id || real && mutation_pending.current) return;
@@ -4990,7 +5082,7 @@ function TaskAppContent({ externalModules = {} }) {
             if (task_scope !== "project") return;
             if (real) {
                 mutate(() => api.materializeUnsectioned({ project: selected_project_id, name: label }), () => {
-                    set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
+                    set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: true } }));
                     set_unsectioned_order_by_project(current => {const next = {...current}; delete next[selected_project_id]; return next;});
                     set_editing_column_id(null);
                     set_editing_column_name("");
@@ -5000,7 +5092,7 @@ function TaskAppContent({ externalModules = {} }) {
             const id = `col_${Date.now()}`;
             set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: [...(current[selected_project_id] || []), { id, label }] }));
             set_tasks(current => current.map(task => task.project_id === selected_project_id && task.section === "unsectioned" ? { ...task, section: id } : task));
-            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: false } }));
+            set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { label: "Sin sección", hidden: true } }));
             set_editing_column_id(null);
             set_editing_column_name("");
             return;
@@ -5012,23 +5104,15 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_delete_column(column_id) {
+        if (board_columns.length < 2) { set_api_error("Crea otra sección antes de eliminar la última."); return; }
         if (real && task_scope === "mine") {
-            if (column_id !== "unsectioned") void personal_board.update(board => {
-                const index = board.sections.findIndex(row => row.id === column_id);
-                return {...board, sections: board.sections.filter(row => row.id !== column_id), task_sections: Object.fromEntries(Object.entries(board.task_sections).filter(([, section]) => section !== column_id)), unsectioned_index: Number.isInteger(board.unsectioned_index) && index >= 0 && index < board.unsectioned_index ? board.unsectioned_index - 1 : board.unsectioned_index};
-            });
+            void personal_board.update(board => removePersonalSection(board, column_id));
             return;
         }
         if (column_id === "unsectioned") {
             const hide = () => set_unsectioned_by_project(current => ({ ...current, [selected_project_id]: { ...(current[selected_project_id] || { label: "Sin sección" }), hidden: true } }));
             if (real) {
-                const links = data.links.filter(link => link.projectId === selected_project_id && !link.sectionId);
-                if (!links.length) { hide(); return; }
-                mutate(async () => {
-                    const existing = data.sections.find(section => section.projectId === selected_project_id);
-                    const target = existing || await api.create("sections", { project: selected_project_id, name: "General", position: "1000" });
-                    for (const [index, link] of links.entries()) await api.updateTaskProjectLink(link.id, { section: target.id, position: String((index + 1) * 1000) });
-                }, hide, undefined, undefined, ["sections", "links"]);
+                mutate(() => api.hideUnsectioned({project: selected_project_id}), hide, undefined, undefined, ["projects", "sections", "links"]);
                 return;
             }
             const sections = mock_sections_by_project[selected_project_id] || [];
@@ -5039,9 +5123,10 @@ function TaskAppContent({ externalModules = {} }) {
             return;
         }
         if (real) { mutate(() => api.remove("sections", column_id), undefined, undefined, undefined, ["sections", "links"]); return; }
+        const target = board_columns.find(row => row.id !== column_id)?.id || "unsectioned";
         set_mock_sections_by_project(current => ({ ...current, [selected_project_id]: (current[selected_project_id] || []).filter(column_item => column_item.id !== column_id) }));
         set_tasks((current_tasks) => current_tasks.map((task_item) => (
-            task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: "unsectioned", status: "Pend.", completed: false } : task_item
+            task_item.project_id === selected_project_id && task_item.section === column_id ? { ...task_item, section: target } : task_item
         )));
     }
 
@@ -5079,7 +5164,7 @@ function TaskAppContent({ externalModules = {} }) {
             ? by_filters.filter((task_item) => isMyTask(task_item, current_user_id))
             : task_scope === "workspace" ? by_filters : by_filters.filter((task_item) => task_item.project_id === selected_project_id);
 
-        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: task_scope === "mine" ? personal_board.board.task_sections[task.id] || "unsectioned" : "unsectioned" } : task) : scoped_tasks, sort_field, sort_direction);
+        return get_sorted_tasks(real ? scoped_tasks.map(task => task_scope !== "project" ? { ...task, section: task_scope === "mine" ? personal_board.board.task_sections[task.id] || (personal_board.board.unsectioned_hidden ? personal_board.board.sections[0]?.id : "unsectioned") : "unsectioned" } : task.section === "unsectioned" && unsectioned_config.hidden ? {...task, section: project_sections[0]?.id} : task) : scoped_tasks, sort_field, sort_direction);
     }, [
         active_filters,
         search_query,
@@ -5089,7 +5174,8 @@ function TaskAppContent({ externalModules = {} }) {
         task_scope,
         tasks,
         workspace_tasks,
-        personal_board.board
+        personal_board.board,
+        unsectioned_config.hidden, project_sections.map(row => row.id).join(",")
     ]);
 
     const selected_project = use_memo(() => (
@@ -5104,8 +5190,8 @@ function TaskAppContent({ externalModules = {} }) {
 
     const selected_task = use_memo(() => {
         if (!selected_task_id) return null;
-        return tasks.find((task_item) => task_item.id === selected_task_id) || (editing_subtask_parent_id && edit_draft?.id === selected_task_id ? edit_draft : null);
-    }, [selected_task_id, tasks, editing_subtask_parent_id, edit_draft]);
+        return tasks.find((task_item) => task_item.id === selected_task_id) || all_workspace_tasks.find(task_item => task_item.id === selected_task_id) || null;
+    }, [selected_task_id, tasks, all_workspace_tasks]);
 
     use_effect(() => {
         if (selected_inbox_id || !notifications.length) return;
@@ -5497,6 +5583,8 @@ function TaskAppContent({ externalModules = {} }) {
                         throw new Error("Espera a que se sincronice la tarea principal antes de agregar subtareas.");
                     }
                     drafts = values.items.map(item => {
+                        const columns = item.project_id ? projectSectionOptions(data, item.project_id) : visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index);
+                        item = {...item, section: columns.some(row => row.id === item.section) ? item.section : preferredSection(columns, last_task_sections[item.project_id || "personal"])};
                         const unitId = item.unitId || session.activeUnit?.id;
                         const payload = taskPayload({ ...item, unitId, parent_task: item.parentTaskId || null, follow_creator: true }, data.statuses, { create: true, unitId });
                         const status = data.statuses.find(row => row.id === payload.status);
@@ -5517,6 +5605,7 @@ function TaskAppContent({ externalModules = {} }) {
                     return result;
                 }, {
                     success_title,
+                    on_success: () => drafts.forEach(draft => remember_task_section(draft.project_id, draft.section)),
                     on_failure: () => set_failed_task_creates(current => [...current, ...drafts.map(draft => {
                         const due = dateFromISO(draft.due_date);
                         return { id: draft.id, title: draft.title, snapshot: JSON.stringify({ ...draft,
@@ -5894,7 +5983,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     // Opens the "Editar tarea" modal and seeds the draft.
     async function handle_open_edit_task(task_id) {
-        let task_item = tasks.find((t) => t.id === task_id);
+        let task_item = tasks.find((t) => t.id === task_id) || all_workspace_tasks.find(t => t.id === task_id);
         if (!task_item) return;
         const version = mutation_generation.current, attempt = ++edit_open_generation.current;
         if (real && task_crud_mutations.current.has(String(task_id))) {
@@ -5908,7 +5997,7 @@ function TaskAppContent({ externalModules = {} }) {
                     return;
                 }
                 if (version !== mutation_generation.current || attempt !== edit_open_generation.current || !task_activity.current) return;
-                if (pagedAttachmentsEnabled()) {
+                if (task_item.attachmentsLoaded === false || pagedAttachmentsEnabled()) {
                     set_opening_edit(true);
                     task_item = await edit_loader.current.load(task_item);
                 }
@@ -5920,7 +6009,7 @@ function TaskAppContent({ externalModules = {} }) {
             }
         }
         if (version !== mutation_generation.current || attempt !== edit_open_generation.current) return;
-        set_editing_subtask_parent_id(null);
+        set_editing_subtask_parent_id(real ? null : task_item.parentTaskId || null);
         const draft_snapshot = {
             ...(real ? task_item : {}),
             title: task_item.title,
@@ -6039,6 +6128,7 @@ function TaskAppContent({ externalModules = {} }) {
             id: `comment_${Date.now()}`,
             task_id,
             author_name: current_user.name,
+            author_assignment: current_user_id,
             body,
             images, voice_notes,
             created_at: new Date().toISOString()
@@ -6060,6 +6150,10 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function change_comment(comment, changes, remove = false) {
+        if (!canManageComment(comment, current_user_id, !real)) {
+            set_api_error("Solo puedes editar o eliminar los comentarios que escribiste.");
+            return false;
+        }
         const task_id = comment.task || comment.task_id;
         if (real) return mutate(async () => {
             const result = remove ? await api.remove("comments", comment.id) : await api.update("comments", comment.id, changes);
@@ -6234,35 +6328,8 @@ function TaskAppContent({ externalModules = {} }) {
         return true;
     }
 
-    function handle_open_subtask(parent_id, subtask_id) {
-        if (real && task_crud_mutations.current.has(String(parent_id))) { set_api_error("Espera a que se sincronice la tarea principal."); return; }
-        if (tasks.some(item => item.id === subtask_id)) {
-            handle_open_edit_task(subtask_id);
-            return;
-        }
-        const parent = tasks.find(item => item.id === parent_id);
-        const subtask = parent?.subtasks?.find(item => item.id === subtask_id);
-        if (!parent || !subtask) return;
-        set_editing_subtask_parent_id(parent_id);
-        set_selected_task_id(subtask_id);
-        set_edit_draft({
-            ...parent,
-            ...subtask,
-            id: subtask.id,
-            parentTaskId: parent_id,
-            description: subtask.description || "",
-            project_id: subtask.project_id || parent.project_id,
-            section: subtask.section || parent.section,
-            assignee_id: subtask.assignee_id || parent.assignee_id,
-            collaborator_ids: subtask.collaborator_ids || [],
-            due_day: subtask.due_day || null,
-            due_label: subtask.due_label || "",
-            priority: subtask.priority || "Media",
-            status: subtask.status || "Pend.",
-            subtasks: subtask.subtasks || []
-        });
-        set_edit_attachments([]);
-        set_active_modal("edit_task");
+    function handle_open_subtask(_parent_id, subtask_id) {
+        handle_task_select(subtask_id);
     }
 
     function handle_edit_subtask_title_change(subtask_id, title) {
@@ -6382,6 +6449,7 @@ function TaskAppContent({ externalModules = {} }) {
                     draft_storage_key={`bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`}
                     drawer={drawer}
                     board_columns={board_columns}
+                    personal_columns={visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index)} last_sections={last_task_sections}
                     on_cancel={() => set_active_modal(null)}
                     on_create={(new_task) => {
                         if (real) {
@@ -6393,8 +6461,16 @@ function TaskAppContent({ externalModules = {} }) {
                             try { snapshot = sessionStorage.getItem(draftKey) || ""; } catch { /* El formulario sigue funcionando. */ }
                             const preview = previewTaskDraft(new_task, null, data.statuses);
                             const mutation = { kind: "create", id: new_task.id, task: preview };
-                            const started = start_task_crud(mutation, () => saveTaskDraft(new_task, data, null, { onCreated: dto => { mutation.serverId = dto.id; } }), {
+                            const started = start_task_crud(mutation, async () => {
+                                const dto = await saveTaskDraft(new_task, data, null, { onCreated: dto => { mutation.serverId = dto.id; } });
+                                if (!new_task.project_id && new_task.section !== "unsectioned") {
+                                    const saved = await personal_board.update(board => ({...board, task_sections: {...board.task_sections, [dto.id]: new_task.section}}));
+                                    if (!saved) throw Object.assign(new Error("La tarea se creó, pero no se pudo guardar su sección personal."), {partialDraft: {...new_task, id: dto.id}});
+                                }
+                                return dto;
+                            }, {
                                 success_title: "Tarea creada",
+                                on_success: () => remember_task_section(new_task.project_id, new_task.section),
                                 on_failure: error => {
                                     if (!error.partialDraft) set_failed_task_creates(items => [...items, { id: new_task.id, title: new_task.title, snapshot: snapshot || JSON.stringify(new_task) }]);
                                 },
@@ -6508,12 +6584,12 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
 
-    if (real && !intro_finished && !api_error) return <LoginIntro />;
+    if (real && !intro_finished && !api_error) return <LoginIntro name={session.employee?.full_name || session.activeAssignment?.name || current_user?.name || ""} />;
     if (real && task_content_active && !data && api_error) return <div className="bold_modal_backdrop"><div className="bold_modal_window"><div className="bold_modal_body"><p role="alert">{api_error}</p><button className="secondary_button" onClick={session.logout}>Cerrar sesión</button><button className="primary_button" onClick={() => { set_api_error(""); refresh.current(["all"]).catch(error => set_api_error(error.message)); }}>Reintentar</button></div></div></div>;
 
     // Returns the full shell with the focused tasks module.
     return (
-        <TaskActionsContext.Provider value={{ saveProjectMembers: (ids, id) => handle_save_project_members(ids, id, false), localComments: visible_local_comments, confirmComments: confirm_local_comments, retryComment: comment => comment.retry?.(), changeComment: (comment, changes) => change_comment(comment, changes), deleteComment: comment => change_comment(comment, {}, true), renameSubtask: rename_subtask, deleteSubtask: (parent_id, subtask_id) => handle_request_delete_task(subtask_id, parent_id) }}><ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour modal={active_modal} detail={Boolean(selected_task)} /><AppShell latestNewsId={releaseNotes[0]?.id} membersContent={<PresenceWidget />}
+        <TaskActionsContext.Provider value={{ canManageComment: comment => canManageComment(comment, current_user_id, !real), saveProjectMembers: (ids, id) => handle_save_project_members(ids, id, false), localComments: visible_local_comments, confirmComments: confirm_local_comments, retryComment: comment => comment.retry?.(), changeComment: (comment, changes) => change_comment(comment, changes), deleteComment: comment => change_comment(comment, {}, true), renameSubtask: rename_subtask, deleteSubtask: (parent_id, subtask_id) => handle_request_delete_task(subtask_id, parent_id) }}><ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour modal={active_modal} detail={Boolean(selected_task)} /><AppShell latestNewsId={releaseNotes[0]?.id} membersContent={<PresenceWidget />}
 sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { teamActive: active_module === "tasks" && task_scope === "mine" && active_section === "team", onTeamSelect: handle_team_select, pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
@@ -6554,7 +6630,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     tasks={real ? tasks.map(task => projectTask(task, null)) : tasks}
                 /> : active_module === "workspaces" ? <>
                     {workspace_state.error && <p role="alert">{workspace_state.error}</p>}
-                    <WorkspacesModule accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={id => { const child = all_workspace_tasks.find(item => item.id === id && item.parentTaskId); if (child) handle_open_subtask(child.parentTaskId, id); else handle_open_edit_task(id); }} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
+                    <WorkspacesModule onEditing={value => {workspace_editing.current = value;}} savePending={workspace_save_pending} onImport={real ? import_workspace_items : null} accountId={session.account?.id} shareRecords={share_records} onShare={share_workspace_folder} TaskSelect={TaskSelect} CalendarDateField={CalendarDateField} key={workspace_unit_id} workspaces={workspaces} activeId={active_workspace_id} projects={projects} tasks={stored_tasks} allTasks={all_workspace_tasks} sections={real ? data?.sections || [] : board_columns} statuses={real ? data?.statuses || [] : default_status_items.map(label => ({ id: label, label, isFinal: label === "Lista" }))} members={team_members} units={real ? data?.units || [] : []} activeUnitId={session.activeUnit?.id} storageKey={`bold_workspace_views:${workspace_unit_id}:${session.activeAssignment?.id || current_user_id}`} pending={pending} loading={real && !data} permissionsCan={real ? session.permissions.can : null} searchQuery={search_query} onOpen={select_workspace} onSave={save_workspace_items} onProject={handle_project_select} onProjectPreview={set_project_preview} onEditProject={id => handle_project_menu_toggle(id, "edit")} onShareProject={handle_share_project} onTask={handle_task_select} onEditTask={handle_open_edit_task} onCreateTask={() => set_active_modal("task")} onQuickCreate={item => handle_workspace_bulk("create", [], { items: [item] })} onBulk={handle_workspace_bulk} />
                     <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={handle_followers_change} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} />
                 </> : ["projects", "department_projects"].includes(active_module) ? render_projects_module({
                     projects: active_module === "department_projects"

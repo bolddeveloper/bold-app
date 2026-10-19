@@ -41,6 +41,7 @@ class WorkspaceSharingTests(TestCase):
         self.login(self.outsider)
         self.assertEqual(self.client.get(self.endpoint).data["items"], [])
         self.login(self.owner)
+        self.payload["revision"] = 1
         self.payload["member_ids"] = []
         self.assertEqual(self.client.post(self.endpoint, self.payload, format="json").status_code, 200)
         self.login(self.member)
@@ -52,6 +53,7 @@ class WorkspaceSharingTests(TestCase):
     def test_content_update_preserves_membership(self):
         self.assertEqual(self.client.post(self.endpoint, self.payload, format="json").status_code, 200)
         self.payload.pop("member_ids")
+        self.payload["revision"] = 1
         self.payload["folders"][0]["name"] = "Equipo actualizado"
         response = self.client.post(self.endpoint, self.payload, format="json")
         self.assertEqual(response.status_code, 200, response.data)
@@ -59,7 +61,8 @@ class WorkspaceSharingTests(TestCase):
         self.login(self.member)
         self.assertEqual(self.client.get(self.endpoint).data["items"][0]["folders"][0]["name"], "Equipo actualizado")
 
-    def test_rejects_other_department_and_invalid_tree(self):
+    def test_rejects_inactive_members_and_invalid_tree(self):
+        self.outsider.is_active = False; self.outsider.save(update_fields=["is_active"])
         self.payload["member_ids"] = [str(self.outsider.pk)]
         self.assertEqual(self.client.post(self.endpoint, self.payload, format="json").status_code, 400)
         self.payload["member_ids"] = []

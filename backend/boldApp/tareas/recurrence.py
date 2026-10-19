@@ -82,7 +82,9 @@ def generate_recurring_tasks(today=None):
     count = 0
     for task_id in Task.objects.filter(recurrence_next_date__lte=today, parent_task__deleted_at__isnull=True, created_by_assignment__employee__user_account__is_active=True).values_list("pk", flat=True):
         with transaction.atomic():
-            source = Task.objects.select_for_update().select_related("unit", "created_by_assignment__position", "created_by_assignment__employee__user_account").filter(pk=task_id).first()
+            # Only the template requires locking for occurrence deduplication;
+            # the optional account join cannot be FOR UPDATE on PostgreSQL.
+            source = Task.objects.select_for_update(of=("self",)).select_related("unit", "created_by_assignment__position", "created_by_assignment__employee__user_account").filter(pk=task_id).first()
             if not source or not source.recurrence or not source.recurrence_next_date:
                 continue
             assignment = source.created_by_assignment

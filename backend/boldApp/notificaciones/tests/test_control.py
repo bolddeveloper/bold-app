@@ -17,6 +17,7 @@ from boldApp.core.models import (AccessGrant, Employee, GrantAuthority, JobRole,
 from boldApp.core.security_control import security_snapshot
 from boldApp.permisos.models import PermissionPolicyState
 from config.asgi import application
+from .socket_helpers import CONTROL_EVENTS, receive_close, receive_event
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -46,25 +47,22 @@ class SecurityControlTests(TransactionTestCase):
             self.assertEqual(ready["payload"]["capabilities"], {"permissions_revision": True})
             self.assertEqual(set(ready["payload"]), {"revision", "state", "context", "boundary_ms", "assignment",
                                                     "sequence", "capabilities", "lease_ms", "force", "presence"})
-            self.assertEqual(set(ready["payload"]["presence"]), {"rows", "updated_at", "grace_seconds"})
+            self.assertEqual(set(ready["payload"]["presence"]), {"rows", "units", "updated_at", "grace_seconds"})
             for person in ready["payload"]["presence"]["rows"]:
-                self.assertEqual(set(person), {"employee_id", "name", "units", "status", "title", "description"})
+                self.assertEqual(set(person), {"employee_id", "name", "avatar_url", "units", "status", "title", "description"})
             self.assertFalse(ready["payload"]["force"])
             await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": None})
-            update = await socket.receive_json_from()
+            update = await receive_event(socket, "permissions.revision")
             self.assertEqual(update["event_type"], "permissions.revision")
             self.assertFalse(update["payload"]["force"])
             self.assertGreater(update["payload"]["sequence"], ready["payload"]["sequence"])
             await database_sync_to_async(lambda: JobRolePermission.objects.create(job_role=self.assignment.position.job_role,
                 permission=self.permission, effect="allow", scope_type="own_unit"))()
-            for _ in range(5):
-                changed = await socket.receive_json_from()
-                if changed["payload"]["force"]:
-                    break
+            changed = await receive_event(socket, CONTROL_EVENTS, payload_matches=lambda payload: payload["force"])
             self.assertTrue(changed["payload"]["force"])
             # A second signal for the same committed state carries no invalidation.
             await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": None})
-            duplicate = await socket.receive_json_from()
+            duplicate = await receive_event(socket, "permissions.revision")
             self.assertFalse(duplicate["payload"]["force"])
             await socket.disconnect()
 
@@ -79,7 +77,7 @@ class SecurityControlTests(TransactionTestCase):
             await database_sync_to_async(lambda: PositionAssignment.objects.filter(pk=self.assignment.id).update(
                 is_active=False, released_at=timezone.now()))()
             await get_channel_layer().group_send(f"assignment_{self.assignment.id}", {"type": "assignment.changed"})
-            self.assertEqual((await socket.receive_output())["code"], 4403)
+            self.assertEqual((await receive_close(socket))["code"], 4403)
             await socket.disconnect()
 
         async_to_sync(scenario)()
@@ -91,7 +89,7 @@ class SecurityControlTests(TransactionTestCase):
             await socket.connect()
             await socket.receive_json_from()
             await database_sync_to_async(revoke_session)(self.session)
-            self.assertEqual((await socket.receive_output())["code"], 4401)
+            self.assertEqual((await receive_close(socket))["code"], 4401)
             await socket.disconnect()
 
         async_to_sync(scenario)()
@@ -107,7 +105,7 @@ class SecurityControlTests(TransactionTestCase):
             async def scenario():
                 self.assertTrue((await socket.connect())[0])
                 await socket.receive_json_from()
-                self.assertEqual((await socket.receive_output(timeout=2))["code"], 4401)
+                self.assertEqual((await receive_close(socket, timeout=2))["code"], 4401)
                 await socket.disconnect()
 
             async_to_sync(scenario)()
@@ -167,7 +165,7 @@ class SecurityControlTests(TransactionTestCase):
         async def scenario():
             await socket.connect()
             ready = await socket.receive_json_from()
-            update = await socket.receive_json_from(timeout=2)
+            update = await receive_event(socket, "control.ready", payload_matches=lambda payload: payload["force"], timeout=2)
             self.assertEqual(update["payload"]["revision"], ready["payload"]["revision"])
             self.assertTrue(update["payload"]["force"])
             await socket.disconnect()
@@ -193,10 +191,30 @@ class SecurityControlTests(TransactionTestCase):
             await socket.receive_json_from()
             await database_sync_to_async(lambda: PermissionPolicyState.objects.filter(key="global").update(revision=42))()
             await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": 2})
-            update = await socket.receive_json_from()
+            update = await receive_event(socket, CONTROL_EVENTS,
+                payload_matches=lambda payload: payload["revision"] == "42" and payload["force"])
             self.assertEqual(update["payload"]["revision"], "42")
             self.assertTrue(update["payload"]["force"])
             await socket.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_presence_burst_is_coalesced_without_duplicate_control_frames(self):
+        socket = self.socket()
+
+        async def scenario():
+            try:
+                self.assertTrue((await socket.connect())[0])
+                await receive_event(socket, "control.ready")
+                initial_presence = await receive_event(socket, "control.ready")
+                for _ in range(40):
+                    await get_channel_layer().group_send("presence_watch", {"type": "presence.changed"})
+                update = await receive_event(socket, "control.ready")
+                self.assertEqual(update["payload"]["sequence"], initial_presence["payload"]["sequence"] + 1)
+                self.assertFalse(update["payload"]["force"])
+                self.assertTrue(await socket.receive_nothing(timeout=0.3))
+            finally:
+                await socket.disconnect()
 
         async_to_sync(scenario)()
 
@@ -265,7 +283,7 @@ class SecurityControlTests(TransactionTestCase):
             await socket.connect(); await socket.receive_json_from()
             await database_sync_to_async(lambda: UserAccount.objects.filter(pk=self.account.id).update(credentials_version=self.account.credentials_version + 1))()
             await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": None})
-            self.assertEqual((await socket.receive_output())["code"], 4401)
+            self.assertEqual((await receive_close(socket))["code"], 4401)
             await socket.disconnect()
 
         async_to_sync(scenario)()

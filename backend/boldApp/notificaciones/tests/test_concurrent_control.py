@@ -19,15 +19,19 @@ from boldApp.core.models import Employee, JobRole, JobRolePermission, Organizati
 from boldApp.notificaciones.events import build_notification_envelope
 from boldApp.notificaciones.models import Notification
 from config.asgi import application
+from .socket_helpers import receive_close, receive_event
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class ConcurrentControlTests(TransactionTestCase):
     def setUp(self):
-        if (settings.DATABASES["default"]["ENGINE"] != "django.db.backends.sqlite3"
+        database = settings.DATABASES["default"]
+        isolated_database = database["ENGINE"] == "django.db.backends.sqlite3" or (
+            database["ENGINE"] == "django.db.backends.postgresql" and database["NAME"] == "test_bold_validation")
+        if (not isolated_database
                 or settings.CHANNEL_LAYERS["default"]["BACKEND"] != "channels.layers.InMemoryChannelLayer"
                 or settings.CACHES["default"]["BACKEND"] != "django.core.cache.backends.locmem.LocMemCache"):
-            raise SkipTest("Use config.settings_test: this synthetic suite must not touch external DB/cache/channels.")
+            raise SkipTest("Use isolated SQLite or bold_validation PostgreSQL; never external cache/channels.")
         cache.clear()  # settings_test uses an isolated cache, never production Redis.
         self.unit = OrganizationalUnit.objects.create(name="Capacidad sintética", unit_type="department", sensitivity_level="low")
         self.role = JobRole.objects.create(title="Cargo sintético")
@@ -71,21 +75,18 @@ class ConcurrentControlTests(TransactionTestCase):
                 self.assertTrue(all(event["event_type"] == "control.ready" for event in ready))
                 start = perf_counter()
                 await get_channel_layer().group_send("permission_watch", {"type": "permission.changed", "revision": None})
-                updates = await asyncio.gather(*(socket.receive_json_from(timeout=10) for socket in controls))
+                updates = await asyncio.gather(*(receive_event(socket, "permissions.revision", timeout=10) for socket in controls))
                 self.assertTrue(all(event["event_type"] == "permissions.revision" for event in updates))
                 # Revoke exactly one session, not the other 24 clients.
                 await database_sync_to_async(revoke_session)(identities[0][2])
-                close = await asyncio.gather(controls[0].receive_output(timeout=10), tasks[0].receive_output(timeout=10))
+                close = await asyncio.gather(receive_close(controls[0], timeout=10), receive_close(tasks[0], timeout=10))
                 self.assertEqual([event["code"] for event in close], [4401, 4403])
                 await get_channel_layer().group_send(f"notifications_assignment_{identities[-1][1].id}", {
                     "type": "notification.created", "envelope": survivor_envelope,
                 })
                 # A policy signal may queue a control heartbeat as well. It is
                 # allowed; prove survival with a recipient-scoped notification.
-                for _ in range(5):
-                    survivor = await controls[-1].receive_json_from(timeout=10)
-                    if survivor.get("entity_id") == str(survivor_notice.pk):
-                        break
+                survivor = await receive_event(controls[-1], "notification.created", timeout=10)
                 self.assertEqual(survivor.get("entity_id"), str(survivor_notice.pk))
                 if os.getenv("BOLD_REPORT_CAPACITY") == "1":
                     times = sorted(connect_times)
@@ -115,7 +116,7 @@ class ConcurrentControlTests(TransactionTestCase):
                 self.assertTrue(all(result[0] for result in await asyncio.gather(*(socket.connect() for socket in sockets))))
                 await asyncio.gather(*(socket.receive_json_from() for socket in sockets))
                 await database_sync_to_async(revoke_session)(identity[2])
-                closed = await asyncio.gather(*(socket.receive_output() for socket in sockets))
+                closed = await asyncio.gather(*(receive_close(socket) for socket in sockets))
                 self.assertEqual([event["code"] for event in closed], [4401, 4401])
             finally:
                 await asyncio.gather(*(socket.disconnect() for socket in sockets))

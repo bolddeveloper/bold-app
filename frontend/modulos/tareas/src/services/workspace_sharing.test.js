@@ -16,9 +16,9 @@ test("shared trees stay separate from local folders and disappear after revocati
     assert.deepEqual(sharedWorkspaceFolders(local, []), local);
 });
 
-test("owner recovers server folders while newer local edits take precedence", () => {
+test("server folders are authoritative and stale local copies cannot override collaboration", () => {
     const remote = {id: "root", name: "Servidor", parentId: null};
     const records = [{id: "share1", folder_id: "root", owner_id: "me", mine: true, folders: [remote]}];
     assert.equal(sharedWorkspaceFolders([], records)[0].ownerId, "me");
-    assert.equal(sharedWorkspaceFolders([{...remote, name: "Local"}], records)[0].name, "Local");
+    assert.equal(sharedWorkspaceFolders([{...remote, name: "Local"}], records)[0].name, "Servidor");
 });

@@ -24,16 +24,23 @@ def project_participation_allows(assignment, resource_id):
 
 def task_authorization_context(resource_id):
     try:
-        row = Task.all_objects.filter(pk=resource_id).values("created_by_assignment_id", "assignee_assignment_id", "deleted_at").first()
+        row = Task.all_objects.filter(pk=resource_id).values("unit_id", "created_by_assignment_id", "assignee_assignment_id", "deleted_at").first()
     except (TypeError, ValueError, ValidationError):
         return {}
     if row is None:
         return {}
+    readers = set() if row["deleted_at"] else {
+        row["assignee_assignment_id"],
+        *TaskFollower.objects.filter(task_id=resource_id).values_list("assignment_id", flat=True),
+    }
     return {
         "resource_created_by_assignment_id": row["created_by_assignment_id"],
-        "task_reader_assignment_ids": set() if row["deleted_at"] else {
-            row["assignee_assignment_id"],
-            *TaskFollower.objects.filter(task_id=resource_id).values_list("assignment_id", flat=True),
+        "task_assignee_assignment_id": None if row["deleted_at"] else row["assignee_assignment_id"],
+        "task_unit_id": row["unit_id"],
+        "task_reader_assignment_ids": readers,
+        "task_editor_assignment_ids": readers,
+        "task_delete_assignment_ids": set() if row["deleted_at"] else {
+            row["created_by_assignment_id"], row["assignee_assignment_id"],
         },
     }
 

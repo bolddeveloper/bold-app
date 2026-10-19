@@ -426,7 +426,8 @@ class AdminEmployeeViewSet(viewsets.ReadOnlyModelViewSet):
 
         with transaction.atomic():
             assignment = (
-                PositionAssignment.objects.select_for_update()
+                # Lock the assignment and vacancy, not nullable account joins.
+                PositionAssignment.objects.select_for_update(of=("self", "position"))
                 .select_related("position__unit", "position__job_role", "employee__user_account")
                 .get(pk=requested_assignment.pk, employee=employee)
             )

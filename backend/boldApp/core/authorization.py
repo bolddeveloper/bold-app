@@ -334,6 +334,7 @@ def resolve_access(
     at=None,
     context=None,
     resource_created_by_assignment_id=None,
+    task_status_only=False,
 ):
     """Resuelve acceso con deny-first y herencia implícita para el dueño.
 
@@ -402,6 +403,19 @@ def resolve_access(
     own_unit = assignment.position.unit
     role_rules = context.role_rules
     direct_rules = context.direct_rules
+    task_context = {}
+    if permission.code in {"tasks.task.update", "tasks.task.delete"} and resource_id is not None:
+        from .resource_context import resolve_resource_context
+
+        # Membership is trusted domain data, never an employee/role name or a
+        # claim from the client. It authorizes only this existing task/unit.
+        task_context = resolve_resource_context(permission, resource_id)
+        if permission.code == "tasks.task.delete" and (
+            task_context.get("task_unit_id") != target_unit.id
+            or assignment.id not in task_context.get("task_delete_assignment_ids", ())
+        ):
+            return _decision(False, "Solo el creador o el responsable directo puede eliminar esta tarea.",
+                "task_delete_principal_required", "system", policy_version=context.policy_version)
 
     if (
         resource_created_by_assignment_id is None
@@ -410,7 +424,7 @@ def resolve_access(
     ):
         from .resource_context import resolve_resource_context
 
-        resource_context = resolve_resource_context(permission, resource_id)
+        resource_context = task_context or resolve_resource_context(permission, resource_id)
         resource_created_by_assignment_id = resource_context.get("resource_created_by_assignment_id")
 
     applicable_direct = [
@@ -449,6 +463,19 @@ def resolve_access(
                 context.policy_version,
             )
 
+    # Only a server-validated status-only mutation may use the assignee's narrow grant.
+    if task_status_only and permission.code == "tasks.task.update" and resource_id is not None:
+        from .resource_context import resolve_resource_context
+
+        if task_context.get("task_unit_id") == target_unit.id and task_context.get("task_assignee_assignment_id") == assignment.id:
+            return _decision(
+                True,
+                "El responsable puede cambiar el estado de su tarea asignada.",
+                "assigned_task_status",
+                "task_assignment",
+                policy_version=context.policy_version,
+            )
+
     for rule in applicable_direct:
         if rule.effect == AccessGrant.EFFECT_ALLOW:
             return _decision(
@@ -470,6 +497,19 @@ def resolve_access(
                 rule.id,
                 context.policy_version,
             )
+
+    # Explicit task collaboration is independent of the employee's job title.
+    # All applicable denials above still win; MFA is applied by check_and_log.
+    # No resource-less, reassignment or project-management rights are granted.
+    if task_context.get("task_unit_id") == target_unit.id:
+        participant_ids = task_context.get(
+            "task_editor_assignment_ids" if permission.code == "tasks.task.update" else "task_delete_assignment_ids", ())
+        if assignment.id in participant_ids:
+            return _decision(True,
+                "Permitido por la participación explícita en esta tarea." if permission.code == "tasks.task.update"
+                else "Permitido al creador o responsable directo de esta tarea.",
+                "task_participant_update" if permission.code == "tasks.task.update" else "task_principal_delete",
+                "task_assignment", policy_version=context.policy_version)
 
     if (
         permission.code in CREATOR_SCOPED_PERMISSION_CODES
@@ -543,6 +583,7 @@ def apply_session_assurance(result, permission, request):
 def check_and_log(
     *, assignment, permission_code, target_unit, resource_id=None, resource_type="", request=None,
     resource_created_by_assignment_id=None,
+    task_status_only=False,
 ):
     permission = Permission.objects.get(code=permission_code.strip().lower())
     result = resolve_access(
@@ -551,6 +592,7 @@ def check_and_log(
         target_unit,
         resource_id=resource_id,
         resource_created_by_assignment_id=resource_created_by_assignment_id,
+        task_status_only=task_status_only,
     )
     result = apply_session_assurance(result, permission, request)
     account = None

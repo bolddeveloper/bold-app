@@ -115,6 +115,12 @@ de preparación contiene infraestructura y controles; no incluye todos los cambi
 funcionales pendientes del árbol de trabajo. Integrar y validar esos cambios en
 una revisión de entrega antes de usarla para desplegar.
 
+La revisión de integración incorpora los cambios funcionales de Sheets, Equipo
+y pipelines, junto con `Develop` en `3dc97715`. Incluye la migración
+`0017_merge_0016_optional_unsectioned_0016_task_pipelines`, que une ambas ramas de
+migraciones de Tareas sin borrar datos. Aplicar todas las migraciones de esa
+revisión completa durante el futuro despliegue; no copiar solo archivos del motor.
+
 ## Verificación posterior, cuando se autorice el despliegue
 
 Antes de migrar, obtener un backup recuperable de PostgreSQL y conservar el archivo

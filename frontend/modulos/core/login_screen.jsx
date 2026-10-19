@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Moon, Sun } from "lucide-react";
 import { BoldSelect } from "./shared/bold_select.jsx";
+import {startupGreeting} from "./startup_greeting.js";
 
 const themeKey = "bold_color_theme";
 const emailKey = "bold_remembered_email";
@@ -12,12 +13,12 @@ function readTheme() {
 }
 function readEmail() { try { return localStorage.getItem(emailKey) || ""; } catch { return ""; } }
 
-export function LoginIntro() {
+export function LoginIntro({name = ""}) {
     const [dark] = useState(readTheme);
     const variant = dark ? "blanco" : "rojo";
     return <main className={`core_login_intro ${dark ? "theme_dark" : ""}`} aria-label="Preparando tu espacio de trabajo">
         <img src={`/auth/bold-carga-animada-oscuro-${variant}.svg`} alt="" aria-hidden="true" />
-        <span className="core_login_intro_status" role="status">Preparando tu espacio de trabajo…</span>
+        <span className="core_login_intro_status" role="status">{startupGreeting(name)}</span>
     </main>;
 }
 

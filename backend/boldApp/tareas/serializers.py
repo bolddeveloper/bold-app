@@ -42,7 +42,7 @@ class ProjectSerializer(DriveImagesMixin, serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = "__all__"
-        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "unsectioned_index"]
+        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "unsectioned_index", "unsectioned_hidden"]
         validators = []
 
     def validate_name(self, value):
@@ -354,7 +354,13 @@ class TaskProjectSerializer(serializers.ModelSerializer):
             section = getattr(self.instance, "section", None)
         if section and project and section.project_id != project.id:
             raise serializers.ValidationError({"section": "La seccion no pertenece al proyecto indicado."})
-        pipeline = attrs.get("pipeline") or getattr(self.instance, "pipeline", None)
+        project_changed = self.instance is not None and project.pk != self.instance.project_id
+        pipeline_changed = "pipeline" in attrs and attrs["pipeline"] != getattr(self.instance, "pipeline", None)
+        if project_changed and "pipeline" not in attrs:
+            attrs["pipeline"] = None
+        if (project_changed or pipeline_changed) and "pipeline_stage" not in attrs:
+            attrs["pipeline_stage"] = None
+        pipeline = attrs.get("pipeline", getattr(self.instance, "pipeline", None))
         stage = attrs.get("pipeline_stage", getattr(self.instance, "pipeline_stage", None))
         if pipeline:
             from .pipelines import find_stage
@@ -373,7 +379,13 @@ class TaskDependencySerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(DriveImagesMixin, serializers.ModelSerializer):
+    can_manage = serializers.SerializerMethodField()
     voice_notes = VoiceNotesField(required=False)
+
+    def get_can_manage(self, obj):
+        request = self.context.get("request")
+        employee_id = getattr(getattr(request, "user", None), "employee_id", None)
+        return employee_id is not None and obj.author_assignment.employee_id == employee_id
 
     def validate(self, attrs):
         task = attrs.get("task", getattr(self.instance, "task", None))

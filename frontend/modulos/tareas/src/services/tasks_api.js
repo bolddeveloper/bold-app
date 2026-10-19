@@ -12,6 +12,7 @@ export function createTasksApi(client = http) {
         listProjects: params => list("projects", params),
         listSections: project => list("sections", { project }),
         materializeUnsectioned: body => request("/api/v2/sections/materialize-unsectioned/", { method: "POST", body }),
+        hideUnsectioned: body => request("/api/v2/sections/hide-unsectioned/", { method: "POST", body }),
         reorderSections: body => request("/api/v2/sections/reorder/", { method: "POST", body }),
         listStatuses: unit => list("task-statuses", { unit }),
         listTasks: params => list("tasks", params),

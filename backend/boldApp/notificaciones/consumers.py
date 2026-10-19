@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from urllib.parse import parse_qs
 
@@ -12,6 +13,7 @@ security_snapshot = database_sync_to_async(sync_security_snapshot)
 from boldApp.autenticacion.presence import heartbeat_snapshot, disconnect_presence
 presence_snapshot = database_sync_to_async(heartbeat_snapshot)
 presence_disconnected = database_sync_to_async(disconnect_presence)
+log = logging.getLogger(__name__)
 
 
 @database_sync_to_async
@@ -103,6 +105,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.control_sequence = 0
         self.control_state = None
         self.security_task = None
+        self.presence_task = None
+        self.closing = False
         self.security_checked = asyncio.Event()
         self.security_wake = asyncio.Event()
         await self.accept()
@@ -110,21 +114,25 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             self.security_task = asyncio.create_task(self.watch_security())
 
     async def disconnect(self, close_code):
-        task = getattr(self, "security_task", None)
-        if task:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        self.closing = True
+        for task in (getattr(self, "security_task", None), getattr(self, "presence_task", None)):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         for group in getattr(self, "groups_joined", ()):
             await self.channel_layer.group_discard(group, self.channel_name)
         if hasattr(self, "session_id"):
             await presence_disconnected(self.session_id, self.channel_name)
 
     async def send_control(self, event_type="control.ready", force=False):
+        if self.closing:
+            return False
         snapshot = await security_snapshot(self.session_id, self.assignment_id)
         if snapshot.get("close_code"):
+            self.closing = True
             if self.security_task:
                 self.security_task.cancel()
             await self.close(code=snapshot["close_code"])
@@ -183,10 +191,33 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.security_wake.set()
 
     async def presence_changed(self, event):
+        # A simultaneous login burst used to enqueue N full checks per client.
+        # Coalesce presence only; permission/revocation handlers and the security
+        # deadline timer remain immediate and independent of this short delay.
+        if not self.closing and self.presence_task is None:
+            self.presence_task = asyncio.create_task(self.queue_presence_refresh())
+
+    async def queue_presence_refresh(self):
+        try:
+            await asyncio.sleep(0.15)
+            await self.channel_layer.send(self.channel_name, {"type": "presence.refresh"})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Do not leave a failed task blocking all future presence updates or
+            # raising during disconnect before subscriptions can be removed.
+            self.presence_task = None
+            log.warning("Presence refresh enqueue failed; next heartbeat will reconcile", exc_info=True)
+
+    async def presence_refresh(self, event):
+        self.presence_task = None
         await self.send_control()
 
     async def notification_created(self, event):
+        if self.closing:
+            return
         if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
             await self.close(code=4403)
             return
         if not await notification_resource_is_readable(self.assignment_id, event["envelope"].get("entity_id")):
@@ -194,6 +225,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event["envelope"])
 
     async def session_revoked(self, event):
+        self.closing = True
         if self.security_task:
             self.security_task.cancel()
         await self.close(code=4401)

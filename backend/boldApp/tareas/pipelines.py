@@ -86,7 +86,10 @@ def aggregate_kind(task):
 
 
 def aggregate_status(task, kind):
-    status = TaskStatus.objects.filter(unit=task.unit, category=kind, is_final=(kind == "completed")).first()
+    # Preserve the selected legacy status when it already represents this aggregate.
+    status = task.status if task.status.is_final == (kind == "completed") and (task.status.category == kind or kind == "completed") else None
+    if status is None:
+        status = TaskStatus.objects.filter(unit=task.unit, category=kind, is_final=(kind == "completed")).first()
     if not status:
         name = {"completed": "Completada", "failed": "Fallida", "in_progress": "En curso", "todo": "Pendiente"}[kind]
         base_name = name

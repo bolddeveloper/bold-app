@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { insertUnsectioned, reorderSections, materializePersonalSection } from "./section_order.js";
+import { insertUnsectioned, reorderSections, materializePersonalSection, visibleSections, preferredSection, projectSectionOptions, removePersonalSection } from "./section_order.js";
 
 const sections = [{ id: "a" }, { id: "b" }, { id: "c" }];
 assert.deepEqual(reorderSections(sections, "a", "c", true).map(item => item.id), ["b", "c", "a"]);
@@ -16,3 +16,16 @@ assert.deepEqual(renamed.sections.map(item => item.id), ["a", "new", "b", "c"]);
 assert.deepEqual(renamed.task_sections, {assigned: "b", hidden: "c", unassigned: "new"});
 assert.equal(renamed.unsectioned_index, null);
 assert.deepEqual(board.task_sections, {assigned: "b", hidden: "c"});
+assert.equal(renamed.unsectioned_hidden, true);
+assert.deepEqual(visibleSections(renamed.sections, renamed.unsectioned_hidden).map(row => row.id), ["a", "new", "b", "c"]);
+assert.equal(preferredSection(sections, "c"), "c");
+assert.equal(preferredSection(sections, "deleted"), "a");
+assert.equal(preferredSection(visibleSections([], false), "deleted"), "unsectioned");
+const deleted = removePersonalSection({...board, unsectioned_hidden: true}, "b");
+assert.equal(deleted.task_sections.assigned, "a");
+assert.equal(deleted.task_sections.hidden, "c");
+assert.equal(deleted.unsectioned_hidden, true);
+assert.equal(removePersonalSection({sections: [{id: "a"}], task_sections: {}, unsectioned_hidden: true}, "a").sections.length, 1);
+assert.equal(removePersonalSection(board, "unsectioned").unsectioned_hidden, true);
+const data = {projects: [{id: "p", unsectioned_hidden: true}], sections: [{id: "c", projectId: "p", position: 2}, {id: "a", projectId: "p", position: 1}, {id: "other", projectId: "q"}]};
+assert.deepEqual(projectSectionOptions(data, "p").map(row => row.id), ["a", "c"]);

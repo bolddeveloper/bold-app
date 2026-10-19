@@ -91,13 +91,14 @@ class AssignmentScopedViewSetMixin:
         ordering = queryset.query.order_by or queryset.model._meta.ordering or ()
         return queryset.order_by(*ordering, "pk")
 
-    def require_permission(self, code, unit, resource_id=None):
+    def require_permission(self, code, unit, resource_id=None, *, task_status_only=False):
         result = check_and_log(
             assignment=self.request.assignment,
             permission_code=code,
             target_unit=unit,
             resource_id=resource_id,
             request=self.request,
+            task_status_only=task_status_only,
         )
         if not result.allowed:
             raise PermissionDenied(result.reason)
@@ -158,8 +159,8 @@ class AssignmentScopedViewSetMixin:
         ids = self._visible_resource_ids(Task.objects.all() if candidates is None else candidates, "tasks.task.read", "task")
         return Task.objects.filter(id__in=ids)
 
-    def visible_projects(self):
-        ids = self._visible_resource_ids(participating_projects(self.request.assignment), "tasks.project.read", "project")
+    def visible_projects(self, candidates=None):
+        ids = self._visible_resource_ids(participating_projects(self.request.assignment, candidates), "tasks.project.read", "project")
         return Project.objects.filter(id__in=ids)
 
 
@@ -178,7 +179,9 @@ class ProjectViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = ProjectSerializer
 
     def get_queryset(self):
-        queryset = self.stable_order(self.visible_projects())
+        ids = self.query_ids("ids")
+        candidates = Project.objects.filter(pk__in=ids) if ids is not None else None
+        queryset = self.stable_order(self.visible_projects(candidates))
         unit_id = self.request.query_params.get("unit")
         return queryset.filter(unit_id=unit_id) if unit_id else queryset
 
@@ -261,14 +264,35 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
         # One transaction: no partially renamed group or task status changes.
         with transaction.atomic():
             project = self.locked_project(request.data.get("project"))
+            if project.unsectioned_hidden:
+                raise ValidationError({"section": "Sin sección ya fue renombrada o eliminada. Actualiza la vista."})
             serializer = self.get_serializer(data={"project": str(project.pk), "name": request.data.get("name")})
             serializer.is_valid(raise_exception=True)
             last = project.sections.aggregate(last=Max("position"))["last"] or 0
             section = serializer.save(position=last + 1000)
+            if project.unsectioned_index is not None:
+                rows = list(project.sections.exclude(pk=section.pk).order_by("position", "created_at", "pk"))
+                rows.insert(min(project.unsectioned_index, len(rows)), section)
+                for index, row in enumerate(rows):
+                    row.position = (index + 1) * 1000
+                Section.objects.bulk_update(rows, ["position"])
             TaskProject.objects.filter(project=project, section__isnull=True).update(section=section)
-            Project.objects.filter(pk=project.pk).update(unsectioned_index=None)
+            Project.objects.filter(pk=project.pk).update(unsectioned_index=None, unsectioned_hidden=True)
             # Section's post-save invalidation is delivered after the entire move commits.
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="hide-unsectioned")
+    def hide_unsectioned(self, request):
+        with transaction.atomic():
+            project = self.locked_project(request.data.get("project"))
+            target = project.sections.order_by("position", "created_at", "pk").first()
+            if not target:
+                raise ValidationError({"section": "Crea otra sección antes de eliminar la última."})
+            TaskProject.objects.filter(project=project, section__isnull=True).update(section=target)
+            Project.objects.filter(pk=project.pk).update(unsectioned_hidden=True, unsectioned_index=None)
+            transaction.on_commit(lambda: dispatch_resource_invalidation(
+                [project.unit_id], "project.changed", "project", project.id, {}))
+        return Response({"unsectioned_hidden": True})
 
     @action(detail=False, methods=["post"])
     def reorder(self, request):
@@ -311,7 +335,11 @@ class SectionViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         self.require_permission("tasks.project.manage", instance.project.unit, instance.project_id)
         with transaction.atomic():
-            Project.objects.select_for_update().get(pk=instance.project_id)
+            project = Project.objects.select_for_update().get(pk=instance.project_id)
+            target = project.sections.exclude(pk=instance.pk).order_by("position", "created_at", "pk").first()
+            if project.unsectioned_hidden and not target:
+                raise ValidationError({"section": "No se puede eliminar la última sección."})
+            TaskProject.objects.filter(section=instance).update(section=target)
             instance.delete()
 
 
@@ -388,7 +416,8 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
 
     def perform_update(self, serializer):
         task = self.get_object()
-        self.require_permission("tasks.task.update", task.unit, task.id)
+        self.require_permission("tasks.task.update", task.unit, task.id,
+                                task_status_only=set(self.request.data) == set(serializer.validated_data) == {"status"})
         new_unit = serializer.validated_data.get("unit")
         unit_changed = new_unit is not None and new_unit.id != task.unit_id
         assignee_changed = (
@@ -467,7 +496,6 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
             section = Section.objects.filter(pk=section_id, project=project).first() if section_id else None
             if section_id and not section:
                 raise ValidationError({"section": "La seccion no pertenece al proyecto."})
-            self.require_permission("tasks.project.manage", project.unit, project.pk)
         with transaction.atomic():
             for task in tasks:
                 if operation == "delete":
@@ -476,6 +504,10 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                     task.save(update_fields=["deleted_at", "updated_at"])
                 elif operation == "link":
                     self.require_permission("tasks.task.update", task.unit, task.pk)
+                    # Reorder an already-linked task without granting project
+                    # administration. New associations retain the manage guard.
+                    existing = TaskProject.objects.filter(task=task, project=project).exists()
+                    self.require_permission("tasks.project.read" if existing else "tasks.project.manage", project.unit, project.pk)
                     link, created = TaskProject.objects.get_or_create(
                         task=task, project=project,
                         defaults={"section": section, "position": 0, "added_by_assignment": request.assignment},
@@ -484,7 +516,7 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
                         link.section = section
                         link.save(update_fields=["section"])
                 else:
-                    self.require_permission("tasks.task.update", task.unit, task.pk)
+                    self.require_permission("tasks.task.update", task.unit, task.pk, task_status_only=set(changes) == {"status"})
                     serializer = self.get_serializer(task, data=changes, partial=True)
                     serializer.is_valid(raise_exception=True)
                     if (
@@ -555,9 +587,17 @@ class TaskProjectViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         link = self.get_object()
-        self._require_link_write(link)
         new_task = serializer.validated_data.get("task")
         new_project = serializer.validated_data.get("project")
+        identities_unchanged = (
+            (new_task is None or new_task.id == link.task_id)
+            and (new_project is None or new_project.id == link.project_id)
+        )
+        if identities_unchanged:
+            self.require_permission("tasks.task.update", link.task.unit, link.task_id)
+            self.require_permission("tasks.project.read", link.project.unit, link.project_id)
+        else:
+            self._require_link_write(link)
         if new_task and new_task.id != link.task_id:
             self.require_permission("tasks.task.update", new_task.unit, new_task.id)
         if new_project and new_project.id != link.project_id:
@@ -601,7 +641,7 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
     serializer_class = CommentSerializer
 
     def get_queryset(self):
-        queryset = Comment.objects.all()
+        queryset = Comment.objects.select_related("author_assignment")
         section = self.request.query_params.get("image_section")
         if section not in (None, "comments", "timeline"):
             raise ValidationError({"image_section": "Usa comments o timeline."})
@@ -632,18 +672,21 @@ class CommentViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, views
 
     def perform_create(self, serializer):
         task = serializer.validated_data["task"]
+        self.require_permission("tasks.task.read", task.unit, task.id)
         self.require_permission("tasks.comment.create", task.unit, task.id)
         serializer.save(author_assignment=self.request.assignment)
 
     def _require_comment_write(self, comment):
-        if comment.author_assignment_id != self.request.assignment.id:
-            self.require_permission("tasks.task.update", comment.task.unit, comment.task_id)
+        # Authorship belongs to the person, not their current position or task role.
+        if comment.author_assignment.employee_id != self.request.user.employee_id:
+            raise PermissionDenied("Solo puedes editar o eliminar los comentarios que escribiste.")
 
     def perform_update(self, serializer):
         comment = self.get_object()
         self._require_comment_write(comment)
         new_task = serializer.validated_data.get("task")
         if new_task and new_task.id != comment.task_id:
+            self.require_permission("tasks.task.read", new_task.unit, new_task.id)
             self.require_permission("tasks.task.update", new_task.unit, new_task.id)
         serializer.save()
 
