@@ -1,6 +1,15 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-sheets-drive-postgres-fix", date: "2026-10-19", category: "Correcciones", icon: "update",
+        title: "Corrección al abrir Sheets y sincronizar con Drive",
+        summary: "Se corrige el error del servidor al consultar o actualizar la conexión de un archivo con Drive.",
+        sections: [{title: "Archivos de Sheets", items: [
+            "La comprobación de Drive y el guardado en segundo plano utilizan consultas compatibles con PostgreSQL.",
+            "La corrección conserva el contenido de los archivos y sus destinos de Drive.",
+        ]}],
+    },
+    {
         id: "2026-10-19-people-search-drive-mentions", date: "2026-10-19", category: "Mejoras", icon: "update",
         title: "Encuentra personas y carpetas con más facilidad",
         summary: "Equipo incorpora búsqueda de personas y los comentarios permiten elegir a quién mencionar.",

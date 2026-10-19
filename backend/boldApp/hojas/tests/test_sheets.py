@@ -126,6 +126,19 @@ class SheetsTests(TestCase):
                 self.assertEqual(response.status_code, 403, response.data)
         self.assertFalse(Workbook.objects.filter(owner=person.employee.user_account).exists())
 
+    @patch("boldApp.hojas.drive.google")
+    def test_open_and_sync_unbound_file_do_not_lock_nullable_drive_account(self, google):
+        self.assertEqual(str(check_external(self.file.pk, self.actor).pk), str(self.file.pk))
+        self.file.drive_account = self.actor.employee.user_account
+        self.file.save(update_fields=["drive_account"])
+        response = self.client.get(f"/api/v2/sheets/files/{self.file.pk}/drive/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["sync_state"], "unbound")
+        sync(self.file.pk)
+        google.assert_not_called()
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.sync_state, "unbound")
+
     def test_template_has_six_empty_sheets_and_copy_removes_assignments(self):
         self.assertEqual([self.document["sheets"][key]["name"] for key in self.document["sheetOrder"]], ["Liderazgo", "Procesos", "IT", "Herramientas", "Copia de Procesos", "Bold Lab"])
         self.assertEqual(Task.objects.count(), 0)

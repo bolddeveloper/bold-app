@@ -81,7 +81,7 @@ def confirms_upload(workbook, data):
 
 @transaction.atomic
 def check_external(workbook_id, assignment):
-    workbook = Workbook.objects.select_for_update().select_related("drive_account", "creator__employee__user_account", "creator__position__unit", "creator__position__job_role").get(pk=workbook_id)
+    workbook = Workbook.objects.select_for_update(of=("self",)).select_related("drive_account", "creator__employee__user_account", "creator__position__unit", "creator__position__job_role").get(pk=workbook_id)
     require_file(assignment, workbook)
     if not workbook.drive_account_id or not workbook.drive_created:
         return workbook
@@ -119,7 +119,7 @@ def sync(workbook_id, lease=None):
     claimed = lease is not None
     lease = lease or uuid.uuid4()
     with transaction.atomic():
-        workbook = Workbook.objects.select_for_update().select_related("drive_account", "creator__employee__user_account", "creator__position__unit", "creator__position__job_role").get(pk=workbook_id)
+        workbook = Workbook.objects.select_for_update(of=("self",)).select_related("drive_account", "creator__employee__user_account", "creator__position__unit", "creator__position__job_role").get(pk=workbook_id)
         now = timezone.now()
         if workbook.deleted_at or not workbook.drive_account_id or workbook.sync_state in {"external", "unbound", "current"} or workbook.sync_after and workbook.sync_after > now or claimed and workbook.sync_lease != lease or not claimed and workbook.lease_until and workbook.lease_until > now:
             return
