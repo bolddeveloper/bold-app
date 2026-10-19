@@ -60,12 +60,17 @@ export function dayLabel(date, now = new Date()) {
 }
 
 export function messageError(error) {
-    if (error?.status === 409) return "El mensaje cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a editar o enviar.";
+    const detail = error?.fields?.detail;
+    if (error?.status === 409) return typeof detail === "string" ? `${detail} Conservamos tu texto y los adjuntos.` : "El mensaje cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a editar o enviar.";
     if (error?.status === 429) return "Has realizado varias acciones seguidas. Conservamos tu texto; espera un momento antes de reintentar.";
     if (error?.status === 404) return "Esta conversación no está disponible para tu cuenta.";
     if (error?.status >= 500 || error?.status === 0) return "No se pudo confirmar la operación. Conservamos tu texto. Actualiza para comprobar si se guardó antes de reintentar.";
-    const detail = error?.fields?.detail;
     if (typeof detail === "string") return detail;
-    if (error?.status === 400) return "Revisa el mensaje: debe contener entre 1 y 5.000 caracteres y el destinatario debe tener una cuenta activa.";
+    if (error?.status === 400) {
+        const fields = error.fields;
+        const messages = Array.isArray(fields) ? fields : [fields?.detail, fields?.file, fields?.body, fields?.non_field_errors].flat();
+        const safe = messages.find(value => typeof value === "string" && value.length <= 400);
+        return safe || "Escribe hasta 5.000 caracteres o adjunta una imagen o nota de voz de hasta 10 MB. El destinatario debe tener una cuenta activa.";
+    }
     return "No se pudo completar la acción. Conservamos tu texto; puedes volver a intentarlo.";
 }

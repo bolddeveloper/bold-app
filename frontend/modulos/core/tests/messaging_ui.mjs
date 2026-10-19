@@ -68,6 +68,8 @@ if (process.argv.includes("--serve")) {
         assert.equal(document.querySelector(".messaging_text a").rel, "noopener noreferrer");
         assert.equal(document.querySelectorAll(".messaging_day").length, 2);
         assert.match(document.querySelector(".messaging_peer").textContent, /En línea/);
+        assert.ok(document.querySelector('[aria-label="Adjuntar imagen"]'));
+        assert.ok(document.querySelector('[aria-label="Grabar nota de voz"]'));
         const reads = fixture.calls.length; await settle(); assert.equal(fixture.calls.length, reads, "no polling while idle");
         input("Prueba de envío"); await settle();
         let release; fixture.sendDelay = new Promise(resolve => {release = resolve;});
@@ -77,6 +79,7 @@ if (process.argv.includes("--serve")) {
         release(); await settle();
         assert.equal(document.querySelector("textarea").value, "");
         assert.equal(document.querySelectorAll(".messaging_message").length, 3);
+        assert.ok(document.querySelector('.messaging_arriving'), "new sends animate but loaded history does not");
         fixture.sendDelay = null; fixture.failSend = true;
         input("No perder este borrador"); await settle(); submit(); await settle();
         assert.equal(document.querySelector("textarea").value, "No perder este borrador");
@@ -113,6 +116,55 @@ if (process.argv.includes("--serve")) {
         assert.equal(document.querySelector('[aria-label^="Abrir chat con"]'), null);
         assert.ok(document.querySelector('[aria-label^="Ver perfil de"]'), "profile remains usable outside IT");
         root.unmount();
+        const {MessageMedia, VoiceRecorder} = await server.ssrLoadModule(`/@fs/${path.resolve("../mensajeria/message_media.jsx").replaceAll("\\", "/")}`);
+        const oldCreate = URL.createObjectURL, oldRevoke = URL.revokeObjectURL, revoked = [];
+        URL.createObjectURL = () => "blob:private-fixture"; URL.revokeObjectURL = value => revoked.push(value);
+        root = createRoot(document.getElementById("root"));
+        root.render(React.createElement(MessageMedia, {message: {id:"voice",conversation_id:fixture.conversation.id,media:{id:"voice",kind:"audio",mime_type:"audio/webm"}}})); await settle();
+        const mediaCalls = fixture.calls.filter(value=>value==="media").length;
+        await settle(); assert.equal(fixture.calls.filter(value=>value==="media").length,mediaCalls,"audio must not download until requested");
+        document.querySelector('.messaging_media_load').click(); await settle();
+        assert.ok(document.querySelector('audio[preload="none"]'));
+        document.querySelector('[aria-label="Velocidad de reproducción: 1×"]').click(); await settle();
+        assert.equal(document.querySelector('audio').playbackRate,1.5);
+        assert.ok(document.querySelector('a[download]')); root.unmount(); assert.ok(revoked.includes("blob:private-fixture"));
+        URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke;
+        let tracksStopped = 0, received = null, recording = false, recordingError = "";
+        const track = {stop:()=>{tracksStopped++;}}, tracks = {getTracks:()=>[track]};
+        Object.defineProperty(navigator,"mediaDevices",{configurable:true,value:{getUserMedia:async ()=>tracks}});
+        globalThis.MediaRecorder = class {
+            static isTypeSupported(type) {return type.startsWith("audio/webm");}
+            constructor() {this.state="inactive"; this.mimeType="audio/webm";}
+            start() {this.state="recording";}
+            stop() {this.state="inactive"; this.ondataavailable({data:new Blob(["voice"],{type:this.mimeType})}); this.onstop();}
+        };
+        root = createRoot(document.getElementById("root"));
+        root.render(React.createElement(VoiceRecorder,{onReady:file=>{received=file;},onRecording:value=>{recording=value;},onError:value=>{recordingError=value;}})); await settle();
+        document.querySelector('[aria-label="Grabar nota de voz"]').click(); await settle(); assert.equal(recording,true);
+        document.querySelector('[aria-label="Detener y escuchar grabación"]').click(); await settle();
+        assert.equal(received.type,"audio/webm"); assert.equal(recording,false); assert.ok(tracksStopped>0); assert.equal(recordingError,"");
+        received = null;
+        document.querySelector('[aria-label="Grabar nota de voz"]').click(); await settle();
+        document.querySelector('[aria-label="Descartar grabación"]').click(); await settle(); assert.equal(received,null);
+        document.querySelector('[aria-label="Grabar nota de voz"]').click(); await settle();
+        root.unmount(); assert.equal(recording,false); assert.ok(tracksStopped>=3); assert.equal(received,null);
+        const {default: ImageEditor} = await server.ssrLoadModule(`/@fs/${path.resolve("../mensajeria/image_editor.jsx").replaceAll("\\", "/")}`);
+        const imageDraws = [], drawingContext = {drawImage:(...args)=>imageDraws.push(args),beginPath:()=>{},rect:()=>{},fill:()=>{},strokeRect:()=>{},setLineDash:()=>{},moveTo:()=>{},lineTo:()=>{},stroke:()=>{}};
+        dom.window.HTMLDialogElement.prototype.showModal = function () {this.setAttribute("open","");};
+        dom.window.HTMLCanvasElement.prototype.getContext = () => drawingContext;
+        dom.window.HTMLCanvasElement.prototype.toBlob = callback => callback(new Blob(["edited image"],{type:"image/webp"}));
+        globalThis.Image = class {constructor() {this.naturalWidth=800; this.naturalHeight=600;} set src(value) {queueMicrotask(()=>this.onload?.());}};
+        URL.createObjectURL = () => "blob:editor-fixture"; URL.revokeObjectURL = value => revoked.push(value);
+        let editedImage = null;
+        root = createRoot(document.getElementById("root"));
+        root.render(React.createElement(ImageEditor,{file:new File(["image"],"fixture.png",{type:"image/png"}),onSave:file=>{editedImage=file;},onCancel:()=>{}}));
+        await waitFor(()=>document.querySelector('dialog[open] canvas') && imageDraws.length>0);
+        assert.equal(document.querySelectorAll('dialog input[type="range"]').length,4,"crop is keyboard-adjustable");
+        [...document.querySelectorAll('dialog button')].find(node=>node.textContent==="Dibujar").click(); await settle();
+        [...document.querySelectorAll('dialog button')].find(node=>node.textContent==="Añadir recuadro").click(); await settle();
+        [...document.querySelectorAll('dialog button')].find(node=>node.textContent==="Usar imagen").click(); await settle();
+        assert.equal(editedImage.type,"image/webp"); assert.ok(editedImage.size>0); root.unmount();
+        assert.ok(revoked.includes("blob:editor-fixture")); URL.createObjectURL=oldCreate; URL.revokeObjectURL=oldRevoke;
         console.log("Messaging UI: private conversation entry, safe links/HTML, presence, edit ownership, dates, no idle polling, double-submit prevention, reset and failure draft retention passed.");
     } finally {await server.close(); dom.window.close();}
     process.exit(0); // Existing private-image cache owns a BroadcastChannel in Node.

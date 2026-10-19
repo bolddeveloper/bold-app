@@ -40,7 +40,7 @@ def private_event(employee_id, event):
     conversation = _conversations(employee_id).select_for_update().filter(pk=event["conversation_id"]).first()
     if not conversation:
         return None
-    rows = list(conversation.messages.filter(pk__in=event["message_ids"][:100]))
+    rows = list(conversation.messages.select_related("media").filter(pk__in=event["message_ids"][:100]))
     if not rows:
         return None
     now = timezone.now()
@@ -60,7 +60,7 @@ def pending_event(employee_id):
     # At most 100 unacknowledged messages per connection. Older messages are
     # acknowledged when actually fetched from paginated history, never by presence.
     conversations = _conversations(employee_id)
-    rows = list(DirectMessage.objects.filter(conversation__in=conversations, delivered_at__isnull=True)
+    rows = list(DirectMessage.objects.select_related("media").filter(conversation__in=conversations, delivered_at__isnull=True)
                 .exclude(author_id=employee_id).order_by("-created_at", "-id")[:100])
     if not rows:
         return None

@@ -49,7 +49,7 @@ ante un evento real en segundo plano.
 
 ## Revisión del piloto: avisos y presentación
 
-Cambios preparados el 19 de octubre, pendientes de publicación y aceptación:
+Cambios publicados el 19 de octubre en `e8b8d590`, pendientes de aceptación del equipo:
 
 - Los mensajes entrantes crean avisos en la campana, con preferencia independiente
   en Perfil → Notificaciones. No incluyen el texto privado del mensaje.
@@ -63,11 +63,75 @@ Cambios preparados el 19 de octubre, pendientes de publicación y aceptación:
 
 Estas son notas internas del piloto, no notas de lanzamiento para toda BOLD.
 
+## Segunda revisión local: móvil, oscuro y multimedia
+
+Preparada localmente; aún no publicada ni probada con el Drive real. La migración
+`0004` se aplicó en la SQLite de desarrollo después de un respaldo consistente;
+no se modificó Oracle. La base local no tiene un destino de Drive activo: antes
+del ensayo de envíos debe configurarse desde Administración → Conectores, sin
+copiar secretos ni credenciales de producción a la base de desarrollo.
+La lista local de unidades IT también está vacía: se conserva el cierre de acceso
+en vez de abrirlo a toda la organización o asumir que otro equipo equivale a IT.
+El servidor visual sintético `node tests/messaging_ui.mjs --serve`, desde Core,
+permite revisar la interfaz en `http://127.0.0.1:5186/` (`?dark` para oscuro)
+sin cuentas empresariales, base de datos ni conexión a Drive. Los archivos elegidos
+allí permanecen solo en la memoria de esa pestaña, no se envían al servidor.
+
+- Sombras neutras oscuras, sin resplandor blanco al activar modo oscuro.
+- Transición corta de la lista plegable y entrada de mensajes nuevos; no se anima
+  todo el historial al cargar. Se respeta la preferencia de movimiento reducido.
+- Espacio móvil adaptado al teclado, controles táctiles y acciones que envuelven
+  en lugar de salirse de la pantalla.
+- Una imagen o nota de voz por mensaje, hasta 10 MB. Imágenes PNG/JPEG/WebP,
+  recorte, cambio de tamaño y trazos antes del envío; pegar y arrastrar admitidos.
+- Las imágenes se validan y normalizan en el servidor, eliminando metadatos de
+  cámara; máximo 24 megapíxeles y salida de hasta 2560 px por lado.
+- Grabación de voz de hasta cinco minutos en el navegador, escucha previa,
+  cancelación y reproducción a 1×, 1,5× o 2×. El límite servidor es de bytes;
+  no se afirma verificación de duración o transcodificación de audio en servidor.
+- El Drive seleccionado en Administración → Conectores aloja `Chat / Empleado /
+  Conversación`; no se crean permisos públicos de Google. Los IDs de Drive no se
+  exponen y las descargas pasan por pertenencia privada y filtro IT en backend.
+- Quienes tengan acceso externo a la carpeta corporativa de Google sí podrán leer
+  estos archivos fuera de BOLD. No es cifrado de extremo a extremo.
+- Las imágenes se descargan al acercarse al área visible; el audio, al solicitarlo.
+  Los blobs se liberan al cerrar la vista; no se guardan en cachés persistentes.
+- Reintentos con el mismo identificador recuperan el mismo archivo remoto y no
+  crean otra notificación ni otro mensaje. Si el envío falla se conserva el borrador.
+- Requiere Pillow y migración `0004_messagemedia`. La validación local usa Drive
+  simulado y base de pruebas; no sustituye ensayo con cámara/micrófono y Drive real.
+
+Limitaciones del piloto: la escritura multimedia se serializa mientras se coordina
+con Drive para evitar duplicados de carpetas y archivos. Antes de escalar, trasladar
+las subidas a un flujo asíncrono con estados pendientes y limpieza de huérfanos.
+Un archivo subido antes de un fallo de commit queda recuperable por marcador en un
+reintento; si se abandona ese borrador requiere conciliación, no borrado automático.
+No se incorporó QR, lotes de imágenes ni edición del binario después de enviar.
+
+### Lista de revisión manual del equipo IT
+
+1. Probar modo claro/oscuro, móvil de 320–414 px y horizontal. Comprobar que no
+   haya halo blanco en burbujas ni controles fuera de la pantalla, incluido teclado abierto.
+2. Plegar/desplegar la lista y enviar/recibir mensajes: transición breve, sin animar
+   el historial completo. Activar movimiento reducido para comprobar que se desactive.
+3. Pegar, arrastrar o elegir una imagen; recortar, ajustar ancho, dibujar y deshacer;
+   cancelar no debe enviar nada. Enviar, abrir y descargar desde la otra cuenta.
+4. Grabar voz, escuchar antes de enviar, descartar y volver a grabar. Verificar
+   1×/1,5×/2× y que el indicador del micrófono se apague al detener o salir de Chat.
+5. Denegar el micrófono y cortar la conexión al enviar: aviso comprensible,
+   conservación del borrador y ausencia de duplicados al reintentar.
+6. Confirmar acceso denegado desde una tercera cuenta y fuera de IT; comprobar
+   además entrega/lectura y puntos de mensajes pendientes entre dispositivos.
+
+La revisión visual se delega al usuario por problemas de sesión de la extensión.
+Las pruebas automáticas de DOM, controles y permisos no equivalen a esa aceptación
+visual ni a una subida de prueba con el Drive corporativo real.
+
 ## Apertura posterior al piloto
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.
 Ese cambio abre el módulo a otras unidades, no concede lectura a administradores:
 cada conversación sigue siendo privada para sus dos participantes.
 Antes de abrir, publicar notas verificadas con las tarjetas actuales y completar
-la aceptación del equipo. Imágenes, audios y archivos de Drive no forman parte
-de este piloto; no anunciarlos como disponibles.
+la aceptación del equipo. Las funciones multimedia preparadas localmente no deben
+anunciarse como disponibles en producción antes de desplegarlas y comprobarlas.

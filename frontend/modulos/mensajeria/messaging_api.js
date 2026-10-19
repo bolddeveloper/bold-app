@@ -25,6 +25,11 @@ export function createMessagingApi(client = http) {
         detail: (conversation, options) => client.request(`${root}${identity(conversation)}/`, options),
         messages: (conversation, next, options) => client.request(pagePath(messagesPath(conversation), next), options),
         send: (conversation, body, clientId, options) => client.request(messagesPath(conversation), {...options, method: "POST", body: {body, client_id: clientId}}),
+        sendMedia: (conversation, body, clientId, file, options) => {
+            const data = new FormData(); data.set("body", body); data.set("client_id", clientId); data.set("file", file, file.name || "nota-de-voz.webm");
+            return client.request(messagesPath(conversation), {...options, method: "POST", body: data});
+        },
+        media: (conversation, message, options) => client.request(`${messagesPath(conversation)}${identity(message)}/media/`, {...options, responseType: "blob"}),
         edit: (conversation, message, body, version, options) => client.request(`${messagesPath(conversation)}${identity(message)}/`, {...options, method: "PATCH", body: {body, version}}),
     };
 }

@@ -2,7 +2,7 @@
 export function installMessagingFixture(target = globalThis) {
     const actor = "11111111-1111-4111-8111-111111111111", peerId = "22222222-2222-4222-8222-222222222222";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-    const now = new Date(), calls = [];
+    const now = new Date(), calls = [], mediaBlobs = new Map();
     const me = {employee_id: actor, name: "Persona de prueba", avatar_url: null, available: true, departments: ["Equipo demo"]};
     const peer = {employee_id: peerId, name: "Compañera de demostración con nombre extenso", avatar_url: null, available: true, departments: ["Diseño", "Equipo demo"]};
     const conversation = {id: conversationId, me, peer, updated_at: now.toISOString()};
@@ -38,6 +38,13 @@ export function installMessagingFixture(target = globalThis) {
             const row = rows.find(message => message.id === messageId);
             Object.assign(row, {body, version: version + 1, edited_at: new Date().toISOString()});
             return {message: {...row}, server_now: new Date().toISOString()};
+        },
+        media: async (_conversation, message) => {calls.push("media"); return mediaBlobs.get(message) || new Blob(["synthetic voice"], {type:"audio/webm"});},
+        sendMedia: async (id, body, clientId, file) => {
+            const result = await target.__messagingApi.send(id,body,clientId);
+            result.message.media = {id:clientId,kind:file.type.startsWith("image/") ? "image" : "audio",mime_type:file.type,size_bytes:file.size,width:200,height:120};
+            mediaBlobs.set(result.message.id,file);
+            return result;
         },
     };
     return fixture;

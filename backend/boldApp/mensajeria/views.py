@@ -17,6 +17,7 @@ from .presenters import available, message_data, people, person_data
 from .events import publish_change
 from .unread import summaries
 from .notifications import notify_message, mark_notices_read
+from .media import prepare, store, EXTENSIONS, BoundedUpload, MAX_BYTES
 
 
 class Conflict(APIException):
@@ -100,7 +101,8 @@ class ConversationListView(PrivateChatView):
 
     def get(self, request):
         latest = DirectMessage.objects.filter(conversation_id=OuterRef("pk")).order_by("-created_at", "-id")
-        rows = self.conversations().annotate(last_body=Subquery(latest.values("body")[:1]))
+        rows = self.conversations().annotate(last_body=Subquery(latest.values("body")[:1]),
+            last_media=Subquery(latest.values("media__kind")[:1]))
         paginator = ConversationPagination()
         page = paginator.paginate_queryset(rows, request)
         ids = {identity for row in page for identity in (row.first_employee_id, row.second_employee_id)}
@@ -108,7 +110,7 @@ class ConversationListView(PrivateChatView):
         actor_id = self.actor()
         return paginator.get_paginated_response([{
             "id": str(row.pk), "peer": person_data(directory[row.second_employee_id if row.first_employee_id == actor_id else row.first_employee_id]),
-            "updated_at": row.updated_at, "preview": (row.last_body or "")[:160],
+            "updated_at": row.updated_at, "preview": (row.last_body or ("Nota de voz" if row.last_media == "audio" else "Imagen" if row.last_media else ""))[:160],
         } for row in page])
 
     def post(self, request):
@@ -137,10 +139,16 @@ class UnreadSummaryView(PrivateChatView):
 
 
 class MessageListView(PrivateChatView):
+    def initialize_request(self, request, *args, **kwargs):
+        # CSRF authentication can parse multipart before post() is entered.
+        if request.method == "POST":
+            request.upload_handlers.insert(0, BoundedUpload(request))
+        return super().initialize_request(request, *args, **kwargs)
+
     def get(self, request, conversation_id):
         conversation = self.conversation(conversation_id)
         paginator = MessagePagination()
-        page = paginator.paginate_queryset(conversation.messages.all(), request)
+        page = paginator.paginate_queryset(conversation.messages.select_related("media"), request)
         now = timezone.now()
         response = paginator.get_paginated_response([message_data(row, self.actor(), now) for row in page])
         response.data["server_now"] = now
@@ -149,6 +157,9 @@ class MessageListView(PrivateChatView):
     @transaction.atomic
     def post(self, request, conversation_id):
         conversation = self.conversation(conversation_id, lock=True)
+        length = request.META.get("CONTENT_LENGTH", "")
+        if length.isdigit() and int(length) > MAX_BYTES + 65536:
+            raise ValidationError("El mensaje supera el tamaño permitido de 10 MB.")
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         actor_id = self.actor()
@@ -156,12 +167,19 @@ class MessageListView(PrivateChatView):
         if not available(get_object_or_404(people(), pk=peer_id)):
             raise PermissionDenied("Este empleado ya no puede recibir mensajes. Puedes consultar el historial.")
         values = serializer.validated_data
+        prepared = prepare(values["file"]) if values.get("file") else None
         message, created = DirectMessage.objects.get_or_create(
             conversation=conversation, author_id=actor_id, client_id=values["client_id"], defaults={"body": values["body"]}
         )
         if not created and message.body != values["body"]:
             raise Conflict("Este envío ya existe con otro contenido. Actualiza la conversación.")
+        if not created:
+            media = getattr(message, "media", None)
+            if bool(media) != bool(prepared) or media and media.digest != prepared["digest"]:
+                raise Conflict("Este envío ya existe con otro archivo. No se ha duplicado el mensaje.")
         if created:
+            if prepared:
+                store(message, prepared)
             conversation.updated_at = message.created_at
             conversation.activity_version += 1
             conversation.save(update_fields=["updated_at", "activity_version"])
@@ -183,6 +201,8 @@ class MessageDetailView(PrivateChatView):
             raise PermissionDenied("El plazo de diez minutos para editar este mensaje ha terminado.")
         serializer = EditMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        if not serializer.validated_data["body"] and not hasattr(message, "media"):
+            raise ValidationError("Un mensaje de texto no puede quedar vacío.")
         if serializer.validated_data["version"] != message.version:
             raise Conflict()
         if serializer.validated_data["body"] != message.body:
@@ -225,6 +245,30 @@ class ReceiptView(PrivateChatView):
             publish_change(conversation, "receipt.updated", list(ids))
         return Response({"conversation_id": str(conversation.pk), "receipts": receipts, "server_now": now,
                          "unread": summaries(DirectConversation.objects.filter(pk=conversation.pk), self.actor())[0]})
+
+
+class MessageMediaView(PrivateChatView):
+    def get(self, request, conversation_id, message_id):
+        import hashlib
+        from django.http import HttpResponse
+        from boldApp.workspace.image_storage import storage_user
+        from boldApp.workspace.service import google, file_id
+        conversation = self.conversation(conversation_id)
+        message = get_object_or_404(conversation.messages.select_related("media__root__user"), pk=message_id)
+        media = getattr(message, "media", None)
+        if not media:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Este mensaje no contiene un archivo.")
+        result = google(storage_user(media.root), "GET", "/files/" + file_id(media.drive_id),
+            params={"alt": "media", "supportsAllDrives": "true"}, raw=True)
+        content = result.content
+        if len(content) != media.size_bytes or hashlib.sha256(content).hexdigest() != media.digest:
+            raise ValidationError("El archivo de Drive cambió fuera de BOLD. No se puede mostrar esta versión.")
+        response = HttpResponse(content, content_type=media.mime_type)
+        response["Content-Disposition"] = f'inline; filename="bold-{media.kind}-{media.pk}.{EXTENSIONS[media.mime_type]}"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        return response
 
 
 class PreferencesView(PrivateChatView):

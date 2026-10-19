@@ -62,3 +62,19 @@ class MessagingPreferences(models.Model):
     class Meta:
         db_table = "messaging_preferences"
         constraints = [models.CheckConstraint(condition=models.Q(enter_behavior__in=["send", "newline"]), name="chat_valid_enter_preference")]
+
+
+class MessageMedia(UUIDPrimaryKeyModel):
+    message = models.OneToOneField(DirectMessage, on_delete=models.CASCADE, related_name="media")
+    root = models.ForeignKey("boldApp_workspace.ImageStorageRoot", on_delete=models.PROTECT)
+    drive_id = models.CharField(max_length=200)
+    kind = models.CharField(max_length=10, choices=[("image", "Imagen"), ("audio", "Nota de voz")])
+    mime_type = models.CharField(max_length=100)
+    size_bytes = models.PositiveIntegerField()
+    digest = models.CharField(max_length=64)
+    width = models.PositiveIntegerField(null=True)
+    height = models.PositiveIntegerField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "messaging_message_media"

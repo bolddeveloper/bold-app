@@ -88,4 +88,6 @@ test("errores comprensibles y sin volcar datos técnicos del servidor", () => {
     assert.match(messageError({status: 429}), /espera/);
     assert.doesNotMatch(messageError({status: 500, message: "SECRET TRACE"}), /SECRET/);
     assert.equal(messageError({status: 403, fields: {detail: "Solo puedes editar tus propios mensajes."}}), "Solo puedes editar tus propios mensajes.");
+    assert.match(messageError({status:400,fields:["Configura el destino de Drive en Administración → Conectores."]}), /Drive/);
+    assert.match(messageError({status:409,fields:{detail:"Vuelve a conectar tu cuenta de Google."}}), /Google/);
 });

@@ -15,12 +15,18 @@ class OpenConversationSerializer(StrictInputSerializer):
 
 
 class SendMessageSerializer(StrictInputSerializer):
-    body = serializers.CharField(max_length=5000, allow_blank=False, trim_whitespace=True)
+    body = serializers.CharField(max_length=5000, allow_blank=True, trim_whitespace=True)
     client_id = serializers.UUIDField()
+    file = serializers.FileField(required=False, max_length=200)
+
+    def validate(self, data):
+        if not data["body"] and not data.get("file"):
+            raise serializers.ValidationError("Escribe un mensaje o adjunta una imagen o nota de voz.")
+        return data
 
 
 class EditMessageSerializer(StrictInputSerializer):
-    body = serializers.CharField(max_length=5000, allow_blank=False, trim_whitespace=True)
+    body = serializers.CharField(max_length=5000, allow_blank=True, trim_whitespace=True)
     version = serializers.IntegerField(min_value=1)
 
 
