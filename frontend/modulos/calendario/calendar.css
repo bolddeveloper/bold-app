@@ -4,7 +4,7 @@
 .bold_calendar_switcher {display:flex;align-items:center;gap:10px;min-width:0;margin:12px 18px 0;padding:7px;border:1px solid var(--cal-line);border-radius:16px;background:var(--cal-surface);color:var(--cal-text)}
 .bold_calendar_tab_scroll {display:flex;align-items:center;gap:8px;flex:1 1 0;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scroll-padding:8px}
 .bold_calendar_source_tabs {display:flex;align-items:center;gap:8px;flex:none}
-.bold_calendar_switcher button {font:inherit;display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:none;min-height:38px;max-width:240px;padding:8px 16px;border:1px solid var(--cal-line);border-radius:11px;background:var(--cal-soft);color:inherit;cursor:pointer;white-space:nowrap;font-size:13px;font-weight:700}
+.bold_calendar_tab_scroll button,.bold_calendar_fixed_share button {font:inherit;display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:none;min-height:38px;max-width:240px;padding:8px 16px;border:1px solid var(--cal-line);border-radius:11px;background:var(--cal-soft);color:inherit;cursor:pointer;white-space:nowrap;font-size:13px;font-weight:700}
 .bold_calendar_source_tabs button {overflow:hidden;text-overflow:ellipsis;display:block}
 .bold_calendar_source_tabs button[aria-selected=true] {background:var(--bold_red,#ef1f2d);border-color:var(--bold_red,#ef1f2d);color:white}
 .bold_calendar_switcher .bold_calendar_add_tab {width:38px;min-width:38px;padding:0}
@@ -475,6 +475,8 @@
 
 .bold_calendar_editor > header button {
     display: grid;
+    flex: none;
+    padding: 0;
     width: 34px;
     height: 34px;
     place-items: center;
@@ -482,6 +484,13 @@
     border-radius: 8px;
     background: var(--cal-soft);
     color: var(--cal-text);
+    cursor: pointer;
+}
+
+.bold_calendar_editor > header button > svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
 }
 
 .bold_calendar_editor form {
@@ -2091,3 +2100,21 @@
 .bold_calendar_settings button:disabled {opacity:.55;cursor:default}
 .bold_calendar_settings button:focus-visible {outline:2px solid var(--bold_red,#ef1f2d);outline-offset:2px}
 @media(max-width:420px) {.bold_calendar_settings .bold_calendar_add_person_actions {align-items:stretch;flex-direction:column}.bold_calendar_settings .bold_calendar_member_list select {width:112px}.bold_calendar_settings .bold_calendar_editor>header button,.bold_calendar_settings .bold_calendar_member_list button {min-width:44px;min-height:44px}}
+
+.bold_calendar_people_picker {min-width:0;width:100%}
+.bold_calendar_native_dialog .bold_calendar_people_trigger {display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--cal-line);border-radius:8px;background:var(--cal-soft);color:var(--cal-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.bold_calendar_people_trigger span {min-width:0;overflow-wrap:anywhere}
+.bold_calendar_people_trigger svg {flex:none}
+.bold_calendar_people_menu {padding:8px;border:1px solid var(--cal-line);border-radius:10px;background:var(--cal-surface);color:var(--cal-text);box-shadow:0 8px 24px #0003;overflow-y:auto}
+.bold_calendar_native_dialog .bold_calendar_local_form .bold_calendar_people_menu .bold_calendar_people_search {display:flex;align-items:center;gap:8px;padding:0 8px;border:1px solid var(--cal-line);border-radius:7px;background:var(--cal-soft)}
+.bold_calendar_native_dialog .bold_calendar_people_search input {min-width:0;min-height:36px;padding:6px 0;border:0;background:transparent;font:inherit;font-size:13px}
+.bold_calendar_people_options {display:grid;gap:4px;padding-block:6px;max-height:164px;overflow-y:auto}
+.bold_calendar_native_dialog .bold_calendar_local_form .bold_calendar_people_menu .bold_calendar_person_option {display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 8px;border-radius:6px;cursor:pointer}
+.bold_calendar_person_option:hover,.bold_calendar_person_option:focus-within {background:var(--cal-soft)}
+.bold_calendar_native_dialog .bold_calendar_person_option input[type=checkbox] {width:16px;height:16px;min-height:0;margin:0;flex:none;accent-color:var(--bold_red,#ef1f2d)}
+.bold_calendar_person_option>span {min-width:0;overflow-wrap:anywhere}
+.bold_calendar_person_option strong,.bold_calendar_person_option small {display:block;font-size:12px;line-height:1.4}
+.bold_calendar_people_menu small,.bold_calendar_people_options p {color:var(--cal-muted);font-size:12px}
+.bold_calendar_native_dialog .bold_calendar_people_menu footer {display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding:6px 0 0;border-top:1px solid var(--cal-line)}
+.bold_calendar_people_menu footer button {min-height:36px;padding:6px 12px;border:1px solid var(--cal-line);border-radius:7px;background:var(--cal-soft);color:var(--cal-text);font:inherit;font-size:12px;cursor:pointer}
+.bold_calendar_people_picker button:focus-visible {outline:2px solid var(--bold_red,#ef1f2d);outline-offset:2px}

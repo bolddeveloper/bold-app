@@ -1,5 +1,5 @@
 import {useEffect, useId, useMemo, useRef, useState} from "react";
-import {AlignLeft, Check, Clock3, MapPin, Plus, Settings2, Trash2, Users, Video, X} from "lucide-react";
+import {AlignLeft, Check, ChevronDown, Clock3, MapPin, Plus, Search, Settings2, Trash2, Users, Video, X} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
 import {confirmBold} from "../core/shared/bold_dialog.js";
 import GoogleConnection from "../docs/google_connection.jsx";
@@ -7,6 +7,7 @@ import {TaskTextEditor} from "../tareas/src/task_text_editor.jsx";
 import {TeamCalendarSharing} from "../tareas/src/team.jsx";
 import {editorHTML, saveRichText} from "../tareas/src/rich_text.js";
 import ColorPicker from "../core/shared/color_picker.jsx";
+import {useAnchoredPopover} from "../core/shared/use_anchored_popover.js";
 import {calendarCardColor, closestCalendarColor, addDays, dayKey, fromDay} from "./calendar_data.js";
 import {localCalendarApi, localCalendarsApi} from "./calendar_api.js";
 
@@ -21,9 +22,34 @@ const datetimeInput = value => {
     return `${dayKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 };
 
+function CalendarPeoplePicker({people, value, onChange, disabled}) {
+    const [open, setOpen] = useState(false), [query, setQuery] = useState("");
+    const root = useRef(null), trigger = useRef(null), panel = useRef(null), id = useId();
+    useAnchoredPopover(open, trigger, panel, {minWidth: 220, maxHeight: 280});
+    useEffect(() => {
+        if (!open) {setQuery(""); return;}
+        panel.current?.querySelector("input")?.focus();
+        const outside = event => {if (!root.current?.contains(event.target)) setOpen(false);};
+        const escape = event => {if (event.key === "Escape" && root.current?.contains(event.target)) {event.preventDefault(); event.stopImmediatePropagation(); setOpen(false); trigger.current?.focus();}};
+        document.addEventListener("pointerdown", outside);
+        document.addEventListener("keydown", escape, true);
+        return () => {document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape, true);};
+    }, [open]);
+    const normalize = text => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+    const matches = people.filter(person => normalize(`${person.name || ""} ${person.email}`).includes(normalize(query)));
+    return <div className="bold_calendar_people_picker" ref={root} onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);}}>
+        <button ref={trigger} type="button" className="bold_calendar_people_trigger" disabled={disabled} aria-expanded={open} aria-controls={id} onClick={() => setOpen(current => !current)}><span>{value.length ? `${value.length} personas añadidas` : "Añadir personas del calendario"}</span><ChevronDown size={16}/></button>
+        {open && <div ref={panel} id={id} popover="manual" className="bold_calendar_people_menu" role="group" aria-label="Personas del calendario">
+            <label className="bold_calendar_people_search"><Search size={16} aria-hidden="true"/><input autoFocus type="search" aria-label="Buscar personas del calendario" placeholder="Buscar nombre o correo" value={query} onChange={event => setQuery(event.target.value)}/></label>
+            <div className="bold_calendar_people_options">{matches.map(person => <label key={person.email} className="bold_calendar_person_option"><input type="checkbox" disabled={disabled} checked={value.includes(person.email)} onChange={event => onChange(event.target.checked ? [...value, person.email] : value.filter(email => email !== person.email))}/><span><strong>{person.name || person.email}</strong><small>{person.email}</small></span></label>)}{!matches.length && <p role="status">No hay coincidencias.</p>}</div>
+            <footer><small>Solo personas con acceso al calendario.</small><button type="button" onClick={() => {setOpen(false); trigger.current?.focus();}}>Listo</button></footer>
+        </div>}
+    </div>;
+}
+
 export function LocalEventEditor({calendar, event, date, endDate, onClose, onSaved, DateTimeField, initialKind = "event", apiOverride, google = false, onEvent, onUntimed}) {
     const api = useMemo(() => apiOverride || localCalendarApi(calendar.id), [calendar.id, apiOverride]);
-    const [expanded, setExpanded] = useState(false), [showPeople, setShowPeople] = useState(false);
+    const [expanded, setExpanded] = useState(false);
     const [form, setForm] = useState(() => ({
         summary: event?.summary || "", description: saveRichText(event?.description || ""), location: event?.location || "",
         allDay: Boolean(event?.start?.date),
@@ -55,7 +81,7 @@ export function LocalEventEditor({calendar, event, date, endDate, onClose, onSav
             <input className="bold_calendar_quick_title" aria-label="Título" placeholder="Añade un título" required maxLength={200} autoFocus value={form.summary} onChange={e => set("summary", e.target.value)}/>
             <div className="bold_calendar_quick_type" role="group" aria-label="Tipo"><button type="button" aria-pressed={form.kind === "event"} disabled={google && Boolean(event)} onClick={() => onEvent ? onEvent() : set("kind", "event")}>Evento</button><button type="button" aria-pressed={form.kind === "task"} onClick={() => set("kind", "task")}>Tarea</button></div>
             <div className="bold_calendar_quick_field"><Clock3 size={18}/><div className="bold_calendar_local_dates"><label>Inicio<DateTimeField required value={form.start} withTime={!form.allDay} onChange={value => set("start", value)}/></label><label>Fin<DateTimeField required value={form.end} withTime={!form.allDay} onChange={value => set("end", value)}/></label></div></div>
-            {form.kind === "event" && <><div className="bold_calendar_quick_field"><Users size={18}/><div><button type="button" aria-expanded={showPeople} onClick={() => setShowPeople(value => !value)}>{form.attendees.length ? `${form.attendees.length} personas añadidas` : "Añadir personas del calendario"}</button>{showPeople && <div className="bold_calendar_people_checks">{calendar.members.map(person => <label className="bold_calendar_check" key={person.email}><input type="checkbox" checked={form.attendees.includes(person.email)} onChange={e => set("attendees", e.target.checked ? [...form.attendees, person.email] : form.attendees.filter(email => email !== person.email))}/><span>{person.name || person.email}</span></label>)}<small>Solo las personas con acceso al calendario pueden ver el evento.</small></div>}</div></div>
+            {form.kind === "event" && <><div className="bold_calendar_quick_field"><Users size={18}/><CalendarPeoplePicker people={calendar.members} value={form.attendees} onChange={value => set("attendees", value)} disabled={busy}/></div>
             <div className="bold_calendar_quick_field"><Video size={18}/>{form.hangoutLink ? <div className="bold_calendar_meet_link"><a href={form.hangoutLink} target="_blank" rel="noreferrer">Unirse con Google Meet</a><button type="button" aria-label="Quitar Meet" onClick={() => set("hangoutLink", "")}><X size={16}/></button></div> : <button type="button" onClick={meet} disabled={busy}>{busy ? "Preparando enlace…" : "Añadir videoconferencia de Google Meet"}</button>}</div>
             <div className="bold_calendar_quick_field"><MapPin size={18}/><input aria-label="Ubicación" placeholder="Añadir ubicación" maxLength={8000} value={form.location} onChange={e => set("location", e.target.value)}/></div></>}
             <div className="bold_calendar_quick_field"><AlignLeft size={18}/><TaskTextEditor label="Descripción" placeholder="Añadir descripción" value={form.description} maxLength={20000} onChange={value => set("description", value)} disabled={busy}/></div>

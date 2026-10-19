@@ -35,6 +35,7 @@ export const releaseNotes = [
             "Calendario producción conserva las agendas importadas de José y Axel. Su acceso se limita a las personas añadidas y no se puede eliminar.",
             "Los calendarios propios utilizan las vistas de día, semana, mes y agenda. Al abrirlos muestran el período actual.",
             "El formulario compacto permite crear eventos o tareas con hora de inicio y fin. Más opciones muestra los campos adicionales sin desbordar la ventana.",
+            "Las personas de un evento se eligen desde un desplegable con buscador por nombre o correo y selección múltiple. Solo aparecen quienes ya tienen acceso al calendario.",
             "Las tarjetas permiten elegir colores con el mezclador habitual. El detalle de las tareas distingue Pendiente y Completada, con botones para completar o volver a pendiente.",
             "Las tareas internas se pueden completar y reabrir. En la agenda conectada a Google, las tareas con horario se reflejan como bloques de Google Calendar; las tareas nativas de Google Tasks conservan únicamente su fecha.",
             "Los eventos de BOLD no se sincronizan con Google Calendar. Puedes añadir un enlace de Meet o crear una sala tras autorizar Google Meet y habilitar su API.",
