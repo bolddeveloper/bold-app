@@ -13,7 +13,7 @@ export function useAnchoredPopover(open, anchorRef, panelRef, {minWidth = 0, max
             const right = left + (viewport?.width || window.innerWidth) - 24;
             const bottom = top + (viewport?.height || window.innerHeight) - 24;
             const width = Math.min(Math.max(rect.width, minWidth), right - left);
-            Object.assign(panel.style, {position: "fixed", inset: "auto", margin: "0", minWidth: "0", width: `${width}px`, maxWidth: `${right - left}px`, maxHeight: `${Math.min(maxHeight, bottom - top)}px`});
+            Object.assign(panel.style, {boxSizing: "border-box", position: "fixed", inset: "auto", margin: "0", minWidth: "0", width: `${width}px`, maxWidth: `${right - left}px`, maxHeight: `${Math.min(maxHeight, bottom - top)}px`});
             const height = panel.offsetHeight;
             const below = bottom - rect.bottom - gap, above = rect.top - top - gap;
             const openAbove = below < height && above > below;

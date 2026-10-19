@@ -10,7 +10,7 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
     const [query, setQuery] = useState("");
     const rootRef = useRef(null);
     const triggerRef = useRef(null), menuRef = useRef(null);
-    useAnchoredPopover(open, triggerRef, menuRef, {maxHeight: 240});
+    useAnchoredPopover(open, triggerRef, menuRef, {minWidth: 180, maxHeight: 240});
     const currentValue = controlled ? value : internalValue;
     const selected = options.find(option => String(option.value) === String(currentValue)) || options[0];
     const visibleOptions = filterSelectOptions(options, query, searchable);

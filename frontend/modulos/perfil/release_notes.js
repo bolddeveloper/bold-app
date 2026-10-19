@@ -1,6 +1,16 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-collapsed-sections-suggestion-filters", date: "2026-10-19", category: "Correcciones", icon: "update",
+        title: "Secciones que recuerdan su estado y filtros sin recortes",
+        summary: "Las secciones cerradas permanecen cerradas al recargar y los filtros de Sugerencias aprovechan mejor el espacio.",
+        sections: [{title: "Navegación y filtros", items: [
+            "Mis tareas y cada proyecto conservan por separado sus secciones abiertas o cerradas en este navegador y cargo activo.",
+            "Los menús de estado mantienen un ancho legible y se ajustan al espacio disponible de la ventana.",
+            "Los campos del panel de filtros de Sugerencias permanecen dentro de sus columnas y se adaptan a pantallas pequeñas.",
+        ]}],
+    },
+    {
         id: "2026-10-19-sheets-drive-postgres-fix", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Corrección al abrir Sheets y sincronizar con Drive",
         summary: "Se corrige el error del servidor al consultar o actualizar la conexión de un archivo con Drive.",

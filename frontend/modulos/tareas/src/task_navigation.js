@@ -14,3 +14,13 @@ export function readTaskNavigation(key, search) {
     try { return restoreTaskNavigation(JSON.parse(globalThis.sessionStorage?.getItem(key) || localStorage.getItem(key)), search); }
     catch { return restoreTaskNavigation(null, search); }
 }
+
+export function readCollapsedSections(key) {
+    try {
+        const ids = JSON.parse(globalThis.localStorage?.getItem(key) || "[]");
+        return Array.isArray(ids) ? [...new Set(ids.filter(id => typeof id === "string" || typeof id === "number" && Number.isFinite(id)))] : [];
+    } catch { return []; }
+}
+export function writeCollapsedSections(key, ids) {
+    try { globalThis.localStorage?.setItem(key, JSON.stringify(ids)); } catch { /* Mantener el estado de esta sesión si el navegador no permite guardar. */ }
+}

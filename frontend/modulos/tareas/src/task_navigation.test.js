@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {restoreTaskNavigation, readTaskNavigation} from "./task_navigation.js";
+import {restoreTaskNavigation, readTaskNavigation, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
 
 test("personal tasks preserve scope, board and Equipo across reloads", () => {
     for (const section of ["tasks", "timeline", "team", "states"]) {
@@ -50,4 +50,29 @@ test("Estados survives reload in personal tasks and projects", () => {
         const saved = {scope, projectId: "project-a", section: "states", view: "board"};
         assert.deepEqual(restoreTaskNavigation(saved), saved);
     }
+});
+
+test("las secciones contraídas sobreviven recargas y se aíslan por cargo y tablero", () => {
+    const saved = new Map();
+    globalThis.localStorage = {getItem:key=>saved.get(key), setItem:(key,value)=>saved.set(key,value)};
+    try {
+        const personal="cargo-a:mine:personal:collapsed-sections", project="cargo-a:project:proyecto:collapsed-sections", other="cargo-b:mine:personal:collapsed-sections";
+        writeCollapsedSections(personal,["pendiente","completadas"]);
+        writeCollapsedSections(project,["pendiente"]);
+        assert.deepEqual(readCollapsedSections(personal),["pendiente","completadas"]);
+        assert.deepEqual(readCollapsedSections(project),["pendiente"]);
+        assert.deepEqual(readCollapsedSections(other),[]);
+        writeCollapsedSections(personal,[]);
+        assert.deepEqual(readCollapsedSections(personal),[]);
+        assert.deepEqual(readCollapsedSections(project),["pendiente"]);
+        saved.set(personal,'{"incorrecto":true}');
+        assert.deepEqual(readCollapsedSections(personal),[]);
+        saved.set(personal,'["pendiente","pendiente",null,{},1]');
+        assert.deepEqual(readCollapsedSections(personal),["pendiente",1]);
+        saved.set(personal,'no-json');
+        assert.deepEqual(readCollapsedSections(personal),[]);
+        globalThis.localStorage = {getItem(){throw Error("storage");}, setItem(){throw Error("storage");}};
+        assert.deepEqual(readCollapsedSections(personal),[]);
+        assert.doesNotThrow(()=>writeCollapsedSections(personal,["pendiente"]));
+    } finally {delete globalThis.localStorage;}
 });

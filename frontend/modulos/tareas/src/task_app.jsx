@@ -3,7 +3,7 @@ import {useAnchoredPopover} from "../../core/shared/use_anchored_popover.js";
 import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
 import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/shared/people.js";
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
-import {readTaskNavigation} from "./task_navigation.js";
+import {readTaskNavigation, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import TeamPanel, {TeamSharingContext, SharingEye, useTeamSharing} from "./team.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
@@ -3068,8 +3068,8 @@ function render_task_group(props) {
             onDragOver={event => dragged_section_id ? handle_section_drag_over(event, section_item.id, "list") : handle_column_drop && event.preventDefault()}
             onDrop={event => { event.preventDefault(); if (dragged_section_id) handle_section_drop(event, section_item.id, "list"); else handle_column_drop?.(section_item.id); }}
         >
-            <div className="task_group_header" role="button" tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") handle_toggle_section(section_item.id);
+            <div className="task_group_header" role="button" aria-expanded={!is_collapsed} tabIndex={0} onClick={() => handle_toggle_section(section_item.id)} onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {event.preventDefault(); handle_toggle_section(section_item.id);}
             }}>
                 <SectionDragHandle id={section_item.id} label={section_item.label} view="list" disabled={!can_reorder_sections} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
                 <span className={`section_chevron ${is_collapsed ? "section_chevron_collapsed" : ""}`}>
@@ -3334,7 +3334,7 @@ function render_mobile_section(props) {
     return (
         <div className="mobile_task_section" data-section-id={section_item.id} key={section_item.id}>
             <SectionDragHandle id={section_item.id} label={section_item.label} view="list" disabled={!can_reorder_sections} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
-            <button className="mobile_section_header" type="button" onClick={() => handle_toggle_section(section_item.id)}>
+            <button className="mobile_section_header" type="button" aria-expanded={!is_collapsed} onClick={() => handle_toggle_section(section_item.id)}>
                 <span className={`section_chevron ${is_collapsed ? "section_chevron_collapsed" : ""}`}>
                     {render_icon(chevron_down_icon, 14)}
                 </span>
@@ -4412,7 +4412,6 @@ function TaskAppContent({ externalModules = {} }) {
         project: false
     });
     const status_options = real ? (data?.statuses || []).filter(item => !item.unitId || item.unitId === (edit_draft?.unitId || session.activeUnit?.id)).map(item => item.label) : default_status_items;
-    const [collapsed_sections, set_collapsed_sections] = use_state([]);
     const [is_notifications_open, set_is_notifications_open] = use_state(false);
 
     const [projects, set_projects] = use_state(() => {
@@ -4537,6 +4536,9 @@ function TaskAppContent({ externalModules = {} }) {
     const [selected_project_id, set_selected_project_id] = use_state(() => initial_navigation.projectId || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
     const [task_scope, set_task_scope] = use_state(initial_navigation.scope);
     const view_storage_key = task_scope === "project" ? `bold_task_view:${selected_project_id}` : `${navigation_key}:${task_scope}:view`;
+    const collapsed_sections_key = `${navigation_key}:${task_scope}:${task_scope === "project" ? selected_project_id : task_scope === "workspace" ? active_workspace_id : "personal"}:collapsed-sections`;
+    const [collapsed_sections_state, set_collapsed_sections_state] = use_state(() => ({key: collapsed_sections_key, ids: readCollapsedSections(collapsed_sections_key)}));
+    const collapsed_sections = collapsed_sections_state.key === collapsed_sections_key ? collapsed_sections_state.ids : readCollapsedSections(collapsed_sections_key);
     const loaded_view = use_ref(view_storage_key);
     use_effect(() => {
         if (loaded_view.current !== view_storage_key) {
@@ -5133,11 +5135,9 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_toggle_section(section_id) {
-        set_collapsed_sections((current_ids) => (
-            current_ids.includes(section_id)
-                ? current_ids.filter((id) => id !== section_id)
-                : [...current_ids, section_id]
-        ));
+        const next = collapsed_sections.includes(section_id) ? collapsed_sections.filter(id => id !== section_id) : [...collapsed_sections, section_id];
+        writeCollapsedSections(collapsed_sections_key, next);
+        set_collapsed_sections_state({key: collapsed_sections_key, ids: next});
     }
 
     const [template_notifications, set_notifications] = use_state(notification_items);
