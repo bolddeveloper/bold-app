@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { currentTimeMarker, fromDay, eventDay, formatCalendarTime, initialCalendarNavigation, mergeEventScopeDraft, guestSuggestions, matchesDay, minutesInZone, selectedTimeRange, timedEventLayout } from "./calendar_data.js";
+import {calendarCardColor, calendarColors, closestCalendarColor, monthDays} from "./calendar_data.js";
+
+test("el mes ocupa semanas completas sin añadir una semana del siguiente mes", () => {
+    for (const [year, month, length, cells] of [[2026, 1, 28, 28], [2024, 1, 29, 35], [2026, 3, 30, 35], [2026, 9, 31, 35], [2026, 7, 31, 42]]) {
+        const days = monthDays(new Date(year, month, 19));
+        assert.equal(days.length, cells);
+        const own = days.filter(day => day.getMonth() === month && day.getFullYear() === year);
+        assert.deepEqual(own.map(day => day.getDate()), Array.from({length}, (_, index) => index + 1));
+        assert.equal(days[0].getDay(), 0);
+        assert.equal(days.at(-1).getDay(), 6);
+    }
+});
+
+test("las tarjetas conservan el color exacto y Google recibe el tono compatible más cercano", () => {
+    assert.equal(calendarCardColor({color:"#123abc",colorId:"2"}),"#123abc");
+    assert.equal(calendarCardColor({color:"invalid",colorId:"2"}),calendarColors[1]);
+    calendarColors.forEach((color,index)=>assert.equal(closestCalendarColor(color),String(index+1)));
+    assert.ok(Number(closestCalendarColor("#123abc")) >= 1);
+});
 
 test("calendar times use AM/PM in the viewer zone, including noon and midnight", () => {
     assert.equal(formatCalendarTime("2026-10-07T06:00:00Z", "America/Tegucigalpa"), "12:00 AM");

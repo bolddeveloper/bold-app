@@ -204,7 +204,7 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
                     {content.value.state !== "shared" ? <p>{meetingMessage[content.value.state]}</p>
                         : !content.value.meetings.length ? <p>Sin reuniones programadas para este día.</p>
                         : content.value.meetings.map(meeting => <article key={meeting.id}><CalendarDays size={20} aria-hidden="true"/><div><h3>{meeting.title}</h3><p>
-                            {new Date(meeting.start).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})} – {new Date(meeting.end).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})}
+                            {meeting.all_day ? "Todo el día" : <>{new Date(meeting.start).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})} – {new Date(meeting.end).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})}</>}{meeting.calendar && ` · ${meeting.calendar}`}
                         </p></div></article>)}
                 </div>}
             </> : <div className="team_empty"><Users size={36} aria-hidden="true"/><h2>Consulta el trabajo compartido por el equipo</h2><p>Revisa las tareas y reuniones compartidas para conocer mejor la carga de trabajo y disponibilidad de cada persona. Despliega un departamento y selecciona a alguien para comenzar.</p></div>}

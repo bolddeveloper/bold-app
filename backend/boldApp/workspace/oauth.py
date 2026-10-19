@@ -39,8 +39,8 @@ class StartView(APIView):
         service = request.data.get("service", "all")
         if service != "all" and service not in SERVICE_SCOPES:
             raise ValidationError("Servicio Google inválido.")
-        # All entry points request one consent; Google can still return partial grants.
-        requested_scopes = set().union(*SERVICE_SCOPES.values())
+        # Meet is opt-in: existing Drive/Calendar consent must not require new scopes.
+        requested_scopes = SERVICE_SCOPES["meet"] if service == "meet" else set().union(*(scopes for key, scopes in SERVICE_SCOPES.items() if key != "meet"))
         identity, _ = credentials()
         config = configuration()
         nonce = secrets.token_urlsafe(32)

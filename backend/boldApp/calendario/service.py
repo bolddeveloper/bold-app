@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import re
 from urllib.parse import quote
 
 from rest_framework.exceptions import APIException, ValidationError, NotFound
@@ -43,7 +44,7 @@ def event_path(event_id=""):
 
 
 def validate_event(data):
-    allowed = {"summary", "description", "location", "start", "end", "attendees", "reminders", "recurrence", "colorId", "addMeet", "removeMeet"}
+    allowed = {"summary", "description", "location", "start", "end", "attendees", "reminders", "recurrence", "colorId", "color", "addMeet", "removeMeet", "kind", "completed"}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValidationError("El evento contiene campos no permitidos.")
     result = {key: data[key] for key in allowed if key in data}
@@ -89,12 +90,41 @@ def validate_event(data):
             raise ValidationError({"reminders": "Recordatorios inválidos."})
     if "colorId" in result and result["colorId"] is not None and result["colorId"] not in {str(number) for number in range(1, 12)}:
         raise ValidationError({"colorId": "Color inválido."})
+    if "color" in result and (not isinstance(result["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", result["color"])):
+        raise ValidationError({"color": "Usa un color hexadecimal de seis caracteres."})
+    if "kind" in result and result["kind"] not in ("event", "task"):
+        raise ValidationError("Tipo de evento inválido.")
+    if "completed" in result and not isinstance(result["completed"], bool):
+        raise ValidationError("Finalización inválida.")
     return result
+
+
+def google_event_data(data, current=None):
+    """Time blocks use Calendar events because the Tasks API discards times."""
+    kind = data.pop("kind", None)
+    completed = data.pop("completed", None)
+    color = data.pop("color", None)
+    if kind is not None or completed is not None or color is not None:
+        properties = dict((current or {}).get("extendedProperties", {}).get("private", {}))
+        if kind is not None:
+            properties["bold_kind"] = kind
+        if completed is not None:
+            properties["bold_completed"] = "true" if completed else "false"
+        if color is not None:
+            properties["bold_color"] = color.lower()
+        data["extendedProperties"] = {"private": properties}
+    return data
 
 
 def public_event(event):
     fields = ("id", "summary", "description", "location", "start", "end", "attendees", "reminders", "recurrence", "recurringEventId", "originalStartTime", "eventType", "status", "colorId", "htmlLink", "etag", "organizer", "hangoutLink", "conferenceData", "locked", "source")
-    return {key: event[key] for key in fields if key in event}
+    result = {key: event[key] for key in fields if key in event}
+    properties = event.get("extendedProperties", {}).get("private", {})
+    if isinstance(properties.get("bold_color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", properties["bold_color"]):
+        result["color"] = properties["bold_color"]
+    if properties.get("bold_kind") == "task":
+        result.update(kind="task", completed=properties.get("bold_completed") == "true")
+    return result
 
 
 def is_task_mirror(event):

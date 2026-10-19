@@ -99,8 +99,8 @@
 .suggestions_filter_panel summary { display: flex; align-items: center; gap: 7px; padding: 11px 12px; border: 1px solid var(--report_line); border-radius: 9px; font-size: 12px; cursor: pointer; list-style: none; }
 .suggestions_filter_panel summary::-webkit-details-marker { display: none; }
 .suggestions_filter_panel summary span { color: var(--report_red); font-weight: 700; }
-.suggestions_filter_panel > div { position: absolute; right: 0; top: calc(100% + 8px); width: 290px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 18px; background: var(--report_surface); border: 1px solid var(--report_line); border-radius: 12px; box-shadow: 0 12px 35px #0002; z-index: 20; }
-.suggestions_filter_panel label:nth-child(3), .suggestions_filter_panel button { grid-column: 1 / -1; }
+.suggestions_filter_panel > div { position: absolute; right: 0; top: calc(100% + 8px); width: min(320px, calc(100vw - 32px)); max-height: min(440px, 75dvh); overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px; background: var(--report_surface); border: 1px solid var(--report_line); border-radius: 12px; box-shadow: 0 12px 35px #0002; z-index: 20; }
+.suggestions_filter_panel .suggestions_filter_full_row, .suggestions_filter_panel button { grid-column: 1 / -1; }
 .suggestions_status_chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 16px 24px; }
 .suggestions_status_chips button { font-size: 11px; border: 0; border-radius: 6px; padding: 6px 10px; background: var(--report_soft); color: var(--report_muted); }
 .suggestions_status_chips button[aria-pressed=true] { color: var(--report_red); background: color-mix(in srgb, var(--report_red) 9%, var(--report_surface)); }
@@ -214,3 +214,6 @@
     .suggestions_context { grid-template-columns: 1fr; }
     .suggestions_captures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.suggestions_filter_panel label{min-width:0}.suggestions_filter_panel label :is(input,select){display:block;max-width:100%;min-width:0}.suggestions_filter_panel select{text-overflow:ellipsis}.suggestions_filter_panel input[type=date]{padding-inline:7px;font-size:12px}
+@media(max-width:380px){.suggestions_filter_panel>div{grid-template-columns:minmax(0,1fr)}}
