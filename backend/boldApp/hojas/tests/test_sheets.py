@@ -63,6 +63,69 @@ class SheetsTests(TestCase):
         result = self.operation([{"kind": "block.configure", "sheet": self.sheet["id"], "block": self.block["id"], "configuration": {"task": configuration}}])
         self.assertEqual(result.status_code, 200, result.data)
 
+    def test_create_template_without_drive_and_retry_is_idempotent(self):
+        identity = str(uuid.uuid4())
+        payload = {"id": identity, "name": "Mi plantilla", "is_template": True, "template": "agenda"}
+        with patch("boldApp.hojas.views.drive.valid_folder") as folder, patch("boldApp.hojas.views.drive.google") as google:
+            response = self.client.post("/api/v2/sheets/files/", payload, format="json")
+            self.assertEqual(response.status_code, 201, response.data)
+            self.assertEqual(self.client.post("/api/v2/sheets/files/", payload, format="json").status_code, 200)
+            folder.assert_not_called()
+            google.assert_not_called()
+        template = Workbook.objects.get(pk=identity)
+        self.assertTrue(template.is_template)
+        self.assertIsNone(template.drive_account_id)
+        self.assertEqual(len(template.document["sheetOrder"]), 6)
+        self.assertEqual(Task.objects.count(), 0)
+        self.assertEqual(self.client.patch(f"/api/v2/sheets/files/{identity}/", {"name": "Renombrada"}, format="json").status_code, 200)
+        copied = self.client.post("/api/v2/sheets/files/", {"id": str(uuid.uuid4()), "name": "Copia", "is_template": True, "template": identity}, format="json")
+        self.assertEqual(copied.status_code, 201, copied.data)
+        self.assertNotEqual(copied.data["document"]["sheetOrder"], template.document["sheetOrder"])
+        self.assertEqual(self.client.delete(f"/api/v2/sheets/files/{identity}/").status_code, 204)
+        self.assertEqual(self.client.get(f"/api/v2/sheets/files/{identity}/").status_code, 403)
+        self.assertEqual(self.client.get(f"/api/v2/sheets/files/{copied.data['id']}/").status_code, 200)
+        restored = self.client.post(f"/api/v2/sheets/files/{identity}/restore/", {}, format="json")
+        self.assertEqual(restored.status_code, 200, restored.data)
+        self.assertTrue(restored.data["is_template"])
+
+    def test_builtin_template_customization_and_removal_are_personal(self):
+        endpoint = "/api/v2/sheets/files/template-agenda/"
+        self.assertEqual(len(self.client.get("/api/v2/sheets/library/").data["templates"]), 1)
+        first = self.client.post(endpoint, {}, format="json")
+        self.assertEqual(first.status_code, 200, first.data)
+        identity = first.data["id"]
+        self.assertNotEqual(identity, str(self.file.id))
+        self.assertEqual(self.client.post(endpoint, {}, format="json").data["id"], identity)
+        self.assertEqual(self.client.get("/api/v2/sheets/library/").data["templates"], [])
+        self.assertEqual(self.client.patch(f"/api/v2/sheets/files/{identity}/", {"name": "Agenda propia"}, format="json").status_code, 200)
+        self.assertEqual(self.client.delete(endpoint, {}, format="json").status_code, 204)
+        self.assertEqual(self.client.get("/api/v2/sheets/library/").data["templates"], [])
+        blocked = self.client.post("/api/v2/sheets/files/", {"id": str(uuid.uuid4()), "name": "No recrear", "is_template": True, "template": "agenda"}, format="json")
+        self.assertEqual(blocked.status_code, 403, blocked.data)
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.deleted_at)
+        other = self.person("template-other@bold.gt", "Otra persona", True)
+        self.login(other)
+        self.assertEqual(len(self.client.get("/api/v2/sheets/library/").data["templates"]), 1)
+        self.assertEqual(self.client.patch(f"/api/v2/sheets/files/{identity}/", {"name": "Prohibido"}, format="json").status_code, 404)
+        self.login(self.actor)
+        self.assertEqual(self.client.post(f"/api/v2/sheets/files/{identity}/restore/", {}, format="json").status_code, 200)
+        self.assertEqual(self.client.get("/api/v2/sheets/library/").data["templates"], [])
+        self.assertEqual(self.client.get(f"/api/v2/sheets/files/{identity}/").data["name"], "Agenda propia")
+
+    def test_template_management_requires_module_permissions(self):
+        person = self.person("template-denied@bold.gt", "Sin permisos")
+        self.login(person)
+        with patch("boldApp.hojas.access.check_and_log", return_value=SimpleNamespace(allowed=False)):
+            for method, endpoint, payload in [
+                ("post", "/api/v2/sheets/files/", {"id": str(uuid.uuid4()), "name": "Plantilla", "is_template": True}),
+                ("post", "/api/v2/sheets/files/template-agenda/", {}),
+                ("delete", "/api/v2/sheets/files/template-agenda/", {}),
+            ]:
+                response = getattr(self.client, method)(endpoint, payload, format="json")
+                self.assertEqual(response.status_code, 403, response.data)
+        self.assertFalse(Workbook.objects.filter(owner=person.employee.user_account).exists())
+
     def test_template_has_six_empty_sheets_and_copy_removes_assignments(self):
         self.assertEqual([self.document["sheets"][key]["name"] for key in self.document["sheetOrder"]], ["Liderazgo", "Procesos", "IT", "Herramientas", "Copia de Procesos", "Bold Lab"])
         self.assertEqual(Task.objects.count(), 0)

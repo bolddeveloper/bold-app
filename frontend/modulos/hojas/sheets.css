@@ -147,3 +147,5 @@
 .sheets_module .sheets_person_select .sheets_person_menu button:hover,.sheets_module .sheets_person_select .sheets_person_menu button[aria-pressed=true]{background:var(--sheet-panel)}
 .sheets_person_option{max-width:calc(100% - 22px);padding:0 5px;border-radius:10px;background:color-mix(in srgb,var(--sheet-text) 8%,var(--sheet-bg));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sheets_person_check{margin-left:auto;color:#4285ff}
+
+.sheets_template_card h3{overflow-wrap:anywhere;margin:12px 0 8px}.sheets_template_card .sheets_file_icon{display:inline-flex}.sheets_file_card .sheets_template_actions{justify-content:flex-start;flex-wrap:wrap;gap:8px}.sheets_template_help{color:var(--sheet-muted);font-size:13px;line-height:1.5;margin:0 0 18px}.sheets_library_tools,.sheets_library_body>main,.sheets_search{min-width:0}@media(max-width:600px){.sheets_file_grid{grid-template-columns:minmax(0,1fr)}.sheets_template_actions button{min-height:44px}}

@@ -77,7 +77,8 @@ class LibraryView(APIView):
     def get(self, request):
         require_module(request.assignment)
         files = accessible(request.assignment).select_related("owner", "folder").prefetch_related(Prefetch("members", queryset=Member.objects.filter(account=request.user), to_attr="_sheet_members"), Prefetch("preference_set", queryset=Preference.objects.filter(account=request.user), to_attr="_sheet_preferences"))
-        return Response({"files": [serialized(file, request, False) for file in files], "folders": [{"id": str(folder.id), "name": folder.name, "parent": str(folder.parent_id) if folder.parent_id else None} for folder in Folder.objects.filter(owner=request.user, deleted_at__isnull=True)], "templates": [{"id": "agenda", "name": "Agenda de triunfos", "sheets": ["Liderazgo", "Procesos", "IT", "Herramientas", "Copia de Procesos", "Bold Lab"]}], "can_create": module_allowed(request.assignment, "create"), "can_initial_agenda": settings.DEBUG and module_allowed(request.assignment, "create") and not Workbook.objects.filter(initial_agenda=True).exists()})
+        templates = [] if Workbook.objects.filter(owner=request.user, system_template="agenda").exists() else [{"id": "agenda", "name": "Agenda de triunfos", "sheets": ["Liderazgo", "Procesos", "IT", "Herramientas", "Copia de Procesos", "Bold Lab"], "can": {"edit": module_allowed(request.assignment, "create") and module_allowed(request.assignment, "edit"), "delete": module_allowed(request.assignment, "delete")}}]
+        return Response({"files": [serialized(file, request, False) for file in files], "folders": [{"id": str(folder.id), "name": folder.name, "parent": str(folder.parent_id) if folder.parent_id else None} for folder in Folder.objects.filter(owner=request.user, deleted_at__isnull=True)], "templates": templates, "can_create": module_allowed(request.assignment, "create"), "can_initial_agenda": settings.DEBUG and module_allowed(request.assignment, "create") and not Workbook.objects.filter(initial_agenda=True).exists()})
 
 
 class DirectoryView(APIView):
@@ -149,11 +150,20 @@ class FileViewSet(SheetsViewSet):
             if existing.owner_id != request.user.id:
                 raise PermissionDenied()
             return Response(serialized(existing, request))
-        destination = drive.valid_folder(request.user, request.data.get("drive_folder"))
+        is_template = request.data.get("is_template", False)
+        if not isinstance(is_template, bool):
+            raise ValidationError("is_template debe ser un booleano.")
+        destination = "" if is_template else drive.valid_folder(request.user, request.data.get("drive_folder"))
         source = request.data.get("template")
         uploaded = request.FILES.get("excel")
         content = None
-        document = agenda() if source == "agenda" else duplicate(self.file(request, source).document) if source else blank(title)
+        if source == "agenda":
+            customized = Workbook.objects.filter(owner=request.user, system_template="agenda").first()
+            if customized:
+                require_file(request.assignment, customized)
+            document = duplicate(customized.document) if customized else agenda()
+        else:
+            document = duplicate(self.file(request, source).document) if source else blank(title)
         document["id"], document["name"] = str(identity), title
         if uploaded:
             if source or not uploaded.name.lower().endswith(".xlsx") or uploaded.size > 20_000_000:
@@ -163,10 +173,10 @@ class FileViewSet(SheetsViewSet):
         validate_document(document)
         if content:
             content = engine.call("export", document, directory=[], links=[], revision=1, recalculate=False, source=base64.b64encode(content).decode(), sourceOnly=True)
-        reserved = drive.google(request.user, "GET", "/files/generateIds", params={"count": 1, "space": "drive", "type": "files"})["ids"][0]
+        reserved = "" if is_template else drive.google(request.user, "GET", "/files/generateIds", params={"count": 1, "space": "drive", "type": "files"})["ids"][0]
         try:
             with transaction.atomic():
-                workbook = Workbook.objects.create(id=identity, owner=request.user, creator=request.assignment, name=title, folder=folder_for(request, request.data.get("folder")), document=document, revision=1, drive_account=request.user, drive_folder=destination, drive_id=reserved, excel_content=content, excel_revision=1 if content else 0)
+                workbook = Workbook.objects.create(id=identity, owner=request.user, creator=request.assignment, name=title, folder=folder_for(request, request.data.get("folder")), document=document, revision=1, is_template=is_template, drive_account=None if is_template else request.user, drive_folder=destination, drive_id=reserved, excel_content=content, excel_revision=1 if content else 0)
         except IntegrityError:
             workbook = Workbook.objects.get(pk=identity)
             require_file(request.assignment, workbook)
@@ -179,6 +189,22 @@ class FileViewSet(SheetsViewSet):
         workbook.save()
         record_system_event("sheets.created", request, module_code="sheets", target_type="workbook", target_id=workbook.id)
         return Response(serialized(workbook, request), status=201)
+
+    @action(detail=False, methods=["post", "delete"], url_path="template-agenda")
+    @transaction.atomic
+    def template_agenda(self, request):
+        require_module(request.assignment, "delete" if request.method == "DELETE" else "edit")
+        if request.method == "POST":
+            require_module(request.assignment, "create")
+        document = agenda()
+        workbook, _ = Workbook.objects.get_or_create(
+            owner=request.user, system_template="agenda",
+            defaults={"id": document["id"], "creator": request.assignment, "name": document["name"], "document": document, "revision": 1, "is_template": True},
+        )
+        if request.method == "DELETE":
+            return self.destroy(request, str(workbook.pk))
+        require_file(request.assignment, workbook, "edit")
+        return Response(serialized(workbook, request))
 
     @action(detail=False, methods=["post"], url_path="initial-agenda")
     def initial_agenda(self, request):

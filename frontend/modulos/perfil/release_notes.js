@@ -1,6 +1,17 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-sheets-template-management", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Administra tus plantillas de Sheets",
+        summary: "Crea, edita y elimina plantillas directamente desde Plantillas.",
+        sections: [{title: "Plantillas reutilizables", items: [
+            "Nueva plantilla permite empezar en blanco o partir de una plantilla existente y guardar el diseño en BOLD.",
+            "Usar plantilla crea un archivo independiente. Editar una plantilla no modifica los archivos creados anteriormente.",
+            "Puedes personalizar o eliminar tu Agenda de triunfos de Plantillas sin cambiar la de otras personas. Las plantillas eliminadas se pueden recuperar en Papelera.",
+            "Crear, editar y eliminar respetan los permisos de Sheets y el acceso a cada archivo.",
+        ]}],
+    },
+    {
         id: "2026-10-19-sheets-team-pipelines", date: "2026-10-19", category: "Mejoras y correcciones", icon: "update",
         title: "Sheets, etapas de trabajo y tareas compartidas con Equipo",
         summary: "Organiza tus tareas por etapas, elige qué compartir con la empresa y conserva más información al trabajar con Excel.",

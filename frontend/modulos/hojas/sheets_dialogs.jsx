@@ -40,6 +40,7 @@ export function NewFileDialog({
   template = '',
   folder,
   uploading = false,
+  asTemplate = false,
   close,
   created
 }) {
@@ -59,7 +60,8 @@ export function NewFileDialog({
         name: title,
         template: selected || null,
         folder: folder || null,
-        drive_folder: target
+        drive_folder: target,
+        ...(asTemplate ? { is_template: true } : {})
       };
       let body = data;
       if (uploading) {
@@ -76,11 +78,11 @@ export function NewFileDialog({
       setBusy(false);
     }
   }
-  return <SheetDialog title={uploading ? 'Subir archivo Excel' : 'Crear archivo de Sheets'} close={close}>{uploading && <label>Archivo Excel<input type="file" accept=".xlsx" disabled={busy} onChange={event=>{
+  return <SheetDialog title={asTemplate ? 'Crear plantilla' : uploading ? 'Subir archivo Excel' : 'Crear archivo de Sheets'} close={close}>{uploading && <label>Archivo Excel<input type="file" accept=".xlsx" disabled={busy} onChange={event=>{
     const selectedFile = event.target.files?.[0];
     if (!selectedFile || !selectedFile.name.toLowerCase().endsWith('.xlsx') || selectedFile.size > 20000000) {setExcel(null);setError('Selecciona un archivo .xlsx de hasta 20 MB.');return;}
     setExcel(selectedFile);setTitle(selectedFile.name.replace(/\.xlsx$/i,''));setError('');
-  }} /></label>}<label>Nombre<input autoFocus maxLength={160} value={title} onChange={event => setTitle(event.target.value)} disabled={busy} /></label>{!uploading && <label>Contenido inicial<select value={selected} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">En blanco</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}<p>Elige dónde guardar el Excel. Los cambios actualizarán este mismo archivo.</p>{uploading && <p>El editor local conserva gráficos, imágenes y tablas dinámicas. La importación no crea tareas históricas.</p>}{error && <p className="sheets_error" role="alert">{error}</p>}<DriveFolderPicker label={busy ? 'Creando…' : uploading ? 'Importar aquí' : 'Crear aquí'} disabled={busy || !title.trim() || uploading && !excel} submit={create} /></SheetDialog>;
+  }} /></label>}<label>Nombre<input autoFocus maxLength={160} value={title} onChange={event => setTitle(event.target.value)} disabled={busy} /></label>{!uploading && <label>Contenido inicial<select value={selected} onChange={event => setSelected(event.target.value)} disabled={busy}><option value="">En blanco</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}<p>{asTemplate ? 'La plantilla se guardará en BOLD. Editarla no cambia los archivos creados a partir de ella.' : 'Elige dónde guardar el Excel. Los cambios actualizarán este mismo archivo.'}</p>{uploading && <p>El editor local conserva gráficos, imágenes y tablas dinámicas. La importación no crea tareas históricas.</p>}{error && <p className="sheets_error" role="alert">{error}</p>}{asTemplate ? <footer><button disabled={busy} onClick={close}>Cancelar</button><button className="sheets_primary" disabled={busy || !title.trim()} onClick={() => create(null)}>{busy ? 'Creando…' : 'Crear plantilla'}</button></footer> : <DriveFolderPicker label={busy ? 'Creando…' : uploading ? 'Importar aquí' : 'Crear aquí'} disabled={busy || !title.trim() || uploading && !excel} submit={create} />}</SheetDialog>;
 }
 export function ShareDialog({
   file,

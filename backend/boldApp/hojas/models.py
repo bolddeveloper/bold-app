@@ -22,6 +22,7 @@ class Workbook(models.Model):
     revision = models.PositiveBigIntegerField(default=0)
     initial_agenda = models.BooleanField(default=False)
     is_template = models.BooleanField(default=False)
+    system_template = models.CharField(max_length=24, blank=True, default="")
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,7 +55,7 @@ class Workbook(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
-        constraints = [models.UniqueConstraint(fields=["initial_agenda"], condition=models.Q(initial_agenda=True), name="one_initial_sheet_agenda")]
+        constraints = [models.UniqueConstraint(fields=["initial_agenda"], condition=models.Q(initial_agenda=True), name="one_initial_sheet_agenda"), models.UniqueConstraint(fields=["owner", "system_template"], condition=~models.Q(system_template=""), name="unique_owner_system_template")]
 
 
 class Member(models.Model):

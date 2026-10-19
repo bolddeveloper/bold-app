@@ -13,6 +13,7 @@ export const sheetsApi = {
   get: id => request(`files/${id}/`),
   create: data => request('files/', 'POST', data),
   initialAgenda: () => request('files/initial-agenda/', 'POST', {}),
+  agendaTemplate: (remove = false) => request('files/template-agenda/', remove ? 'DELETE' : 'POST', {}),
   update: (id, data) => request(`files/${id}/`, 'PATCH', data),
   remove: id => request(`files/${id}/`, 'DELETE'),
   restore: id => request(`files/${id}/restore/`, 'POST', {}),
