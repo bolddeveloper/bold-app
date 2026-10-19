@@ -26,7 +26,7 @@ test("pipeline completion applies the confirmed status before announcing refresh
         let persisted={status:"s",status_name:"Completada",status_is_final:true}, body;
         globalThis.__pipelineRequest=async(path,options)=>{if(!options)return context;body=options.body;return persisted;};
         const saved=result=>{order.push("saved");assert.equal(result,persisted);};
-        await togglePipelineCompletion({id:"t",completed:false},"p",()=>assert.fail("No legacy patch for project pipeline"),saved);
+        assert.equal(await togglePipelineCompletion({id:"t",completed:false},"p",()=>assert.fail("No legacy patch for project pipeline"),saved),persisted);
         assert.deepEqual(body,{stage:"done"});
         assert.deepEqual(order,["saved","refresh"]);
         persisted={...persisted,status_is_final:false}; order.length=0;

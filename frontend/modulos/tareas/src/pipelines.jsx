@@ -96,6 +96,7 @@ export async function togglePipelineCompletion(task, projectId, fallback, onSave
     const result = await http.request(`${base}pipelines/${active.pipeline.id}/tasks/${task.id}/`,{method:"PUT",body:{stage:stage.id}});
     onSaved?.(result);
     announce(task.id,active.project);
+    return result;
 }
 
 export default function PipelinePanel({projects=[], projectId, personal=false, onSelectTask}) {

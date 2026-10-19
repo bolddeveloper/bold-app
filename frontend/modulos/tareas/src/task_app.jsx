@@ -5514,7 +5514,7 @@ function TaskAppContent({ externalModules = {} }) {
         };
     }
 
-    function queue_task_status(task_id, status) {
+    function queue_task_status(task_id, status, save) {
         const key = String(task_id);
         if (task_crud_mutations.current.has(key)) {
             set_api_error("Esta tarea aún se está sincronizando. Podrás cambiar su estado al terminar.");
@@ -5529,6 +5529,7 @@ function TaskAppContent({ externalModules = {} }) {
         } else {
             mutation.desired = status;
         }
+        mutation.save = save;
         apply_optimistic_task_status(task_id, status);
         if (!mutation.running) void flush_task_status(key, mutation);
         return true;
@@ -5538,11 +5539,17 @@ function TaskAppContent({ externalModules = {} }) {
         mutation.running = true;
         try {
             while (task_status_mutations.current.get(task_id) === mutation) {
-                while (String(mutation.confirmed.id) !== String(mutation.desired.id)) {
+                while (String(mutation.confirmed.id) !== String(mutation.desired.id) || mutation.confirmed.isFinal !== mutation.desired.isFinal) {
                     const requested = mutation.desired;
+                    const save = mutation.save;
                     try {
-                        await api.updateTask(task_id, { status: requested.id });
-                        mutation.confirmed = requested;
+                        const result = await (save ? save() : api.updateTask(task_id, { status: requested.id }));
+                        if (task_status_mutations.current.get(task_id) !== mutation) return;
+                        mutation.confirmed = result?.status ? {id: result.status, label: result.status_name, category: result.status_category, isFinal: result.status_is_final} : requested;
+                        if (mutation.desired === requested) {
+                            mutation.desired = mutation.confirmed;
+                            apply_optimistic_task_status(task_id, mutation.confirmed);
+                        }
                     } catch (error) {
                         if (task_status_mutations.current.get(task_id) === mutation) {
                             task_status_mutations.current.delete(task_id);
@@ -5556,7 +5563,7 @@ function TaskAppContent({ externalModules = {} }) {
                 try { await refresh.current([`tasks@${task_id}`]); }
                 catch { set_api_error("El estado se guardó; la confirmación visual se recuperará al volver a sincronizar."); return; }
                 if (task_status_mutations.current.get(task_id) !== mutation) return;
-                if (String(mutation.confirmed.id) !== String(mutation.desired.id)) continue;
+                if (String(mutation.confirmed.id) !== String(mutation.desired.id) || mutation.confirmed.isFinal !== mutation.desired.isFinal) continue;
                 task_status_mutations.current.delete(task_id);
                 return;
             }
@@ -6056,7 +6063,7 @@ function TaskAppContent({ externalModules = {} }) {
     // Applies a quick priority or status change from the inline popover.
     function handle_quick_change(task_id, field, value) {
         if (field === "collaborator_ids") {
-            if (real) { mutate(() => saveFollowers(task_id, value, data), undefined, undefined, undefined, [`followers@${task_id}`]); return; }
+            if (real) { handle_followers_change(task_id, value); return; }
             set_tasks(current => current.map(task => task.id === task_id ? { ...task, collaborator_ids: value } : task));
             return;
         }
@@ -6179,16 +6186,15 @@ function TaskAppContent({ externalModules = {} }) {
     // Toggles task completion and emits a local template event for future sync.
     function handle_toggle_task(task_id) {
         if (real) {
+            if (task_status_mutations.current.has(String(task_id))) return;
             const task = data.tasks.find(item => item.id === task_id);
             if (!task) return;
             const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
-            void togglePipelineCompletion(task, task_scope === "project" ? selected_project_id : null, serverStatus => {
+            queue_task_status(task_id, status || {...task_status_snapshot(task), isFinal: !task.completed}, () => togglePipelineCompletion(task, task_scope === "project" ? selected_project_id : null, serverStatus => {
                 const requested = status || serverStatus;
                 if (!requested) throw new Error("No hay un estado compatible para cambiar la finalización.");
-                return queue_task_status(task_id, requested);
-            }, result => {
-                if (result?.status) apply_optimistic_task_status(task_id, {id:result.status, label:result.status_name, category:result.status_category, isFinal:result.status_is_final});
-            }).catch(error => set_api_error(error.message));
+                return api.updateTask(task_id, {status: requested.id});
+            }));
             return;
         }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {
