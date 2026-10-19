@@ -223,3 +223,12 @@ class PipelineTests(TestCase):
         self.assertIsNotNone(context.data["personal"])
         pipeline = personal_pipeline(self.owner.employee)
         self.assertEqual(self.move(pipeline,pipeline.stages[1],task).status_code, 200)
+
+    def test_personal_pipeline_without_project_can_be_edited_and_moved(self):
+        pipeline = personal_pipeline(self.owner.employee)
+        self.assertIsNone(pipeline.project_id)
+        response = self.client.put(f"/api/v2/pipelines/{pipeline.pk}/", {"name": "Personal actualizado", "version": pipeline.version, "stages": pipeline.stages}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        response = self.move(pipeline, pipeline.stages[1])
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(str(PersonalPipelineTask.objects.get(pipeline=pipeline, task=self.task).stage_id), pipeline.stages[1]["id"])

@@ -282,7 +282,7 @@ class PipelineView(AssignmentScopedViewSetMixin, APIView):
         allowed = self.pipeline(pipeline_id, write=True)
         if allowed.project_id:
             Project.objects.select_for_update().get(pk=allowed.project_id)
-        pipeline = Pipeline.objects.select_for_update().select_related("project").get(pk=pipeline_id)
+        pipeline = Pipeline.objects.select_for_update(of=("self",)).select_related("project").get(pk=pipeline_id)
         if request.data.get("version") != pipeline.version:
             raise ValidationError("El pipeline cambió. Actualiza antes de guardar para conservar los cambios de otras personas.")
         stages = validate_stages(request.data.get("stages"))
@@ -395,7 +395,7 @@ class PipelineTaskView(PipelineView):
     @transaction.atomic
     def put(self, request, pipeline_id, task_id):
         self.pipeline(pipeline_id)
-        pipeline = Pipeline.objects.select_for_update().select_related("project").get(pk=pipeline_id)
+        pipeline = Pipeline.objects.select_for_update(of=("self",)).select_related("project").get(pk=pipeline_id)
         task = self.visible_tasks().select_for_update().filter(pk=task_id).first()
         if not task:
             raise NotFound()

@@ -249,3 +249,16 @@ existente de Drive; no se modificaron archivos de Drive para estas comprobacione
 
 Los respaldos privados permanecen fuera de Git. Conservarlos para reversión y no
 restaurarlos sobre producción sin contemplar los cambios posteriores al dump.
+
+## Actualizaciones del backend y conexión del túnel
+
+Después de recrear el backend, reiniciar también `cloudflared` y comprobar las
+rutas públicas: el túnel puede mantener conexiones hacia la IP anterior del
+contenedor. El Compose declara esta dependencia con `restart: true`; cuando se
+utilice `--no-deps`, reiniciar el túnel explícitamente tras verificar el backend:
+
+```sh
+docker compose --env-file deploy/oracle/.env.oracle -f deploy/oracle/compose.oracle.yaml restart cloudflared
+```
+
+No es necesario reiniciar PostgreSQL, restaurar la base ni cambiar los volúmenes.

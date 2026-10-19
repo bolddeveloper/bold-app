@@ -1,6 +1,15 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-pipeline-postgres-fix", date: "2026-10-19", category: "Correcciones", icon: "update",
+        title: "Corrección al mover tareas entre etapas",
+        summary: "Se corrige el error del servidor al cambiar etapas o configurar el pipeline personal.",
+        sections: [{title: "Estados", items: [
+            "Mover tareas y guardar cambios del pipeline personal ya no falla por una consulta incompatible con la base de datos del servidor.",
+            "La corrección conserva las tareas, sus proyectos y sus permisos.",
+        ]}],
+    },
+    {
         id: "2026-10-19-sheets-it-pilot", date: "2026-10-19", category: "Mejoras", icon: "update",
         title: "Prueba de Sheets con Equipo de IT",
         summary: "Sheets incorpora un acceso limitado por equipo para su prueba inicial.",

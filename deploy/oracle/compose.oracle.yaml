@@ -185,6 +185,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+        restart: true
     read_only: true
     cap_drop:
       - ALL
