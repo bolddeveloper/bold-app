@@ -1,6 +1,17 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-instant-task-completion", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Completar tareas al instante",
+        summary: "La marca de completado cambia inmediatamente y se guarda en segundo plano.",
+        sections: [{title: "Tareas", items: [
+            "Completar y reabrir muestran el cambio sin esperar la consulta del pipeline. La sincronización actualiza únicamente la tarea afectada.",
+            "Si el guardado falla, se recupera el estado anterior y se muestra el error. Durante el envío se evitan cambios duplicados de la misma marca.",
+            "Cambiar colaboradores desde la lista también muestra el cambio y guarda en segundo plano, igual que los demás cambios rápidos de la tarea.",
+            "Los proyectos con varios pipelines conservan su regla de finalización; la respuesta del servidor confirma el estado definitivo.",
+        ]}],
+    },
+    {
         id: "2026-10-19-cross-department-responsibles", date: "2026-10-19", category: "Mejoras", icon: "update",
         title: "Responsables de otros departamentos",
         summary: "Puedes asignar tareas a personas de otros departamentos y buscarlas por nombre o correo.",
