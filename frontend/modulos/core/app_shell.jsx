@@ -143,7 +143,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     const [membersOpen, setMembersOpen] = useState(false);
     useDialog(membersOpen, ".team_members_panel", () => setMembersOpen(false));
     useEffect(() => setMembersOpen(false), [core.activeAssignment?.id, shell.chat_target]);
-    const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews };
+    const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews, unreadChats: core.messaging?.unread?.total > 0 };
     const [bellPulse, setBellPulse] = useState(0);
     const [bellReminder, setBellReminder] = useState(false);
     const hasUnreadNotifications = topBarProps.notifications.some(item => !item.is_read);
@@ -185,6 +185,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
             </aside>
         </div>
         <div id="bold-overlay-root" />
+        <span className="chat_unread_status" role="status" aria-atomic="true">{membersActions.unreadChats ? `${core.messaging.unread.total} mensajes de Chat sin leer` : ""}</span>
         {profileAnchor && <ProfileQuickMenu anchor={profileAnchor} close={() => setProfileAnchor(null)} openProfile={shell.open_profile} changeDepartment={async id => {if (!await shell.can_change_department()) return false; core.setActiveAssignment(id); return true;}}/>}
         {overlays}
     </div>;
@@ -213,12 +214,14 @@ function render_navigation_item(item, active_module, handle_module_change, optio
             data-tour={`nav-${item.id}`}
             aria-expanded={is_expandable ? is_expanded : undefined}
             aria-controls={options.controls_id}
+            aria-label={item.unread ? `${item.label}, mensajes sin leer` : undefined}
             onClick={handle_click}
         >
             <span className="navigation_icon">
                 {is_expandable && is_active ? render_icon(check_icon, 16) : render_icon(item_icon, 17)}
             </span>
             <span>{item.label}</span>
+            {item.unread && <span className="chat_unread_dot" aria-hidden="true"/>}
             {is_expandable ? (
                 <span className={`navigation_chevron ${is_expanded ? "navigation_chevron_open" : ""}`}>
                     {render_icon(chevron_down_icon, 18)}
@@ -431,7 +434,7 @@ function TopBar(props) {
                     </button>
 
                 </div>
-                <button className="theme_toggle_button" type="button" aria-label="Mostrar lista de miembros" title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 19)}</button>
+                <button className="theme_toggle_button chat_members_button" type="button" aria-label={props.unreadChats ? "Mostrar lista de miembros, mensajes sin leer" : "Mostrar lista de miembros"} title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 19)}{props.unreadChats && <span className="chat_unread_dot" aria-hidden="true"/>}</button>
             </div>
         </header>
     );
@@ -466,7 +469,7 @@ function render_mobile_header(props) {
                 <div className="mobile_tour_actions">
                     <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
                     <button className={`mobile_more_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}>{render_icon(newspaper_icon, 22)}</button>
-                <button className="mobile_more_button" type="button" aria-label="Mostrar lista de miembros" title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 22)}</button>
+                <button className="mobile_more_button chat_members_button" type="button" aria-label={props.unreadChats ? "Mostrar lista de miembros, mensajes sin leer" : "Mostrar lista de miembros"} title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 22)}{props.unreadChats && <span className="chat_unread_dot" aria-hidden="true"/>}</button>
                 <button className={`mobile_more_button${props.notifications.some(item => !item.is_read) ? " bell_has_unread" : ""}`} data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
                     <span key={props.bellPulse} className={props.bellPulse ? `notification_bell_arrival${props.bellReminder ? " notification_bell_reminder" : ""}` : undefined}>{render_icon(bell_icon, 22)}</span>
                     {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}

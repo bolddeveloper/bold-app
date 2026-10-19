@@ -15,6 +15,7 @@ export function installMessagingFixture(target = globalThis) {
         account: {id: "fixture-account", employee: actor}, employee: {id: actor}, activeAssignment: {id: "fixture-assignment", personId: actor, chat_enabled: true},
         directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}],
         presence: {rows: [{...peer, status: "online", units:[{id:"it", name:"Equipo de IT"}]}], units: [{id:"it", name:"Equipo de IT"}]},
+        messaging: {connection:"open", markDelivered:()=>{}, markRead:()=>{}, unread:{total:2,byEmployee:{[peerId]:2},byConversation:{[conversationId]:{count:2,version:2}}}},
     };
     target.__messagingShell = {chat_target: {employee_id: peerId}, open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
     target.__messagingApi = {

@@ -69,6 +69,9 @@ class RealtimeChatTests(TransactionTestCase):
             response = await database_sync_to_async(self.post)(0, "messages/", {"body": "Mensaje privado", "client_id": str(uuid.uuid4())})
             self.assertEqual(response.status_code, 201)
             message = response.data["message"]
+            notice = await receive_event(sockets[1], "notification.created")
+            self.assertEqual(notice["payload"]["module"], "messaging")
+            self.assertNotIn("Mensaje privado", notice["payload"]["title"])
             for index in (0, 1):
                 event = await receive_event(sockets[index], "messaging.message.created")
                 row = event["payload"]["messages"][0]
@@ -81,10 +84,16 @@ class RealtimeChatTests(TransactionTestCase):
             event = await receive_event(sockets[0], "messaging.receipt.updated")
             self.assertIsNotNone(event["payload"]["receipts"][0]["delivered_at"])
             self.assertIsNone(event["payload"]["receipts"][0]["read_at"])
+            peer_delivery = await receive_event(sockets[1], "messaging.receipt.updated")
+            self.assertEqual(peer_delivery["payload"]["unread"]["count"], 1)
             read = await database_sync_to_async(self.post)(1, "receipts/", {"message_ids": [message["id"]], "state": "read"})
             self.assertEqual(read.status_code, 200)
             event = await receive_event(sockets[0], "messaging.receipt.updated")
             self.assertIsNotNone(event["payload"]["receipts"][0]["read_at"])
+            await receive_event(sockets[1], "notification.invalidated")
+            peer_read = await receive_event(sockets[1], "messaging.receipt.updated")
+            self.assertEqual(peer_read["payload"]["unread"]["count"], 0)
+            self.assertEqual(peer_read["payload"]["unread"]["version"], 2)
             await self.no_chat(sockets[2])
             # Even a misrouted internal hint cannot grant the owner membership.
             await get_channel_layer().group_send(f"messaging_employee_{self.people[2][0].employee_id}", {"type": "messaging.changed", "kind": "message.created", "conversation_id": str(self.conversation.pk), "message_ids": [message["id"]]})

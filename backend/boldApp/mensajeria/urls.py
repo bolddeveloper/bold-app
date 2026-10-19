@@ -1,8 +1,9 @@
 from django.urls import path
 
-from .views import ConversationDetailView, ConversationListView, MessageDetailView, MessageListView, ReceiptView, PreferencesView
+from .views import ConversationDetailView, ConversationListView, MessageDetailView, MessageListView, ReceiptView, PreferencesView, UnreadSummaryView
 
 urlpatterns = [
+    path("unread/", UnreadSummaryView.as_view(), name="messaging-unread"),
     path("preferences/", PreferencesView.as_view(), name="messaging-preferences"),
     path("conversations/", ConversationListView.as_view(), name="direct-conversations"),
     path("conversations/<uuid:conversation_id>/", ConversationDetailView.as_view(), name="direct-conversation"),

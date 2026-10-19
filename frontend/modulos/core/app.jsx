@@ -48,7 +48,7 @@ function ApplicationWorkspace() {
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
-        ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work"}] : []),
+        ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: core.messaging?.unread?.total > 0}] : []),
         ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),

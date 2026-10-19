@@ -8,6 +8,7 @@ from django.utils import timezone
 from boldApp.core.events import build_event_envelope
 from .models import DirectConversation, DirectMessage
 from .presenters import message_data, people, person_data
+from .unread import summaries
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +35,9 @@ def _conversations(employee_id):
         first_employee__in=people().values("pk"), second_employee__in=people().values("pk"))
 
 
+@transaction.atomic
 def private_event(employee_id, event):
-    conversation = _conversations(employee_id).filter(pk=event["conversation_id"]).first()
+    conversation = _conversations(employee_id).select_for_update().filter(pk=event["conversation_id"]).first()
     if not conversation:
         return None
     rows = list(conversation.messages.filter(pk__in=event["message_ids"][:100]))
@@ -50,6 +52,7 @@ def private_event(employee_id, event):
         peer = people().get(pk=peer_id)
         payload = {"conversation_id": str(conversation.pk), "peer": person_data(peer), "updated_at": conversation.updated_at,
                    "messages": [message_data(row, employee_id, now) for row in rows]}
+    payload["unread"] = summaries(DirectConversation.objects.filter(pk=conversation.pk), employee_id)[0]
     return build_event_envelope("messaging." + event["kind"], "direct_conversation", conversation.pk, payload)
 
 

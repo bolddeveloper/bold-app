@@ -10,6 +10,7 @@ import { createPermissionCache } from "./permission_cache.js";
 import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
 import {createMessagingSession} from "./messaging_session.js";
+import {createMessagingUnread} from "./messaging_unread.js";
 import { createSessionNotifications } from "./session_notifications.js";
 import {createNotificationSync} from "./notification_sync.js";
 import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
@@ -29,6 +30,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const notificationController = useRef(null);
     const messagingController = useRef(null);
     const [messagingConnection, setMessagingConnection] = useState("disconnected");
+    const [unreadChats, setUnreadChats] = useState({assignmentId: null, total: 0, byEmployee: {}, byConversation: {}});
     const markDelivered = useCallback((conversation, ids) => messagingController.current?.delivered(conversation, ids), []);
     const markRead = useCallback((conversation, ids) => messagingController.current?.read(conversation, ids), []);
     const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
@@ -54,6 +56,25 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [mfaManageError, setMfaManageError] = useState("");
     const [mfaAssuranceRevision, setMfaAssuranceRevision] = useState(0);
     const real = is_using_real_backend();
+    const chatAllowed = real && state.sessionStatus === "ready" && state.activeAssignment?.chat_enabled === true && !state.securityUncertain;
+    useEffect(() => {
+        const assignmentId = state.activeAssignment?.id;
+        setUnreadChats({assignmentId, total: 0, byEmployee: {}, byConversation: {}});
+        if (!chatAllowed) return;
+        const unread = createMessagingUnread({fetchSummary: options => http.request("/api/v2/messaging/unread/", options),
+            onChange: snapshot => setUnreadChats({assignmentId, ...snapshot})});
+        const receive = event => unread.receive(event.detail);
+        const recover = () => {if (!document.hidden && navigator.onLine !== false) unread.recover();};
+        window.addEventListener("bold:messaging-event", receive);
+        for (const event of ["bold:messaging-reconnect", "focus", "online"]) window.addEventListener(event, recover);
+        document.addEventListener("visibilitychange", recover);
+        recover();
+        return () => {
+            unread.dispose(); window.removeEventListener("bold:messaging-event", receive);
+            for (const event of ["bold:messaging-reconnect", "focus", "online"]) window.removeEventListener(event, recover);
+            document.removeEventListener("visibilitychange", recover);
+        };
+    }, [chatAllowed, state.activeAssignment?.id]);
     if (!permissionCache.current) {
         permissionCache.current = createPermissionCache({
             onRevisionChange: revision => window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision } })),
@@ -429,7 +450,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const assignments = current.assignments.map(change);
         updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change), presence: current.presence ? {...current.presence, rows: current.presence.rows.map(row => row.employee_id === employeeId ? {...row, name: profile.name, avatar_url: profile.avatar_url} : row)} : null});
     }
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, messaging: {connection: messagingConnection, markDelivered, markRead}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const unread = chatAllowed && unreadChats.assignmentId === state.activeAssignment?.id ? unreadChats : {total: 0, byEmployee: {}, byConversation: {}};
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

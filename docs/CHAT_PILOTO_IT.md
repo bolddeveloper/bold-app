@@ -47,7 +47,23 @@ Las pestañas ocultas no consultan periódicamente; un evento pendiente se recup
 al volver. Los avisos de escritorio expresamente habilitados pueden consultar
 ante un evento real en segundo plano.
 
-## Apertura posterior
+## Revisión del piloto: avisos y presentación
+
+Cambios preparados el 19 de octubre, pendientes de publicación y aceptación:
+
+- Los mensajes entrantes crean avisos en la campana, con preferencia independiente
+  en Perfil → Notificaciones. No incluyen el texto privado del mensaje.
+- Los puntos de Chat, Equipo y remitente reflejan mensajes realmente sin leer.
+  Confirmar entrega u abrir el panel de personas no los limpia. Se recuperan desde
+  el servidor al entrar y reconectar, sin sondeo periódico adicional.
+- La versión de actividad por conversación evita que una respuesta antigua restaure
+  puntos ya eliminados al leer desde otra sesión. Requiere migración `0003`.
+- Lista plegable a avatares en escritorio, foco redondeado y fondo geométrico
+  discreto, manteniendo modos claro y oscuro y navegación de teclado.
+
+Estas son notas internas del piloto, no notas de lanzamiento para toda BOLD.
+
+## Apertura posterior al piloto
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.
 Ese cambio abre el módulo a otras unidades, no concede lectura a administradores:

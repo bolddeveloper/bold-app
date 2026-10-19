@@ -54,6 +54,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         from boldApp.hojas.access import accessible, module_allowed
         sheet_ids = base.filter(module="sheets", resource_type="file").values_list("resource_id", flat=True)
         visible_sheets = accessible(self.request.assignment).filter(pk__in=sheet_ids, deleted_at__isnull=True).values_list("pk", flat=True) if sheet_ids.exists() and module_allowed(self.request.assignment) else []
+        from boldApp.mensajeria.access import assignment_can_chat
+        from boldApp.mensajeria.events import _conversations
+        visible_chats = _conversations(self.request.assignment.employee_id).values_list("pk", flat=True) if assignment_can_chat(self.request.assignment) else []
         return base.select_related(
             "actor_assignment__employee", "recipient_assignment", "task", "project"
         ).filter(
@@ -62,6 +65,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             Q(project__isnull=True) | Q(project_id__in=visible_projects),
         ).filter(
             ~Q(module="sheets") | Q(resource_type="file", resource_id__in=visible_sheets),
+        ).filter(
+            ~Q(module="messaging") | Q(resource_type="direct_conversation", resource_id__in=visible_chats),
         ).order_by("-created_at", "pk")
 
     @action(detail=False, methods=["post"], url_path="clear")

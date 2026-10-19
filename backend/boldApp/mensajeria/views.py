@@ -15,6 +15,8 @@ from .models import DirectConversation, DirectMessage, MessagingPreferences
 from .serializers import EditMessageSerializer, OpenConversationSerializer, SendMessageSerializer, ReceiptSerializer, PreferencesSerializer
 from .presenters import available, message_data, people, person_data
 from .events import publish_change
+from .unread import summaries
+from .notifications import notify_message, mark_notices_read
 
 
 class Conflict(APIException):
@@ -129,6 +131,11 @@ class ConversationDetailView(PrivateChatView):
         return Response(self.conversation_data(self.conversation(conversation_id)))
 
 
+class UnreadSummaryView(PrivateChatView):
+    def get(self, request):
+        return Response({"conversations": summaries(self.conversations(), self.actor())})
+
+
 class MessageListView(PrivateChatView):
     def get(self, request, conversation_id):
         conversation = self.conversation(conversation_id)
@@ -156,7 +163,9 @@ class MessageListView(PrivateChatView):
             raise Conflict("Este envío ya existe con otro contenido. Actualiza la conversación.")
         if created:
             conversation.updated_at = message.created_at
-            conversation.save(update_fields=["updated_at"])
+            conversation.activity_version += 1
+            conversation.save(update_fields=["updated_at", "activity_version"])
+            notify_message(message, request.assignment)
             publish_change(conversation, "message.created", [message.pk])
         now = timezone.now()
         return Response({"message": message_data(message, actor_id, now), "server_now": now}, status=201 if created else 200)
@@ -209,8 +218,13 @@ class ReceiptView(PrivateChatView):
                 When(delivered_at__gt=now, then=F("delivered_at")), default=Value(now), output_field=DateTimeField()))
         receipts = [{"id": str(row.pk), "delivered_at": row.delivered_at, "read_at": row.read_at} for row in rows]
         if changed:
+            if serializer.validated_data["state"] == "read":
+                conversation.activity_version += 1
+                conversation.save(update_fields=["activity_version"])
+                mark_notices_read(conversation, self.actor(), ids)
             publish_change(conversation, "receipt.updated", list(ids))
-        return Response({"conversation_id": str(conversation.pk), "receipts": receipts, "server_now": now})
+        return Response({"conversation_id": str(conversation.pk), "receipts": receipts, "server_now": now,
+                         "unread": summaries(DirectConversation.objects.filter(pk=conversation.pk), self.actor())[0]})
 
 
 class PreferencesView(PrivateChatView):

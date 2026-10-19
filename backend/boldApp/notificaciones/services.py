@@ -56,7 +56,7 @@ def _actor_name(actor):
     return actor.employee.full_name if actor else "Bold"
 
 
-def create_notification(*, recipient, event_type, title, body="", actor=None, task=None, project=None, route=None, metadata=None, dedupe_key=None, resource_type="", resource_id=None):
+def create_notification(*, recipient, event_type, title, body="", actor=None, task=None, project=None, route=None, metadata=None, dedupe_key=None, resource_type="", resource_id=None, robust_dispatch=False):
     if actor and recipient.id == actor.id:
         return None
     if not event_preferences(recipient.employee.user_account.notification_settings).get(event_type, True):
@@ -86,7 +86,7 @@ def create_notification(*, recipient, event_type, title, body="", actor=None, ta
             **defaults,
         ), True
     if created:
-        transaction.on_commit(lambda: dispatch_notification(notification))
+        transaction.on_commit(lambda: dispatch_notification(notification), robust=robust_dispatch)
     return notification if created else None
 
 

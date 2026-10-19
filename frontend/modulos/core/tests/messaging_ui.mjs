@@ -55,6 +55,13 @@ if (process.argv.includes("--serve")) {
     try {
         root.render(React.createElement(Messaging)); await waitFor(() => document.querySelectorAll(".messaging_message").length === 2);
         assert.equal(document.querySelectorAll(".messaging_message").length, 2);
+        assert.ok(document.querySelector('.messaging_chat_row .chat_unread_dot'));
+        document.querySelector('[aria-label="Plegar conversaciones"]').click(); await settle();
+        assert.ok(document.querySelector('.messaging_module.messaging_compact'));
+        assert.equal(document.querySelector('[aria-label="Desplegar conversaciones"]').getAttribute('aria-expanded'),'false');
+        assert.equal(localStorage.getItem('bold:chat:compact:fixture-account'),'true');
+        document.querySelector('[aria-label="Desplegar conversaciones"]').click(); await settle();
+        assert.equal(document.querySelector('.messaging_module.messaging_compact'),null);
         assert.equal(document.querySelectorAll('[aria-label="Editar mi mensaje"]').length, 1);
         assert.equal(document.querySelector(".messaging_text script"), null);
         assert.match(document.querySelector(".messaging_text").textContent, /<script>/);
@@ -90,6 +97,7 @@ if (process.argv.includes("--serve")) {
         root = createRoot(document.getElementById("root")); root.render(React.createElement(Presence));
         await waitFor(() => document.querySelector('[aria-label^="Abrir chat con"]'));
         const beforeCard = fixture.calls.length;
+        assert.ok(document.querySelector('.home_presence_open_chat .chat_unread_dot'));
         document.querySelector('[aria-label^="Ver perfil de"]').click(); await settle();
         assert.match(document.querySelector('[role="dialog"]').textContent, /Analista/);
         assert.match(document.querySelector('[role="dialog"]').textContent, /Equipo de IT/);

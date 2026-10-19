@@ -1805,3 +1805,7 @@
 }
 @media (prefers-reduced-motion: reduce) {.bell_has_unread .notification_bell_arrival svg {animation: none;}}
 .bell_unread_dot { top: 4px; right: 4px; width: 6px; height: 6px; border: 0; background: var(--bold_red); animation: none; }
+.chat_unread_dot {display: inline-block; width: 9px; height: 9px; min-width: 9px; border-radius: 50%; background: var(--bold_red); flex-shrink: 0; margin-left: 8px; vertical-align: middle;}
+.chat_members_button {position: relative;}
+.chat_members_button > .chat_unread_dot {position: absolute; right: 3px; top: 3px; margin: 0; box-shadow: 0 0 0 2px var(--bold_surface);}
+.chat_unread_status {position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;}

@@ -7,6 +7,7 @@ from boldApp.core.models.mixins import UUIDPrimaryKeyModel
 
 
 class DirectConversation(UUIDPrimaryKeyModel):
+    activity_version = models.PositiveBigIntegerField(default=0)
     # Canonical employee pair, not assignments: changing roles is not a new person.
     first_employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, related_name="direct_chats_first")
     second_employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, related_name="direct_chats_second")
@@ -49,7 +50,8 @@ class DirectMessage(UUIDPrimaryKeyModel):
             models.UniqueConstraint(fields=["conversation", "author", "client_id"], name="unique_direct_message_retry"),
             models.CheckConstraint(condition=models.Q(read_at__isnull=True) | models.Q(delivered_at__isnull=False, read_at__gte=models.F("delivered_at")), name="chat_read_requires_delivery"),
         ]
-        indexes = [models.Index(fields=["conversation", "-created_at", "-id"], name="chat_message_history")]
+        indexes = [models.Index(fields=["conversation", "-created_at", "-id"], name="chat_message_history"),
+                   models.Index(fields=["conversation", "author"], condition=models.Q(read_at__isnull=True), name="chat_unread_recipient")]
 
 
 class MessagingPreferences(models.Model):

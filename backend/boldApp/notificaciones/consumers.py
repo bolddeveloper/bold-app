@@ -86,6 +86,12 @@ def notification_resource_is_readable(assignment_id, notification_id):
     ).filter(pk=notification_id, recipient_assignment_id=assignment_id).first()
     if not notification:
         return False
+    if notification.module == "messaging":
+        from boldApp.mensajeria.access import assignment_can_chat
+        from boldApp.mensajeria.events import _conversations
+        return bool(assignment_can_chat(notification.recipient_assignment)
+                    and notification.resource_type == "direct_conversation"
+                    and _conversations(notification.recipient_assignment.employee_id).filter(pk=notification.resource_id).exists())
     if notification.module == "sheets":
         from boldApp.hojas.access import readable
         return notification.resource_type == "file" and notification.resource_id is not None and readable(notification.recipient_assignment, notification.resource_id)
