@@ -5,7 +5,7 @@ El módulo ``permisos`` administra las políticas; Core conserva este motor
 para que cada módulo de contenido aplique las mismas reglas sin duplicarlas.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Optional
 
@@ -260,6 +260,7 @@ class AuthorizationContext:
     role_rules: list
     direct_rules: list
     policy_version: int
+    resource_contexts: dict = field(default_factory=dict)
 
 
 def current_policy_version():
@@ -563,7 +564,10 @@ def resolve_access(
     if permission.code == "tasks.task.read" and resource_id is not None and own_unit.id != target_unit.id:
         from .resource_context import resolve_resource_context
 
-        readers = resolve_resource_context(permission, resource_id).get("task_reader_assignment_ids", ())
+        resource_context = context.resource_contexts.get(str(resource_id))
+        if resource_context is None:
+            resource_context = resolve_resource_context(permission, resource_id)
+        readers = resource_context.get("task_reader_assignment_ids", ())
         if assignment.id in readers:
             own_access = resolve_access(assignment, permission, own_unit, context=context)
             if own_access.allowed:

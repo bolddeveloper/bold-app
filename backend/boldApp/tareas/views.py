@@ -141,7 +141,10 @@ class AssignmentScopedViewSetMixin:
             return []
         context = build_authorization_context(self.request.assignment, permission)
         units = self.authorization_units()
-        rows = queryset.select_related("unit")
+        rows = list(queryset.select_related("unit"))
+        if resource_type == "task" and not self.request.assignment.employee.user_account.is_superuser:
+            from .authorization_provider import task_reader_contexts
+            context.resource_contexts = task_reader_contexts(rows, self.request.assignment)
         cache[key] = [
             row.id
             for row in rows
@@ -395,6 +398,12 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
 
     def get_queryset(self):
         candidates = Task.objects.all()
+        identity = self.kwargs.get("pk")
+        if identity is not None:
+            try:
+                candidates = candidates.filter(pk=UUID(str(identity)))
+            except (ValueError, TypeError):
+                candidates = candidates.none()
         ids = self.query_ids("ids")
         if ids is not None:
             candidates = candidates.filter(id__in=ids)

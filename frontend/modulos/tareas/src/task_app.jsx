@@ -69,6 +69,7 @@ import { createRefreshCoordinator, contentCanRefresh } from "../../core/refresh_
 import { createContextCache } from "../../core/context_cache.js";
 import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks, confirmPipelineLink } from "./services/task_service.js";
 import { createTaskDataLoader, resourcesForTaskEvent, TASK_RESOURCES, PROJECT_RESOURCES } from "./services/task_data_loader.js";
+import {taskSyncOptions} from "./services/task_sync_options.js";
 import { settleCommittedTaskChanges } from "./services/task_models.js";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
@@ -4371,7 +4372,7 @@ function TaskAppContent({ externalModules = {} }) {
     const task_status_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
     use_effect(() => {
-        const reload = event => {if (event.detail?.projectId) void refresh.current(["tasks", "links", "statuses"]).catch(error=>set_api_error(error.message));};
+        const reload = event => {if (event.detail?.projectId) void refresh.current(event.detail.taskId ? [`tasks@${event.detail.taskId}`, `links@${event.detail.taskId}`, "statuses"] : ["tasks", "links", "statuses"]).catch(error=>set_api_error(error.message));};
         window.addEventListener("bold:pipelines", reload);
         return () => window.removeEventListener("bold:pipelines", reload);
     }, []);
@@ -5225,7 +5226,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (!real) { list_tasks_request().then(rows => set_tasks(merge_saved_comments(rows))); return; }
         let mounted = true, dataGeneration = 0, securityUncertain = Boolean(session.securityUncertain);
         const catalogCache = createContextCache();
-        const incremental = import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true";
+        const incremental = taskSyncOptions(import.meta.env).incremental;
         const deferComments = pagedCommentsEnabled();
         const deferAttachments = pagedAttachmentsEnabled();
         const notificationClient = { list: () => Promise.resolve(session.notifications.getRows()) };
@@ -5362,14 +5363,11 @@ function TaskAppContent({ externalModules = {} }) {
             syncRealtime().catch(report);
             coordinator.request({ reason: "permissions", security: true }).catch(report);
         };
-        window.addEventListener("focus", reconcile);
-        window.addEventListener("online", reconcile);
-        document.addEventListener("visibilitychange", reconcile);
         window.addEventListener("bold:permissions-revision", reconcilePermissions);
         const configuredInterval = Number(import.meta.env?.VITE_TASK_RECONCILE_MS);
         const interval = Number.isFinite(configuredInterval) && configuredInterval >= 60_000 ? configuredInterval : 300_000;
-        const timer = setInterval(reconcile, interval);
-        return () => { mounted = false; dataGeneration++; streamGeneration++; switch_task_activity.current = () => {}; coordinator.dispose(); loader.clear(); catalogCache.clear(); clearInterval(timer); window.removeEventListener("focus", reconcile); window.removeEventListener("online", reconcile); document.removeEventListener("visibilitychange", reconcile); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
+        const stopReconcile = backgroundRefresh(reconcile, {interval});
+        return () => { mounted = false; dataGeneration++; streamGeneration++; switch_task_activity.current = () => {}; coordinator.dispose(); loader.clear(); catalogCache.clear(); stopReconcile(); window.removeEventListener("bold:permissions-revision", reconcilePermissions); disconnect_realtime_stream(); api.cancelRequests(); setPresentationData(null); };
     }, []);
     use_effect(() => { switch_task_activity.current(task_content_active); }, [task_content_active]);
     use_effect(() => {
@@ -6188,8 +6186,13 @@ function TaskAppContent({ externalModules = {} }) {
             const task = data.tasks.find(item => item.id === task_id);
             if (!task) return;
             const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
-            if (status) void togglePipelineCompletion(task, task_scope === "project" ? selected_project_id : null, () => queue_task_status(task_id, status)).catch(error => set_api_error(error.message));
-            else set_api_error("No hay un estado compatible para cambiar la finalización.");
+            void togglePipelineCompletion(task, task_scope === "project" ? selected_project_id : null, serverStatus => {
+                const requested = status || serverStatus;
+                if (!requested) throw new Error("No hay un estado compatible para cambiar la finalización.");
+                return queue_task_status(task_id, requested);
+            }, result => {
+                if (result?.status) apply_optimistic_task_status(task_id, {id:result.status, label:result.status_name, category:result.status_category, isFinal:result.status_is_final});
+            }).catch(error => set_api_error(error.message));
             return;
         }
         set_tasks((current_tasks) => current_tasks.map((task_item) => {

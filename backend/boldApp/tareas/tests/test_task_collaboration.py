@@ -153,6 +153,24 @@ class TaskCollaborationTests(TestCase):
         self.task.followers.filter(assignment=self.cross).delete()
         self.assertEqual(client.post("/api/v2/comments/", {"task":str(self.task.pk),"body":"Sin compartir"}, format="json").status_code,403)
 
+    def test_shared_task_list_batches_membership_checks_and_detail_filters_first(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        tasks = Task.objects.bulk_create([Task(unit=self.unit, status=self.todo, title=f"Compartida {i}", created_by_assignment=self.creator) for i in range(40)])
+        TaskFollower.objects.bulk_create([TaskFollower(task=task, assignment=self.cross, added_by_assignment=self.creator) for task in tasks[:20]])
+        client = self.client_for(self.cross)
+        with CaptureQueriesContext(connection) as queries:
+            response = client.get("/api/v2/tasks/?limit=100")
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(len(queries), 70)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertTrue({str(task.pk) for task in tasks[:20]} <= ids)
+        self.assertFalse({str(task.pk) for task in tasks[20:]} & ids)
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(client.get(f"/api/v2/tasks/{tasks[0].pk}/").status_code, 200)
+        self.assertLess(len(queries), 35)
+        self.assertEqual(client.get("/api/v2/tasks/invalid-id/").status_code, 404)
+
     def test_other_department_project_invitation_shares_only_that_project_and_its_tasks(self):
         owner = self.client_for(self.owner)
         result = owner.patch(f"/api/v2/projects/{self.project.pk}/", {"member_ids":[str(self.cross.pk)]}, format="json")

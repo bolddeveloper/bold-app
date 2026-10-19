@@ -80,19 +80,20 @@ export function TaskPipelineState({taskId, projectId}) {
     </section>;
 }
 
-export async function togglePipelineCompletion(task, projectId, fallback) {
+export async function togglePipelineCompletion(task, projectId, fallback, onSaved) {
     const context = await http.request(`${base}task-pipelines/${task.id}/`);
     const active = projectId ? context.projects.find(item=>item.project === projectId) : context.projects.length === 1 ? context.projects[0] : null;
     if (!active && context.project_managed && !context.projects.length) throw new Error("El estado de esta tarea se gestiona en su proyecto. Solicita acceso al proyecto para cambiarlo.");
     if (!active && context.projects.length) throw new Error("Esta tarea participa en varios pipelines. Selecciona cada proyecto en Estados y llévala a Completada en todos para finalizarla.");
     if (!active) {
         if (!task.completed && !context.personal?.pipeline.stages.some(stage=>stage.kind === "completed")) throw new Error("Tu pipeline no tiene Completada. Agrega esa etapa antes de completar la tarea.");
-        return fallback();
+        return fallback(context.completion_status);
     }
     const selected = active.pipeline.stages.find(stage=>stage.id === active.stage);
     const stage = selected?.kind === "completed" ? active.pipeline.stages.find(stage=>stage.kind === "open") : active.pipeline.stages.find(stage=>stage.kind === "completed");
     if (!stage) throw new Error("Este pipeline no tiene Completada. Agrega esa etapa antes de completar la tarea.");
-    await http.request(`${base}pipelines/${active.pipeline.id}/tasks/${task.id}/`,{method:"PUT",body:{stage:stage.id}});
+    const result = await http.request(`${base}pipelines/${active.pipeline.id}/tasks/${task.id}/`,{method:"PUT",body:{stage:stage.id}});
+    onSaved?.(result);
     announce(task.id,active.project);
 }
 
