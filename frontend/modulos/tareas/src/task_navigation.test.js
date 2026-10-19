@@ -1,6 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {restoreTaskNavigation, readTaskNavigation, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
+import {restoreTaskNavigation, readTaskNavigation, readCollapsedSections, writeCollapsedSections, readTaskFilters, writeTaskFilters} from "./task_navigation.js";
+
+test("los filtros sobreviven recargas y no se mezclan entre cargos o proyectos", () => {
+    const saved = new Map();
+    globalThis.localStorage = {getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)};
+    try {
+        writeTaskFilters("cargo-a:mine", {assignee_ids:["ana","ana"],collaborator_ids:["luis"],priorities:["Alta"],sections:["Pendiente"]});
+        assert.deepEqual(readTaskFilters("cargo-a:mine"), {assignee_ids:["ana"],collaborator_ids:["luis"],priorities:["Alta"],sections:["Pendiente"]});
+        assert.deepEqual(readTaskFilters("cargo-b:mine").assignee_ids, []);
+        writeTaskFilters("cargo-a:project", {priorities:["Baja"]});
+        assert.deepEqual(readTaskFilters("cargo-a:mine").priorities,["Alta"]);
+        writeTaskFilters("cargo-a:mine", {});
+        assert.deepEqual(readTaskFilters("cargo-a:mine").priorities,[]);
+        saved.set("bad", '{"assignee_ids":[{},null,4],"priorities":"invalid"}');
+        assert.deepEqual(readTaskFilters("bad").assignee_ids,[]);
+        saved.set("bad", "no-json");
+        assert.deepEqual(readTaskFilters("bad").sections,[]);
+        globalThis.localStorage = {getItem(){throw Error("storage");},setItem(){throw Error("storage");}};
+        assert.doesNotThrow(()=>writeTaskFilters("bad",{}));
+        assert.deepEqual(readTaskFilters("bad").priorities,[]);
+    } finally {delete globalThis.localStorage;}
+});
 
 test("personal tasks preserve scope, board and Equipo across reloads", () => {
     for (const section of ["tasks", "timeline", "team", "states"]) {

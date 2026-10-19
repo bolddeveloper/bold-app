@@ -1,6 +1,47 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-permissions-dark-contrast", date: "2026-10-19", category: "Correcciones", icon: "update",
+        title: "Contraste en Permisos y políticas",
+        summary: "El modo oscuro mantiene legibles las acciones y descripciones de las políticas.",
+        sections: [{title: "Modo oscuro", items: [
+            "Limpiar y Configurar selección tienen fondos y textos contrastados. La acción principal conserva su énfasis rojo.",
+            "Las descripciones, contadores, códigos y botones de preselección utilizan colores legibles. Las casillas distinguen selección y disponibilidad sobre fondos oscuros.",
+        ]}],
+    },
+    {
+        id: "2026-10-19-task-filters-project-guests-production-hours", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Filtros guardados, proyectos entre equipos y horarios de producción",
+        summary: "Mis tareas conserva sus filtros y los proyectos permiten añadir personas de otros departamentos.",
+        sections: [{title: "Tareas y colaboración", items: [
+            "Los filtros se conservan al recargar, separados por cargo y tablero. Limpiar filtros también actualiza esa preferencia.",
+            "Las personas añadidas a un proyecto pueden consultarlo y leer sus tareas aunque pertenezcan a otro departamento. Esto no concede administración ni acceso a otros proyectos.",
+            "Las personas con acceso a una tarea compartida pueden comentar si su cargo lo permite. Las denegaciones explícitas y los requisitos de seguridad siguen aplicándose.",
+            "Comentarios admite alcance global entre departamentos. Solo puedes comentar en tareas que ya puedes consultar; este permiso no abre tareas privadas.",
+        ]}, {title: "Agenda de producción", items: [
+            "La configuración del calendario es más compacta. El buscador de acceso muestra nombres y correos internos de BOLD, permite buscar sin tildes y evita duplicar personas por sus cargos.",
+            "La vista mensual muestra únicamente los días del mes actual. Las casillas de otros meses quedan vacías, también en el calendario pequeño.",
+            "Compartir agenda permite publicar títulos y horarios de un calendario interno en tu perfil de Equipo. Empieza apagado y solo lo pueden activar sus administradores. Añadir personas y administrar permisos tiene un botón independiente.",
+            "Los horarios del Excel se aplican a las tarjetas de producción. Los rangos sin AM/PM se interpretan como jornada diurna y una hora de inicio sin fin recibe una duración provisional de una hora.",
+            "Las actividades separadas conservan sus intervalos. Los eventos ya programados mantienen sus horas y los casos contradictorios quedan señalados para revisión.",
+        ]}],
+    },
+    {
+        id: "2026-10-19-private-production-calendars", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Calendarios privados y agenda de producción",
+        summary: "Calendario permite alternar entre la agenda conectada a Google, identificada como BOLD, y agendas propias desde una barra de pestañas.",
+        sections: [{title: "Calendarios de BOLD", items: [
+            "Crea calendarios privados y comparte acceso de lectura, edición o administración con personas de BOLD. Compartir agenda permanece a la derecha mientras desplazas las pestañas.",
+            "Calendario producción conserva las agendas importadas de José y Axel. Su acceso se limita a las personas añadidas y no se puede eliminar.",
+            "Los calendarios propios utilizan las vistas de día, semana, mes y agenda. Al abrirlos muestran el período actual.",
+            "El formulario compacto permite crear eventos o tareas con hora de inicio y fin. Más opciones muestra los campos adicionales sin desbordar la ventana.",
+            "Las tarjetas permiten elegir colores con el mezclador habitual. El detalle de las tareas distingue Pendiente y Completada, con botones para completar o volver a pendiente.",
+            "Las tareas internas se pueden completar y reabrir. En la agenda conectada a Google, las tareas con horario se reflejan como bloques de Google Calendar; las tareas nativas de Google Tasks conservan únicamente su fecha.",
+            "Los eventos de BOLD no se sincronizan con Google Calendar. Puedes añadir un enlace de Meet o crear una sala tras autorizar Google Meet y habilitar su API.",
+            "Los horarios y las anotaciones del Excel permanecen en la descripción original. Las fechas inconsistentes quedan señaladas para revisión.",
+        ]}],
+    },
+    {
         id: "2026-10-19-collapsed-sections-suggestion-filters", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Secciones que recuerdan su estado y filtros sin recortes",
         summary: "Las secciones cerradas permanecen cerradas al recargar y los filtros de Sugerencias aprovechan mejor el espacio.",

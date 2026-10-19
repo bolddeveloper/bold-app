@@ -12,6 +12,7 @@ from boldApp.autenticacion.services import decrypt_secret, encrypt_secret
 from .models import GoogleConnection
 
 BASES = {
+    "meet": "https://meet.googleapis.com/v2",
     "gmail": "https://gmail.googleapis.com/gmail/v1",
     "calendar": "https://www.googleapis.com/calendar/v3",
     "tasks": "https://tasks.googleapis.com/tasks/v1",

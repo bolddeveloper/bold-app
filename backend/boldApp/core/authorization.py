@@ -536,6 +536,28 @@ def resolve_access(
             policy_version=context.policy_version,
         )
 
+    # A project invitation grants only this project's read access. Administration
+    # and unit-wide policies are never inherited from the inviting department.
+    if permission.code == "tasks.project.read" and resource_id is not None and own_unit.id != target_unit.id:
+        from .resource_context import resolve_resource_context
+        project_context = resolve_resource_context(permission, resource_id)
+        if project_context.get("project_unit_id") == target_unit.id and assignment.id in project_context.get("project_member_assignment_ids", ()):
+            if resolve_access(assignment, permission, own_unit, context=context).allowed:
+                return _decision(True, "Lectura del proyecto al que se añadió esta asignación.",
+                    "project_member_read", "project_membership", policy_version=context.policy_version)
+
+    # Commenting on an explicitly shared task also requires the person's own
+    # comment policy and effective read permission for that exact task.
+    if permission.code == "tasks.comment.create" and resource_id is not None and own_unit.id != target_unit.id:
+        from .resource_context import resolve_resource_context
+        comment_context = resolve_resource_context(permission, resource_id)
+        if comment_context.get("task_unit_id") == target_unit.id and assignment.id in comment_context.get("task_reader_assignment_ids", ()):
+            read_permission = Permission.objects.filter(code="tasks.task.read", is_active=True).first()
+            if read_permission and resolve_access(assignment, permission, own_unit, context=context).allowed and resolve_access(
+                assignment, read_permission, target_unit, resource_id=resource_id).allowed:
+                return _decision(True, "Comentarios en una tarea compartida con acceso de lectura vigente.",
+                    "shared_task_comment", "task_assignment", policy_version=context.policy_version)
+
     # An assignment shares only this task's read access, not the source unit.
     # Explicit target-unit denials above and the reader's own policies still apply.
     if permission.code == "tasks.task.read" and resource_id is not None and own_unit.id != target_unit.id:

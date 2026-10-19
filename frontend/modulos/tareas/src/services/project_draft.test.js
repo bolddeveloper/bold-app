@@ -36,5 +36,5 @@ test("project forms use atomic member_ids rather than per-person API requests", 
     assert.match(source, /api\.update\("projects", project_id, \{ member_ids \}\)/);
     assert.doesNotMatch(source, /api\.(?:create|update|remove)\("project-members"/);
     assert.match(source, /project_form_initialized\.current\.initialize\(draftKey/);
-    assert.match(source, /set_project_people_ids\(initialProjectMemberIds\(project, unitPeople\)\)/);
+    assert.match(source, /set_project_people_ids\(initialProjectMemberIds\(project, session.directory\)\)/);
 });

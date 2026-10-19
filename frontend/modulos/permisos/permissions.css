@@ -1108,6 +1108,12 @@
     cursor: pointer;
 }
 
+.permissions_bulk_bar > button.permissions_primary {
+    border-color: var(--bold_red, #ef1f2d);
+    background: var(--bold_red, #ef1f2d);
+    color: #fff;
+}
+
 .permissions_drawer_backdrop {
     position: fixed;
     inset: 0;
@@ -1486,6 +1492,43 @@
 .theme_dark .permissions_module .permissions_policy_group > summary {
     background: #292e37;
     color: #edf0f5;
+}
+
+.theme_dark .permissions_module :is(.permissions_presets small, .permissions_presets span, .permissions_policy_group > summary small, .permissions_bulk_bar small, .permissions_catalog code, .permissions_search) {
+    color: #c7ced9;
+}
+
+.theme_dark .permissions_module :is(.permissions_bulk_bar > button:not(.permissions_primary), .permissions_policy_group_meta button, .permissions_header_actions button:not(.permissions_primary):not(.permissions_unlocked), .permissions_panel header > button:not(.permissions_primary), .permissions_secondary) {
+    background: #292e37;
+    border-color: #465060;
+    color: #edf0f5;
+}
+
+.theme_dark .permissions_module .permissions_bulk_bar > button.permissions_primary {
+    background: #c81729;
+    border-color: #e14857;
+    color: #fff;
+}
+
+.theme_dark .permissions_module .permissions_policy_select {
+    background: #191d24;
+    border-color: #8591a3;
+    color: #9ce0bd;
+}
+
+.theme_dark .permissions_module .permissions_policy_select[aria-pressed="true"] {
+    background: #153b2b;
+    border-color: #279968;
+}
+
+.theme_dark .permissions_module .permissions_policy_select:disabled {
+    background: #343a45;
+    border-color: #8591a3;
+}
+
+.theme_dark .permissions_module .permissions_policy_items > article.is_selected {
+    border-color: #279968;
+    box-shadow: 0 0 0 1px #279968 inset;
 }
 
 .theme_dark .permissions_module .permissions_policy_items > article:hover, .theme_dark .permissions_module .permissions_presets > button:hover {

@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { workspaceApi } from "./workspace_api.js";
 import "./workspace.css";
 
-export default function GoogleConnection({ onConnected }) {
-    const authorized = connection => ["drive", "calendar", "tasks", "contacts", "gmail"].every(service => connection?.services?.[service]?.status === "available");
+export default function GoogleConnection({ onConnected, service = "all" }) {
+    const meetOnly = service === "meet";
+    const authorized = connection => (meetOnly ? ["meet"] : ["drive", "calendar", "tasks", "contacts", "gmail"]).every(service => connection?.services?.[service]?.status === "available");
     const shell = useShell();
     const [connection, setConnection] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
     const popup = useRef(null), watcher = useRef(null);
@@ -29,12 +30,12 @@ export default function GoogleConnection({ onConnected }) {
         setError(""); setBusy(true);
         popup.current = window.open("", "bold-workspace", "width=560,height=740");
         try {
-            const result = await workspaceApi.start();
+            const result = await workspaceApi.start(service);
             if (!popup.current) { window.location.assign(result.authorization_url); return; }
             popup.current.location.href = result.authorization_url;
             clearInterval(watcher.current);
             watcher.current = setInterval(() => { if (popup.current?.closed) { clearInterval(watcher.current); setBusy(false); load(true); } }, 700);
         } catch (problem) { popup.current?.close(); setBusy(false); setError(problem.message); }
     }
-    return <section className="workspace_connection"><h2>Conectar servicios de Google</h2><p>{connection?.connected ? `Conectado como ${connection.email}` : `Conecta ${accountHint}.`}</p><p>Autoriza Drive, Docs, Sheets, Slides, Calendario, Google Tasks, Contactos y Gmail en una sola conexión. Cada empleado conecta su propia cuenta y conserva sus permisos de Google.</p>{connection?.connected && <p>{authorized(connection) ? "Todos los servicios están autorizados." : "Faltan permisos. Conecta los servicios y selecciona todos los permisos en Google."}</p>}{error && <p role="alert">{error}</p>}{connection ? <div className="workspace_actions"><button disabled={busy || !connection.configured} onClick={connect}>{busy ? "Conectando…" : "Conectar servicios de Google"}</button>{connection.connected && <button onClick={async () => { if (!await confirmBold("¿Desconectar tu cuenta de Google de BOLD?")) return; try { await workspaceApi.disconnect(); await load(true); } catch (problem) { setError(problem.message); } }}>Desconectar mi cuenta</button>}<button onClick={() => load(true)}>Verificar conexión</button></div> : <button onClick={load}>Comprobar conexión</button>}{connection && !connection.configured && <p>El administrador debe subir el JSON OAuth una vez en Administración → Conectores. Los empleados solo tendrán que conectar su cuenta.</p>}</section>;
+    return <section className="workspace_connection"><h2>{meetOnly ? "Autorizar Google Meet" : "Conectar servicios de Google"}</h2><p>{connection?.connected ? `Conectado como ${connection.email}` : `Conecta ${accountHint}.`}</p><p>{meetOnly ? "Autoriza la creación de salas de Google Meet. Los eventos de este calendario se guardan únicamente en BOLD." : "Autoriza Drive, Docs, Sheets, Slides, Calendario, Google Tasks, Contactos y Gmail en una sola conexión. Cada empleado conecta su propia cuenta y conserva sus permisos de Google."}</p>{connection?.connected && <p>{authorized(connection) ? "Todos los servicios están autorizados." : "Faltan permisos. Conecta los servicios y selecciona todos los permisos en Google."}</p>}{error && <p role="alert">{error}</p>}{connection ? <div className="workspace_actions"><button disabled={busy || !connection.configured} onClick={connect}>{busy ? "Conectando…" : (meetOnly ? "Autorizar Google Meet" : "Conectar servicios de Google")}</button>{connection.connected && !meetOnly && <button onClick={async () => { if (!await confirmBold("¿Desconectar tu cuenta de Google de BOLD?")) return; try { await workspaceApi.disconnect(); await load(true); } catch (problem) { setError(problem.message); } }}>Desconectar mi cuenta</button>}<button onClick={() => load(true)}>Verificar conexión</button></div> : <button onClick={load}>Comprobar conexión</button>}{connection && !connection.configured && <p>El administrador debe subir el JSON OAuth una vez en Administración → Conectores. Los empleados solo tendrán que conectar su cuenta.</p>}</section>;
 }

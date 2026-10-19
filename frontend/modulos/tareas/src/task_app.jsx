@@ -3,7 +3,7 @@ import {useAnchoredPopover} from "../../core/shared/use_anchored_popover.js";
 import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
 import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/shared/people.js";
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
-import {readTaskNavigation, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
+import {readTaskNavigation, readTaskFilters, writeTaskFilters, normalizeTaskFilters, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import TeamPanel, {TeamSharingContext, SharingEye, useTeamSharing} from "./team.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
@@ -653,7 +653,7 @@ function ProjectMembersButton({project}) {
     use_effect(() => { setAnchor(null); setQuery(""); }, [project.id]);
     const real = is_using_real_backend();
     if (real && !Array.isArray(project.member_ids)) return null;
-    const members = real ? membersForUnit(core.directory, project.unitId || project.unit) : team_members;
+    const members = real ? core.directory : team_members;
     const assigned = uniquePeople(members.filter(member => project.member_ids?.includes(member.id) || project.owner_assignment === member.id), [project.owner_assignment, ...(project.member_ids || [])]);
     const text = normalizeSearchText(query);
     const matches = member => normalizeSearchText(`${member.name} ${member.email || ""}`).includes(text);
@@ -4155,7 +4155,7 @@ function render_project_modal(props) {
                     <section className="project_create_step">
                         <span><strong>5</strong> Personas relacionadas al proyecto</span>
                         <CollaboratorsSelector
-                            members={unit_people}
+                            members={props.directory || []}
                             selected_ids={project_people_ids}
                             on_change={set_project_people_ids}
                             label="Personas relacionadas"
@@ -4398,12 +4398,6 @@ function TaskAppContent({ externalModules = {} }) {
     const [active_task_tool, set_active_task_tool] = use_state(null);
     const [sort_field, set_sort_field] = use_state(real ? "position" : "due_day");
     const [sort_direction, set_sort_direction] = use_state("asc");
-    const [active_filters, set_active_filters] = use_state({
-        assignee_ids: [],
-        collaborator_ids: [],
-        priorities: [],
-        sections: []
-    });
     const [visible_fields, set_visible_fields] = use_state({
         assignee: true,
         collaborators: true,
@@ -4537,6 +4531,14 @@ function TaskAppContent({ externalModules = {} }) {
     const [selected_project_id, set_selected_project_id] = use_state(() => initial_navigation.projectId || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
     const [task_scope, set_task_scope] = use_state(initial_navigation.scope);
     const view_storage_key = task_scope === "project" ? `bold_task_view:${selected_project_id}` : `${navigation_key}:${task_scope}:view`;
+    const filters_key = `${navigation_key}:${task_scope}:${task_scope === "project" ? selected_project_id : task_scope === "workspace" ? active_workspace_id : "personal"}:filters`;
+    const [filters_state, set_filters_state] = use_state(() => ({key: filters_key, filters: readTaskFilters(filters_key)}));
+    const active_filters = use_memo(() => filters_state.key === filters_key ? filters_state.filters : readTaskFilters(filters_key), [filters_state, filters_key]);
+    function set_active_filters(update) {
+        const next = normalizeTaskFilters(typeof update === "function" ? update(active_filters) : update);
+        writeTaskFilters(filters_key, next);
+        set_filters_state({key: filters_key, filters: next});
+    }
     const collapsed_sections_key = `${navigation_key}:${task_scope}:${task_scope === "project" ? selected_project_id : task_scope === "workspace" ? active_workspace_id : "personal"}:collapsed-sections`;
     const [collapsed_sections_state, set_collapsed_sections_state] = use_state(() => ({key: collapsed_sections_key, ids: readCollapsedSections(collapsed_sections_key)}));
     const collapsed_sections = collapsed_sections_state.key === collapsed_sections_key ? collapsed_sections_state.ids : readCollapsedSections(collapsed_sections_key);
@@ -4739,13 +4741,12 @@ function TaskAppContent({ externalModules = {} }) {
             if (editing_project_id && !project) return;
             project_form_initialized.current.initialize(draftKey, () => {
                 const unitId = project?.unitId || project?.unit || session.activeUnit?.id || "";
-                const unitPeople = membersForUnit(session.directory, unitId);
                 set_project_avatar_data_url(project?.avatar_data_url || "");
                 set_project_status(({ active: "Activo", inactive: "Inactivo", pending: "Pendiente" })[project?.status?.toLowerCase()] || project?.status || "Activo");
                 set_project_priority(project?.priority || "Media");
                 set_project_unit_id(unitId);
                 set_project_owner_assignment_id(project?.owner_assignment || (String(session.activeAssignment?.unitId) === String(unitId) ? session.activeAssignment?.id : session.directory?.find(person => String(person.unitId) === String(unitId))?.id) || "");
-                set_project_people_ids(initialProjectMemberIds(project, unitPeople));
+                set_project_people_ids(initialProjectMemberIds(project, session.directory));
             });
         } else {
             project_form_initialized.current.reset();
@@ -4823,7 +4824,6 @@ function TaskAppContent({ externalModules = {} }) {
     function handle_project_select(project_id) {
         remember_project(project_id);
         const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(window.history.state, "", url);
-        if (real) set_active_filters(filters => ({ ...filters, sections: [] }));
         set_selected_project_id(project_id);
         set_task_scope("project");
         set_active_module("tasks");
@@ -6531,7 +6531,7 @@ function TaskAppContent({ externalModules = {} }) {
         }
 
         if (active_modal === "share") {
-            return <ShareProjectModal project={selected_project} members={membersForUnit(session.directory, selected_project?.unitId || selected_project?.unit)} pending={pending} onClose={() => set_active_modal(null)} onSave={handle_save_project_members} onError={set_api_error} />;
+            return <ShareProjectModal project={selected_project} members={session.directory} pending={pending} onClose={() => set_active_modal(null)} onSave={handle_save_project_members} onError={set_api_error} />;
         }
 
         if (active_modal === "project") {
@@ -6600,7 +6600,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
             overlays={<>
                 {render_active_modal()}
                 {render_project_menu(handle_request_delete_project, active_modal === "project_menu")}
-                {project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={membersForUnit(session.directory, projects.find(project => project.id === project_preview.id)?.unitId || projects.find(project => project.id === project_preview.id)?.unit)} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}
+                {project_preview && projects.some(project => project.id === project_preview.id) && <ProjectPreview project={projects.find(project => project.id === project_preview.id)} members={session.directory} anchor={project_preview.rect} pending={pending} onClose={() => set_project_preview(null)} onSave={ids => handle_save_project_members(ids, project_preview.id, false)} onUpdate={changes => handle_update_project(project_preview.id, changes)} />}
                 {workspace_assignment && <WorkspaceAssignmentModal item={workspace_assignment.item} itemType={workspace_assignment.type} workspaces={workspaces.filter(folder => !folder.shared)} onToggle={toggle_workspace_assignment} onClose={() => set_workspace_assignment(null)} />}
                 <NoticeLayer>
                 {visible_failed_task_creates.length > 0 && dismissed_failed_notice !== failed_notice_key && <div className="task_failed_drafts" role="alert">

@@ -207,6 +207,34 @@ class TeamVoiceView(TeamView):
 class TeamMeetingsView(TeamView):
 
     def get(self, request, employee_id):
+        from boldApp.calendario.models import AppCalendar, AppCalendarEvent
+        response = self.google_meetings(request, employee_id)
+        calendars = AppCalendar.objects.filter(team_shares__user__employee_id=employee_id).filter(
+            Q(owner__employee_id=employee_id) | Q(members__user__employee_id=employee_id, members__role="manager")
+        ).distinct()
+        if not calendars.exists():
+            return response
+        zone_name = response.data.get("time_zone", "America/Guatemala")
+        try:
+            day = date.fromisoformat(request.query_params.get("date", ""))
+            zone = ZoneInfo(zone_name)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise serializers.ValidationError("Selecciona una fecha válida.")
+        start = datetime.combine(day, time.min, tzinfo=zone)
+        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=zone)
+        meetings = list(response.data.get("meetings", []))
+        for row in AppCalendarEvent.objects.filter(calendar__in=calendars, start_at__lt=end, end_at__gt=start).select_related("calendar"):
+            data = row.data
+            if data.get("status") == "cancelled":
+                continue
+            # All-day dates are calendar dates, independent of the viewer's time zone.
+            if data.get("start", {}).get("date") and not (data["start"]["date"] <= day.isoformat() < data["end"]["date"]):
+                continue
+            meetings.append({"id": f"bold:{row.pk}", "title": "Ocupado" if data.get("visibility") in ("private", "confidential") else data.get("summary") or "Evento",
+                "start": row.start_at.isoformat(), "end": row.end_at.isoformat(), "all_day": bool(data.get("start", {}).get("date")), "calendar": row.calendar.name})
+        return Response({"state": "shared", "time_zone": zone_name, "meetings": sorted(meetings, key=lambda row: row["start"])})
+
+    def google_meetings(self, request, employee_id):
         from boldApp.calendario.models import CalendarDraft
         from boldApp.calendario.presence import meeting_window
         from boldApp.calendario.service import event_path, google_request

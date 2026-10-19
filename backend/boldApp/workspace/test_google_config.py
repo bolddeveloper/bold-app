@@ -218,7 +218,10 @@ class GoogleConfigurationTests(TestCase):
         values = parse_qs(urlparse(result.data["authorization_url"]).query)
         self.assertEqual(values["include_granted_scopes"], ["true"])
         self.assertIn(next(iter(SCOPES["tasks"])), values["scope"][0])
-        self.assertEqual(set(values["scope"][0].split()), {"openid", "email"} | set().union(*SCOPES.values()))
+        self.assertEqual(set(values["scope"][0].split()), {"openid", "email"} | set().union(*(scopes for key, scopes in SCOPES.items() if key != "meet")))
+        meet = self.client.post("/api/v2/workspace/oauth/start/", {"service": "meet"}, format="json")
+        meet_values = parse_qs(urlparse(meet.data["authorization_url"]).query)
+        self.assertEqual(set(meet_values["scope"][0].split()), {"openid", "email"} | SCOPES["meet"])
 
     @patch("boldApp.calendario.tasks.google_request")
     def test_legacy_drafts_and_changed_accounts_are_never_cleaned_by_another_token(self, request):

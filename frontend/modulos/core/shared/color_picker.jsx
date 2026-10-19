@@ -28,5 +28,5 @@ function ColorPanel({anchor,value,onChange,close,label}) {
         <label className="bold_color_accessible">Saturación<input aria-label="Saturación" type="range" min="0" max="100" value={Math.round(hsv[1]*100)} onChange={e=>change([hsv[0],Number(e.target.value)/100,hsv[2]])}/></label>
         <label className="bold_color_accessible">Brillo<input aria-label="Brillo" type="range" min="0" max="100" value={Math.round(hsv[2]*100)} onChange={e=>change([hsv[0],hsv[1],Number(e.target.value)/100])}/></label>
         <div className="bold_color_presets">{["#ef1f2d","#f1db8c","#813782","#3d6489","#318246"].map(color=><button key={color} type="button" aria-label={`Usar ${color}`} style={{background:color}} onClick={()=>choose(color)}/>)}</div>{error&&<p role="alert">{error}</p>}
-    </section></div>,document.body);
+    </section></div>,anchor.closest("dialog[open]") || document.body);
 }

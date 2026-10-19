@@ -39,6 +39,40 @@ class TeamTests(TestCase):
         self.client.force_authenticate(assignment.employee.user_account)
         self.client.credentials(HTTP_X_ASSIGNMENT_ID=str(assignment.pk))
 
+    def test_native_agenda_opt_in_independent_from_google_and_revoked_access(self):
+        from boldApp.calendario.models import AppCalendar, CalendarMember
+        user = self.owner.employee.user_account
+        calendar = AppCalendar.objects.create(name="Producción", owner=user)
+        root = f"/api/v2/calendar/local/{calendar.pk}/"
+        self.client.post(root + "events/", {"summary": "Grabación", "description": "No publicar", "start": {"dateTime": "2026-10-19T09:00:00-06:00"}, "end": {"dateTime": "2026-10-19T10:00:00-06:00"}}, format="json")
+        self.client.post(root + "events/", {"summary": "Privado", "visibility": "private", "start": {"date": "2026-10-19"}, "end": {"date": "2026-10-20"}}, format="json")
+        meetings_url = self.profile_url + "meetings/?date=2026-10-19"
+        self.assertEqual(self.client.get(meetings_url).data["state"], "hidden")
+        self.assertEqual(self.client.put(root + "team-share/", {"share_team": "true"}, format="json").status_code, 400)
+        self.assertTrue(self.client.put(root + "team-share/", {"share_team": True}, format="json").data["share_team"])
+        self.login(self.reader)
+        with patch("boldApp.calendario.service.google_request") as google:
+            result = self.client.get(meetings_url)
+            google.assert_not_called()
+        self.assertEqual(result.data["state"], "shared")
+        self.assertEqual({row["title"] for row in result.data["meetings"]}, {"Grabación", "Ocupado"})
+        self.assertTrue(any(row["all_day"] for row in result.data["meetings"]))
+        self.assertNotIn("description", result.data["meetings"][0])
+        self.assertEqual(self.client.get(root + "events/").status_code, 404)
+        self.assertEqual(self.client.put(root + "team-share/", {"share_team": True}, format="json").status_code, 404)
+        member = CalendarMember.objects.create(calendar=calendar, user=self.reader.employee.user_account, role="reader")
+        self.assertEqual(self.client.put(root + "team-share/", {"share_team": True}, format="json").status_code, 403)
+        member.role = "manager"
+        member.save()
+        self.assertEqual(self.client.put(root + "team-share/", {"share_team": True}, format="json").status_code, 200)
+        reader_url = f"{self.root}{self.reader.employee_id}/meetings/?date=2026-10-19"
+        self.assertEqual(self.client.get(reader_url).data["state"], "shared")
+        member.delete()
+        self.assertEqual(self.client.get(reader_url).data["state"], "hidden")
+        self.login(self.owner)
+        self.client.put(root + "team-share/", {"share_team": False}, format="json")
+        self.assertEqual(self.client.get(meetings_url).data["state"], "hidden")
+
     def publish(self, tasks=None, visible=True):
         return self.client.put(self.root + "self/", {"task_ids": [str(task.pk) for task in (tasks or [self.task])], "visible": visible}, format="json")
 

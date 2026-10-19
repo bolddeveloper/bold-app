@@ -15,6 +15,7 @@ from boldApp.autenticacion.services import decrypt_secret, encrypt_secret
 from .models import GoogleOAuthConfiguration, GoogleConnection
 
 SCOPES = {
+    "meet": {"https://www.googleapis.com/auth/meetings.space.created"},
     "gmail": {"https://www.googleapis.com/auth/gmail.readonly"},
     "drive": {"https://www.googleapis.com/auth/drive"},
     "calendar": {"https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar.calendars.readonly"},

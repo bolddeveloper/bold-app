@@ -116,6 +116,36 @@ class CalendarTests(TestCase):
         self.assertEqual(google.call_count, 2)
         self.assertEqual(google.call_args.kwargs["base"], "https://people.googleapis.com")
 
+    def test_timed_task_uses_calendar_times_and_private_metadata(self):
+        payload = {"summary": "Trabajo", "kind": "task", "start": {"dateTime": "2026-10-19T09:00:00-06:00"}, "end": {"dateTime": "2026-10-19T10:30:00-06:00"}}
+        def created(user, method, path, **kwargs):
+            return {"id": "block", **kwargs["body"]}
+        with patch("boldApp.calendario.views.google_request", side_effect=created) as google:
+            result = self.member_client.post("/api/v2/calendar/events/", payload, format="json")
+            self.assertEqual(result.status_code, 201, result.data)
+            sent = google.call_args.kwargs["body"]
+            self.assertEqual(sent["start"], payload["start"])
+            self.assertEqual(sent["end"], payload["end"])
+            self.assertNotIn("kind", sent)
+            self.assertEqual(sent["extendedProperties"]["private"]["bold_kind"], "task")
+            self.assertEqual(result.data["kind"], "task")
+        current = {"id": "block", **sent}
+        with patch("boldApp.calendario.views.google_request", side_effect=[current, {**current, "extendedProperties": {"private": {"bold_kind": "task", "bold_completed": "true"}}}]) as google:
+            result = self.member_client.patch("/api/v2/calendar/events/block/", {"completed": True}, format="json")
+            self.assertEqual(result.status_code, 200, result.data)
+            self.assertTrue(result.data["completed"])
+            self.assertEqual(google.call_args.kwargs["body"]["extendedProperties"]["private"]["bold_kind"], "task")
+
+    def test_google_custom_color_uses_private_metadata_without_changing_task_kind(self):
+        from boldApp.calendario.service import google_event_data, public_event
+        current = {"extendedProperties": {"private": {"bold_kind": "task", "other": "kept"}}}
+        data = google_event_data(validate_event({"color": "#123ABC", "colorId": "9"}), current)
+        self.assertNotIn("color", data)
+        self.assertEqual(data["colorId"], "9")
+        self.assertEqual(data["extendedProperties"]["private"], {"bold_kind": "task", "other": "kept", "bold_color": "#123abc"})
+        self.assertEqual(public_event(data)["color"], "#123abc")
+        self.assertEqual(public_event(data)["kind"], "task")
+
     def test_create_event_requests_google_meet(self):
         self.connect()
         with patch("boldApp.workspace.service.requests.post", return_value=GoogleResponse({"access_token": "access"})), patch("boldApp.workspace.service.requests.request", return_value=GoogleResponse({"id": "new", "summary": "Reunión"})) as google:

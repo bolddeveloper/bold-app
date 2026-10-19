@@ -1,7 +1,21 @@
 export const dayKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+export const calendarColors = ["#7986cb", "#33b679", "#8e24aa", "#e67c73", "#f6c026", "#f5511d", "#039be5", "#616161", "#3f51b5", "#0b8043", "#d50000"];
+export const calendarCardColor = event => /^#[0-9a-f]{6}$/i.test(event.color || "") ? event.color : calendarColors[Number(event.colorId) - 1] || "#4c9ed7";
+export function closestCalendarColor(color) {
+    const rgb = hex => [1,3,5].map(index => parseInt(hex.slice(index,index + 2),16));
+    const target = rgb(color);
+    const distances = calendarColors.map(value => rgb(value).reduce((sum, channel, index) => sum + (channel - target[index]) ** 2, 0));
+    return String(distances.indexOf(Math.min(...distances)) + 1);
+}
 export const fromDay = key => new Date(`${key}T12:00:00`);
 export const addDays = (date, count) => { const next = new Date(date); next.setDate(next.getDate() + count); return next; };
 export const weekStart = date => addDays(date, -date.getDay());
+export function monthDays(cursor) {
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const count = Math.ceil((first.getDay() + last.getDate()) / 7) * 7;
+    return Array.from({length: count}, (_, index) => addDays(weekStart(first), index));
+}
 // Restore the preferred layout, never the previously browsed date.
 export function initialCalendarNavigation(saved, now = new Date()) {
     return {view: ["day", "week", "month", "agenda"].includes(saved?.view) ? saved.view : "week", cursor: new Date(now)};

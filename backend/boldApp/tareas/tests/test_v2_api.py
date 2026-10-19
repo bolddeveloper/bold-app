@@ -410,7 +410,7 @@ class TasksV2ApiTests(TransactionTestCase):
         )
         self.assertEqual(edited.status_code, 200, edited.data)
 
-    def test_project_members_must_belong_to_project_unit(self):
+    def test_project_members_can_belong_to_other_departments(self):
         ProjectMember.objects.filter(
             project=self.ops_project,
             assignment=self.david_assignment,
@@ -437,9 +437,8 @@ class TasksV2ApiTests(TransactionTestCase):
             },
             format="json",
         )
-        self.assertEqual(invalid.status_code, 400, invalid.data)
-        self.assertIn("assignment", invalid.data)
-        self.assertFalse(
+        self.assertEqual(invalid.status_code, 201, invalid.data)
+        self.assertTrue(
             ProjectMember.objects.filter(
                 project=self.ops_project,
                 assignment=self.ana_assignment,

@@ -66,8 +66,8 @@ class ProjectSerializer(DriveImagesMixin, serializers.ModelSerializer):
             )
         for member in attrs.get("member_ids", []):
             validate_active_assignment(member, "member_ids")
-            if not member.employee.is_active or member.position.unit_id != unit.id:
-                raise serializers.ValidationError({"member_ids": "Selecciona plazas activas del departamento del proyecto."})
+            if not member.employee.is_active:
+                raise serializers.ValidationError({"member_ids": "Selecciona personas activas de BOLD."})
         if self.instance and unit.id != self.instance.unit_id and "member_ids" not in attrs:
             raise serializers.ValidationError({"member_ids": "Al cambiar de departamento, selecciona nuevamente sus participantes."})
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
@@ -144,10 +144,9 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         project = attrs.get("project") or getattr(self.instance, "project", None)
         assignment = attrs.get("assignment") or getattr(self.instance, "assignment", None)
-        if project and assignment and assignment.position.unit_id != project.unit_id:
-            raise serializers.ValidationError(
-                {"assignment": "La asignacion debe pertenecer al departamento del proyecto."}
-            )
+        validate_active_assignment(assignment)
+        if assignment and not assignment.employee.is_active:
+            raise serializers.ValidationError({"assignment": "Selecciona una persona activa de BOLD."})
         return attrs
 
 

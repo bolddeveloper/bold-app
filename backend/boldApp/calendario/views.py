@@ -12,7 +12,7 @@ from boldApp.administrativo.services import record_system_event
 from boldApp.workspace.models import GoogleConnection
 from boldApp.workspace.image_storage import provider_images
 from .models import CalendarDraft
-from .service import CalendarReconnect, CalendarUnavailable, event_path, google_request, is_task_mirror, public_event, validate_event
+from .service import CalendarReconnect, CalendarUnavailable, event_path, google_request, is_task_mirror, public_event, validate_event, google_event_data
 
 
 def current_subject(user):
@@ -85,7 +85,7 @@ class CalendarEventsView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        data = validate_event(request.data)
+        data = google_event_data(validate_event(request.data))
         if data.pop("addMeet", False):
             data["conferenceData"] = {"createRequest": {"requestId": secrets.token_urlsafe(18), "conferenceSolutionKey": {"type": "hangoutsMeet"}}}
         if not all(data.get(key) for key in ("summary", "start", "end")):
@@ -114,7 +114,7 @@ class CalendarEventView(APIView):
         target = current.get("recurringEventId") if scope == "series" else event_id
         if not target:
             target = event_id
-        data = validate_event(request.data)
+        data = google_event_data(validate_event(request.data), current)
         if current.get("recurringEventId") and scope == "instance" and "recurrence" in data:
             raise ValidationError("Cambiar la repetición requiere aplicar los cambios a toda la serie.")
         if data.pop("removeMeet", False):
@@ -201,7 +201,7 @@ class CalendarDraftView(APIView):
                 draft.last_seen_at = timezone.now()
                 draft.save(update_fields=["last_seen_at"])
                 return Response(public_event(event))
-            data = validate_event(request.data.get("event"))
+            data = google_event_data(validate_event(request.data.get("event")))
             data.pop("addMeet", None)
             if not all(data.get(key) for key in ("summary", "start", "end")):
                 raise ValidationError("Título, inicio y fin son obligatorios.")

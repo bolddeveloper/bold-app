@@ -24,3 +24,16 @@ export function readCollapsedSections(key) {
 export function writeCollapsedSections(key, ids) {
     try { globalThis.localStorage?.setItem(key, JSON.stringify(ids)); } catch { /* Mantener el estado de esta sesión si el navegador no permite guardar. */ }
 }
+
+export function normalizeTaskFilters(value) {
+    return Object.fromEntries(["assignee_ids", "collaborator_ids", "priorities", "sections"].map(key => [key,
+        Array.isArray(value?.[key]) ? [...new Set(value[key].filter(item => typeof item === "string" && item.length <= 200))].slice(0, 100) : [],
+    ]));
+}
+export function readTaskFilters(key) {
+    try {return normalizeTaskFilters(JSON.parse(globalThis.localStorage?.getItem(key) || "null"));}
+    catch {return normalizeTaskFilters(null);}
+}
+export function writeTaskFilters(key, value) {
+    try {globalThis.localStorage?.setItem(key, JSON.stringify(normalizeTaskFilters(value)));} catch { /* Los filtros siguen funcionando sin almacenamiento. */ }
+}
