@@ -13,6 +13,7 @@ import { useCore } from "./core_provider.jsx";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
 import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
+import { startNotificationBellReminder } from "./notification_bell.js";
 const icon_map = { brands: users_icon, profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
