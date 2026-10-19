@@ -1,0 +1,167 @@
+[     745ms] The requested module '/core_provider.jsx?t=1792305818268' does not provide an export named 'CoreContext'
+[     745ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5174/favicon.ico:0
+[   15824ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   15894ms] TypeError: Cannot read properties of undefined (reading 'filter')
+    at render_tasks_module (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/task_app.jsx?t=1792336857869:4771:41)
+    at Preview (http://localhost:5174/output/playwright/pipelines-preview.jsx:67:5)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+[   15892ms] [WARNING] %s
+
+%s
+ An error occurred in the <Preview> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[   16584ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   16628ms] TypeError: Cannot read properties of undefined (reading 'filter')
+    at render_tasks_module (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/task_app.jsx?t=1792336857869:4771:41)
+    at Preview (http://localhost:5174/output/playwright/pipelines-preview.jsx:67:5)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+[   16627ms] [WARNING] %s
+
+%s
+ An error occurred in the <Preview> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[   78368ms] [ERROR] You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   78378ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792336857869:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[   78378ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[   79475ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   79539ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792336857869:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[   79535ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[   80174ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   80221ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792336857869:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[   80218ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[  164793ms] [ERROR] You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  164805ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792337114594:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[  164800ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[  165408ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  165465ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792337114594:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[  165457ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[  317406ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  317461ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792337114594:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[  317460ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[  318044ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  318088ms] TypeError: Cannot read properties of undefined (reading 'stage')
+    at PipelineFields (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792337114594:81:142)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[  318087ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelineFields> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[  347298ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  348063ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  350447ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  518475ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  519216ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  521746ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  630585ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  631419ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  634144ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  665227ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  665976ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  668835ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5

@@ -1,0 +1,18 @@
+[    8892ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:5
+[    9215ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/auth/shortcut-settings/:0
+[  172488ms] Error: useCore requiere CoreProvider.
+    at useCore (http://localhost:5178/core_provider.jsx:21:20)
+    at ApplicationWorkspace (http://localhost:5178/app.jsx:31:16)
+    at Object.react_stack_bottom_frame (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:394634)
+    at renderWithHooks (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:4:182819)
+    at updateFunctionComponent (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:5625)
+    at beginWork (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:52667)
+    at runWithFiberInDEV (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:4:20381)
+    at performUnitOfWork (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:190802)
+    at workLoopSync (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:186747)
+    at renderRootSync (http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:6:186242)
+[  172487ms] [WARNING] %s
+
+%s
+ An error occurred in the <ApplicationWorkspace> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:3

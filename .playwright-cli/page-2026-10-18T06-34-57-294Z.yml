@@ -1,0 +1,148 @@
+- main [ref=e4]:
+  - generic [ref=e6]:
+    - button "Abrir navegacion" [ref=e7] [cursor=pointer]
+    - heading "Inicio" [level=1] [ref=e9]
+    - generic [ref=e10]:
+      - button "Abrir tutorial de este módulo" [ref=e11] [cursor=pointer]
+      - button "Novedades sin leer" [ref=e15] [cursor=pointer]
+      - button "Mostrar lista de miembros" [ref=e21] [cursor=pointer]
+      - button "Notificaciones" [ref=e26] [cursor=pointer]
+  - generic [ref=e32]:
+    - combobox [ref=e38]
+    - generic [ref=e39]:
+      - button "Abrir tutorial de este módulo" [ref=e40] [cursor=pointer]
+      - button "Novedades sin leer" [ref=e45] [cursor=pointer]
+      - button "Activar modo oscuro" [ref=e52] [cursor=pointer]
+      - button "Mostrar lista de miembros" [ref=e56] [cursor=pointer]
+  - generic [ref=e62]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - heading "Buenos días" [level=1] [ref=e65]
+        - paragraph [ref=e66]: domingo, 18 de octubre · Esto es lo más importante para hoy
+      - generic [ref=e67]:
+        - button "Agregar widget" [ref=e68] [cursor=pointer]
+        - button "Restaurar" [ref=e70] [cursor=pointer]
+    - generic [ref=e74]:
+      - article [ref=e76]:
+        - generic [ref=e77]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e78]
+          - button "Opciones del widget" [ref=e87] [cursor=pointer]
+        - generic [ref=e92]:
+          - generic [ref=e93]:
+            - heading "Tareas por estado" [level=2] [ref=e98]
+            - button "Ver tareas" [ref=e99] [cursor=pointer]
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - generic [ref=e103]:
+                - strong [ref=e104]: "1"
+                - generic [ref=e105]: 33%
+              - strong [ref=e106]: Completadas
+            - generic [ref=e107]:
+              - generic [ref=e109]:
+                - strong [ref=e110]: "1"
+                - generic [ref=e111]: 33%
+              - strong [ref=e112]: En curso
+            - generic [ref=e113]:
+              - generic [ref=e115]:
+                - strong [ref=e116]: "1"
+                - generic [ref=e117]: 33%
+              - strong [ref=e118]: Pendientes
+      - article [ref=e120]:
+        - generic [ref=e121]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e122]
+          - button "Opciones del widget" [ref=e131] [cursor=pointer]
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - heading "Proyectos" [level=2] [ref=e142]
+            - button "Ver todos" [ref=e143] [cursor=pointer]
+          - generic [ref=e144]:
+            - button "Lanzamiento Q4 29% 2 2 de 7 tareas completadas" [ref=e145] [cursor=pointer]:
+              - generic [ref=e146]:
+                - strong [ref=e148]: Lanzamiento Q4
+                - generic [ref=e149]: 29%
+              - progressbar [ref=e150]
+              - generic [ref=e151]: 2 de 7 tareas completadas
+            - button "Contenido mensual 0% 0 0 de 0 tareas completadas" [ref=e152] [cursor=pointer]:
+              - generic [ref=e153]:
+                - strong [ref=e155]: Contenido mensual
+                - generic [ref=e156]: 0%
+              - progressbar [ref=e157]
+              - generic [ref=e158]: 0 de 0 tareas completadas
+            - button "Rediseno web 0% 0 0 de 0 tareas completadas" [ref=e159] [cursor=pointer]:
+              - generic [ref=e160]:
+                - strong [ref=e162]: Rediseno web
+                - generic [ref=e163]: 0%
+              - progressbar [ref=e164]
+              - generic [ref=e165]: 0 de 0 tareas completadas
+      - article [ref=e167]:
+        - generic [ref=e168]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e169]
+          - button "Opciones del widget" [ref=e178] [cursor=pointer]
+        - generic [ref=e183]:
+          - generic [ref=e184]:
+            - heading "Mis tareas" [level=2] [ref=e189]
+            - button "Ver todas" [ref=e190] [cursor=pointer]
+          - tablist [ref=e191]:
+            - tab "Hoy" [selected] [ref=e192] [cursor=pointer]
+            - tab "Próximas" [ref=e193] [cursor=pointer]
+            - tab "Sin fecha" [ref=e194] [cursor=pointer]
+          - generic [ref=e195]:
+            - button "Completar Definir concepto creativo Definir concepto creativo Alta Lanzamiento Q4 10 sep" [ref=e196] [cursor=pointer]:
+              - button "Completar Definir concepto creativo" [ref=e197]
+              - generic [ref=e198]:
+                - strong [ref=e199]: Definir concepto creativo
+                - generic [ref=e200]: Alta
+              - generic [ref=e201]:
+                - strong [ref=e203]: Lanzamiento Q4
+                - generic [ref=e204]: 10 sep
+            - button "Completar Configurar campana en Meta Configurar campana en Meta Media Lanzamiento Q4 9 sep" [ref=e205] [cursor=pointer]:
+              - button "Completar Configurar campana en Meta" [ref=e206]
+              - generic [ref=e207]:
+                - strong [ref=e208]: Configurar campana en Meta
+                - generic [ref=e209]: Media
+              - generic [ref=e210]:
+                - strong [ref=e212]: Lanzamiento Q4
+                - generic [ref=e213]: 9 sep
+          - button "+ Agregar tarea rápida" [ref=e214] [cursor=pointer]
+      - article [ref=e216]:
+        - generic [ref=e217]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e218]
+          - button "Opciones del widget" [ref=e227] [cursor=pointer]
+        - generic [ref=e232]:
+          - generic [ref=e233]:
+            - heading "Actividad reciente" [level=2] [ref=e239]
+            - button "Ver actividad" [ref=e240] [cursor=pointer]
+          - generic [ref=e241]:
+            - button [ref=e242] [cursor=pointer]:
+              - strong [ref=e246]: David Urbina te asigno una tarea
+            - button [ref=e247] [cursor=pointer]:
+              - strong [ref=e253]: Carla Ruiz comento en Reunion de arranque
+            - button [ref=e254] [cursor=pointer]:
+              - strong [ref=e259]: Ana Martinez marco una tarea como completada
+      - article [ref=e261]:
+        - generic [ref=e262]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e263]
+          - button "Opciones del widget" [ref=e272] [cursor=pointer]
+        - generic [ref=e277]:
+          - generic [ref=e278]:
+            - heading "Próximos vencimientos" [level=2] [ref=e283]
+            - button "Ver todas" [ref=e284] [cursor=pointer]
+          - generic [ref=e285]:
+            - button "Definir concepto creativo Vencida · 10 sept 2026" [ref=e286] [cursor=pointer]:
+              - generic [ref=e287]:
+                - strong [ref=e288]: Definir concepto creativo
+                - generic [ref=e289]: Vencida · 10 sept 2026
+            - button "Configurar campana en Meta Vencida · 9 sept 2026" [ref=e292] [cursor=pointer]:
+              - generic [ref=e293]:
+                - strong [ref=e294]: Configurar campana en Meta
+                - generic [ref=e295]: Vencida · 9 sept 2026
+      - article [ref=e299]:
+        - generic [ref=e300]:
+          - button "Mover widget. Arrastra o usa las flechas para cambiar su posición." [ref=e301]
+          - button "Opciones del widget" [ref=e310] [cursor=pointer]
+        - generic [ref=e315]:
+          - heading "Navegación rápida" [level=2] [ref=e321]
+          - generic [ref=e322]:
+            - button "Crear una tarea" [ref=e323] [cursor=pointer]
+            - button "Crear un proyecto" [ref=e329] [cursor=pointer]
+            - button "Abrir Informes" [ref=e336] [cursor=pointer]

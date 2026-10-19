@@ -1,0 +1,54 @@
+[     178ms] The requested module '/core_provider.jsx?t=1792305818268' does not provide an export named 'CoreContext'
+[     182ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5174/favicon.ico:0
+[     885ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[     938ms] TypeError: Cannot read properties of null (reading 'task')
+    at PipelinePanel (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792338020743:274:101)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[     939ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelinePanel> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[    1350ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[    1382ms] TypeError: Cannot read properties of null (reading 'task')
+    at PipelinePanel (http://localhost:5174/@fs/C:/Users/otero/Documents/GitHub/bold%20app/frontend/modulos/tareas/src/pipelines.jsx?t=1792338020743:274:101)
+    at Object.react_stack_bottom_frame (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:394634)
+    at renderWithHooks (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:182819)
+    at updateFunctionComponent (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:5625)
+    at beginWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:52667)
+    at runWithFiberInDEV (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:4:20381)
+    at performUnitOfWork (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:190802)
+    at workLoopSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186747)
+    at renderRootSync (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:186242)
+    at performWorkOnRoot (http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:6:166199)
+[    1383ms] [WARNING] %s
+
+%s
+ An error occurred in the <PipelinePanel> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:3
+[   21313ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   21654ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   70749ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   71136ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[   72535ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  109790ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  110184ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  111784ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  159120ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  159486ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  195217ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  195556ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  275988ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  276388ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  277922ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  299883ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  300175ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5
+[  301518ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5

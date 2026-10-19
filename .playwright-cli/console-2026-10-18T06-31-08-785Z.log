@@ -1,0 +1,3 @@
+[     607ms] The requested module '/core_provider.jsx' does not provide an export named 'CoreContext'
+[     613ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5174/favicon.ico:0
+[    8240ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5174/.vite-local/deps/chunk-W73GEABS.js?v=2160ad1f:5

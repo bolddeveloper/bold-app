@@ -1,0 +1,127 @@
+- generic [ref=f1e3]:
+  - complementary "Navegación" [ref=f1e4]:
+    - generic "Bold" [ref=f1e6]
+    - generic [ref=f1e7]:
+      - navigation "Principal" [ref=f1e9]:
+        - button "Inicio" [ref=f1e10] [cursor=pointer]
+        - button "Tareas" [ref=f1e17] [cursor=pointer]
+        - button "Bandeja de entrada" [ref=f1e25] [cursor=pointer]
+        - button "Calendario" [ref=f1e31] [cursor=pointer]
+        - button "Docs" [ref=f1e36] [cursor=pointer]
+        - button "Drive" [ref=f1e42] [cursor=pointer]
+        - button "Sugerencias" [ref=f1e47] [cursor=pointer]
+        - button "Hojas" [ref=f1e52] [cursor=pointer]
+      - generic [ref=f1e57]:
+        - paragraph [ref=f1e58]: Gestión
+        - navigation "Principal" [ref=f1e59]:
+          - button "Informes" [ref=f1e60] [cursor=pointer]
+    - generic [ref=f1e65]:
+      - button "Abrir ajustes rápidos del perfil" [ref=f1e66] [cursor=pointer]:
+        - generic [ref=f1e67]: AM
+        - generic [ref=f1e68]:
+          - strong [ref=f1e69]: Ana Martinez
+          - generic [ref=f1e70]: Administrador
+      - button "Ajustes del perfil" [ref=f1e71] [cursor=pointer]
+  - main [ref=f1e75]:
+    - generic [ref=f1e76]:
+      - combobox [ref=f1e82]
+      - generic [ref=f1e83]:
+        - button "Abrir tutorial de este módulo" [ref=f1e84] [cursor=pointer]
+        - button "Novedades sin leer" [ref=f1e89] [cursor=pointer]
+        - button "Activar modo oscuro" [ref=f1e94] [cursor=pointer]
+        - button "Notificaciones" [ref=f1e99] [cursor=pointer]
+        - button "Mostrar lista de miembros" [ref=f1e105] [cursor=pointer]
+    - generic [ref=f1e111]:
+      - heading "Mis tareas" [level=1] [ref=f1e112]
+      - generic [ref=f1e113]:
+        - tablist "Navegación principal" [ref=f1e114]:
+          - tab "Tareas" [selected] [ref=f1e115] [cursor=pointer]
+          - tab "Cronograma" [ref=f1e116] [cursor=pointer]
+          - tab "Equipo" [ref=f1e117] [cursor=pointer]
+        - generic [ref=f1e118]:
+          - button "Ordenar" [ref=f1e120] [cursor=pointer]
+          - button "Filtrar" [ref=f1e122] [cursor=pointer]
+          - button "Personalizar" [ref=f1e124] [cursor=pointer]
+        - generic [ref=f1e125]:
+          - button "Ver personas del proyecto" [ref=f1e126] [cursor=pointer]
+          - group "Cambiar estilo de visualización" [ref=f1e130] [cursor=pointer]:
+            - button "Vista en lista" [pressed] [ref=f1e131]
+            - button "Vista en columnas" [ref=f1e139]
+          - button "Agregar tarea" [ref=f1e144] [cursor=pointer]
+          - button "Más opciones" [ref=f1e146] [cursor=pointer]
+      - region "Lista de tareas desplazable" [ref=f1e154]:
+        - generic [ref=f1e155]:
+          - generic [ref=f1e156]: TAREA
+          - generic [ref=f1e157]: RESPONSABLE
+          - generic [ref=f1e158]: COLABORADORES
+          - generic [ref=f1e159]: FECHA
+          - generic [ref=f1e160]: PRIORIDAD
+        - generic [ref=f1e161]:
+          - button [ref=f1e162] [cursor=pointer]:
+            - button "Mover sección Por hacer" [ref=f1e163]
+            - button "Compartir tareas mostradas en Por hacer en Equipo" [disabled] [ref=f1e174]
+            - strong [ref=f1e180]: POR HACER
+          - generic "Arrastra la tarea a otra sección" [ref=f1e181]:
+            - button "Completar tarea" [ref=f1e182] [cursor=pointer]
+            - generic [ref=f1e183]:
+              - button "Definir concepto creativo" [ref=f1e184] [cursor=pointer]
+              - generic "Vencida hace 38 día(s)" [ref=f1e186]: "-38d"
+              - button "Compartir tarea Definir concepto creativo en Equipo" [disabled] [ref=f1e187]
+            - generic "Acciones de tarea" [ref=f1e193]:
+              - button "Agregar subtarea a Definir concepto creativo. 2 existentes" [ref=f1e195] [cursor=pointer]:
+                - generic [ref=f1e197]: "2"
+              - button "Editar Definir concepto creativo" [ref=f1e198] [cursor=pointer]
+              - button "Eliminar Definir concepto creativo" [ref=f1e202] [cursor=pointer]
+            - button "AM" [ref=f1e207] [cursor=pointer]
+            - button "AM" [ref=f1e210] [cursor=pointer]
+            - generic [ref=f1e213]: 10 sep
+            - button "ALTA" [ref=f1e215] [cursor=pointer]
+        - generic [ref=f1e218]:
+          - button [ref=f1e219] [cursor=pointer]:
+            - button "Mover sección En curso" [ref=f1e220]
+            - button "Compartir tareas mostradas en En curso en Equipo" [disabled] [ref=f1e231]
+            - strong [ref=f1e237]: EN CURSO
+          - generic "Arrastra la tarea a otra sección" [ref=f1e238]:
+            - button "Completar tarea" [ref=f1e239] [cursor=pointer]
+            - generic [ref=f1e240]:
+              - button "Configurar campana en Meta" [ref=f1e241] [cursor=pointer]
+              - generic "Vencida hace 39 día(s)" [ref=f1e243]: "-39d"
+              - button "Compartir tarea Configurar campana en Meta en Equipo" [disabled] [ref=f1e244]
+            - generic "Acciones de tarea" [ref=f1e250]:
+              - button "Agregar subtarea a Configurar campana en Meta. 0 existentes" [ref=f1e252] [cursor=pointer]
+              - button "Editar Configurar campana en Meta" [ref=f1e254] [cursor=pointer]
+              - button "Eliminar Configurar campana en Meta" [ref=f1e258] [cursor=pointer]
+            - button "AM" [ref=f1e263] [cursor=pointer]
+            - button "AM" [ref=f1e266] [cursor=pointer]
+            - generic [ref=f1e269]: 9 sep
+            - button "MEDIA" [ref=f1e271] [cursor=pointer]
+        - generic [ref=f1e274]:
+          - button [ref=f1e275] [cursor=pointer]:
+            - button "Mover sección Completadas" [ref=f1e276]
+            - button "Compartir tareas mostradas en Completadas en Equipo" [disabled] [ref=f1e287]
+            - strong [ref=f1e293]: COMPLETADAS
+          - generic "Arrastra la tarea a otra sección" [ref=f1e294]:
+            - button "Completar tarea" [ref=f1e295] [cursor=pointer]
+            - generic [ref=f1e298]:
+              - button "Reunion de arranque" [ref=f1e299] [cursor=pointer]
+              - button "Compartir tarea Reunion de arranque en Equipo" [disabled] [ref=f1e301]
+            - generic "Acciones de tarea" [ref=f1e307]:
+              - button "Agregar subtarea a Reunion de arranque. 0 existentes" [ref=f1e309] [cursor=pointer]
+              - button "Editar Reunion de arranque" [ref=f1e311] [cursor=pointer]
+              - button "Eliminar Reunion de arranque" [ref=f1e315] [cursor=pointer]
+            - button "AM" [ref=f1e320] [cursor=pointer]
+            - button "AM" [ref=f1e323] [cursor=pointer]
+            - generic [ref=f1e326]: 2 sep
+            - button "BAJA" [ref=f1e328] [cursor=pointer]
+        - button [ref=f1e332] [cursor=pointer]:
+          - button "Mover sección Sin sección" [ref=f1e333]
+          - strong [ref=f1e344]: SIN SECCIÓN
+          - generic:
+            - button "Eliminar sección"
+        - button "+ Agregar tarea" [ref=f1e345] [cursor=pointer]
+        - button "+ Nueva sección" [ref=f1e347] [cursor=pointer]
+        - generic [ref=f1e348]:
+          - generic [ref=f1e349]:
+            - strong [ref=f1e350]: 3 tareas
+            - generic [ref=f1e351]: 1 completadas
+          - strong [ref=f1e354]: 33%

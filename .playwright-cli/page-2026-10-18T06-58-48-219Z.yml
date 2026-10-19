@@ -1,0 +1,4 @@
+- generic [ref=e2]:
+  - button "Compartir tarea Preparar propuesta del proyecto en Equipo" [ref=e3] [cursor=pointer]
+  - button "Compartir tareas mostradas en Pendientes en Equipo" [ref=e9] [cursor=pointer]
+  - status [ref=e15]: "0"

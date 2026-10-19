@@ -1,0 +1,50 @@
+[     584ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:5
+[     977ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/auth/shortcut-settings/:0
+[   48879ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/my-team/self/:0
+[   48896ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   48906ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   49258ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   49274ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   49291ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   49300ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   49662ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   49673ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52052ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/my-team/self/:0
+[   52067ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   52083ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   52444ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52448ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52460ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52470ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52822ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   52832ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55185ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/my-team/self/:0
+[   55207ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   55217ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   55572ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55579ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55587ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55599ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55969ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   55979ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57602ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/my-team/self/:0
+[   57617ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   57628ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   57755ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57788ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57804ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57817ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57944ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   57953ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   58905ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/my-team/self/:0
+[   58917ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   58929ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/calendar/connection/:0
+[   59003ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   59015ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   59028ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   59049ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   59181ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[   59196ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5178/api/v2/workspace/connection/:0
+[  102931ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:5
+[  160038ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:5
+[  351113ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5178/.vite-local/deps/chunk-W73GEABS.js?v=56b1b078:5
