@@ -131,7 +131,8 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{base_dir / 'db.sqlite3'}",
-        conn_max_age=600,
+        # ASGI requests must release their thread's connection when they finish.
+        conn_max_age=0,
     )
 }
 
