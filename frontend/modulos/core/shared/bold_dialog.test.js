@@ -44,3 +44,30 @@ test("Las confirmaciones dentro de un diálogo nativo usan su capa visible", asy
         else globalThis.document = originalDocument;
     }
 });
+
+test("La preferencia del aviso se guarda solo al aceptar con No volver a mostrar", async () => {
+    const originalFire = Swal.fire, originalStorage = globalThis.localStorage;
+    const saved = new Map();
+    globalThis.localStorage = {getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value)};
+    let answer = {isConfirmed: false}, calls = 0;
+    Swal.fire = async () => {calls++; return answer;};
+    try {
+        assert.equal(await confirmBold("Compartir", {rememberKey: "person-a"}), false);
+        assert.equal(saved.size, 0);
+        answer = {isConfirmed: true};
+        assert.equal(await confirmBold("Compartir", {rememberKey: "person-a"}), true);
+        assert.equal(saved.size, 0);
+        answer = {isDenied: true};
+        assert.equal(await confirmBold("Compartir", {rememberKey: "person-a"}), true);
+        assert.equal(saved.get("person-a"), "1");
+        assert.equal(await confirmBold("Compartir", {rememberKey: "person-a"}), true);
+        assert.equal(calls, 3);
+        answer = {isConfirmed: false};
+        assert.equal(await confirmBold("Compartir", {rememberKey: "person-b"}), false);
+        assert.equal(calls, 4);
+    } finally {
+        Swal.fire = originalFire;
+        if (originalStorage === undefined) delete globalThis.localStorage;
+        else globalThis.localStorage = originalStorage;
+    }
+});

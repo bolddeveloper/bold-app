@@ -75,7 +75,7 @@ npm --prefix services/sheets-engine test
 Con el entorno Python del backend activado:
 
 ```sh
-python backend/manage.py test boldApp.hojas.tests.test_sheets boldApp.hojas.tests.test_drive_merge --noinput
+python backend/manage.py test boldApp.hojas.tests --settings=config.settings_test --noinput
 ```
 
 En una máquina con Docker Linux disponible, construir las imágenes sin levantar
@@ -97,20 +97,21 @@ Comprobaciones locales del 19 de octubre de 2026:
 - Compose válido con la plantilla, sin levantar servicios.
 - Ocho pruebas de healthcheck y proxy del Worker aprobadas.
 - Prueba básica de fórmulas, XLSX y gráfico nativo aprobada con Node 24 en Windows.
-- Suite completa del motor: 34 aprobadas y 12 fallidas. Hay fallos en tablas de
-  bloques, conservación de notas, enlaces, imágenes y tablas importadas, y tablas
-  dinámicas con apóstrofos en el nombre de la hoja. Revisar los casos de
-  `codec.test.mjs`, `excel_images.test.mjs`, `excel_tables.test.mjs` y
-  `native_excel.test.mjs` antes de publicar.
-- Backend: 80 de 83 pruebas aprobadas. Fallan
-  `test_collaborators_without_responsible_share_one_task_after_title_is_entered`,
-  `test_disjoint_cells_merge_same_cell_conflicts_preserve_numeric_values` y
-  `test_legacy_multi_select_after_drive_sync_preserves_cells_and_existing_task`.
+- Tras las correcciones, las 46 pruebas del motor y las 90 del backend de Sheets
+  pasan. También pasan las 81 pruebas del frontend de Sheets. Se corrigieron
+  lecturas de notas y enlaces desplazadas una columna, nombres de partes de
+  imágenes incompatibles con ExcelJS, conservación de filas agrupadas y rangos
+  de tablas dinámicas con apóstrofos. Las pruebas ahora usan las propiedades
+  reales de ExcelJS, bases y revisiones correctas, y el runtime Node de Univer.
+- Las pruebas del backend usan `config.settings_test` para aislar base de datos,
+  correo, Redis y credenciales externas, conservando las opciones de SQLite.
 - No se construyó la imagen: el daemon Docker Linux local no estaba disponible.
-  No se verificaron Oracle, el túnel real, OAuth ni una sincronización real con Drive.
+  No se verificaron Oracle ni el túnel real. El usuario confirma que Drive ya
+  funciona; estas pruebas locales no vuelven a verificar su conexión externa.
 
-Estos fallos impiden declarar Sheets listo para producción. El commit de
-preparación contiene infraestructura y controles; no incluye todos los cambios
+Las comprobaciones locales pasan. Sigue pendiente validar la imagen Linux ARM64
+y el entorno publicado antes de declarar Sheets listo para producción. El commit
+de preparación contiene infraestructura y controles; no incluye todos los cambios
 funcionales pendientes del árbol de trabajo. Integrar y validar esos cambios en
 una revisión de entrega antes de usarla para desplegar.
 

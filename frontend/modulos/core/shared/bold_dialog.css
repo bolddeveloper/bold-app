@@ -15,6 +15,8 @@
 .bold_dialog .swal2-styled { border-radius: 10px; font-size: 14px; transition: background 150ms, transform 150ms; }
 .bold_dialog .swal2-styled.bold_dialog_confirm { background: #ef1f2d; color: white; }
 .bold_dialog .swal2-styled.bold_dialog_cancel { background: #eef1f5; color: #18202d; }
+.bold_dialog .swal2-actions { gap: 8px; max-width: calc(100% - 32px); flex-wrap: wrap; }
+.bold_dialog .swal2-actions button { max-width: 100%; margin: 0; white-space: normal; }
 .bold_dialog .swal2-styled:active { transform: scale(.97); }
 .bold_dialog :is(button, input):focus-visible { outline: 2px solid #ef1f2d; outline-offset: 3px; }
 

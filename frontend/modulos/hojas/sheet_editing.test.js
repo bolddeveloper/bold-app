@@ -86,11 +86,14 @@ test('actualizar personas y opciones conserva el editor y su historial', () => {
 });
 
 test('el historial real de Univer deshace texto y tamaño, conservando las celdas remotas', async () => {
-  const {Univer, UniverInstanceType} = await import('../core/node_modules/@univerjs/core/lib/es/index.js');
-  const {FUniver} = await import('../core/node_modules/@univerjs/core/lib/es/facade.js');
-  const {UniverSheetsPlugin} = await import('../core/node_modules/@univerjs/sheets/lib/es/index.js');
-  await import('../core/node_modules/@univerjs/sheets/lib/es/facade.js');
-  const univer = new Univer();
+  // Use Univer's Node entry point; its browser ESM build expects bundled opentype.js.
+  const {createRequire} = await import('node:module');
+  const require = createRequire(new URL('../core/package.json',import.meta.url));
+  const {Univer, UniverInstanceType, LocaleType} = require('@univerjs/core');
+  const {FUniver} = require('@univerjs/core/facade');
+  const {UniverSheetsPlugin} = require('@univerjs/sheets');
+  require('@univerjs/sheets/facade');
+  const univer = new Univer({locale:LocaleType.EN_US,locales:{[LocaleType.EN_US]:require('@univerjs/sheets/locale/en-US')}});
   try {
     univer.registerPlugin(UniverSheetsPlugin);
     univer.createUnit(UniverInstanceType.UNIVER_SHEET, {id:'undo-file',sheetOrder:['sheet'],styles:{},

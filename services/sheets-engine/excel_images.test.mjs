@@ -18,12 +18,17 @@ test('imágenes importadas conservan anclas y siguen siendo dibujos de Excel',as
   const fresh = new ExcelJS.Workbook(), output = fresh.addWorksheet('Hoja');
   output.getCell('A1').value='Editado';
   exportImages(fresh,output,document,'sheet');
-  const patched = await patchExcelPackage(source,await fresh.xlsx.writeBuffer(),document);
-  const loaded = new ExcelJS.Workbook(); await loaded.xlsx.load(patched);
-  assert.equal(loaded.getWorksheet('Hoja').getImages().length,1);
-  assert.equal(loaded.getWorksheet('Hoja').getCell('A1').value,'Editado');
-  const zip = await JSZip.loadAsync(patched);
-  assert.equal(Object.keys(zip.files).filter(name=>name.startsWith('xl/media/bold-')).length,1);
+  const clean = new ExcelJS.Workbook();clean.addWorksheet('Hoja');
+  const generated = await fresh.xlsx.writeBuffer();
+  for (let input of [source,await clean.xlsx.writeBuffer()]) for (let pass=0;pass<2;pass++) {
+    input = await patchExcelPackage(input,generated,document);
+    const loaded = new ExcelJS.Workbook(); await loaded.xlsx.load(input);
+    assert.equal(loaded.getWorksheet('Hoja').getImages().length,1);
+    assert.equal(loaded.getWorksheet('Hoja').getCell('A1').value,'Editado');
+    const zip = await JSZip.loadAsync(input);
+    assert.equal(zip.file(/^xl\/media\/bold[\da-f]+\.png$/).length,1);
+    assert.equal(zip.file(/^xl\/drawings\/drawing\d+\.xml$/).length,1);
+  }
 });
 test('posición o fuente externa inválida no se exporta ni descarga desde el servidor',()=>{
   const original=new ExcelJS.Workbook(), output=original.addWorksheet('Hoja');

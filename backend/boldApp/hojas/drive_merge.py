@@ -58,28 +58,40 @@ def saved_document(document):
     return document
 
 
-def merge_resources(base, local, remote, path):
-    merged = merge_documents(resource_map(base), resource_map(local), resource_map(remote), path)
+def merge_resources(base, local, remote, path, chart_preference=None, prefer_local=False, conflicts=None):
+    maps = [resource_map(value) for value in (base, local, remote)]
+    name = "__casual_sheets_charts__"
+    original, current, incoming = [value.get(name, MISSING) for value in maps]
+    if chart_preference in {"local", "remote"} and current != original and incoming != original and current != incoming:
+        if conflicts is not None:
+            conflicts.append(path + "/" + name)
+        selected = current if chart_preference == "local" else incoming
+        for value in maps:
+            if selected is MISSING:
+                value.pop(name, None)
+            else:
+                value[name] = deepcopy(selected)
+    merged = merge_documents(*maps, path, prefer_local=prefer_local, cell_conflicts=conflicts)
     return [{"name": name, "data": json.dumps(data, ensure_ascii=False, separators=(",", ":")) if not isinstance(data, str) else data} for name, data in sorted(merged.items())]
 
 
-def merge_identified_lists(base, local, remote, path):
+def merge_identified_lists(base, local, remote, path, prefer_local=False, conflicts=None):
     for field in ("id", "uid", "cfId"):
         if all(all(isinstance(item, dict) and field in item for item in value) for value in (base, local, remote)) and any((base, local, remote)):
             maps = [{item[field]: item for item in value} for value in (base, local, remote)]
             if any(len(mapping) != len(value) for mapping, value in zip(maps, (base, local, remote))):
                 break
-            merged = merge_documents(*maps, path=path)
+            merged = merge_documents(*maps, path=path, prefer_local=prefer_local, cell_conflicts=conflicts)
             common = set(maps[0]) & set(maps[1]) & set(maps[2])
             orders = [[item[field] for item in value if item[field] in common] for value in (base, local, remote)]
-            merge_documents(*orders, path=path + "/orden")
+            merge_documents(*orders, path=path + "/orden", prefer_local=prefer_local, cell_conflicts=conflicts)
             first = remote if orders[1] == orders[0] else local
             order = list(dict.fromkeys(item[field] for value in (first, local, remote) for item in value))
             return [merged[key] for key in order if key in merged]
     raise Conflict("Hay cambios simultáneos en " + path + ". Conservamos ambas versiones; revisa el conflicto antes de continuar.")
 
 
-def merge_documents(base, local, remote, path="Archivo", cell_conflicts=None, _technical_sheets=None):
+def merge_documents(base, local, remote, path="Archivo", cell_conflicts=None, _technical_sheets=None, chart_preference=None, prefer_local=False):
     """Merge independent edits; Drive can retain local cells and record recoverable conflicts."""
     if path == "Archivo":
         base, local, remote = map(saved_document, (base, local, remote))
@@ -93,30 +105,40 @@ def merge_documents(base, local, remote, path="Archivo", cell_conflicts=None, _t
     if base is MISSING and isinstance(local, list) and isinstance(remote, list):
         base = []
     parts = path.split("/")
+    if len(parts) == 4 and parts[1] == "sheets" and parts[3] in {"zoomRatio", "scrollTop", "scrollLeft"} and chart_preference == "remote":
+        return deepcopy(remote)
     if cell_conflicts is not None and len(parts) == 6 and parts[1] == "sheets" and parts[3] == "cellData" and (parts[5] != "0" or parts[2] not in _technical_sheets) and all(isinstance(value, dict) for value in (base, local, remote)):
         # Keep formula/text content together; cached formula results are not edits.
         content = lambda cell: {key: value for key, value in cell.items() if key in {"v", "f", "p", "si"} and (key != "v" or not cell.get("f"))}
         original, current, incoming = map(content, (base, local, remote))
         if current == incoming or current == original or incoming == original:
             try:
-                return merge_documents(base, local, remote, path)
+                return merge_documents(base, local, remote, path, prefer_local=prefer_local)
             except Conflict:
                 pass
         cell_conflicts.append(path)
         return deepcopy(local)
     if all(isinstance(value, list) for value in (base, local, remote)):
-        return merge_identified_lists(base, local, remote, path)
+        try:
+            return merge_identified_lists(base, local, remote, path, prefer_local, cell_conflicts)
+        except Conflict:
+            if not prefer_local:
+                raise
     if all(isinstance(value, dict) for value in (base, local, remote)):
         result = {}
         for key in base.keys() | local.keys() | remote.keys():
             if key == "resources" and path == "Archivo":
-                result[key] = merge_resources(base.get(key, []), local.get(key, []), remote.get(key, []), path + "/resources")
+                result[key] = merge_resources(base.get(key, []), local.get(key, []), remote.get(key, []), path + "/resources", chart_preference, prefer_local, cell_conflicts)
                 continue
             if key == "v" and local.get("f") and local.get("f") == remote.get("f"):
                 result[key] = remote.get(key)
                 continue
-            value = merge_documents(base.get(key, MISSING), local.get(key, MISSING), remote.get(key, MISSING), path + "/" + str(key), cell_conflicts, _technical_sheets)
+            value = merge_documents(base.get(key, MISSING), local.get(key, MISSING), remote.get(key, MISSING), path + "/" + str(key), cell_conflicts, _technical_sheets, chart_preference=chart_preference, prefer_local=prefer_local)
             if value is not MISSING:
                 result[key] = value
         return result
+    if prefer_local:
+        if cell_conflicts is not None:
+            cell_conflicts.append(path)
+        return deepcopy(local) if local is not MISSING else MISSING
     raise Conflict("Hay cambios simultáneos en " + path + ". Conservamos ambas versiones; revisa el conflicto antes de continuar.")

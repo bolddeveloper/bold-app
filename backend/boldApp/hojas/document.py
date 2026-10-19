@@ -40,7 +40,7 @@ def columns(kind):
 
 def blank_sheet(name="Hoja 1"):
     key = identity()
-    return {"id": key, "name": name, "rowCount": 1000, "columnCount": 40, "defaultColumnWidth": 140, "defaultRowHeight": 28, "cellData": {}, "columnData": {"0": {"hd": 1}}, "freeze": {"startRow": 1, "startColumn": 1, "xSplit": 1, "ySplit": 1}, "__bold": {"blocks": []}}
+    return {"id": key, "name": name, "rowCount": 1000, "columnCount": 40, "defaultColumnWidth": 140, "defaultRowHeight": 28, "cellData": {}, "columnData": {"0": {"hd": 1}}, "freeze": {"startRow": -1, "startColumn": -1, "xSplit": 0, "ySplit": 0}, "__bold": {"blocks": []}}
 
 
 def unique_sheet_name(document, name, exclude=None):
@@ -177,8 +177,6 @@ def add_block(sheet, kind, title=None, custom_columns=None):
         raise ValidationError("Tipo de bloque inválido.")
     block = {"id": identity(), "type": kind, "title": title or {"tasks": "Tareas", "costs": "Productos y licencias", "comparison": "Anterior / actual", "summary": "Resumen", "text": "Texto"}[kind], "startRow": max([int(key) for key in sheet.get("cellData", {})] + [-2]) + 3, "columns": custom_columns or columns(kind), "rowIds": [identity() for _ in range(3 if kind not in {"text", "summary"} else 1)], "currency": "USD", "tax": 0, "discount": 0, "task": {"enabled": False, "unit": "", "status_map": {}}}
     sheet["__bold"]["blocks"].append(block)
-    if len(sheet["__bold"]["blocks"]) == 1:
-        sheet["freeze"] = {"startRow": block["startRow"] + 1, "startColumn": 2, "xSplit": 2, "ySplit": block["startRow"] + 1}
     decorate(sheet, block)
     return block
 
@@ -308,9 +306,18 @@ def _validate_document(document):
                 data = json.loads(resource["data"])
                 key = "charts" if resource["name"] == "__casual_sheets_charts__" else "pivots"
                 models = data[key]
+                if key == "charts":
+                    removed = data.get("deletedParts", [])
+                    if not isinstance(removed, list) or len(removed) > 100 or any(not isinstance(value, str) or not re.fullmatch(r"xl/charts/chart\d+\.xml", value) for value in removed):
+                        raise ValueError()
                 if not isinstance(models, list) or len(models) > 100 or len({item["id"] for item in models}) != len(models):
                     raise ValueError()
                 for item in models:
+                    if key == "charts":
+                        for field in ("width", "height", "offsetX", "offsetY"):
+                            value = item.get("pos", {}).get(field)
+                            if value is not None and (type(value) not in {int, float} or not math.isfinite(value) or abs(value) > 1000000 or field in {"width", "height"} and value <= 0):
+                                raise ValueError()
                     identities = [item["sheetId"]] if key == "charts" else [item["sourceSheetId"], item["targetSheetId"]]
                     if any(identity not in sheets for identity in identities):
                         raise ValueError()

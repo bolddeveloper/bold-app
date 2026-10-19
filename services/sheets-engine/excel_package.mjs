@@ -26,7 +26,9 @@ async function mergeImages(original,generated,old,fresh,oldPath,freshPath,types)
   const freshRels = freshRelations ? xml(await freshRelations.async('string')) : null;
   const originalDrawing = child(old.documentElement,'drawing'), newDrawing = child(fresh.documentElement,'drawing');
   const originalRelation = originalDrawing && elements(rels.documentElement).find(item=>item.getAttribute('Id')===originalDrawing.getAttribute('r:id'));
-  const drawingPath = originalRelation ? resolvePart(oldPath,originalRelation.getAttribute('Target')) : 'xl/drawings/bold-'+path.posix.basename(oldPath);
+  let drawingPath = originalRelation ? resolvePart(oldPath,originalRelation.getAttribute('Target')) : 'xl/drawings/drawing1.xml';
+  // ExcelJS only reads drawing and media part names with alphanumeric basenames.
+  if (!originalRelation) for (let index=2; original.file(drawingPath); index++) drawingPath='xl/drawings/drawing'+index+'.xml';
   const drawing = original.file(drawingPath) ? xml(await original.file(drawingPath).async('string')) : xml('<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>');
   const drawingRelsPath = relatedPath(drawingPath), drawingRels = original.file(drawingRelsPath) ? xml(await original.file(drawingRelsPath).async('string')) : xml('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>');
   const removed = new Set();
@@ -44,7 +46,7 @@ async function mergeImages(original,generated,old,fresh,oldPath,freshPath,types)
     for (const [index,item] of elements(newRels.documentElement).entries()) {
       if (!item.getAttribute('Type').endsWith('/image')) continue;
       const part = resolvePart(newPath,item.getAttribute('Target')), data = await generated.file(part).async('nodebuffer');
-      const stored = 'xl/media/bold-'+createHash('sha256').update(data).digest('hex')+path.posix.extname(part);
+      const stored = 'xl/media/bold'+createHash('sha256').update(data).digest('hex')+path.posix.extname(part);
       original.file(stored,data);
       let serial = index, id = 'boldImage'+serial;
       while (elements(drawingRels.documentElement).some(item=>item.getAttribute('Id')===id)) id='boldImage'+(++serial);
@@ -222,7 +224,14 @@ export async function patchExcelPackage(source, exported, document, sourceOnly =
             const tablePath = resolvePart(path, relation.getAttribute('Target'));
             const table = await read(original, tablePath), root = table.documentElement;
             const current = tables[snapshot.id]?.tables?.find(item => (item.meta?.excelName || item.name) === root.getAttribute('name'));
-            if (!current) { parts.removeChild(part); continue; }
+            if (!current) {
+              parts.removeChild(part);
+              links.documentElement.removeChild(relation);
+              original.remove(tablePath);
+              original.remove(relatedPath(tablePath));
+              for (const item of elements(types.documentElement)) if (item.getAttribute('PartName')==='/'+tablePath) types.documentElement.removeChild(item);
+              continue;
+            }
             const area = current.range, ref = cellAddress(area.startRow,area.startColumn) + ':' + cellAddress(area.endRow,area.endColumn);
             root.setAttribute('ref',ref);
             root.setAttribute('name',current.name);
@@ -247,6 +256,7 @@ export async function patchExcelPackage(source, exported, document, sourceOnly =
           }
           parts.setAttribute('count',String(elements(parts).length));
           if (!elements(parts).length) old.documentElement.removeChild(parts);
+          original.file(relationFile,serializer.serializeToString(links));
         }
       }
       if (!sourceOnly && snapshot) await mergeMissingTables(original,generated,old,next,path,freshPath,types,snapshot.id);

@@ -249,8 +249,6 @@ def update_external(workbook_id, lease):
         if review.issues:
             raise ValidationError("La actualización de Drive necesita resolver identificadores, personas u opciones ambiguas. Conservamos ambas versiones.")
         baseline = workbook.versions.filter(reason="drive_base", revision=workbook.synced_revision).first()
-        if not baseline and workbook.revision != workbook.synced_revision:
-            raise Conflict("Hay cambios pendientes sin una versión común de Drive. Conservamos ambos archivos; revisa la actualización.")
         data, _ = raw_metadata(workbook)
         with transaction.atomic():
             current = Workbook.objects.select_for_update().get(pk=workbook_id)
@@ -262,7 +260,12 @@ def update_external(workbook_id, lease):
                 transaction.on_commit(partial(enqueue, str(current.pk), current.sync_after))
                 return
             cell_conflicts = []
-            merged = merge_documents(baseline.document if baseline else workbook.document, current.document, review.document, cell_conflicts=cell_conflicts)
+            if not baseline and current.revision != current.synced_revision:
+                # Without a common base, keep BOLD and archive the incoming file before uploading.
+                merged = deepcopy(current.document)
+                cell_conflicts.append("Archivo")
+            else:
+                merged = merge_documents(baseline.document if baseline else workbook.document, current.document, review.document, cell_conflicts=cell_conflicts, chart_preference="local", prefer_local=True)
             validate_document(merged)
             Revision.objects.create(workbook=current, revision=current.revision, document=current.document, excel_content=current.excel_content, reason="before_drive_import")
             if cell_conflicts:
@@ -333,7 +336,7 @@ def apply_review(workbook_id, review_id, request):
         elif issue["type"] in {"responsible", "collaborators"}:
             block = next(block for block in sheet["__bold"]["blocks"] if block["startRow"] < issue["row"] <= block["startRow"] + len(block["rowIds"]))
             person = valid_people.get(resolution)
-            if resolution and (not person or block["task"].get("enabled") and person["unit"] != block["task"]["unit"]):
+            if resolution and (not person or block["type"] != "tasks" and block["task"].get("enabled") and person["unit"] != block["task"]["unit"]):
                 raise ValidationError("Selecciona una persona válida del departamento.")
             cell["v"] = ",".join(filter(None, [cell.get("v", ""), resolution])) if issue["type"] == "collaborators" else resolution
         else:

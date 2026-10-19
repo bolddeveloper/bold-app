@@ -4,6 +4,7 @@ from hashlib import sha256
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.serializers import UUIDField
 
@@ -58,27 +59,38 @@ def connect_automatic_tasks(sheet, block, actor):
         person = values.get("responsible") or next(filter(None, collaborators.split(",")), None)
         if not person:
             continue
-        unit_id = UUIDField().run_validation(configuration["unit"]) if configuration.get("unit") else None
-        assignment = assignment_for(person, unit_id)
+        assignment = assignment_for(person)
         unit = assignment.position.unit
         require_module(actor, "assign")
         task_permission(actor, "tasks.task.create", unit)
         task_permission(actor, "tasks.task.assign", unit)
-        statuses = list(TaskStatus.objects.filter(Q(unit=unit) | Q(unit__isnull=True)).order_by("position", "id"))
-        statuses.sort(key=lambda status: status.unit_id != unit.id)
-        mapping = dict(configuration.get("status_map", {}))
-        options = next((col.get("options", []) for col in block["columns"] if col["id"] == "status"), [])
-        for option in options:
-            if mapping.get(option["value"]):
-                continue
-            status = next((status for status in statuses if status.category == option["value"]), None)
-            if not status:
-                raise ValidationError("Asocia el estado «" + option["label"] + "» en Configurar antes de asignar esta tarea.")
-            mapping[option["value"]] = str(status.id)
+        mapping = row_status_mapping(block, unit)
         block["task"] = {**configuration, "enabled": True, "unit": str(unit.id), "status_map": mapping}
         validate_connection(block, actor)
         return True
     return False
+
+
+def row_status_mapping(block, unit):
+    configuration = block.get("task", {})
+    mapping = dict(configuration.get("status_map", {}))
+    statuses = list(TaskStatus.objects.filter(Q(unit=unit) | Q(unit__isnull=True)).order_by("position", "id"))
+    statuses.sort(key=lambda status: status.unit_id != unit.id)
+    mapped_ids = [UUIDField().run_validation(value) for value in mapping.values()]
+    mapped = {str(status.id): status for status in TaskStatus.objects.filter(pk__in=mapped_ids)}
+    if len(mapped) != len(set(mapped_ids)):
+        raise ValidationError("Un estado asociado ya no existe. Revisa Configurar.")
+    options = next((col.get("options", []) for col in block["columns"] if col["id"] == "status"), [])
+    for option in options:
+        current = mapped.get(mapping.get(option["value"]))
+        if current and current.unit_id in (None, unit.id):
+            continue
+        category = current.category if current else option["value"]
+        status = next((status for status in statuses if status.category == category), None)
+        if not status:
+            raise ValidationError("Asocia el estado «" + option["label"] + "» en Configurar antes de asignar esta tarea.")
+        mapping[option["value"]] = str(status.id)
+    return mapping
 
 
 def validate_connection(block, actor):
@@ -87,6 +99,8 @@ def validate_connection(block, actor):
         return None
     if not {"title", "responsible", "status"}.issubset({col["id"] for col in block["columns"]}):
         raise ValidationError("Conectar tareas requiere columnas Tarea, Responsable y Estado.")
+    if block["type"] == "tasks":
+        return None
     try:
         unit = OrganizationalUnit.objects.get(pk=UUIDField().run_validation(configuration.get("unit")))
     except (OrganizationalUnit.DoesNotExist, ValueError, TypeError) as exc:
@@ -99,6 +113,19 @@ def validate_connection(block, actor):
     if any(value not in valid_ids for value in mapping.values()):
         raise ValidationError("Un estado no pertenece al departamento elegido.")
     return unit
+
+
+def delete_removed_tasks(workbook, previous, request):
+    current = {row for _, block in blocks(workbook.document) for row in block["rowIds"]}
+    removed = {row for sheet, block in blocks(previous) if sheet["id"] in workbook.document["sheets"] for row in block["rowIds"] if row not in current}
+    with suppress_reverse():
+        for link in workbook.task_links.filter(active=True, row_id__in=removed).select_related("task__unit"):
+            task = link.task
+            if task.deleted_at:
+                continue
+            task_permission(request.assignment, "tasks.task.delete", task.unit, task)
+            task.deleted_at = timezone.now()
+            task.save(update_fields=["deleted_at", "updated_at"])
 
 
 def apply_tasks(workbook, previous, request):
@@ -116,7 +143,7 @@ def apply_tasks(workbook, previous, request):
             configuration = block.get("task", {})
             if not configuration.get("enabled"):
                 continue
-            unit = validate_connection(block, request.assignment)
+            configured_unit = validate_connection(block, request.assignment)
             for row_id in block["rowIds"]:
                 values = row_values(sheet, block, row_id)
                 link = linked.get(row_id)
@@ -125,22 +152,28 @@ def apply_tasks(workbook, previous, request):
                 changed = values != old_rows.get(row_id) or configuration != old_connections.get(row_id)
                 if not changed and link and link.active:
                     continue
-                if link and not link.active and link.task.unit_id != unit.id:
-                    raise ValidationError("La tarea se movió a otro departamento. Duplica la fila sin vínculos para conectar una tarea nueva.")
-                title = str(values.get("title") or "").strip()
-                assignee = assignment_for(values.get("responsible"), unit)
+                assignee = assignment_for(values.get("responsible"), configured_unit)
                 collaborators = values.get("collaborators") or ""
                 if not isinstance(collaborators, str):
                     raise ValidationError("Colaboradores inválidos.")
+                first_collaborator = assignment_for(next(filter(None, collaborators.split(",")), None), configured_unit)
+                person = assignee or first_collaborator
+                unit = configured_unit or (person.position.unit if person else link.task.unit if link else None)
+                if unit is None:
+                    continue
+                if link and not link.active and link.task.unit_id != unit.id:
+                    raise ValidationError("La tarea se movió a otro departamento. Duplica la fila sin vínculos para conectar una tarea nueva.")
+                title = str(values.get("title") or "").strip()
                 collaborator_ids = [str(assignment_for(value, unit).id) for value in collaborators.split(",") if value]
                 people = {str(value.employee_id): value for value in PositionAssignment.objects.filter(pk__in=collaborator_ids)}
                 collaborator_ids = [str(value.id) for value in people.values() if not assignee or value.employee_id != assignee.employee_id]
                 if not link and (not title or not assignee and not collaborator_ids):
                     continue
                 if not title:
-                    raise ValidationError("Una tarea vinculada necesita título. Eliminar la fila conserva y desvincula la tarea.")
-                status_key = values.get("status") or next(iter(configuration["status_map"]))
-                status_id = configuration["status_map"].get(status_key)
+                    raise ValidationError("Una tarea vinculada necesita título. Eliminar la fila envía su tarea a la papelera.")
+                mapping = row_status_mapping(block, unit) if block["type"] == "tasks" else configuration["status_map"]
+                status_key = values.get("status") or next(iter(mapping))
+                status_id = mapping.get(status_key)
                 if not status_id:
                     raise ValidationError("Asocia este estado con un estado del departamento.")
                 data = {"unit": str(unit.id), "title": title, "assignee_assignment": str(assignee.id) if assignee else None, "status": status_id}
@@ -212,7 +245,12 @@ def refresh_from_task(task_id):
     for sheet, block in blocks(workbook.document):
         if str(link.row_id) not in block["rowIds"]:
             continue
-        if task.deleted_at or str(task.unit_id) != block["task"].get("unit"):
+        values = row_values(sheet, block, str(link.row_id))
+        expected_unit = block["task"].get("unit")
+        if block["type"] == "tasks":
+            person_id = values.get("responsible") or next(filter(None, str(values.get("collaborators") or "").split(",")), None)
+            expected_unit = PositionAssignment.objects.filter(pk=person_id).values_list("position__unit_id", flat=True).first() if person_id else task.unit_id
+        if task.deleted_at or str(task.unit_id) != str(expected_unit):
             # Sharing this file cannot follow a task into another department.
             link.active = False
             link.save(update_fields=["active"])
@@ -222,12 +260,11 @@ def refresh_from_task(task_id):
             task_permission(workbook.creator, "tasks.task.read", task.unit, task)
         except PermissionDenied:
             return
-        values = row_values(sheet, block, str(link.row_id))
-        mapping = block["task"].get("status_map", {})
+        mapping = row_status_mapping(block, task.unit) if block["type"] == "tasks" else block["task"].get("status_map", {})
         status_key = next((key for key, value in mapping.items() if value == str(task.status_id)), None)
         if status_key is None:
             status_key = "task-" + str(task.status_id)
-            mapping[status_key] = str(task.status_id)
+            block["task"].setdefault("status_map", {})[status_key] = str(task.status_id)
             status_col = next(col for col in block["columns"] if col["id"] == "status")
             status_col.setdefault("options", []).append({"value": status_key, "label": task.status.name, "color": "#8a96a8"})
         comment = Comment.objects.filter(task=task, image_section="comments").order_by("-created_at").first()

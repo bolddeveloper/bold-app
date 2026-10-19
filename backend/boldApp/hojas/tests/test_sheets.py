@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import timedelta
 from hashlib import md5
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 import uuid
@@ -87,6 +88,63 @@ class SheetsTests(TestCase):
         self.assertEqual(configuration["unit"], str(self.unit.id))
         self.assertFalse(self.file.drive_account_id)
 
+    def test_each_row_uses_responsible_department_and_preserves_task_on_reassignment(self):
+        other_unit = OrganizationalUnit.objects.create(name="Marketing", unit_type="department", sensitivity_level="low")
+        other = self.person("marketing@bold.gt", "Marketing responsable")
+        other.position.unit = other_unit
+        other.position.save(update_fields=["unit"])
+        other_status = TaskStatus.objects.create(unit=other_unit, name="Por hacer", category="todo", position=0)
+        done = TaskStatus.objects.create(unit=other_unit, name="Terminado Marketing", category="completed", position=2, is_final=True)
+        second_row = self.block["rowIds"][1]
+        response = self.operation([
+            self.edit("title", "IT"), self.edit("responsible", str(self.actor.id)),
+            self.edit("title", "Marketing", row=second_row), self.edit("responsible", str(other.id), row=second_row),
+        ])
+        self.assertEqual(response.status_code, 200, response.data)
+        first = TaskLink.objects.get(workbook=self.file, row_id=self.row).task
+        second = TaskLink.objects.get(workbook=self.file, row_id=second_row).task
+        self.assertEqual(first.unit_id, self.unit.id)
+        self.assertEqual(second.unit_id, other_unit.id)
+        self.assertEqual(second.status_id, other_status.id)
+        second.title = "Cambio desde tareas"
+        second.save()
+        refresh_from_task(second.id)
+        self.file.refresh_from_db()
+        sheet, block = next(blocks(self.file.document))
+        self.assertEqual(row_values(sheet, block, second_row)["title"], second.title)
+        self.assertTrue(TaskLink.objects.get(task=second).active)
+        response = self.operation([self.edit("status", "completed", row=second_row)])
+        self.assertEqual(response.status_code, 200, response.data)
+        second.refresh_from_db()
+        self.assertEqual(second.status_id, done.id)
+        response = self.operation([self.edit("responsible", str(other.id))])
+        self.assertEqual(response.status_code, 200, response.data)
+        first.refresh_from_db()
+        self.assertEqual(first.unit_id, other_unit.id)
+        self.assertEqual(first.status_id, other_status.id)
+        self.assertEqual(TaskLink.objects.get(workbook=self.file, row_id=self.row).task_id, first.id)
+        self.assertEqual(Task.objects.count(), 2)
+
+    @patch("boldApp.hojas.task_bridge.task_permission")
+    def test_mixed_departments_still_require_permission_for_each_row(self, permission):
+        other_unit = OrganizationalUnit.objects.create(name="Restringido", unit_type="department", sensitivity_level="low")
+        other = self.person("restringido@bold.gt", "Otro responsable")
+        other.position.unit = other_unit
+        other.position.save(update_fields=["unit"])
+        def check(actor, code, unit, task=None):
+            if unit.id == other_unit.id:
+                raise PermissionDenied("Departamento no autorizado")
+        permission.side_effect = check
+        second_row = self.block["rowIds"][1]
+        response = self.operation([
+            self.edit("title", "IT"), self.edit("responsible", str(self.actor.id)),
+            self.edit("title", "Restringida", row=second_row), self.edit("responsible", str(other.id), row=second_row),
+        ])
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertEqual(Task.objects.count(), 0)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.revision, 0)
+
     def test_collaborators_without_responsible_share_one_task_after_title_is_entered(self):
         first = self.person("colaborador@bold.gt", "Primer colaborador")
         second = self.person("colaborador2@bold.gt", "Segundo colaborador")
@@ -100,9 +158,10 @@ class SheetsTests(TestCase):
         self.assertTrue(TaskFollower.objects.filter(task=link.task, assignment=first).exists())
         identity = str(uuid.uuid4())
         changes = [self.edit("collaborators", f"{first.id},{second.id}"), self.edit("priority", "high")]
+        revision = self.file.revision
         response = self.operation(changes, identity=identity)
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(self.operation(changes, revision=0, identity=identity).status_code, 200)
+        self.assertEqual(self.operation(changes, revision=revision, identity=identity).status_code, 200)
         self.assertEqual(self.operation([self.edit("responsible", str(self.actor.id))]).status_code, 200)
         link.refresh_from_db()
         self.assertEqual(link.task_id, original_task)
@@ -256,11 +315,13 @@ class SheetsTests(TestCase):
         self.assertEqual(Comment.objects.filter(task=task).count(), 2)
 
     def test_disjoint_cells_merge_same_cell_conflicts_preserve_numeric_values(self):
+        other_change = self.edit("account", "Cuenta")
+        conflict_change = self.edit("title", "Borrador")
         first = self.operation([self.edit("title", "Servidor")], revision=0)
         self.assertEqual(first.status_code, 200)
-        other = self.operation([self.edit("account", "Cuenta", before={})], revision=0)
+        other = self.operation([other_change], revision=0)
         self.assertEqual(other.status_code, 200)
-        conflict = self.operation([self.edit("title", "Borrador", before={})], revision=0)
+        conflict = self.operation([conflict_change], revision=0)
         self.assertEqual(conflict.status_code, 409)
         self.assertEqual(conflict.data["conflicts"][0]["current"]["v"], "Servidor")
         self.assertIsInstance(conflict.data["conflicts"][0]["row"], int)
@@ -334,7 +395,151 @@ class SheetsTests(TestCase):
         self.assertFalse(link.active)
         self.assertIsNone(link.task.deleted_at)
 
+    def test_remove_block_deletes_related_tasks_and_rolls_back_without_delete_permission(self):
+        self.connect()
+        self.assertEqual(self.operation([self.edit("title", "Eliminar con bloque"), self.edit("responsible", str(self.actor.id))]).status_code, 200)
+        link = TaskLink.objects.get(workbook=self.file, row_id=self.row)
+        change = {"kind": "block.remove", "sheet": self.sheet["id"], "block": self.block["id"]}
+        with patch("boldApp.hojas.task_bridge.task_permission", side_effect=PermissionDenied("Sin permiso para eliminar tareas")):
+            denied = self.operation([change])
+        self.assertEqual(denied.status_code, 403)
+        self.file.refresh_from_db()
+        self.assertTrue(any(block["id"] == self.block["id"] for _, block in blocks(self.file.document)))
+        link.task.refresh_from_db()
+        self.assertIsNone(link.task.deleted_at)
+        response = self.operation([change])
+        self.assertEqual(response.status_code, 200, response.data)
+        link.refresh_from_db()
+        link.task.refresh_from_db()
+        self.assertIsNotNone(link.task.deleted_at)
+        self.assertFalse(link.active)
+        self.assertFalse(Task.objects.filter(pk=link.task_id).exists())
+
+    def test_remove_table_from_grid_deletes_its_related_task(self):
+        self.connect()
+        self.assertEqual(self.operation([self.edit("title", "Eliminar con tabla"), self.edit("responsible", str(self.actor.id))]).status_code, 200)
+        link = TaskLink.objects.get(workbook=self.file, row_id=self.row)
+        snapshot = deepcopy(self.file.document)
+        snapshot["resources"] = [{"name": "SHEET_TABLE_PLUGIN", "data": json.dumps({self.sheet["id"]: {"tables": [], "disabledBlocks": [self.block["id"]]}})}]
+        response = self.operation([{"kind": "grid", "document": snapshot, "baseDocument": self.file.document}])
+        self.assertEqual(response.status_code, 200, response.data)
+        link.task.refresh_from_db()
+        self.assertIsNotNone(link.task.deleted_at)
+
+    def test_chart_move_and_resize_persist_with_cell_edits_between_saves(self):
+        name = "__casual_sheets_charts__"
+        area = {"startRow": 1, "endRow": 8, "startColumn": 3, "endColumn": 7}
+        chart = {"id": "chart", "sheetId": self.sheet["id"], "type": "bar", "source": area, "pos": {**area, "width": 625, "height": 375, "offsetX": 25, "offsetY": 7}, "format": {"legend": "right", "dataLabels": True}}
+        self.file.document["resources"] = [{"name": name, "data": json.dumps({"v": 1, "charts": [chart]})}]
+        self.file.save()
+        base = deepcopy(self.file.document)
+        moved = deepcopy(base)
+        payload = json.loads(moved["resources"][0]["data"])
+        payload["charts"][0]["pos"] = {**chart["pos"], "startRow": 4, "endRow": 11}
+        moved["resources"][0]["data"] = json.dumps(payload)
+        self.assertEqual(self.operation([self.edit("title", "Cambio de celda")]).status_code, 200)
+        saved = self.operation([{"kind": "grid", "baseDocument": base, "document": moved}], revision=0)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        base = deepcopy(saved.data["document"])
+        resized = deepcopy(base)
+        payload["charts"][0]["pos"]["endColumn"] = 12
+        resized["resources"] = [{"name": name, "data": json.dumps(payload)}]
+        revision = saved.data["revision"]
+        self.assertEqual(self.operation([self.edit("title", "Otro cambio de celda")]).status_code, 200)
+        saved = self.operation([{"kind": "grid", "baseDocument": base, "document": resized}], revision=revision)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        reopened = self.client.get(f"/api/v2/sheets/files/{self.file.id}/")
+        document = reopened.data["document"]
+        result = json.loads(next(item["data"] for item in document["resources"] if item["name"] == name))["charts"][0]
+        self.assertEqual(result["pos"], payload["charts"][0]["pos"])
+        self.assertEqual(result["format"], chart["format"])
+        self.assertEqual(result["type"], "bar")
+        self.assertEqual(row_values(*next(blocks(document)), self.row)["title"], "Otro cambio de celda")
+        old_revision = saved.data["revision"]
+        competing = deepcopy(document)
+        newer = deepcopy(payload)
+        newer["charts"][0]["title"] = "Versión anterior en servidor"
+        competing["resources"] = [{"name": name, "data": json.dumps(newer)}]
+        self.assertEqual(self.operation([{"kind": "grid", "baseDocument": document, "document": competing}]).status_code, 200)
+        deleted = deepcopy(document)
+        deleted["resources"] = [item for item in deleted["resources"] if item["name"] != name]
+        saved = self.operation([{"kind": "grid", "baseDocument": document, "document": deleted}], revision=old_revision)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        reopened = self.client.get(f"/api/v2/sheets/files/{self.file.id}/")
+        self.assertFalse(any(item["name"] == name for item in reopened.data["document"]["resources"]))
+
+    @patch("boldApp.hojas.operations.shift_rows")
+    def test_remove_row_deletes_only_its_task_and_requires_delete_permission(self, shift):
+        self.connect()
+        last = self.block["rowIds"][-1]
+        changes = [self.edit("title", "Conservar"), self.edit("responsible", str(self.actor.id)), self.edit("title", "Eliminar fila", row=last), self.edit("responsible", str(self.actor.id), row=last)]
+        self.assertEqual(self.operation(changes).status_code, 200)
+        kept = TaskLink.objects.get(workbook=self.file, row_id=self.row)
+        removed = TaskLink.objects.get(workbook=self.file, row_id=last)
+        # The selected row is last in this sheet; isolate the external Excel engine.
+        def shift_last(document, sheet, start, delta):
+            self.assertEqual(delta, -1)
+            sheet["cellData"].pop(str(start), None)
+            sheet.get("rowData", {}).pop(str(start), None)
+        shift.side_effect = shift_last
+        change = {"kind": "row.remove", "sheet": self.sheet["id"], "block": self.block["id"], "row": last}
+        with patch("boldApp.hojas.task_bridge.task_permission", side_effect=PermissionDenied("Sin permiso para eliminar tareas")):
+            self.assertEqual(self.operation([change]).status_code, 403)
+        self.file.refresh_from_db()
+        self.assertIn(last, self.file.document["sheets"][self.sheet["id"]]["__bold"]["blocks"][0]["rowIds"])
+        removed.task.refresh_from_db()
+        self.assertIsNone(removed.task.deleted_at)
+        response = self.operation([change])
+        self.assertEqual(response.status_code, 200, response.data)
+        removed.task.refresh_from_db()
+        removed.refresh_from_db()
+        self.assertIsNotNone(removed.task.deleted_at)
+        self.assertFalse(removed.active)
+        kept.task.refresh_from_db()
+        self.assertIsNone(kept.task.deleted_at)
+
+    def test_remove_block_clears_native_table_cells_and_rules_after_reload(self):
+        start, end = self.block["startRow"], self.block["startRow"] + len(self.block["rowIds"])
+        area = {"startRow": start, "endRow": end, "startColumn": 1, "endColumn": len(self.block["columns"])}
+        self.sheet["cellData"][str(start)]["40"] = {"v": "Celda ajena"}
+        self.sheet["rowData"] = {str(end): {"h": 70}}
+        table = {"id": "native", "name": "Tabla_1", "range": area, "columns": [{"id": col["id"], "displayName": col["name"]} for col in self.block["columns"]], "options": {"tableStyleId": "table-default-0"}}
+        rules = [{"uid": "list", "type": "list", "formula1": '["A","B"]', "ranges": [{**area, "endRow": end + 2}]}]
+        self.document["resources"] = [
+            {"name": "SHEET_TABLE_PLUGIN", "data": json.dumps({self.sheet["id"]: {"tables": [table], "tableFilteredOutRows": [end]}})},
+            {"name": "SHEET_DATA_VALIDATION_PLUGIN", "data": json.dumps({self.sheet["id"]: rules})},
+            {"name": "SHEET_RANGE_THEME_MODEL_PLUGIN", "data": json.dumps({"rangeThemeStyleRuleMap": {"table": {"themeName": "table-default-0", "rangeInfo": {"subUnitId": self.sheet["id"], "range": area}}}})},
+        ]
+        self.file.document = self.document
+        self.file.save()
+        response = self.operation([{"kind": "block.remove", "sheet": self.sheet["id"], "block": self.block["id"]}])
+        self.assertEqual(response.status_code, 200, response.data)
+        self.file.refresh_from_db()
+        sheet = self.file.document["sheets"][self.sheet["id"]]
+        self.assertFalse(any(block["id"] == self.block["id"] for block in sheet["__bold"]["blocks"]))
+        self.assertEqual(sheet["cellData"].get(str(start)), {"40": {"v": "Celda ajena"}})
+        self.assertNotIn(str(end), sheet["cellData"])
+        self.assertNotIn(str(end), sheet["rowData"])
+        saved = {resource["name"]: json.loads(resource["data"]) for resource in self.file.document["resources"]}
+        self.assertEqual(saved["SHEET_TABLE_PLUGIN"][self.sheet["id"]]["tables"], [])
+        self.assertEqual(saved["SHEET_RANGE_THEME_MODEL_PLUGIN"]["rangeThemeStyleRuleMap"], {})
+        self.assertEqual(saved["SHEET_DATA_VALIDATION_PLUGIN"][self.sheet["id"]][0]["ranges"], [{**area, "startRow": end + 1, "endRow": end + 2}])
+        reopened = self.client.get(f"/api/v2/sheets/files/{self.file.id}/")
+        self.assertEqual(reopened.status_code, 200)
+        self.assertEqual(reopened.data["document"]["sheets"][self.sheet["id"]], sheet)
+
+    def test_grid_table_removal_also_deletes_the_block_in_saved_document(self):
+        snapshot = deepcopy(self.file.document)
+        snapshot["resources"] = [{"name": "SHEET_TABLE_PLUGIN", "data": json.dumps({self.sheet["id"]: {"tables": [], "disabledBlocks": [self.block["id"]]}})}]
+        response = self.operation([{"kind": "grid", "document": snapshot, "baseDocument": self.file.document}])
+        self.assertEqual(response.status_code, 200, response.data)
+        self.file.refresh_from_db()
+        sheet = self.file.document["sheets"][self.sheet["id"]]
+        self.assertFalse(any(block["id"] == self.block["id"] for block in sheet["__bold"]["blocks"]))
+        self.assertFalse(any(cells.get("0", {}).get("v") == "block:" + self.block["id"] for cells in sheet["cellData"].values()))
+
     def drive_file(self):
+        self.file.refresh_from_db()
         self.file.drive_account = self.actor.employee.user_account
         self.file.drive_folder = "fixed-folder"
         self.file.drive_id = "reserved-drive-id"
@@ -805,6 +1010,11 @@ class SheetsTests(TestCase):
         document["resources"][0]["data"] = __import__("json").dumps({"v": 1, "charts": [model]})
         with self.assertRaises(ValidationError):
             validate_document(document)
+        model["source"]["endRow"] = 2
+        for invalid in ({"v": 1, "charts": [{**model, "pos": {**model["pos"], "width": 0}}]}, {"v": 1, "charts": [], "deletedParts": ["xl/worksheets/sheet1.xml"]}):
+            document["resources"][0]["data"] = json.dumps(invalid)
+            with self.assertRaises(ValidationError):
+                validate_document(document)
 
     def test_native_tables_reject_deleted_sheets_and_invalid_ranges(self):
         import json
@@ -870,6 +1080,8 @@ class SheetsTests(TestCase):
         put_cell(sheet, row, column, {"v": "medium"})
         Revision.objects.create(workbook=self.file, revision=self.file.synced_revision, document=base, reason="drive_base")
         local, remote = deepcopy(base), deepcopy(base)
+        local["sheets"][key]["zoomRatio"] = .9
+        remote["sheets"][key]["zoomRatio"] = .8
         put_cell(local["sheets"][key], row, column, {"v": "low"})
         put_cell(remote["sheets"][key], row, column, {"v": ""})
         remote["sheets"][key]["cellData"]["100"] = {"1": {"v": "Cambio independiente en Drive"}}
@@ -878,13 +1090,15 @@ class SheetsTests(TestCase):
         self.file.save()
         review = ImportReview.objects.create(workbook=self.file, reviewer=self.actor.employee.user_account, drive_version="9", base_revision=self.file.revision, document=remote, excel_content=b"drive-xlsx", issues=[], changes=[])
         review_external.return_value = review
-        update_external(self.file.pk, lease)
+        with self.captureOnCommitCallbacks(execute=True):
+            update_external(self.file.pk, lease)
         self.file.refresh_from_db()
         review.refresh_from_db()
         self.assertEqual(cell_at(self.file.document["sheets"][key], row, column)["v"], "low")
         self.assertEqual(self.file.document["sheets"][key]["cellData"]["100"]["1"]["v"], "Cambio independiente en Drive")
         self.assertEqual(self.file.sync_state, "pending")
         self.assertEqual(self.file.sync_error, "")
+        self.assertEqual(self.file.document["sheets"][key]["zoomRatio"], .9)
         self.assertEqual(self.file.drive_id, "reserved-drive-id")
         incoming = Revision.objects.get(workbook=self.file, reason="drive_conflict")
         self.assertEqual(incoming.document, remote)
@@ -892,6 +1106,32 @@ class SheetsTests(TestCase):
         self.assertEqual(Revision.objects.get(workbook=self.file, reason="before_drive_import").document, local)
         self.assertIsNotNone(review.applied_at)
         tasks.assert_called_once()
+        self.assertNotIn("sync_error", publish.call_args.args[1])
+
+    @patch("boldApp.hojas.drive.publish")
+    @patch("boldApp.administrativo.services.record_system_event")
+    @patch("boldApp.hojas.drive.apply_tasks")
+    @patch("boldApp.hojas.drive.raw_metadata", return_value=({"version": "9", "md5Checksum": "remote", "name": "Agenda", "parents": ["folder"]}, None))
+    @patch("boldApp.hojas.drive.review_external")
+    def test_drive_without_a_common_base_keeps_bold_and_archives_drive(self, review_external, metadata, tasks, audit, publish):
+        self.drive_file()
+        lease = uuid.uuid4()
+        self.file.sync_lease = lease
+        self.file.synced_revision = self.file.revision
+        self.file.revision += 1
+        self.file.save()
+        local = deepcopy(self.file.document)
+        remote = deepcopy(local)
+        remote["sheets"][remote["sheetOrder"][0]]["zoomRatio"] = .8
+        review = ImportReview.objects.create(workbook=self.file, reviewer=self.actor.employee.user_account, drive_version="9", base_revision=self.file.revision, document=remote, excel_content=b"drive-xlsx", issues=[], changes=[])
+        review_external.return_value = review
+        with self.captureOnCommitCallbacks(execute=True):
+            update_external(self.file.pk, lease)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.document, local)
+        self.assertEqual(self.file.sync_state, "pending")
+        self.assertEqual(self.file.sync_error, "")
+        self.assertEqual(Revision.objects.get(workbook=self.file, reason="drive_conflict").document, remote)
         self.assertNotIn("sync_error", publish.call_args.args[1])
 
     def test_drive_conflict_message_does_not_expose_a_serialized_dictionary(self):

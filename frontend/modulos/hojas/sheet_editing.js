@@ -1,5 +1,15 @@
 import {canonical} from './sheets_model.js';
 
+const sheetModels=new Set(['__casual_sheets_charts__','__casual_sheets_pivots__','__casual_sheets_sparklines__']);
+export const withoutSheetModels=document=>({...document,resources:(document.resources || []).filter(item=>!sheetModels.has(item.name))});
+export function applyRemoteSheetModels(casual, resources=[]) {
+  const current=casual.getContent();
+  const models=items=>items.filter(item=>sheetModels.has(item.name));
+  const comparable=items=>canonical(models(items).map(item=>({...item,data:JSON.parse(item.data)})).sort((a,b)=>a.name.localeCompare(b.name)));
+  if (JSON.stringify(comparable(current.resources || []))===JSON.stringify(comparable(resources))) return;
+  casual.setContent({...current,resources:[...withoutSheetModels(current).resources,...models(resources)]});
+}
+
 export function finishSheetEdit(book, api, eventType) {
   if (!book.isCellEditing()) return;
   // Closing without Enter confirms the draft without moving to the next row.

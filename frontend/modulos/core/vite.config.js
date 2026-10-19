@@ -21,7 +21,7 @@ export default define_config({
             "/ws": { target: "ws://127.0.0.1:8000", ws: true, headers: { Origin: "http://localhost:5174" } }
         },
         fs: {
-            allow: [".."]
+            allow: ["..", "../../../services/sheets-engine/block_tables.mjs"]
         }
     },
     preview: {

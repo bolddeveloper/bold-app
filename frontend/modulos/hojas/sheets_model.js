@@ -1,5 +1,6 @@
 import {canonical, prepareTextStyles, sameTextStyle} from './sheet_styles.js';
 export {canonical} from './sheet_styles.js';
+import {prepareBlockTables, styleTaskTables, taskTableCellStyle, normalizeBlockTables} from '../../../services/sheets-engine/block_tables.mjs';
 
 export const blockTypes = [{
   id: 'tasks',
@@ -122,23 +123,27 @@ export function gridRowChanges(document, sheetId, kind, range) {
   const sheet = document.sheets[sheetId];
   if (!sheet || !range) return null;
   const removing = kind.includes('remove');
-  const blocks = sheet.__bold.blocks.filter(block => removing ? range.startRow <= block.startRow + block.rowIds.length && range.endRow >= block.startRow : range.startRow > block.startRow && range.startRow <= block.startRow + block.rowIds.length + 1);
+  const lastRow=block=>block.startRow+block.rowIds.length+(['costs','comparison'].includes(block.type)?1:0);
+  const blocks = sheet.__bold.blocks.filter(block => removing ? range.startRow <= lastRow(block) && range.endRow >= block.startRow : range.startRow > block.startRow && range.startRow <= block.startRow + block.rowIds.length + 1);
   if (!blocks.length) return null;
+  if (removing) return [...blocks].sort((a,b)=>b.startRow-a.startRow).map(block=>{
+    if (range.startRow<=block.startRow && range.endRow>=block.startRow+block.rowIds.length) return {kind:'block.remove',sheet:sheetId,block:block.id};
+    if (range.startRow<=block.startRow || range.endRow>block.startRow+block.rowIds.length) throw Error('Selecciona el bloque completo, incluido su encabezado, para eliminarlo.');
+    const count=range.endRow-range.startRow+1;
+    if (count>500) throw Error('Modifica hasta 500 filas por operación.');
+    return {kind:'row.remove',sheet:sheetId,block:block.id,row:block.rowIds[range.startRow-block.startRow-1],count};
+  });
   const block = blocks[0],
     count = range.endRow - range.startRow + 1;
-  if (blocks.length !== 1 || range.startRow <= block.startRow || removing && range.endRow > block.startRow + block.rowIds.length) throw Error('La selección incluye encabezados u otras tablas. Elimina tablas desde su menú.');
+  if (blocks.length !== 1 || range.startRow <= block.startRow) throw Error('Añade filas dentro de un único bloque.');
   if (count > 500) throw Error('Modifica hasta 500 filas por operación.');
   const index = range.startRow - block.startRow - 1;
   return [{
-    kind: removing ? 'row.remove' : 'row.add',
+    kind: 'row.add',
     sheet: sheetId,
     block: block.id,
     count,
-    ...(removing ? {
-      row: block.rowIds[index]
-    } : {
-      index
-    })
+    index
   }];
 }
 export function blockCell(sheet, block, row, column) {
@@ -153,6 +158,16 @@ export function columnLetter(index) {
   }
   return result;
 }
+function gridValidationRule(rule) {
+  if (rule.type !== 'custom' || !rule.formula1?.trim()) return rule;
+  const formula = rule.formula1.trim();
+  // Excel date checks depend on CELL("format"), which Univer always returns as "G".
+  if (/^=?OR\(NOT\(ISERROR\(DATEVALUE\((\$?[A-Z]+\$?\d+)\)\)\),\s*AND\(ISNUMBER\(\1\),\s*LEFT\(CELL\("format",\s*\1\)\)="D"\)\)$/i.test(formula)) {
+    const {formula1, formula2, operator, ...dateRule} = rule;
+    return {...dateRule, type:'date'};
+  }
+  return {...rule, formula1:'=' + formula.replace(/^=/, '')};
+}
 export function displayGrid(document, people) {
   const next = clone(document),
     names = new Map(people.map(person => [person.id, person.name]));
@@ -165,6 +180,17 @@ export function displayGrid(document, people) {
       delete item.p;
       delete item.si;
     }
+    if (column.type === 'date' && typeof item.v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.v)) {
+      const milliseconds=Date.parse(item.v+'T00:00:00Z');
+      if (Number.isFinite(milliseconds)) {
+        item.v=(milliseconds-Date.UTC(1899,11,30))/86400000;
+        item.t=2;
+        const style=typeof item.s==='string' ? next.styles?.[item.s] || {} : item.s || {};
+        item.s={...style,n:style.n || {pattern:'yyyy-mm-dd'}};
+        delete item.p;
+        delete item.si;
+      }
+    }
     if (column.type === 'dropdown' && item.v) item.v = column.options?.find(option => option.value === item.v)?.label || item.v;
   }
   const resource = next.resources?.find(item => item.name === 'SHEET_DATA_VALIDATION_PLUGIN') || {name:'SHEET_DATA_VALIDATION_PLUGIN', data:'{}'};
@@ -172,18 +198,19 @@ export function displayGrid(document, people) {
   for (const sheet of Object.values(next.sheets)) for (const block of sheet.__bold.blocks) for (let index=0; index<block.columns.length; index++) {
     const column = block.columns[index], type = validationType(column.type);
     if (!type || !block.rowIds.length) continue;
-    const options = column.type === 'dropdown' ? (column.options || []).map(option => option.label) : type === 'checkbox' ? [] : samePerson(people, block.task.enabled ? block.task.unit : '').map(person => person.name);
+    const options = column.type === 'dropdown' ? (column.options || []).map(option => option.label) : type === 'checkbox' ? [] : samePerson(people, block.task.enabled && block.type !== 'tasks' ? block.task.unit : '').map(person => person.name);
     // These rules belong to the block configuration, not to each editor's save/undo history.
     (rules[sheet.id] ||= []).push({uid:`bold-validation-${block.id}-${column.id}`, type, allowBlank:true,
-      ...(['responsible','collaborators'].includes(column.type) ? {renderMode:1} : {}),
-      ...(type === 'checkbox' ? {} : {formula1:JSON.stringify([...new Set(options)]), showDropDown:true}),
+      ...(type === 'checkbox' ? {} : type === 'date' ? {showDropDown:true,renderMode:2} : {renderMode:2, formula1:JSON.stringify([...new Set(options)]), showDropDown:true}),
       ranges:[{startRow:block.startRow+1, endRow:block.startRow+block.rowIds.length, startColumn:index+1, endColumn:index+1}]});
   }
-  resource.data = JSON.stringify(rules);
+  resource.data = JSON.stringify(Object.fromEntries(Object.entries(rules).map(([sheet,items])=>[sheet,items.map(gridValidationRule)])));
   if (!next.resources?.includes(resource)) (next.resources ||= []).push(resource);
+  prepareBlockTables(next);
+  styleTaskTables(next);
   return prepareTextStyles(next);
 }
-const validationType = type => ({responsible:'list', collaborators:'listMultiple', dropdown:'list', checkbox:'checkbox'})[type];
+const validationType = type => ({responsible:'list', collaborators:'listMultiple', dropdown:'list', checkbox:'checkbox', date:'date'})[type];
 function savedValidationRules(data, document) {
   for (const [id, rules] of Object.entries(data)) data[id] = rules.filter(rule => {
     if (rule.uid?.startsWith('bold-validation-')) return false;
@@ -198,16 +225,24 @@ function savedRowData(rows = {}) {
 }
 export function normalizeSnapshot(snapshot, metadata, people = []) {
   const next = clone(snapshot);
-  const restoreStyle = (item, original) => {
+  const taskTables=JSON.parse(next.resources?.find(item=>item.name==='SHEET_TABLE_PLUGIN')?.data || '{}');
+  const restoreStyle = (item, original, taskTable=false) => {
     if (!item) return;
     if (typeof item.s === 'string') item.s = clone(next.styles?.[item.s] || {});
     const style = typeof original === 'string' ? metadata.styles?.[original] : original;
     // Keep the saved representation in operation bases, avoiding false edit conflicts.
-    if (style && sameTextStyle(item.s, style)) item.s = clone(original);
+    if (style && (sameTextStyle(item.s, style) || taskTable && sameTextStyle(item.s, taskTableCellStyle(style)))) item.s = clone(original);
   };
   for (const resource of next.resources || []) {
     if (resource.name !== 'SHEET_DATA_VALIDATION_PLUGIN') continue;
     const data = savedValidationRules(JSON.parse(resource.data || '{}'), metadata);
+    const original = JSON.parse(metadata.resources?.find(item=>item.name===resource.name)?.data || '{}');
+    for (const [sheet, rules] of Object.entries(data)) data[sheet] = rules.map(rule => {
+      const saved = original[sheet]?.find(item=>item.uid===rule.uid);
+      // Keep Excel's original rule when only its runtime representation changed.
+      if (saved && JSON.stringify(canonical({...gridValidationRule(saved),ranges:[]})) === JSON.stringify(canonical({...rule,ranges:[]}))) return {...saved,ranges:rule.ranges};
+      return rule;
+    });
     for (const rules of Object.values(data)) for (const rule of rules) {
       if (rule.type !== 'date') continue;
       for (const key of ['formula1','formula2']) {
@@ -250,7 +285,8 @@ export function normalizeSnapshot(snapshot, metadata, people = []) {
       if (rows.length === known.size) block.rowIds = rows.map(([, cells]) => cells[0].v);
     }
     for (const [row, cells] of Object.entries(sheet.cellData || {})) for (const [col, item] of Object.entries(cells)) {
-      restoreStyle(item, metadata.sheets[id]?.cellData?.[row]?.[col]?.s);
+      const taskTable=taskTables[id]?.tables.some(table=>table.options?.tableStyleId==='table-bold-tasks' && +row>=table.range.startRow && +row<=table.range.endRow && +col>=table.range.startColumn && +col<=table.range.endColumn);
+      restoreStyle(item, metadata.sheets[id]?.cellData?.[row]?.[col]?.s, taskTable);
     }
     for (const block of sheet.__bold.blocks) for (const row of block.rowIds) for (const column of block.columns) {
       const item = blockCell(sheet, block, row, column.id);
@@ -272,20 +308,26 @@ export function normalizeSnapshot(snapshot, metadata, people = []) {
         item.v = richCellValue(item);
       }
       if (column.type === 'checkbox' && [0, 1, 'TRUE', 'FALSE', '1', '0'].includes(item.v)) item.v = [1, 'TRUE', '1'].includes(item.v);
-      if (column.type === 'date' && typeof item.v === 'number') item.v = new Date(Date.UTC(1899, 11, 30) + item.v * 86400000).toISOString().slice(0, 10);
+      if (column.type === 'date') {
+        if (typeof item.v === 'number') {
+          if (!Number.isFinite(item.v)) throw Error('Selecciona una fecha válida antes de guardar.');
+          item.v = new Date(Date.UTC(1899, 11, 30) + item.v * 86400000).toISOString().slice(0, 10);
+        }
+        if (typeof item.v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.v)) item.t=1;
+      }
       if (column.type === 'dropdown' && item.v) item.v = column.options?.find(option => option.label === item.v || option.value === item.v)?.value || item.v;
       if (['responsible', 'collaborators'].includes(column.type) && item.v && people.length) {
         const previousBlock=metadata.sheets[id]?.__bold.blocks.find(previous=>previous.id===block.id);
         const previousCell=previousBlock&&blockCell(metadata.sheets[id],previousBlock,row,column.id);
         const previous=previousCell?.v;
         const originalPeople=String(previous||'').split(',').filter(Boolean).map(identity=>people.find(person=>person.id===identity));
-        if(originalPeople.length&&originalPeople.every(person=>person&&(!block.task.enabled||person.unit===block.task.unit))&&[originalPeople.map(person=>person.name).join(', '),originalPeople.map(person=>`${person.name} <${person.email}>`).join(', ')].includes(item.v)){
+        if(originalPeople.length&&originalPeople.every(person=>person&&(block.type==='tasks'||!block.task.enabled||person.unit===block.task.unit))&&[originalPeople.map(person=>person.name).join(', '),originalPeople.map(person=>`${person.name} <${person.email}>`).join(', ')].includes(item.v)){
           item.v=previous;
           if (previousCell.p) item.p=clone(previousCell.p);
           if (previousCell.si != null) item.si=previousCell.si;
           continue;
         }
-        const choices = samePerson(people, block.task.enabled ? block.task.unit : '').map(person => originalPeople.find(original => original?.employee === person.employee && (!block.task.enabled || original.unit === block.task.unit)) || person);
+        const choices = samePerson(people, block.task.enabled && block.type !== 'tasks' ? block.task.unit : '').map(person => originalPeople.find(original => original?.employee === person.employee && (block.type === 'tasks' || !block.task.enabled || original.unit === block.task.unit)) || person);
         let selections = null;
         if (typeof item.v === 'string' && item.v.trim().startsWith('[')) {
           try { selections = JSON.parse(item.v); }
@@ -320,10 +362,24 @@ export function normalizeSnapshot(snapshot, metadata, people = []) {
     }
   }
   next.styles = {...next.styles, ...clone(metadata.styles || {})};
+  normalizeBlockTables(next,metadata);
+  const chartName='__casual_sheets_charts__';
+  const oldCharts=JSON.parse(metadata.resources?.find(item=>item.name===chartName)?.data || '{}');
+  const chartResource=next.resources?.find(item=>item.name===chartName);
+  const charts=JSON.parse(chartResource?.data || '{"v":1,"charts":[]}');
+  const ids=new Set((charts.charts || []).map(item=>item.id));
+  const deletedParts=[...new Set([...(oldCharts.deletedParts || []),...(charts.deletedParts || []),...(oldCharts.charts || []).filter(item=>!ids.has(item.id) && item.excelPart).map(item=>item.excelPart)])];
+  if (deletedParts.length) {
+    const resource={name:chartName,data:JSON.stringify({...charts,deletedParts})};
+    if (chartResource) chartResource.data=resource.data;
+    else (next.resources ||= []).push(resource);
+  }
   return next;
 }
 function comparableResources(document) {
-  return (document.resources || []).map(resource => {
+  const prepared={...document,resources:clone(document.resources || [])};
+  prepareBlockTables(prepared);
+  return (prepared.resources || []).map(resource => {
     let data;
     try { data = JSON.parse(resource.data || '{}'); }
     catch { return resource; }
@@ -453,4 +509,21 @@ export function newerFile(next, current) {
 export function advancePending(pending, operation, next, current) {
   const ownRevision = Number(next.revision) === Number(operation.revision) + 1 && Number(current.revision) <= Number(next.revision);
   for (const item of pending) if (!item.sent && (item.changes.every(change => change.kind === 'cell') || ownRevision)) item.revision = Number(next.revision);
+}
+
+export function repairRejectedDraft(pending, changes) {
+  if (!pending[0]?.rejected) return null;
+  const all=[...pending.flatMap(operation=>operation.changes),...changes];
+  if (all.some(change=>!['cell','grid'].includes(change.kind))) return null;
+  const firstGrid=all.findIndex(change=>change.kind==='grid');
+  const cells=new Map();
+  for (const change of firstGrid<0?all:all.slice(0,firstGrid)) {
+    const key=JSON.stringify([change.sheet,change.block,change.row,change.column]);
+    cells.set(key,cells.has(key)?{...cells.get(key),after:clone(change.after)}:clone(change));
+  }
+  if (firstGrid<0) return {revision:pending[0].revision,changes:[...cells.values()]};
+  if (!all[firstGrid].baseDocument) return null;
+  const base=optimistic(all[firstGrid].baseDocument,[...cells.values()].map(change=>({...change,after:change.before})));
+  const document=all.reduce((document,change)=>optimistic(document,[change]),base);
+  return {revision:pending[0].revision,changes:[{kind:'grid',baseDocument:base,document}]};
 }

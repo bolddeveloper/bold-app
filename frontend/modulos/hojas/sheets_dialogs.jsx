@@ -20,8 +20,8 @@ export function SheetDialog({
     return () => reference.current?.close();
   }, []);
   useEffect(() => {
-    const shell = document.querySelector('.app_shell');
-    const update = () => reference.current?.classList.toggle('sheets_dark', !!shell?.classList.contains('theme_dark'));
+    const shell = document.documentElement;
+    const update = () => reference.current?.classList.toggle('sheets_dark', shell.classList.contains('theme_dark'));
     update();
     const observer = new MutationObserver(update);
     if (shell) observer.observe(shell, {
@@ -76,7 +76,7 @@ export function NewFileDialog({
       setBusy(false);
     }
   }
-  return <SheetDialog title={uploading ? 'Subir archivo Excel' : 'Crear archivo de Hojas'} close={close}>{uploading && <label>Archivo Excel<input type="file" accept=".xlsx" disabled={busy} onChange={event=>{
+  return <SheetDialog title={uploading ? 'Subir archivo Excel' : 'Crear archivo de Sheets'} close={close}>{uploading && <label>Archivo Excel<input type="file" accept=".xlsx" disabled={busy} onChange={event=>{
     const selectedFile = event.target.files?.[0];
     if (!selectedFile || !selectedFile.name.toLowerCase().endsWith('.xlsx') || selectedFile.size > 20000000) {setExcel(null);setError('Selecciona un archivo .xlsx de hasta 20 MB.');return;}
     setExcel(selectedFile);setTitle(selectedFile.name.replace(/\.xlsx$/i,''));setError('');
@@ -190,7 +190,7 @@ export function ConflictDialog({
         }));
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = 'borrador-hojas.json';
+        anchor.download = 'borrador-sheets.json';
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }}>Descargar borrador</button></> : conflict.conflicts.map((item, index) => <fieldset key={index}><legend>Hoja {item.sheet}, fila {item.row + 1}, columna {item.column + 1}</legend><label className="sheets_check"><input type="radio" name={`conflict-${index}`} checked={choices[index] === 'current'} onChange={() => setChoices(old => ({

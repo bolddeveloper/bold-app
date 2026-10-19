@@ -16,6 +16,50 @@ async function file() {
   sheet.addRows([['Producto','Total'],['Licencias',20],['Equipo',30]]);
   return book.xlsx.writeBuffer();
 }
+
+test('eliminar un gráfico importado retira el objeto original y no reaparece al importar',async()=>{
+  const value=document();value.resources=value.resources.filter(item=>item.name==='__casual_sheets_charts__');
+  const zip=await JSZip.loadAsync(await addNativeObjects(await file(),value));
+  zip.remove('bold/native-objects.json');
+  const part=Object.keys(zip.files).find(name=>/^xl\/charts\/chart\d+\.xml$/.test(name));
+  value.resources=[{name:'__casual_sheets_charts__',data:JSON.stringify({v:1,charts:[],deletedParts:[part]})}];
+  const buffer=await addNativeObjects(await zip.generateAsync({type:'nodebuffer'}),value);
+  const removed=await JSZip.loadAsync(buffer);
+  assert.equal(removed.file(/^xl\/charts\/chart\d+\.xml$/).length,0);
+  await importNativeCharts(buffer,value);
+  assert.deepEqual(JSON.parse(value.resources.find(item=>item.name==='__casual_sheets_charts__').data).charts,[]);
+});
+
+test('el tamaño explícito de un gráfico no depende de las celdas que cruza al moverlo',()=>{
+  const value=document(),model=JSON.parse(value.resources[0].data).charts[0];
+  model.pos={...model.pos,width:625,height:375,offsetX:25,offsetY:7};
+  const before=nativeChart(value,model,{Col:22}).charts[0];
+  model.pos.endColumn++;
+  const after=nativeChart(value,model,{Col:22}).charts[0];
+  assert.deepEqual(after.Dimension,before.Dimension);
+  assert.deepEqual(after.Dimension,{Width:625,Height:375});
+  assert.equal(after.Format.OffsetX,25);assert.equal(after.Format.OffsetY,7);
+  assert.equal(after.Legend.Position,'right');
+  assert.deepEqual(after.Series[0].Fill.Color,['4285F4']);
+  assert.throws(()=>nativeChart(value,{...model,pos:{...model.pos,width:-1}},{Col:22}),/Tamaño/);
+});
+
+test('guardar y releer un gráfico propio conserva dimensiones exactas y diseño sin crecer',async()=>{
+  const value=document();value.resources=value.resources.filter(item=>item.name==='__casual_sheets_charts__');
+  const data=JSON.parse(value.resources[0].data),model=data.charts[0];
+  model.type='area-stacked';model.pos={...model.pos,width:625,height:375,offsetX:25,offsetY:7};
+  model.format={legend:'right',palette:'pastel',showTitle:true};
+  value.resources[0].data=JSON.stringify(data);
+  let buffer=await file();
+  for (let saved=0;saved<3;saved++) {
+    buffer=await addNativeObjects(buffer,value);
+    await importNativeCharts(buffer,value);
+    const imported=JSON.parse(value.resources[0].data).charts[0];
+    assert.deepEqual(imported.pos,model.pos);
+    assert.deepEqual(imported.format,model.format);
+    assert.equal(imported.type,model.type);
+  }
+});
 test('gráficos referencian celdas y tablas dinámicas conservan agregación nativa', () => {
   const value = document(), chart = JSON.parse(value.resources[0].data).charts[0], pivot = JSON.parse(value.resources[1].data).pivots[0];
   const output = nativeChart(value,chart,{Col:22});

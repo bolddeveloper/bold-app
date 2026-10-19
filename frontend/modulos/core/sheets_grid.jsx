@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CasualSheets } from '@casualoffice/sheets/sheets';
 import '@univerjs/sheets-data-validation/facade';
+import '@univerjs/sheets-formula/facade';
 import { LocaleType } from '@univerjs/core';
 import { DeviceInputEventType } from '@univerjs/engine-render';
-import { finishSheetEdit, executeSheetCommand, applyRemoteSheetCells, applyManagedValidations, applyRemoteSheetLayout } from '../hojas/sheet_editing.js';
+import { finishSheetEdit, executeSheetCommand, applyRemoteSheetCells, applyManagedValidations, applyRemoteSheetLayout, withoutSheetModels, applyRemoteSheetModels } from '../hojas/sheet_editing.js';
 import {sheetLocales} from './sheets_locales.js';
 import '@casualoffice/sheets/styles';
 import '@univerjs/sheets-table-ui/lib/index.css';
@@ -20,7 +21,8 @@ import '@univerjs/sheets-thread-comment-ui/lib/index.css';
 import '@univerjs/find-replace/lib/index.css';
 import { SheetChartDialog } from '../hojas/sheet_charts.jsx';
 import { SheetPivotDialog } from '../hojas/sheet_pivots.jsx';
-const extensions = {dialogs: {'insert-chart': SheetChartDialog, 'insert-pivot': SheetPivotDialog}};
+import {routeSheetDialog,tableBlockRemovalChanges} from '../hojas/sheet_menus.js';
+const hostOwnedDialogs = ['insert-chart', 'insert-pivot'];
 const features = {file:false, branding:false, sparklines:false};
 export default function SheetsGrid({
   document,
@@ -37,6 +39,7 @@ export default function SheetsGrid({
   people = [],
   adapter
 }) {
+  const [hostDialog, setHostDialog] = useState(null);
   const {
     displayGrid,
     gridChanges,
@@ -97,6 +100,11 @@ export default function SheetsGrid({
         finishSheetEdit(book, univerAPI, DeviceInputEventType.PointerDown);
         return capture();
       };
+      listeners.push({dispose:casual.on('change',()=>{
+        if (!disposed && !applying.current && editable) {
+          try {capture();} catch (error) {callbacks.current.onError(error);}
+        }
+      })});
       const executeCommand = casual.executeCommand.bind(casual);
       const commands = {commit:editable ? commit : null, execute:executeCommand, onError:error => callbacks.current.onError(error)};
       casual.executeCommand = async (id, params) => disposed ? false : executeSheetCommand(commands, id, params);
@@ -156,8 +164,25 @@ export default function SheetsGrid({
       };
       ownerDocument.addEventListener('pointerdown', outside, true);
       listeners.push({dispose: () => ownerDocument.removeEventListener('pointerdown', outside, true)});
-      if (!editable) listeners.push(univerAPI.addEvent(univerAPI.Event.CellClicked, editCell));
+      listeners.push(univerAPI.addEvent(univerAPI.Event.CellClicked, params => {
+        if (!editable) return editCell(params);
+        const subUnitId=params.worksheet.getSheetId(), sheet=metadata.current.sheets[subUnitId];
+        const block=sheet?.__bold.blocks.find(block=>params.row>block.startRow && params.row<=block.startRow+block.rowIds.length);
+        if (block?.columns[params.column-1]?.type==='date') {
+          univerAPI.executeCommand('sheet.operation.show-data-validation-dropdown',{unitId:book.getId(),subUnitId,row:params.row,column:params.column});
+        }
+      }));
       listeners.push(univerAPI.addEvent(univerAPI.Event.BeforeCommandExecute, command => {
+        if (command.id==='sheet.command.delete-table') {
+          try {
+            const changes=tableBlockRemovalChanges(casual.getContent(),metadata.current,command.params?.tableId);
+            if (changes.length) {
+              command.cancel=true;
+              if (editable) {capture();callbacks.current.change(changes);}
+              return;
+            }
+          } catch (error) {command.cancel=true;callbacks.current.onError(error);return;}
+        }
         if (/insert-sheet|remove-sheet|set-worksheet-name|copy-sheet|move-sheet/.test(command.id)) {
           callbacks.current.onError(Error('Organiza las hojas desde las pestañas de BOLD.'));
           command.cancel = true;
@@ -233,6 +258,7 @@ export default function SheetsGrid({
   };
   // Confirm pending cells before the child editor disposes its engine in a passive effect.
   useLayoutEffect(() => () => instance.current?.cleanup?.(), [document.id, generation, editable]);
+  useEffect(() => {setHostDialog(null);}, [document.id, generation, editable]);
   useEffect(() => {
     const runtime = instance.current;
     const directoryChanged = JSON.stringify(currentPeople.current) !== JSON.stringify(people);
@@ -241,14 +267,25 @@ export default function SheetsGrid({
       if (runtime.book.isCellEditing()) return;
       if (runtime.capture().length && editable) return;
       // Compare the live snapshot, not the previous server state: own edits already exist here.
-      const incoming = gridChanges(last.current, document, {layout:false});
+      let incoming = gridChanges(withoutSheetModels(last.current), withoutSheetModels(document), {layout:false});
+      if (incoming.some(change => change.kind === 'grid')) {
+        // Runtime plugins may serialize resources differently from the server's saved copy.
+        const remote = gridChanges(withoutSheetModels(metadata.current), withoutSheetModels(document), {layout:false});
+        if (!remote.some(change => change.kind === 'grid')) incoming = remote;
+      }
       if (incoming.some(change => change.kind === 'grid')) {
         received.current = document;
         setGeneration(old => old + 1);
         return;
       }
+      if (!incoming.length && !directoryChanged && !gridChanges(metadata.current, document).length) {
+        received.current = document;
+        metadata.current = document;
+        return;
+      }
       const visible = displayGrid(document, people);
       applying.current = true;
+      applyRemoteSheetModels(runtime.casual,visible.resources);
       applyRemoteSheetLayout(runtime.univerAPI, runtime.book.getId(), last.current, visible);
       applyManagedValidations(runtime.univerAPI, runtime.book.getId(), runtime.casual.getContent().resources, visible.resources);
       const cellsBySheet = new Map();
@@ -299,7 +336,7 @@ export default function SheetsGrid({
     for (const sheet of Object.values(snapshot.sheets)) delete sheet.__bold;
     return snapshot;
   }, [document.id, generation, editable]);
-  return <div className="sheets_grid" onDragOver={event => {
+  return <div className="sheets_grid" onMouseDownCapture={event => routeSheetDialog(event, instance.current?.casual, setHostDialog)} onClickCapture={event => routeSheetDialog(event, instance.current?.casual, setHostDialog)} onDragOver={event => {
     if (event.dataTransfer.types.includes('application/x-bold-sheet-block')) event.preventDefault();
   }} onDrop={event => {
     const type = event.dataTransfer.getData('application/x-bold-sheet-block');
@@ -307,7 +344,7 @@ export default function SheetsGrid({
       event.preventDefault();
       onDropBlock?.(type);
     }
-  }}>{problem && <p role="alert">{problem}</p>}<div ref={container} className="sheets_univer" aria-label="Cuadrícula de Hojas"><CasualSheets
+  }}>{problem && <p role="alert">{problem}</p>}<div ref={container} className="sheets_univer" aria-label="Cuadrícula de Sheets"><CasualSheets
     key={`${document.id}:${generation}:${editable}`}
     initialData={input}
     onReady={api => {initialize(api).catch(error => {setProblem(error.message); callbacks.current.onError(error);});}}
@@ -316,7 +353,11 @@ export default function SheetsGrid({
     onError={error => callbacks.current.onError(Error(error.message || 'No se pudo actualizar la cuadrícula.'))}
     documentMode={editable ? 'editing' : 'viewing'}
     appearance={dark ? 'dark' : 'light'}
-    locale={LocaleType.ES_ES} locales={sheetLocales} chrome="full" extensions={extensions} features={features}
+    locale={LocaleType.ES_ES} locales={sheetLocales} chrome="full" features={features}
+    hostOwnedDialogs={hostOwnedDialogs}
+    onDialogRequest={kind => {
+      if (hostOwnedDialogs.includes(kind) && instance.current?.casual) setHostDialog({kind, api:instance.current.casual});
+    }}
     style={{height:'100%', width:'100%', minHeight:0}}
-  /></div></div>;
+  /></div>{hostDialog?.kind === 'insert-chart' && <SheetChartDialog api={hostDialog.api} onClose={() => setHostDialog(null)}/>}{hostDialog?.kind === 'insert-pivot' && <SheetPivotDialog api={hostDialog.api} onClose={() => setHostDialog(null)}/>}</div>;
 }

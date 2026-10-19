@@ -1,6 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bindSheetMenus } from './sheet_menus.js';
+import { bindSheetMenus, routeSheetDialog, tableBlockRemovalChanges } from './sheet_menus.js';
+
+test('quitar una tabla de bloque elimina el bloque aunque sea importada, sin tocar otras tablas',()=>{
+  const metadata={sheets:{sheet:{__bold:{blocks:[{id:'tasks',startRow:37,rowIds:['a','b','c'],columns:[{},{}]},{id:'other',startRow:50,rowIds:['d'],columns:[{}]}]}}}};
+  const table={id:'native',range:{startRow:37,endRow:40,startColumn:1,endColumn:2}};
+  const snapshot={resources:[{name:'SHEET_TABLE_PLUGIN',data:JSON.stringify({sheet:{tables:[table]}})}]};
+  assert.deepEqual(tableBlockRemovalChanges(snapshot,metadata,'native'),[{kind:'block.remove',sheet:'sheet',block:'tasks'}]);
+  assert.deepEqual(tableBlockRemovalChanges(snapshot,metadata,'missing'),[]);
+  table.range.startRow=60;table.range.endRow=63;
+  snapshot.resources[0].data=JSON.stringify({sheet:{tables:[table]}});
+  assert.deepEqual(tableBlockRemovalChanges(snapshot,metadata,'native'),[]);
+});
+
+test('gráficos y tablas dinámicas abren el diálogo propio desde barra o menú, también con teclado', () => {
+  for (const kind of ['insert-chart','insert-pivot']) for (const menu of [false,true]) {
+    const api={}, opened=[];
+    const button={disabled:false,getAttribute:name=>name==='data-action' ? (menu?null:kind) : `cs-menuitem-${kind}`};
+    let prevented=0, stopped=0;
+    const event={target:{closest:()=>button},preventDefault(){prevented++;},stopPropagation(){stopped++;}};
+    routeSheetDialog({...event,type:'mousedown'},api,value=>opened.push(value));
+    assert.deepEqual(opened,[]);
+    routeSheetDialog({...event,type:'click',detail:0},api,value=>opened.push(value));
+    assert.deepEqual(opened,[{kind,api}]);
+    assert.equal(prevented,2);
+    assert.equal(stopped,2);
+    button.disabled=true;
+    routeSheetDialog({...event,type:'click'},api,value=>opened.push(value));
+    assert.equal(opened.length,1);
+  }
+});
+
+test('ambos botones del panel de gráficos abren únicamente el editor propio', () => {
+  for (const testId of ['charts-panel-empty-cta','charts-panel-add']) {
+    const api={}, opened=[];
+    const button={disabled:false,getAttribute:name=>name==='data-testid'?testId:null};
+    let prevented=0,stopped=0;
+    const event={target:{closest:selector=>{assert.ok(selector.includes(`[data-testid="${testId}"]`));return button;}},preventDefault(){prevented++;},stopPropagation(){stopped++;}};
+    routeSheetDialog({...event,type:'mousedown'},api,value=>opened.push(value));
+    routeSheetDialog({...event,type:'click',detail:0},api,value=>opened.push(value));
+    assert.deepEqual(opened,[{kind:'insert-chart',api}]);
+    assert.equal(prevented,2);
+    assert.equal(stopped,2);
+  }
+});
 
 function events() {
   const handlers = new Map();

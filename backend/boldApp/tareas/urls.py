@@ -1,6 +1,8 @@
+from .pipelines import PipelineView, PipelineBoardView, PipelineTaskView, TaskPipelinesView
 from django.urls import path
 from .workspace_sharing import WorkspaceSharingView
 from .personal_board import PersonalBoardView
+from .team import TeamSelfView, TeamDirectoryView, TeamBoardView, TeamMeetingsView, TeamVoiceView
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -39,4 +41,17 @@ router.register(r"task-tags", TaskTagViewSet, basename="task-tag")
 router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-endpoint")
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 
-urlpatterns = [path("workspace-sharing/", WorkspaceSharingView.as_view()), path("personal-board/", PersonalBoardView.as_view())] + router.urls
+urlpatterns = [
+    path("task-pipelines/<uuid:task_id>/", TaskPipelinesView.as_view()),
+    path("pipelines/", PipelineView.as_view()),
+    path("pipelines/<uuid:pipeline_id>/", PipelineView.as_view()),
+    path("pipelines/<uuid:pipeline_id>/board/", PipelineBoardView.as_view()),
+    path("pipelines/<uuid:pipeline_id>/tasks/<uuid:task_id>/", PipelineTaskView.as_view()),
+    path("my-team/self/", TeamSelfView.as_view()),
+    path("my-team/directory/", TeamDirectoryView.as_view()),
+    path("my-team/<uuid:employee_id>/board/", TeamBoardView.as_view()),
+    path("my-team/<uuid:employee_id>/tasks/<uuid:task_id>/", TeamBoardView.as_view()),
+    path("my-team/<uuid:employee_id>/tasks/<uuid:task_id>/voice-note/", TeamVoiceView.as_view()),
+    path("my-team/<uuid:employee_id>/meetings/", TeamMeetingsView.as_view()),
+    path("workspace-sharing/", WorkspaceSharingView.as_view()), path("personal-board/", PersonalBoardView.as_view())
+] + router.urls

@@ -9,12 +9,12 @@ def call(endpoint, document, **extra):
     try:
         response = requests.post(settings.SHEETS_ENGINE_URL.rstrip("/") + "/" + endpoint, json={"document": document, **extra}, headers={"Authorization": "Bearer " + settings.SHEETS_ENGINE_TOKEN}, timeout=60)
     except requests.RequestException as exc:
-        raise APIException("El motor de Hojas no está disponible. Tus datos siguen guardados en BOLD.") from exc
+        raise APIException("El motor de Sheets no está disponible. Tus datos siguen guardados en BOLD.") from exc
     if not response.ok:
         try:
             message = response.json().get("detail", "No se pudo procesar el Excel.")
         except ValueError:
-            message = "El motor de Hojas no está disponible."
+            message = "El motor de Sheets no está disponible."
         raise ValidationError(message)
     return response.content if endpoint == "export" else response.json()
 

@@ -1,5 +1,27 @@
 import { floatingMenuPosition } from '../docs/drive_helpers.js';
 
+export function tableBlockRemovalChanges(snapshot, metadata, tableId) {
+  const tables=JSON.parse(snapshot.resources?.find(item=>item.name==='SHEET_TABLE_PLUGIN')?.data || '{}');
+  for (const [sheetId,data] of Object.entries(tables)) {
+    const table=data.tables?.find(item=>item.id===tableId);
+    if (!table) continue;
+    const blocks=metadata.sheets[sheetId]?.__bold?.blocks || [];
+    return blocks.filter(block=>table.meta?.boldBlock===block.id || table.range.startRow<=block.startRow+block.rowIds.length && table.range.endRow>=block.startRow && table.range.startColumn<=block.columns.length && table.range.endColumn>=1).map(block=>({kind:'block.remove',sheet:sheetId,block:block.id}));
+  }
+  return [];
+}
+
+export function routeSheetDialog(event, api, open) {
+  const button = event.target.closest?.('[data-action="insert-chart"], [data-action="insert-pivot"], [data-testid="cs-menuitem-insert-chart"], [data-testid="cs-menuitem-insert-pivot"], [data-testid="charts-panel-empty-cta"], [data-testid="charts-panel-add"]');
+  if (!button || button.disabled || !api) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.type !== 'click') return;
+  const testId = button.getAttribute('data-testid') || '';
+  const kind = button.getAttribute('data-action') || (testId.startsWith('charts-panel-') ? 'insert-chart' : testId.replace('cs-menuitem-', ''));
+  open({kind, api});
+}
+
 export function bindSheetMenus(root) {
   const ownerDocument = root.ownerDocument, view = ownerDocument.defaultView;
   let active;

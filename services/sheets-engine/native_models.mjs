@@ -1,6 +1,6 @@
 const CHART_TYPES = {column:'Col', 'column-stacked':'ColStacked', 'column-stacked-100':'ColPercentStacked', bar:'Bar', 'bar-stacked':'BarStacked', 'bar-stacked-100':'BarPercentStacked', line:'Line', 'line-stacked':'LineStacked', area:'Area', 'area-stacked':'AreaStacked', pie:'Pie', doughnut:'Doughnut', scatter:'Scatter'};
 // Match Casual Sheets' Apache-2.0 chart palettes in native Excel series.
-const palettes={office:['5B9BD5','ED7D31','A5A5A5','FFC000','4472C4','70AD47','264478','9E480E'],mono:['1F77B4','3F8FBC','5FA7C5','7FBFCD','9FD7D6','BFEFDE','5A8DAA','3D6E89'],vivid:['E63946','F1A208','06A77D','005F73','9B5DE5','F15BB5','00BBF9','00F5D4'],pastel:['A3CEF1','FFD6A5','CAFFBF','FFADAD','BDB2FF','FDFFB6','FFC6FF','9BF6FF']};
+const palettes={sheets:['4285F4','EA4335','FBBC04','34A853','FF6D01','46BDC6','AB47BC','00ACC1'],office:['5B9BD5','ED7D31','A5A5A5','FFC000','4472C4','70AD47','264478','9E480E'],mono:['1F77B4','3F8FBC','5FA7C5','7FBFCD','9FD7D6','BFEFDE','5A8DAA','3D6E89'],vivid:['E63946','F1A208','06A77D','005F73','9B5DE5','F15BB5','00BBF9','00F5D4'],pastel:['A3CEF1','FFD6A5','CAFFBF','FFADAD','BDB2FF','FDFFB6','FFC6FF','9BF6FF']};
 export const columnName = index => {
   let result = '';
   for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) result = String.fromCharCode(65 + (value - 1) % 26) + result;
@@ -10,6 +10,7 @@ const address = (row, column) => `$${columnName(column)}$${row + 1}`;
 const quote = name => "'" + name.replace(/'/g, "''") + "'!";
 const range = value => {
   if (!value || !['startRow','endRow','startColumn','endColumn'].every(key => Number.isInteger(value[key])) || value.startRow < 0 || value.endRow >= 20000 || value.startColumn < 0 || value.endColumn >= 500 || value.endRow < value.startRow || value.endColumn < value.startColumn) throw Error('Rango de gráfico o tabla dinámica inválido.');
+  if (['width','height','offsetX','offsetY'].some(key=>value[key]!=null && (!Number.isFinite(value[key]) || Math.abs(value[key])>1000000 || ['width','height'].includes(key) && value[key]<=0))) throw Error('Tamaño o posición del gráfico inválidos.');
   return value;
 };
 const sheet = (document, id) => {
@@ -32,17 +33,17 @@ export function nativeChart(document, model, excelize) {
     const kind = format.seriesTypes?.[label] === 'line' ? 'Line' : format.seriesTypes?.[label] === 'bar' ? model.type.startsWith('bar') ? 'Bar' : 'Col' : CHART_TYPES[model.type];
     const secondary = !!format.secondaryAxis?.[label], key = kind + ':' + secondary;
     if (!groups.has(key)) groups.set(key, {kind, secondary, series:[]});
-    const color = format.seriesColors?.[label] || '#' + (palettes[format.palette || 'office'] || palettes.office)[(column-source.startColumn-1)%8];
+    const color = format.seriesColors?.[label] || '#' + (palettes[format.palette || 'sheets'] || palettes.sheets)[(column-source.startColumn-1)%8];
     if (!/^#[\da-f]{6}$/i.test(color)) throw Error('Color de gráfico inválido.');
     const fill={Type:'pattern',Pattern:1,Color:[color.slice(1)]};
-    groups.get(key).series.push({Name:prefix + address(source.startRow,column), Categories:prefix + address(source.startRow + 1,source.startColumn) + ':' + address(source.endRow,source.startColumn), Values:prefix + address(source.startRow + 1,column) + ':' + address(source.endRow,column),Fill:fill,Line:{Fill:fill,Width:2},...(['pie','doughnut'].includes(model.type)?{DataPoint:Array.from({length:source.endRow-source.startRow},(_,index)=>({Index:index,Fill:{Type:'pattern',Pattern:1,Color:[(palettes[format.palette || 'office'] || palettes.office)[index%8]]}}))}:{})});
+    groups.get(key).series.push({Name:prefix + address(source.startRow,column), Categories:prefix + address(source.startRow + 1,source.startColumn) + ':' + address(source.endRow,source.startColumn), Values:prefix + address(source.startRow + 1,column) + ':' + address(source.endRow,column),Fill:fill,Line:{Fill:fill,Width:2},...(['pie','doughnut'].includes(model.type)?{DataPoint:Array.from({length:source.endRow-source.startRow},(_,index)=>({Index:index,Fill:{Type:'pattern',Pattern:1,Color:[(palettes[format.palette || 'sheets'] || palettes.sheets)[index%8]]}}))}:{})});
   }
   if (groups.size > 2) throw Error('Excel admite aquí dos grupos de series. Reduce la combinación de tipos y ejes antes de exportar.');
-  const height = Math.max(180, Math.min(1200, (pos.endRow - pos.startRow + 1) * 24)), width = Math.max(300, Math.min(1600, (pos.endColumn - pos.startColumn + 1) * 80));
+  const height = Math.max(180, Math.min(1200, pos.height ?? (pos.endRow - pos.startRow + 1) * 24)), width = Math.max(240, Math.min(1600, pos.width ?? (pos.endColumn - pos.startColumn + 1) * 80));
   const charts = [...groups.values()].map(group => ({Type:excelize[group.kind], Series:group.series,
     Title:{Paragraph:format.showTitle === false || !model.title ? [] : [{Text:String(model.title).slice(0,255)}]},
-    Legend:{Position:format.legend === 'none' ? 'none' : format.legend || 'bottom'},
-    Dimension:{Width:width,Height:height}, Format:{AltText:'BOLD ' + model.id},
+    Legend:{Position:format.legend === 'none' ? 'none' : format.legend || 'right'},
+    Dimension:{Width:width,Height:height}, Format:{AltText:'BOLD ' + model.id,OffsetX:Math.round(pos.offsetX || 0),OffsetY:Math.round(pos.offsetY || 0)},
     XAxis:{Title:{Paragraph:format.xAxisTitle ? [{Text:format.xAxisTitle}] : []}},
     YAxis:{Secondary:group.secondary, MajorGridLines:format.gridlines !== false, Title:{Paragraph:format.yAxisTitle ? [{Text:format.yAxisTitle}] : []}},
     PlotArea:{ShowVal:!!format.dataLabels}, HoleSize:60
@@ -74,8 +75,9 @@ export function nativePivot(document, model, excelize) {
   const rows = Math.max(3, Number(model.lastOutputExtent?.rows) || 10), columns = Math.max(2, Number(model.lastOutputExtent?.cols) || data.length + 1);
   if (target.startRow+rows >= 20000 || target.startColumn+columns >= 500) throw Error('La tabla dinámica excede el tamaño de la hoja.');
   return {Name:'BoldPivot_' + String(model.id).replace(/[^\da-z]/gi,'').slice(0,50),
-    DataRange:quote(current.name)+address(source.startRow,source.startColumn)+':'+address(source.endRow,source.endColumn),
-    PivotTableRange:quote(destination.name)+address(target.startRow,target.startColumn)+':'+address(target.startRow+rows-1,target.startColumn+columns-1),
+    // Excelize's pivot API takes literal sheet names; chart formulas use Excel quoting.
+    DataRange:current.name+'!'+address(source.startRow,source.startColumn)+':'+address(source.endRow,source.endColumn),
+    PivotTableRange:destination.name+'!'+address(target.startRow,target.startColumn)+':'+address(target.startRow+rows-1,target.startColumn+columns-1),
     Rows:dimensions(model.rows),Columns:dimensions(model.cols),Data:data,
     Filter:(model.filters || []).filter(item=>![...(model.rows || []),...(model.cols || [])].some(field=>field.column===item.column)).map(item=>({Data:field(item.column),SelectedItems:item.allowedValues.map(String)})),
     RowGrandTotals:true,ColGrandTotals:true,ShowDrill:true,PivotTableStyleName:'PivotStyleMedium9'};

@@ -1,3 +1,4 @@
+import {styleTaskTables} from './block_tables.mjs';
 import { randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
@@ -388,6 +389,7 @@ export async function exportExcel(document, {
 } = {}) {
   const calculated = recalculate ? await calculate(document) : clone(document);
   prepareBlockTables(calculated);
+  styleTaskTables(calculated);
   const book = new ExcelJS.Workbook();
   book.creator = 'BOLD';
   book.modified = new Date();
@@ -1126,7 +1128,7 @@ export async function importExcel(buffer, {
         if (imported.p && previous?.p?.body?.dataStream === imported.p.body.dataStream && previous.p.body.customRanges?.[0]?.properties?.url === cell.hyperlink) imported.p = clone(previous.p);
         sheet.cellData[number - 1][col - 1] = imported;
       });
-      if (row.height || row.hidden) sheet.rowData[number - 1] = {
+      if (row.height || row.hidden || row.outlineLevel) sheet.rowData[number - 1] = {
         h: (row.height || 21) / .75,
         hd: +!!row.hidden,
         ...(row.outlineLevel ? {outlineLevel:row.outlineLevel} : {})
@@ -1269,7 +1271,7 @@ export async function importExcel(buffer, {
           let value = cell.v ?? '';
           if (descriptor.type === 'date' && source.getCell(row + 1,col + 1).value instanceof Date) cell.v = value = source.getCell(row + 1,col + 1).value.toISOString().slice(0,10);
           if (descriptor.id === 'note') {
-            const note = source.getCell(row + 1, col).note;
+            const note = source.getCell(row + 1, col + 1).note;
             const text = typeof note === 'string' ? note : note?.texts?.map(part => part.text).join('');
             if (text != null && (original ? value === original.exported && text !== plain(original.exported) : !value)) {
               cell.v = value = text;
@@ -1277,7 +1279,7 @@ export async function importExcel(buffer, {
           }
           if (original && value === original.exported) {
             cell.v = original.raw ?? '';
-            const link = source.getCell(row + 1, col).hyperlink || '', beforeLink = original.hyperlink ?? richLink(original.raw) ?? '';
+            const link = source.getCell(row + 1, col + 1).hyperlink || '', beforeLink = original.hyperlink ?? richLink(original.raw) ?? '';
             if (typeof original.raw === 'string' && original.raw.startsWith('<!--bold-rich-text-->') && link !== beforeLink) {
               const count = (original.raw.match(/<a\b/gi) || []).length;
               if (count > 1) throw Error('Revisa los enlaces de esta descripción en BOLD antes de importar; contiene varios enlaces.');
@@ -1300,12 +1302,12 @@ export async function importExcel(buffer, {
             const ids = [];
             const labels = descriptor.type === 'responsible' ? [String(value).trim()] : String(value).split(',').map(value => value.trim()).filter(Boolean);
             for (const name of labels) {
-              const candidates = directory.filter(person => (!block.task?.enabled || person.unit === block.task.unit) && [person.name, person.email, person.id].some(value => value?.toLocaleLowerCase() === name.toLocaleLowerCase()));
+              const candidates = directory.filter(person => (block.type === 'tasks' || !block.task?.enabled || person.unit === block.task.unit) && [person.name, person.email, person.id].some(value => value?.toLocaleLowerCase() === name.toLocaleLowerCase()));
               const unique = [...new Map(candidates.map(person => [person.employee, person])).values()];
               if (unique.length === 1) ids.push(unique[0].id);else issues.push({
                 id: randomUUID(),
                 type: descriptor.type,
-                unit: block.task?.enabled ? block.task.unit : '',
+                unit: block.task?.enabled && block.type !== 'tasks' ? block.task.unit : '',
                 sheet: sheet.id,
                 row,
                 column: col,

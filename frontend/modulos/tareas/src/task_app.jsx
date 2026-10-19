@@ -1,7 +1,11 @@
+import PipelinePanel, {PipelineFields, TaskPipelineState, togglePipelineCompletion} from "./pipelines.jsx";
+import {useAnchoredPopover} from "../../core/shared/use_anchored_popover.js";
 import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
 import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/shared/people.js";
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
+import {readTaskNavigation} from "./task_navigation.js";
 import {usePersonalBoard} from "./personal_board.jsx";
+import TeamPanel, {TeamSharingContext, SharingEye, useTeamSharing} from "./team.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
 import {backgroundRefresh} from "../../core/google_cache.js";
 import {CachedImage} from "../../core/shared/cached_image.jsx";
@@ -62,7 +66,7 @@ import { api } from "./services/tasks_api.js";
 import { is_using_real_backend } from "../../core/http_client.js";
 import { createRefreshCoordinator, contentCanRefresh } from "../../core/refresh_coordinator.js";
 import { createContextCache } from "../../core/context_cache.js";
-import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks } from "./services/task_service.js";
+import { loadTaskData, saveTaskDraft, saveFollowers, saveSubtasks, confirmPipelineLink } from "./services/task_service.js";
 import { createTaskDataLoader, resourcesForTaskEvent, TASK_RESOURCES, PROJECT_RESOURCES } from "./services/task_data_loader.js";
 import { settleCommittedTaskChanges } from "./services/task_models.js";
 import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTaskChange, replaceTemporaryTaskIds, previewTaskDraft, dateFromISO, toISODate, projectTask, taskPayload, uniqueProjectName, validateProjectDraft, recentProjectIds, isActiveProject, groupProjectsByUnit, isMyTask, membersForUnit } from "./services/task_models.js";
@@ -519,7 +523,8 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
     const selected_option = normalized_options.find(option => String(option.value) === String(selected_value)) || normalized_options[0] || { value: "", label: "Seleccionar" };
     const [is_open, set_is_open] = use_state(false);
     const [active_index, set_active_index] = use_state(0);
-    const root_ref = use_ref(null);
+    const root_ref = use_ref(null), trigger_ref = use_ref(null), menu_ref = use_ref(null);
+    useAnchoredPopover(is_open, trigger_ref, menu_ref, {minWidth: class_name.includes("task_select_compact") ? 110 : 210});
     const listbox_id = use_id();
 
     use_effect(() => {
@@ -539,11 +544,12 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
         if (!controlled) set_local_value(option.value);
         on_change(option.value);
         set_is_open(false);
+        trigger_ref.current?.focus({preventScroll: true});
     }
 
     function handle_key_down(event) {
         if (disabled) return;
-        if (event.key === "Escape") { set_is_open(false); return; }
+        if (event.key === "Escape" && is_open) { event.preventDefault(); event.stopPropagation(); set_is_open(false); trigger_ref.current?.focus(); return; }
         if (event.key === "Tab") { set_is_open(false); return; }
         if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
             event.preventDefault();
@@ -568,11 +574,11 @@ function TaskSelect({ aria_label, class_name = "", default_value, disabled = fal
 
     return <div className={`task_select task_select_${variant} ${is_open ? "task_select_open" : ""} ${class_name}`} ref={root_ref} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) set_is_open(false); }} onClick={stop_propagation ? event => event.stopPropagation() : undefined} onKeyDown={handle_key_down}>
         {name ? <input type="hidden" name={name} value={selected_value ?? ""} /> : null}
-        <button className="task_select_trigger" type="button" role="combobox" aria-label={aria_label} aria-activedescendant={is_open ? `${listbox_id}-${active_index}` : undefined} aria-controls={listbox_id} aria-expanded={is_open} aria-haspopup="listbox" disabled={disabled} onClick={() => is_open ? set_is_open(false) : open()}>
+        <button ref={trigger_ref} className="task_select_trigger" type="button" role="combobox" aria-label={aria_label} aria-activedescendant={is_open ? `${listbox_id}-${active_index}` : undefined} aria-controls={listbox_id} aria-expanded={is_open} aria-haspopup="listbox" disabled={disabled} onClick={() => is_open ? set_is_open(false) : open()}>
             {render_option(selected_option, true)}
             {render_icon(chevron_down_icon, 16)}
         </button>
-        {is_open ? <div className="task_select_menu" id={listbox_id} role="listbox" aria-label={aria_label}>
+        {is_open ? <div ref={menu_ref} popover="manual" className="task_select_menu" id={listbox_id} role="listbox" aria-label={aria_label}>
             {normalized_options.map((option, index) => <button className={`task_select_option ${index === active_index ? "task_select_option_focused" : ""}`} id={`${listbox_id}-${index}`} key={option.value} style={{ "--select_color": option.color || select_color(variant, option.label) || "#ef1f2d" }} type="button" role="option" aria-selected={String(option.value) === String(selected_value)} disabled={option.disabled} onMouseEnter={() => set_active_index(index)} onClick={() => choose(option)}>
                 {render_option(option)}
                 {String(option.value) === String(selected_value) ? <span className="task_select_check">{render_icon(check_icon, 15)}</span> : null}
@@ -839,9 +845,13 @@ function WorkspaceAssignmentModal({ item, itemType, onClose, onToggle, workspace
 function render_tasks_workspace_menu(handle_my_tasks_select, handle_projects_open, set_active_modal, projects, selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_open, projects_active, workspaceProps) {
     return (
         <div className={`tasks_submenu ${is_open ? "tasks_submenu_open" : "tasks_submenu_closed"}`} id="tasks_workspace_menu" aria-hidden={!is_open}>
-            <button className={`my_tasks_button ${task_scope === "mine" ? "my_tasks_button_active" : ""}`} type="button" onClick={handle_my_tasks_select}>
+            <button className={`my_tasks_button ${task_scope === "mine" && !workspaceProps.teamActive ? "my_tasks_button_active" : ""}`} type="button" title="Tareas asignadas a ti, creadas por ti o en las que colaboras" onClick={handle_my_tasks_select}>
                 <span className="submenu_dot"></span>
                 <span>Mis tareas</span>
+            </button>
+
+            <button className={`my_tasks_button team_sidebar_button ${workspaceProps.teamActive ? "my_tasks_button_active" : ""}`} type="button" aria-current={workspaceProps.teamActive ? "page" : undefined} onClick={workspaceProps.onTeamSelect}>
+                <span className="submenu_dot"></span><span>Equipo</span>
             </button>
 
             <div className="sidebar_section workspace_block">
@@ -1634,7 +1644,7 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_cl
     };
     use_effect(() => {
         const outside = event => { if (!root_ref.current?.parentElement.contains(event.target)) apply(); };
-        const escape = event => { if (event.key === "Escape") { event.stopPropagation(); on_close?.(); } };
+        const escape = event => { if (event.key === "Escape" && !root_ref.current?.querySelector(".task_select_open")) { event.stopPropagation(); on_close?.(); } };
         document.addEventListener("pointerdown", outside);
         document.addEventListener("keydown", escape, true);
         return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape, true); };
@@ -1835,6 +1845,8 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
             <div className="detail_collaborators_card">
                 <CollaboratorsSelector selected_ids={selected_task.collaborator_ids || []} on_change={ids => on_followers_change(selected_task.id, ids)} action_label="Modificar" collapsible />
             </div>
+
+            {show_comments && <TaskPipelineState key={selected_task.id} taskId={selected_task.id} projectId={selected_task.project_id}/>}
 
             {selected_task.description ? (
                 <div className="detail_description_block">
@@ -2141,6 +2153,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                         <TaskTextEditor value={edit_draft.description || ""} onChange={value => handle_edit_field_change("description", value)} notes={edit_draft.voice_notes || []} onNotesChange={value => handle_edit_field_change("voice_notes", value)} resourceId={edit_draft.id} onBusyChange={set_audio_busy} disabled={pending} />
                     </div>
 
+                    <PipelineFields key={edit_draft.project_id || "personal"} taskId={edit_draft.id} projectId={edit_draft.project_id} value={{pipeline:edit_draft.pipeline,pipeline_stage:edit_draft.pipeline_stage}} onChange={value=>{handle_edit_field_change("pipeline",value.pipeline);handle_edit_field_change("pipeline_stage",value.pipeline_stage);}} disabled={pending}/>
                     <RecurrenceFields value={edit_draft.recurrence || {}} onChange={value => handle_edit_field_change("recurrence", value)} disabled={pending} />
                     {/* Subtareas */}
                     <div className="bold_field_group">
@@ -2240,6 +2253,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     const [due_month, set_due_month] = use_state(Number.isInteger(initial_draft.due_month) ? initial_draft.due_month : today.getMonth());
     const [due_year, set_due_year] = use_state(Number.isInteger(initial_draft.due_year) ? initial_draft.due_year : today.getFullYear());
     const [priority, set_priority] = use_state(initial_draft.priority || "Media");
+    const [pipeline_choice, set_pipeline_choice] = use_state(initial_draft.pipeline_choice || null);
     const [status, set_status] = use_state(initial_draft.status || "Pend.");
     const [description, set_description] = use_state(initial_draft.description || "");
     const [voice_notes, set_voice_notes] = use_state(initial_draft.voice_notes || []);
@@ -2272,9 +2286,9 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
     use_effect(() => {
         if (!draft_storage_key) return;
         try {
-            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks }));
+            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks, pipeline_choice }));
         } catch { /* El formulario sigue funcionando aunque el navegador bloquee el almacenamiento. */ }
-    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks]);
+    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks, pipeline_choice]);
     async function handle_submit(e) {
         e.preventDefault();
         if (pending || audio_busy) return;
@@ -2286,6 +2300,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
             created_by_assignment: currentAssignmentId,
             title: title.trim(),
             project_id,
+            pipeline: pipeline_choice?.pipeline, pipeline_stage: pipeline_choice?.pipeline_stage,
             section,
             assignee_id: real ? assignee_id || null : collaborator_ids[0] || null,
             unitId,
@@ -2378,6 +2393,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                         on_change={ids => { set_creator_collaboration_touched(true); set_collaborator_ids(ids); }}
                     />
 
+                    <PipelineFields key={project_id || "personal"} projectId={project_id} value={pipeline_choice} onChange={value=>set_pipeline_choice({...value, project: project_id})} disabled={pending}/>
                     <div className="bold_field_group">
                         <label className="bold_field_label">Prioridad</label>
                         <TaskSelect aria_label="Prioridad" variant="priority" value={priority} options={priority_items} on_change={set_priority} />
@@ -2425,7 +2441,7 @@ function CreateTaskModal({ board_columns, draft_storage_key, drawer, on_cancel, 
                     </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button" disabled={pending || audio_busy || !title.trim() || (real && !status)}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Creando tarea…</> : "Crear tarea"}</button>
+                        <button type="submit" className="primary_button" disabled={pending || audio_busy || !title.trim() || (real && (!status || !pipeline_choice?.pipeline || pipeline_choice.project !== project_id))}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Creando tarea…</> : "Crear tarea"}</button>
                     </footer>
                 </form>
         </TaskDrawer>
@@ -2517,6 +2533,11 @@ function render_tasks_module(props) {
         visible_fields
     } = props;
 
+    if (active_section === "team" && props.task_scope === "mine") return <section className="tasks_module team_module" aria-label="Equipo">
+        <h1 className="task_page_title_sr">Equipo</h1>
+        <TeamPanel assignmentId={props.assignment_id} enabled={is_using_real_backend()} renderBoard={render_board_view} CalendarDateField={CalendarDateField}/>
+    </section>;
+
     const project_tasks = filtered_tasks;
     const completed_count = project_tasks.filter((task_item) => task_item.completed).length;
     const completion_percent = project_tasks.length ? Math.round((completed_count / project_tasks.length) * 100) : 0;
@@ -2529,36 +2550,11 @@ function render_tasks_module(props) {
     const active_filter_items = Object.entries(active_filters).flatMap(([group, values]) => values.map(value => ({ group, value, label: filter_labels[group]?.(value) || value })));
 
     return (
+        <TeamSharingContext.Provider value={props.task_scope === "mine" ? props.team_sharing : null}>
         <section className="tasks_module">
-            <div className="task_project_header">
-                <div className="project_title_group">
-                    <p className="breadcrumb_text">
-                        TAREAS / BOLD WORKSPACE
-                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / {is_using_real_backend() ? current_user?.unit_name : "MARKETING"}</span>
-                    </p>
-                    <h1>{selected_project.label}</h1>
-                    <p className="project_subtitle">{plainRichText(selected_project.description || "") || (is_using_real_backend() ? "" : "Campaña y entregables del último trimestre")}</p>
-                    <button className="mobile_workspace_selector" type="button">
-                        <span className="workspace_badge">B</span>
-                        <span>{is_using_real_backend() ? current_user?.unit_name : "BOLD Workspace"}</span>
-                        {render_icon(chevron_down_icon, 14)}
-                    </button>
-                </div>
-
-                <div className="project_actions">
-                    <ProjectMembersButton project={selected_project} />
-                    <button className="primary_button" type="button" onClick={() => set_active_modal("task")}>
-                        {render_icon(plus_icon, 17)}
-                        Agregar tarea
-                    </button>
-                    <button className="icon_button project_menu_toggle" type="button" aria-label="Más opciones" aria-expanded={active_modal === "project_menu"} onClick={() => set_active_modal(current => current === "project_menu" ? null : "project_menu")}>
-                        {render_icon(more_horizontal_icon, 22)}
-                    </button>
-                </div>
-            </div>
+            <h1 className="task_page_title_sr">{selected_project.label}</h1>
 
             <div className="task_tabs_row">
-                {/* 1 & 2. Navegación principal: Tareas | Cronograma | Calendario */}
                 <nav className="main_section_nav_tabs" role="tablist" aria-label="Navegación principal">
                     <button
                         className={`main_nav_tab_btn ${active_section === "tasks" ? "main_nav_tab_active" : ""}`}
@@ -2578,10 +2574,11 @@ function render_tasks_module(props) {
                     >
                         Cronograma
                     </button>
+                    {["mine", "project"].includes(props.task_scope) && <button type="button" role="tab" aria-selected={active_section === "states"} className={`main_nav_tab_btn ${active_section === "states" ? "main_nav_tab_active" : ""}`} onClick={() => {set_active_section("states"); handle_close_task_tool(); handle_toggle_quick_popover(null); handle_task_select(null);}}>Estados</button>}
                 </nav>
 
                 {/* 3 & 4 & 5. Dentro del apartado Tareas: Acciones de tareas — Personalizar — Botón de visualización */}
-                {active_section === "tasks" ? (
+            {active_section === "tasks" ? (
                     <div className="task_tools">
                         <div className="task_tool_anchor">
                             <button
@@ -2631,14 +2628,18 @@ function render_tasks_module(props) {
                             }) : null}
                         </div>
 
-                        {/* Botón de visualización Lista ↔ Columnas al lado derecho de Personalizar */}
-                        {render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); handle_toggle_quick_popover(null); })}
                     </div>
                 ) : null}
 
-                <button className="mobile_floating_add" type="button" aria-label="Agregar tarea" onClick={() => set_active_modal("task")}>
+                {!["team", "states"].includes(active_section) && <div className="project_actions task_compact_actions">
+                    <ProjectMembersButton project={selected_project} />
+                    {active_section === "tasks" && render_view_switch(active_view, view => { set_active_view(view); handle_close_task_tool(); handle_toggle_quick_popover(null); })}
+                    <button className="primary_button" type="button" onClick={() => set_active_modal("task")}>{render_icon(plus_icon, 16)} Agregar tarea</button>
+                    <button className="icon_button project_menu_toggle" type="button" aria-label="Más opciones" aria-expanded={active_modal === "project_menu"} onClick={() => set_active_modal(current => current === "project_menu" ? null : "project_menu")}>{render_icon(more_horizontal_icon, 20)}</button>
+                </div>}
+                {!["team", "states"].includes(active_section) && <button className="mobile_floating_add" type="button" aria-label="Agregar tarea" onClick={() => set_active_modal("task")}>
                     {render_icon(plus_icon, 28)}
-                </button>
+                </button>}
             </div>
 
             {active_section === "tasks" && active_filter_items.length ? <div className="active_filter_chips" aria-label="Filtros activos">
@@ -2648,6 +2649,8 @@ function render_tasks_module(props) {
                 <button className="active_filter_clear" type="button" onClick={handle_clear_filters}>Limpiar filtros</button>
             </div> : null}
 
+            {active_section === "tasks" && props.task_scope === "mine" && props.team_sharing.error && <p className="team_sharing_error" role="alert">{props.team_sharing.error} <button type="button" onClick={props.team_sharing.retry}>Reintentar</button></p>}
+                {active_section === "states" && <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}><div className="tasks_main_area"><PipelinePanel key={props.task_scope === "mine" ? "mine" : selected_project.id} personal={props.task_scope === "mine"} projectId={selected_project.id} projects={props.pipeline_projects || []} onSelectTask={handle_task_select}/></div>{selected_task && <TaskDetailSidebar {...props}/>}</div>}
             {/* Vista según el apartado activo */}
             {active_section === "tasks" ? (
                 <div className={`tasks_workspace_split ${selected_task ? "has_detail" : ""}`}>
@@ -2706,6 +2709,7 @@ function render_tasks_module(props) {
                         }) : null}
 
                         {active_view === "board" ? render_board_view({
+                            task_scope:props.task_scope,sort_field,sort_direction,
                     mobile_actions: props.mobile_actions,
                             active_quick_popover,
                             board_columns,
@@ -2796,6 +2800,7 @@ function render_tasks_module(props) {
             ) : null}
 
         </section>
+        </TeamSharingContext.Provider>
     );
 }
 
@@ -3058,6 +3063,7 @@ function render_task_group(props) {
                 <span className={`section_chevron ${is_collapsed ? "section_chevron_collapsed" : ""}`}>
                     {render_icon(chevron_down_icon, 14)}
                 </span>
+
                 {editing_column_id === section_item.id ? (
                     <input
                         autoFocus
@@ -3204,6 +3210,7 @@ function render_task_row(props) {
                 style={{ width: "100%", height: "100%", display: "flex", alignItems: "center" }}
             >
                 <InlineTaskTitle task={task_item} on_save={title => handle_quick_change(task_item.id, "title", title)} />
+                <SharingEye ids={[task_item.id]} label={task_item.title}/>
             </div>
 
             <div className="task_quick_actions" aria-label="Acciones de tarea">
@@ -3322,6 +3329,7 @@ function render_mobile_section(props) {
                 {section_item.label}
                 <span>{section_tasks.length}</span>
             </button>
+
             {is_collapsed ? null : section_tasks.map((task_item) => render_task_card({
                     mobile_actions: props.mobile_actions,
                 handle_task_select,
@@ -3392,6 +3400,7 @@ function render_task_card(props) {
                     <span className="muted_meta">{member_item?.name || "Sin responsable"} · {project_item.label}</span>
                 </span>
             </button>
+            <SharingEye ids={[task_item.id]} label={task_item.title}/>
             {render_avatar(member_item, "avatar_medium")}
             <TaskMobileActions task={task_item} actions={props.mobile_actions} />
         </article>
@@ -3401,7 +3410,12 @@ function render_task_card(props) {
 
 // Renders the board view for project workflow columns.
 function render_board_view(props) {
+    return <TaskBoardView {...props}/>;
+}
+
+function TaskBoardView(props) {
     const {
+        readOnly = false,
         board_columns = default_board_columns,
         dragged_task_id,
         editing_column_id,
@@ -3439,26 +3453,43 @@ function render_board_view(props) {
         set_new_column_name
     } = props;
 
+    const [task_preview,set_task_preview]=use_state(null);
+    const [task_drop_target,set_task_drop_target]=use_state(null);
+    const [arrived,set_arrived]=use_state(null);
+    const drag_preview_ref=use_ref(null);
+    use_effect(()=>{if(!arrived)return;const timer=setTimeout(()=>set_arrived(null),1200);return()=>clearTimeout(timer);},[arrived]);
+    const clear_preview=()=>{drag_preview_ref.current=null;set_task_preview(null);set_task_drop_target(null);};
     const columns_to_render = board_columns && board_columns.length ? board_columns : default_board_columns;
 
     return (
-        <div className="board_view" tabIndex={0} role="region" aria-label="Tablero de tareas desplazable">
+        <div className={`board_view${readOnly ? " board_view_readonly" : ""}`} data-section-count={columns_to_render.length} onDragStartCapture={event=>{
+            if(readOnly)return;
+            const card=event.target.closest?.('.board_card[data-task-id]');
+            if(!card)return;
+            const task=filtered_tasks.find(item=>item.id===card.dataset.taskId);
+            if(!task)return;
+            const preview={id:task.id,title:task.title,section:task.section,height:card.offsetHeight};
+            drag_preview_ref.current=preview;set_task_preview(preview);
+        }} onDragEndCapture={clear_preview} tabIndex={0} role="region" aria-label="Tablero de tareas desplazable">
             {columns_to_render.map((section_item) => {
                 const section_tasks = get_tasks_by_section(filtered_tasks, section_item.id);
+                const show_preview=!readOnly && task_preview && task_drop_target===section_item.id && task_preview.section!==section_item.id;
+                const preview_tasks=show_preview ? get_tasks_by_section(get_sorted_tasks(filtered_tasks.map(task=>task.id===task_preview.id ? {...task,section:section_item.id,...(props.task_scope==='project' && props.sort_field==='position' ? {position:Math.max(0,...section_tasks.map(item=>Number(item.position)||0))+1000} : {})} : task),props.sort_field,props.sort_direction),section_item.id) : section_tasks;
 
                 return (
                     <section
-                        className={`board_column${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
+                        className={`board_column${arrived?.section===section_item.id ? " board_column_arrived" : ""}${dragged_section_id === section_item.id ? " section_dragging" : ""}`}
                         data-section-drop={section_drop?.id === section_item.id ? section_drop.side : undefined}
                         data-section-id={section_item.id}
                         key={section_item.id}
-                        onDragOver={event => { if (dragged_section_id) handle_section_drag_over(event, section_item.id, "board"); else if (handle_column_drop) { event.preventDefault(); event.currentTarget.dataset.taskDrop = "true"; } }}
-                        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.taskDrop; }}
-                        onDrop={event => { event.preventDefault(); delete event.currentTarget.dataset.taskDrop; if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else handle_column_drop?.(section_item.id); }}
+                        onDragOver={event => { if (dragged_section_id) handle_section_drag_over(event, section_item.id, "board"); else if (!readOnly && handle_column_drop && drag_preview_ref.current) { event.preventDefault(); event.dataTransfer.dropEffect="move"; event.currentTarget.dataset.taskDrop = "true";set_task_drop_target(section_item.id); } }}
+                        onDragLeave={event => { const rect=event.currentTarget.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>=rect.right||event.clientY<rect.top||event.clientY>=rect.bottom){delete event.currentTarget.dataset.taskDrop;set_task_drop_target(null);} }}
+                        onDrop={event => { event.preventDefault(); delete event.currentTarget.dataset.taskDrop; if (dragged_section_id) handle_section_drop(event, section_item.id, "board"); else if(!readOnly && drag_preview_ref.current){const preview=drag_preview_ref.current;if(preview.section!==section_item.id)set_arrived({id:preview.id,section:section_item.id});handle_column_drop?.(section_item.id,preview.id);clear_preview();} }}
                     >
                         <header>
-                            <SectionDragHandle id={section_item.id} label={section_item.label} view="board" disabled={board_columns.length < 2} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>
-                            {editing_column_id === section_item.id ? (
+                            {readOnly && section_item.color && <span className="team_status_dot" aria-hidden="true" style={{background:section_item.color}}/>}
+                            {!readOnly && <SectionDragHandle id={section_item.id} label={section_item.label} view="board" disabled={board_columns.length < 2} onStart={handle_section_drag_start} onOver={handle_section_drag_over} onDrop={handle_section_drop} onEnd={handle_section_drag_end} onKeyDown={handle_section_key_down}/>}
+                            {!readOnly && editing_column_id === section_item.id ? (
                                 <input
                                     autoFocus
                                     className="board_column_title_input"
@@ -3475,9 +3506,9 @@ function render_board_view(props) {
                                     }}
                                 />
                             ) : (
-                                <h2 className="section_drag_title" draggable={board_columns.length > 1} tabIndex={board_columns.length > 1 ? 0 : undefined} title="Doble clic para cambiar el nombre" onDragStart={event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={event => handle_section_key_down(event, section_item.id, "board")}><span draggable="false" onDoubleClick={() => handle_start_edit_column(section_item)}>{section_item.label}</span></h2>
+                                <h2 className={readOnly ? "team_section_title" : "section_drag_title"} draggable={!readOnly && board_columns.length > 1} tabIndex={!readOnly && board_columns.length > 1 ? 0 : undefined} title={readOnly ? undefined : "Doble clic para cambiar el nombre"} onDragStart={readOnly ? undefined : event => handle_section_drag_start(event, section_item.id)} onDragEnd={handle_section_drag_end} onKeyDown={readOnly ? undefined : event => handle_section_key_down(event, section_item.id, "board")}><span draggable="false" onDoubleClick={readOnly ? undefined : () => handle_start_edit_column(section_item)}>{section_item.label}</span></h2>
                             )}
-                            {section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_"))) ? (
+                            {!readOnly && (section_item.manageable || (section_item.id !== "unsectioned" && (is_using_real_backend() || section_item.id.startsWith("col_")))) ? (
                                 <div className="board_section_actions" onClick={(event) => event.stopPropagation()}>
                                     <button type="button" title="Eliminar sección" onClick={() => handle_delete_column(section_item.id)}>
                                         {render_icon(trash_icon, 13)}
@@ -3486,7 +3517,10 @@ function render_board_view(props) {
                             ) : null}
                         </header>
                         <div className="board_card_stack">
-                            {section_tasks.map((task_item) => render_board_card({
+                            {preview_tasks.map((task_item, card_index) => show_preview && task_item.id===task_preview.id ? <div className="pipeline_drop_preview board_drop_preview" key={`preview-${task_item.id}`} style={{minHeight:task_preview.height}} aria-hidden="true"><span>Soltar aquí</span><strong>{task_preview.title}</strong></div> : render_board_card({
+                                just_moved:arrived?.id===task_item.id && arrived.section===section_item.id,
+                                card_index,
+                                readOnly,
                     mobile_actions: props.mobile_actions,
                                 handle_drag_end,
                                 handle_drag_start,
@@ -3496,16 +3530,16 @@ function render_board_view(props) {
                                 task_item
                             }))}
                         </div>
-                        {quick_task_open && quick_task_section === section_item.id ? <form className="board_quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(section_item.id); }}>
+                        {!readOnly && (quick_task_open && quick_task_section === section_item.id ? <form className="board_quick_task_form" onSubmit={event => { event.preventDefault(); handle_quick_add_tasks(section_item.id); }}>
                             <textarea autoFocus rows="1" aria-label={`Tareas nuevas en ${section_item.label}`} placeholder="Escribe una tarea o pega varias líneas" value={quick_task_text} onChange={event => set_quick_task_text(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />
                             <button type="button" onClick={() => { set_quick_task_text(""); set_quick_task_open(false); set_quick_task_section(null); }}>Cancelar</button>
                             <button type="submit" disabled={!quick_task_text.trim()}>Agregar</button>
-                        </form> : <button className="board_quick_add_button" type="button" onClick={() => { set_quick_task_section(section_item.id); set_quick_task_open(true); }}>+ Agregar tarea</button>}
+                        </form> : <button className="board_quick_add_button" type="button" onClick={() => { set_quick_task_section(section_item.id); set_quick_task_open(true); }}>+ Agregar tarea</button>)}
                     </section>
                 );
             })}
 
-            {handle_add_column ? (
+            {!readOnly && handle_add_column ? (
                 <div className="board_column_new">
                     {is_adding_column ? (
                         <div className="board_column_form">
@@ -3550,6 +3584,7 @@ function render_board_view(props) {
 // Renders a task card inside the board view.
 function render_board_card(props) {
     const {
+        readOnly = false,
         handle_drag_end,
         handle_drag_start,
         handle_task_select,
@@ -3559,54 +3594,61 @@ function render_board_card(props) {
     } = props;
     const member_item = get_member(task_item.assignee_id);
     const project_item = get_project(task_item.project_id);
+    const TitleTag = readOnly ? "div" : "button";
 
     return (
         <article
-            className={`board_card ${task_item.completed ? "board_card_completed" : ""}`}
+            className={`board_card ${task_item.completed ? "board_card_completed" : ""} ${props.just_moved ? "board_card_just_moved" : ""}`}
+            data-task-id={task_item.id}
             data-dragging={is_dragging ? "true" : "false"}
             key={task_item.id}
-            draggable={Boolean(handle_drag_start)}
-            onDragEnd={handle_drag_end}
-            onDragStart={handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
-            onClick={() => handle_task_select(task_item.id)}
-            style={{ cursor: "pointer" }}
+            draggable={!readOnly && Boolean(handle_drag_start)}
+            onDragEnd={readOnly ? undefined : handle_drag_end}
+            onDragStart={!readOnly && handle_drag_start ? event => handle_drag_start(task_item.id, event) : undefined}
+            onClick={readOnly ? undefined : () => handle_task_select(task_item.id)}
+            style={{ cursor: readOnly ? "default" : "pointer", ...(readOnly ? {"--team-card-index": Math.min(props.card_index || 0, 6)} : {}) }}
         >
             <div className="board_card_topline">
-                {render_project_dot(project_item)}
-                <span>{project_item.label}</span>
-                <button
+                {readOnly ? <span className="team_status_dot" aria-hidden="true" style={{background: task_item.status_color || "#9ca3af"}}/> : render_project_dot(project_item)}
+                <span>{readOnly ? task_item.status : project_item.label}</span>
+                {!readOnly && <SharingEye ids={[task_item.id]} label={task_item.title}/>}
+                {!readOnly && <button
                     className={`task_checkbox ${task_item.completed ? "task_checkbox_checked" : ""}`}
                     type="button"
                     aria-label="Completar tarea"
+                    disabled={readOnly}
                     onClick={(e) => {
                         e.stopPropagation();
                         handle_toggle_task(task_item.id);
                     }}
                 >
                     {task_item.completed ? render_icon(check_icon, 13) : null}
-                </button>
+                </button>}
             </div>
-            <button
+            <TitleTag
                 className="board_title_button"
-                type="button"
-                onClick={(e) => {
+                type={readOnly ? undefined : "button"}
+                title={readOnly ? task_item.title : undefined}
+                onClick={readOnly ? undefined : (e) => {
                     e.stopPropagation();
                     handle_task_select(task_item.id);
                 }}
-                style={{ width: "100%", textAlign: "left", cursor: "pointer" }}
+                style={{ width: "100%", textAlign: "left", cursor: readOnly ? "default" : "pointer" }}
             >
                 <span className="board_title_text">{task_item.title}</span>
                 {render_days_badge(task_item)}
-            </button>
+            </TitleTag>
             <p>{plainRichText(task_item.description || "Sin descripción adicional.")}</p>
             <footer>
-                {render_avatar(member_item, "avatar_small")}
+                {readOnly && !member_item
+                    ? <span className="avatar_small team_readonly_avatar" title={task_item.assignee_name} aria-label={task_item.assignee_name}>{task_item.assignee_id ? task_item.assignee_name?.split(/\s+/).slice(0,2).map(word => word[0]).join("") : "—"}</span>
+                    : render_avatar(member_item, "avatar_small")}
                 <span>{task_item.due_label}</span>
                 <span className={`task_badge priority_badge ${get_priority_class(task_item.priority)}`}>
                     {task_item.priority}
                 </span>
             </footer>
-            <TaskMobileActions task={task_item} actions={props.mobile_actions} />
+            {!readOnly && <TaskMobileActions task={task_item} actions={props.mobile_actions} />}
         </article>
     );
 }
@@ -3938,7 +3980,7 @@ function render_projects_module({ projects, units = [], group_by_unit = false, s
         || (priority_order[a.priority] ?? 1) - (priority_order[b.priority] ?? 1));
     const groups = group_by_unit ? groupProjectsByUnit(visible, units) : [{ id: "all", name: "", projects: visible }];
     return <section className="projects_module">
-        <header className="projects_module_header"><div><p className="breadcrumb_text">PROYECTOS</p><h1>Proyectos</h1><p>{group_by_unit ? "Supervisa los proyectos activos de cada departamento." : "Gestiona el trabajo del departamento en un solo lugar."}</p></div><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
+        <header className="projects_module_header projects_module_header_compact"><h1 className="task_page_title_sr">Proyectos</h1><button className="primary_button" type="button" onClick={onCreate}>{render_icon(plus_icon, 17)} Crear proyecto</button></header>
         <div className="projects_department_groups">{groups.map(group => <section className="projects_department_group" key={group.id}>{group_by_unit && <header><div><h2>{group.name}</h2><p>{group.projects.length} proyecto{group.projects.length === 1 ? "" : "s"} activo{group.projects.length === 1 ? "" : "s"}</p></div></header>}<div className="projects_grid">{group.projects.map(project => {
             const projectTasks = tasks.filter(task => task.project_id === project.id || task.taskProjects?.some(link => link.projectId === project.id));
             const done = projectTasks.filter(task => task.completed).length;
@@ -4145,15 +4187,8 @@ function render_schedules_module(props) {
 
     return (
         <section className="tasks_module schedules_module">
-            <div className="task_project_header">
-                <div className="project_title_group">
-                    <p className="breadcrumb_text">
-                        CRONOGRAMAS / BOLD WORKSPACE
-                        <span className="desktop_breadcrumb_tail"> / PROYECTOS / {is_using_real_backend() ? current_user?.unit_name : "MARKETING"}</span>
-                    </p>
-                    <h1>Lanzamiento Q4 — Cronogramas</h1>
-                    <p className="project_subtitle">Planificación temporal, hitos y fechas de entrega del proyecto</p>
-                </div>
+            <div className="task_project_header task_project_header_compact">
+                <h1 className="task_page_title_sr">Cronogramas</h1>
 
                 <div className="project_actions">
                     <button className="primary_button" type="button" onClick={() => set_active_modal("task")}>
@@ -4238,6 +4273,8 @@ function TaskAppContent({ externalModules = {} }) {
     task_activity.current = task_content_active;
     const switch_task_activity = use_ref(() => {});
     const real = is_using_real_backend();
+    const navigation_key = `bold_task_navigation:${session.activeAssignment?.id || "demo"}`;
+    const [initial_navigation] = use_state(() => readTaskNavigation(navigation_key, window.location.search));
     const cache_scope = moduleScope(session);
     const [cached_snapshot] = use_state(() => real ? moduleCache.read(cache_scope, "tasks") : null);
     const cached_data = use_ref(cached_snapshot && Array.isArray(cached_snapshot.tasks) && Array.isArray(cached_snapshot.projects) && Array.isArray(cached_snapshot.statuses) ? cached_snapshot : null);
@@ -4250,6 +4287,7 @@ function TaskAppContent({ externalModules = {} }) {
     }, []);
     const [api_error, set_api_error] = use_state("");
     const personal_board = usePersonalBoard(session.activeAssignment?.id, real, set_api_error, cache_scope);
+    const team_sharing = useTeamSharing(session.activeAssignment?.id, real);
     const [pending, set_pending] = use_state(false);
     const mutation_pending = use_ref(false);
     const mutation_generation = use_ref(0);
@@ -4319,7 +4357,12 @@ function TaskAppContent({ externalModules = {} }) {
     }, [failed_drafts_key, failed_task_state]);
     const task_status_mutations = use_ref(new Map());
     const refresh = use_ref(async () => {});
-    const [active_view, set_active_view] = use_state("list");
+    use_effect(() => {
+        const reload = event => {if (event.detail?.projectId) void refresh.current(["tasks", "links", "statuses"]).catch(error=>set_api_error(error.message));};
+        window.addEventListener("bold:pipelines", reload);
+        return () => window.removeEventListener("bold:pipelines", reload);
+    }, []);
+    const [active_view, set_active_view] = use_state(initial_navigation.view);
     const [active_modal, set_raw_active_modal] = use_state(null);
     function set_active_modal(value) {
         if (["task", "edit_task", "project"].includes(value) && !task_activity.current) set_active_module("tasks");
@@ -4456,23 +4499,33 @@ function TaskAppContent({ externalModules = {} }) {
     }, [unsectioned_order_key, unsectioned_order_by_project]);
     const [schedule_view, set_schedule_view] = use_state("timeline");
     const [active_quick_popover, set_active_quick_popover] = use_state(null);
-    const [active_section, set_active_section] = use_state("tasks");
-    const [selected_project_id, set_selected_project_id] = use_state(() => new URLSearchParams(window.location.search).get("project") || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
-    const loaded_view_project = use_ref(null);
+    const [active_section, set_active_section] = use_state(initial_navigation.section);
+    const [selected_project_id, set_selected_project_id] = use_state(() => initial_navigation.projectId || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
+    const [task_scope, set_task_scope] = use_state(initial_navigation.scope);
+    const view_storage_key = task_scope === "project" ? `bold_task_view:${selected_project_id}` : `${navigation_key}:${task_scope}:view`;
+    const loaded_view = use_ref(view_storage_key);
     use_effect(() => {
-        if (!selected_project_id) return;
+        if (loaded_view.current !== view_storage_key) {
+            loaded_view.current = view_storage_key;
+            let saved;
+            try { saved = localStorage.getItem(view_storage_key); } catch { /* Optional view preference. */ }
+            set_active_section(saved === "timeline" ? "timeline" : saved === "team" && task_scope === "mine" ? "team" : "tasks");
+            if (["list", "board"].includes(saved)) set_active_view(saved);
+            return;
+        }
+        try { localStorage.setItem(view_storage_key, active_section === "tasks" ? active_view : active_section); } catch { /* Navigation works without storage. */ }
+    }, [active_section, active_view, view_storage_key, task_scope]);
+    use_effect(() => {
         try {
-            const saved = localStorage.getItem(`bold_task_view:${selected_project_id}`);
-            if (saved === "timeline") set_active_section("timeline");
-            else if (["list", "board"].includes(saved)) { set_active_section("tasks"); set_active_view(saved); }
-        } catch { /* La vista Lista sigue siendo el valor seguro. */ }
-    }, [selected_project_id]);
-    use_effect(() => {
-        if (!selected_project_id) return;
-        if (loaded_view_project.current !== selected_project_id) { loaded_view_project.current = selected_project_id; return; }
-        try { localStorage.setItem(`bold_task_view:${selected_project_id}`, active_section === "timeline" ? "timeline" : active_view); } catch { /* La navegación no depende del almacenamiento local. */ }
-    }, [active_section, active_view, selected_project_id]);
-    const [task_scope, set_task_scope] = use_state("project");
+            const saved = JSON.stringify({scope: task_scope, projectId: selected_project_id, section: active_section, view: active_view});
+            localStorage.setItem(navigation_key, saved); sessionStorage.setItem(navigation_key, saved);
+        } catch { /* Navigation works without storage. */ }
+        const url = new URL(window.location.href);
+        const previous = url.searchParams.get("project");
+        if (task_scope === "project" && selected_project_id) url.searchParams.set("project", selected_project_id);
+        else url.searchParams.delete("project");
+        if (previous !== url.searchParams.get("project")) window.history.replaceState(window.history.state, "", url);
+    }, [navigation_key, task_scope, selected_project_id, active_section, active_view]);
     const tasks = use_memo(() => real ? stored_tasks.map(task => projectTask(task, task_scope === "project" ? selected_project_id : null)) : stored_tasks, [real, stored_tasks, selected_project_id, task_scope]);
     const all_workspace_tasks = use_memo(() => real ? (data?.tasks || []).map(task => projectTask(task, null)) : stored_tasks.flatMap(task => [task, ...(task.subtasks || []).map(child => ({ ...child, parentTaskId: task.id, project_id: child.project_id || task.project_id, unitId: child.unitId || task.unitId }))]), [real, data?.tasks, stored_tasks]);
     const unsectioned_config = unsectioned_by_project[selected_project_id] || { label: "Sin sección", hidden: false };
@@ -4672,7 +4725,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_project_select(project_id) {
         remember_project(project_id);
-        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(window.history.state, "", url);
         if (real) set_active_filters(filters => ({ ...filters, sections: [] }));
         set_selected_project_id(project_id);
         set_task_scope("project");
@@ -4693,7 +4746,7 @@ function TaskAppContent({ externalModules = {} }) {
             return;
         }
         if (action !== "toggle") {
-            const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+            const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(window.history.state, "", url);
             set_selected_project_id(project_id);
         }
         if (action === "edit") {
@@ -4721,7 +4774,7 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_share_project(project_id) {
-        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(null, "", url);
+        const url = new URL(window.location.href); url.searchParams.set("project", project_id); window.history.replaceState(window.history.state, "", url);
         set_selected_project_id(project_id);
         set_active_project_menu_id(null);
         set_active_modal("share");
@@ -5474,6 +5527,7 @@ function TaskAppContent({ externalModules = {} }) {
             const changes = operation === "update" && values.priority ? { ...values, priority: ({ Alta: "high", Media: "medium", Baja: "low" })[values.priority] || values.priority } : values;
             const originals = ids.map(id => data.tasks.find(item => String(item.id) === String(id)));
             if (originals.some(item => !item)) { set_api_error("Una o más tareas ya no están disponibles. Actualiza la vista."); return false; }
+            if (operation === "link" && originals.some(item => item.taskProjects.length && !item.taskProjects.some(link => link.projectId === values.project)) && !await confirmPipelineLink()) return false;
             const mutations = originals.map(original => {
                 if (operation === "delete") return { kind: "delete", id: original.id, original, originalIndex: data.tasks.indexOf(original) };
                 const patch = operation === "link" ? { project_id: values.project, section: values.section || "unsectioned" } : changesFromWorkspace(changes);
@@ -5752,10 +5806,24 @@ function TaskAppContent({ externalModules = {} }) {
     }
 
     function handle_my_tasks_select() {
+        loaded_view.current = `${navigation_key}:mine:view`;
         set_task_scope("mine");
         set_active_module("tasks");
         set_active_section("tasks");
         set_selected_task_id(null);
+        set_is_sidebar_open(false);
+    }
+
+    function handle_team_select() {
+        loaded_view.current = `${navigation_key}:mine:view`;
+        set_task_scope("mine");
+        set_active_module("tasks");
+        set_active_section("team");
+        set_selected_task_id(null);
+        set_active_modal(null);
+        set_active_quick_popover(null);
+        set_search_query("");
+        set_is_tasks_menu_open(true);
         set_is_sidebar_open(false);
     }
 
@@ -6023,7 +6091,7 @@ function TaskAppContent({ externalModules = {} }) {
             const task = data.tasks.find(item => item.id === task_id);
             if (!task) return;
             const status = data.statuses.find(item => (!item.unitId || item.unitId === task.unitId) && item.isFinal !== task.completed);
-            if (status) queue_task_status(task_id, status);
+            if (status) void togglePipelineCompletion(task, task_scope === "project" ? selected_project_id : null, () => queue_task_status(task_id, status)).catch(error => set_api_error(error.message));
             else set_api_error("No hay un estado compatible para cambiar la finalización.");
             return;
         }
@@ -6354,7 +6422,7 @@ function TaskAppContent({ externalModules = {} }) {
                         return true;
                     }}
                     projects={projects}
-                    selected_project_id={selected_project_id}
+                    selected_project_id={task_scope === "project" ? selected_project_id : ""}
                     status_options={status_options}
                 />
             );
@@ -6446,7 +6514,7 @@ function TaskAppContent({ externalModules = {} }) {
     // Returns the full shell with the focused tasks module.
     return (
         <TaskActionsContext.Provider value={{ saveProjectMembers: (ids, id) => handle_save_project_members(ids, id, false), localComments: visible_local_comments, confirmComments: confirm_local_comments, retryComment: comment => comment.retry?.(), changeComment: (comment, changes) => change_comment(comment, changes), deleteComment: comment => change_comment(comment, {}, true), renameSubtask: rename_subtask, deleteSubtask: (parent_id, subtask_id) => handle_request_delete_task(subtask_id, parent_id) }}><ProjectPreviewContext.Provider value={set_project_preview}><OnboardingTour modal={active_modal} detail={Boolean(selected_task)} /><AppShell latestNewsId={releaseNotes[0]?.id} membersContent={<PresenceWidget />}
-sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
+sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_workspace_menu", open: is_tasks_menu_open, onToggle: handle_tasks_menu_toggle, content: render_tasks_workspace_menu(handle_my_tasks_select, () => { set_search_query(""); handle_module_change("department_projects"); }, set_active_modal, [...new Set([...pinned_project_ids, ...recent_project_ids])].map(id => projects.find(project => project.id === id)).filter(project => project && (!real || (project.unitId || project.unit) === session.activeUnit?.id)), selected_project_id, handle_project_select, handle_project_menu_toggle, active_project_menu_id, project_menu_anchor, task_scope, is_tasks_menu_open, ["projects", "department_projects"].includes(active_module), { teamActive: active_module === "tasks" && task_scope === "mine" && active_section === "team", onTeamSelect: handle_team_select, pinnedIds: pinned_project_ids, activeId: active_workspace_id, workspaces, onManage: () => { select_workspace("all"); set_is_sidebar_open(false); }, onTotal: () => { select_workspace("total"); set_is_sidebar_open(false); }, onDepartmentProjects: () => { set_search_query(""); handle_module_change("department_projects"); }, onSelect: select_workspace, onAssignProject: project => { set_active_project_menu_id(null); set_workspace_assignment({ type: "project", item: project }); } }) } } }}
             mobileHeaderProps={{ detailOpen: !!selected_task || (active_module === "inbox" && inbox_detail_open), detailTitle: selected_task ? "Detalle de tarea" : active_module === "inbox" && inbox_detail_open ? "Detalle de actividad" : null, onBack: () => { set_selected_task_id(null); set_inbox_detail_open(false); }, onMore: () => set_active_modal(selected_task ? "project_menu" : null) }}
             topBarProps={{ searchPlaceholder: active_module === "projects" ? "Buscar proyectos por nombre" : "Buscar tareas, proyectos o personas", handle_close_notifications, handle_mark_notifications_read, handle_notification_select, handle_search_navigate, handle_toggle_notifications, is_notifications_open, notifications: notifications.map(item => ({ ...item, actor: session.directory.find(member => member.id === (item.actor_assignment || item.actor_id)), icon: notification_type_icons[item.type] })), search_query, set_search_query }}
             feedback={null}
@@ -6505,6 +6573,10 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     onWorkspace: project => set_workspace_assignment({ type: "project", item: project }),
                     onDelete: id => handle_project_menu_toggle(id, "delete")
                 }) : active_module === "tasks" ? render_tasks_module({
+                    pipeline_projects: projects,
+                    task_scope,
+                    team_sharing,
+                    assignment_id: session.activeAssignment?.id,
                     on_workspace: task => set_workspace_assignment({ type: "task", item: task }),
                     handle_quick_add_tasks,
                     handle_task_click,

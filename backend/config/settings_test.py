@@ -8,7 +8,8 @@ os.environ["REDIS_URL"] = ""  # tickets use Django's isolated local cache in thi
 
 from .settings import *  # noqa: F403,E402
 
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+# Keep the SQLite transaction options from application settings while isolating data.
+DATABASES = {"default": {**DATABASES["default"], "NAME": ":memory:"}}  # noqa: F405
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "cache+memory://"

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { costTotal, gridChanges, optimistic, samePerson, groupedRows, displayGrid, normalizeSnapshot, advancePending, newerFile, gridRowChanges, requiredBlockColumn } from './sheets_model.js';
+import { costTotal, gridChanges, optimistic, samePerson, groupedRows, displayGrid, normalizeSnapshot, advancePending, newerFile, gridRowChanges, requiredBlockColumn, repairRejectedDraft } from './sheets_model.js';
 const document = () => ({
   id: 'book',
   sheetOrder: ['sheet'],
@@ -233,13 +233,17 @@ test('duplicate positions keep the current valid assignment when the displayed p
   assert.equal(samePerson(people).length,1);
   assert.equal(normalizeSnapshot(displayGrid(data,people),data,people).sheets.sheet.cellData[1][1].v,'first');
 });
-test('native table row commands preserve technical identities and reject header deletion',()=>{
+test('native table row commands preserve technical identities and delete complete blocks',()=>{
   const data=document(),block=data.sheets.sheet.__bold.blocks[0];
   const insert=gridRowChanges(data,'sheet','sheet.command.insert-row',{startRow:1,endRow:4});
   assert.equal(insert[0].kind,'row.add');assert.equal(insert[0].count,4);
   const remove=gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:1,endRow:1});
   assert.equal(remove[0].row,block.rowIds[0]);
-  assert.throws(()=>gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:0,endRow:1}),/encabezados/);
+  assert.throws(()=>gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:0,endRow:0}),/bloque completo/);
+  assert.deepEqual(gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:0,endRow:1}),[{kind:'block.remove',sheet:'sheet',block:block.id}]);
+  assert.deepEqual(gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:0,endRow:2}),[{kind:'block.remove',sheet:'sheet',block:block.id}]);
+  data.sheets.sheet.__bold.blocks.push({...block,id:'second',startRow:5});
+  assert.deepEqual(gridRowChanges(data,'sheet','sheet.command.remove-row-by-range',{startRow:0,endRow:7}).map(change=>change.block),['second',block.id]);
 });
 
 test('cambios de orden interno y avisos de Drive no son una edición de cuadrícula',()=>{
@@ -251,16 +255,19 @@ test('cambios de orden interno y avisos de Drive no son una edición de cuadríc
   assert.deepEqual(gridChanges(before,after),[]);
 });
 
-test('tamaños y nombres se aplican sin sustituir la estructura; añadir columnas sigue requiriendo una actualización estructural',()=>{
+test('ignorar tamaños permite cambios de celdas; encabezados y columnas conservan la actualización estructural',()=>{
   const before=document(),after=structuredClone(before);
   after.sheets.sheet.rowData={1:{h:80}};
   after.sheets.sheet.columnData={2:{w:250}};
-  after.sheets.sheet.cellData[0][1]={v:'Producto actualizado'};
+  after.sheets.sheet.cellData[1][1]={v:'Producto actualizado'};
   assert.equal(gridChanges(before,after)[0].kind,'grid');
   const incremental=gridChanges(before,after,{layout:false});
   assert.equal(incremental.length,1);
   assert.equal(incremental[0].kind,'cell');
   assert.equal(incremental[0].after.v,'Producto actualizado');
+  const renamed=structuredClone(after);
+  renamed.sheets.sheet.cellData[0][1]={v:'Encabezado actualizado'};
+  assert.equal(gridChanges(before,renamed,{layout:false})[0].kind,'grid');
   after.sheets.sheet.columnCount=20;
   assert.equal(gridChanges(before,after,{layout:false})[0].kind,'grid');
 });
@@ -338,7 +345,7 @@ test('managed selectors show names and stay outside the save history after reope
   assert.equal(visible.sheets.sheet.cellData[1][1].v,'Samuel');
   assert.equal(visible.sheets.sheet.cellData[1][1].p,undefined);
   assert.equal(visible.sheets.sheet.cellData[1][1].si,undefined);
-  assert.equal(rules[1].renderMode,1);
+  assert.equal(rules[1].renderMode,2);
   assert.equal(rules[1].formula1,'["Samuel"]');
   assert.deepEqual(rules,JSON.parse(displayGrid(data,people).resources[0].data).sheet);
   const saved=normalizeSnapshot(visible,data,people);
@@ -347,6 +354,43 @@ test('managed selectors show names and stay outside the save history after reope
   assert.deepEqual(gridChanges(data,saved),[]);
   visible.sheets.sheet.cellData[1][2].v=25;
   assert.equal(gridChanges(data,normalizeSnapshot(visible,data,people))[0].kind,'cell');
+});
+
+test('correcting a rejected assignee replaces the invalid draft and preserves other edits and conflict bases',()=>{
+  const edit=(column,before,after)=>({kind:'cell',sheet:'sheet',block:'block',row:'row',column,before:{v:before},after:{v:after}});
+  const original=edit('responsible','original','invalid');
+  const note=edit('note','before','keep');
+  const pending=[{id:'failed',revision:4,rejected:true,changes:[original,note]},{id:'later',revision:4,changes:[edit('responsible','invalid','also-invalid')]}];
+  const repaired=repairRejectedDraft(pending,[edit('responsible','also-invalid','valid')]);
+  assert.equal(repaired.revision,4);
+  assert.deepEqual(repaired.changes,[{...original,after:{v:'valid'}},note]);
+  assert.equal(pending[0].changes[0].after.v,'invalid');
+  assert.equal(repairRejectedDraft([{...pending[0],rejected:false}],[]),null,'uncertain network outcomes must retain their original request identity');
+  assert.equal(repairRejectedDraft(pending,[{kind:'block.remove'}]),null);
+});
+
+test('correcting a rejected grid retains its original base and all later cell edits',()=>{
+  const base=document(),snapshot=structuredClone(base);
+  snapshot.sheets.sheet.cellData[1][1].v='invalid';
+  snapshot.sheets.sheet.cellData[1][2].v=47;
+  const pending=[{revision:3,rejected:true,changes:[{kind:'grid',baseDocument:base,document:snapshot}]}];
+  const correction={kind:'cell',sheet:'sheet',block:'block',row:'row',column:'product',before:{v:'invalid'},after:{v:'valid'}};
+  const repaired=repairRejectedDraft(pending,[correction]);
+  assert.deepEqual(repaired.changes[0].baseDocument,base);
+  assert.equal(repaired.changes[0].document.sheets.sheet.cellData[1][1].v,'valid');
+  assert.equal(repaired.changes[0].document.sheets.sheet.cellData[1][2].v,47);
+});
+
+test('all block selectors use the same chip appearance without changing their selection type', () => {
+  for (const [type,validation] of [['responsible','list'],['collaborators','listMultiple'],['dropdown','list'],['checkbox','checkbox']]) {
+    const data=document(),block=data.sheets.sheet.__bold.blocks[0];
+    block.columns[0]={id:'selector',type,options:[{value:'low',label:'Baja'}]};
+    const visible=displayGrid(data,[{id:'person',employee:'employee',name:'Samuel'}]);
+    const rule=JSON.parse(visible.resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet.find(item=>item.uid==='bold-validation-block-selector');
+    assert.equal(rule.type,validation);
+    assert.equal(rule.renderMode,type==='checkbox'?undefined:2);
+    if(type!=='checkbox') assert.equal(rule.showDropDown,true);
+  }
 });
 
 test('new name selections preserve IDs, comma names and existing valid positions', () => {
@@ -414,4 +458,73 @@ test('native style IDs and reordered style fields do not resave cell or layout f
   assert.deepEqual(gridChanges(data,saved),[]);
   snapshot.styles.native.bg.rgb='#ffffff';
   assert.equal(gridChanges(data,normalizeSnapshot(snapshot,data))[0].kind,'grid');
+});
+
+
+test('las fechas de Excel usan validación nativa y conservan la regla original al guardar', () => {
+  const data=document();
+  data.sheets.sheet.__bold.blocks=[];
+  const rule={uid:'excel-date',type:'custom',allowBlank:true,formula1:'OR(NOT(ISERROR(DATEVALUE(B2))), AND(ISNUMBER(B2), LEFT(CELL("format", B2))="D"))',ranges:[{startRow:1,endRow:3,startColumn:1,endColumn:1}]};
+  data.resources=[{name:'SHEET_DATA_VALIDATION_PLUGIN',data:JSON.stringify({sheet:[rule]})}];
+  const visible=displayGrid(data,[]), resource=visible.resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN');
+  const shown=JSON.parse(resource.data).sheet[0];
+  assert.equal(shown.type,'date');
+  assert.equal(shown.formula1,undefined);
+  assert.deepEqual(shown.ranges,rule.ranges);
+  assert.deepEqual(visible.sheets.sheet.cellData,data.sheets.sheet.cellData);
+  const saved=normalizeSnapshot(visible,data);
+  assert.deepEqual(JSON.parse(saved.resources.find(item=>item.name===resource.name).data).sheet,[rule]);
+  assert.deepEqual(gridChanges(data,saved),[]);
+  shown.ranges[0].endRow=4;
+  resource.data=JSON.stringify({sheet:[shown]});
+  assert.equal(JSON.parse(normalizeSnapshot(visible,data).resources.find(item=>item.name===resource.name).data).sheet[0].ranges[0].endRow,4);
+});
+
+test('otras fórmulas personalizadas se ejecutan con igual sin convertirlas en reglas de fecha', () => {
+  const data=document(); data.sheets.sheet.__bold.blocks=[];
+  const rules=['B2>0','=B2<100','OR(NOT(ISERROR(DATEVALUE(B2))), AND(ISNUMBER(C2), LEFT(CELL("format", B2))="D"))'].map((formula1,index)=>({uid:String(index),type:'custom',formula1,ranges:[{startRow:1,endRow:2,startColumn:1,endColumn:1}]}));
+  data.resources=[{name:'SHEET_DATA_VALIDATION_PLUGIN',data:JSON.stringify({sheet:rules})}];
+  const visible=displayGrid(data,[]), displayed=JSON.parse(visible.resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet;
+  assert.deepEqual(displayed.map(rule=>rule.type),['custom','custom','custom']);
+  assert.deepEqual(displayed.map(rule=>rule.formula1),rules.map(rule=>'='+rule.formula1.replace(/^=/,'')));
+  assert.deepEqual(JSON.parse(normalizeSnapshot(visible,data).resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet,rules);
+});
+
+
+test('task rows keep valid responsible profiles from different departments after connection',()=>{
+  const data=document(),block=data.sheets.sheet.__bold.blocks[0];
+  block.type='tasks';block.columns[0]={id:'responsible',type:'responsible'};
+  block.task={enabled:true,unit:'marketing',status_map:{}};
+  const people=[{id:'samuel',employee:'one',unit:'marketing',name:'Samuel'},{id:'david',employee:'two',unit:'operations',name:'David Urbina'}];
+  data.sheets.sheet.cellData[1][1].v='david';
+  const visible=displayGrid(data,people);
+  assert.equal(visible.sheets.sheet.cellData[1][1].v,'David Urbina');
+  const rules=JSON.parse(visible.resources.find(resource=>resource.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet;
+  assert.ok(rules.some(rule=>rule.formula1?.includes('David Urbina')));
+  const saved=normalizeSnapshot(visible,data,people);
+  assert.equal(saved.sheets.sheet.cellData[1][1].v,'david');
+  visible.sheets.sheet.cellData[1][1].v='Samuel';
+  assert.equal(normalizeSnapshot(visible,data,people).sheets.sheet.cellData[1][1].v,'samuel');
+});
+
+
+test('managed delivery dates have native calendars without persisting generated rules',()=>{
+  const data=document(),block=data.sheets.sheet.__bold.blocks[0];
+  block.columns[0]={id:'due_date',name:'Entrega',type:'date'};
+  data.sheets.sheet.cellData[1][1]={v:'2026-10-20',t:2};
+  const visible=displayGrid(data,[]);
+  const rule=JSON.parse(visible.resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet.find(rule=>rule.uid==='bold-validation-block-due_date');
+  assert.equal(rule.type,'date');assert.equal(rule.showDropDown,true);
+  assert.equal(rule.formula1,undefined);
+  assert.equal(visible.sheets.sheet.cellData[1][1].v,(Date.UTC(2026,9,20)-Date.UTC(1899,11,30))/86400000);
+  assert.equal(visible.sheets.sheet.cellData[1][1].t,2);
+  assert.equal(visible.sheets.sheet.cellData[1][1].s.n.pattern,'yyyy-mm-dd');
+  visible.sheets.sheet.cellData[1][1].v=46315;
+  const saved=normalizeSnapshot(visible,data,[]);
+  assert.match(saved.sheets.sheet.cellData[1][1].v,/^2026-\d{2}-\d{2}$/);
+  assert.equal(saved.sheets.sheet.cellData[1][1].t,1);
+  assert.deepEqual(gridChanges(saved,normalizeSnapshot(displayGrid(saved,[]),saved,[])),[]);
+  visible.sheets.sheet.cellData[1][1].v=NaN;
+  assert.throws(()=>normalizeSnapshot(visible,data,[]),/fecha válida/);
+  assert.deepEqual(JSON.parse(saved.resources.find(item=>item.name==='SHEET_DATA_VALIDATION_PLUGIN').data).sheet,[]);
 });

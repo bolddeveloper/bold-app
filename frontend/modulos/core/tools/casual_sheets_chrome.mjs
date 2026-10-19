@@ -14,6 +14,14 @@ export function mountSheetPopover(element, position = floatingMenuPosition) {
 
 export function patchCasualSheetsChrome(source) {
   if (!source.includes('function BordersPicker({ api })')) return source;
+  if (!source.includes('// BOLD: contiguous menu panels and clickable submenu parents.')) {
+    const start=source.indexOf('var SUBMENU_PANEL_STYLE ='), end=source.indexOf('function MenuBar(',start);
+    if (start<0 || end<0) throw Error('Cambió el submenú superior de Hojas.');
+    source=source.slice(0,start)+source.slice(start,end).replace('marginLeft: 2,','marginLeft: -1,')+source.slice(end);
+    const menuStart=source.indexOf('function MenuBar('), menuEnd=source.indexOf('\n// src/',menuStart);
+    const menu=source.slice(menuStart,menuEnd).replace('onMouseDown: (e) => e.preventDefault(),\n                children:', 'onMouseDown: (e) => e.preventDefault(),\n                onClick: () => setOpenSubmenu(item.id),\n                children:');
+    source='// BOLD: contiguous menu panels and clickable submenu parents.\n'+source.slice(0,menuStart)+menu+source.slice(menuEnd);
+  }
   if (source.includes('var boldSheetPopover =')) return source;
   let next = source;
   for (const [style, id] of [['POPOVER_STYLE','cs-color-popover'], ['POPOVER_STYLE2','cs-borders-popover'], ['POPOVER_STYLE3','cs-autosum-popover']]) {

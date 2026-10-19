@@ -20,3 +20,17 @@ class PersonalTaskBoard(models.Model):
     sections = models.JSONField(default=list)
     task_sections = models.JSONField(default=dict)
     unsectioned_index = models.PositiveIntegerField(null=True, blank=True, default=None)
+
+
+class TeamProfile(models.Model):
+    employee = models.OneToOneField("boldApp_core.Employee", primary_key=True, on_delete=models.CASCADE)
+    share_calendar = models.BooleanField(default=False)
+
+
+class TeamTaskShare(models.Model):
+    employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.CASCADE)
+    task = models.ForeignKey("boldApp_tareas.Task", on_delete=models.CASCADE)
+    source_assignment = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["employee", "task"], name="unique_team_person_task")]

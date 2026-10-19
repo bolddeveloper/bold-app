@@ -6,6 +6,7 @@ import sheets from '@univerjs/sheets-ui/locale/es-ES';
 import formula from '@univerjs/sheets-formula-ui/locale/es-ES';
 import numberFormat from '@univerjs/sheets-numfmt-ui/locale/es-ES';
 import validation from '@univerjs/sheets-data-validation-ui/locale/es-ES';
+import validationRules from '@univerjs/sheets-data-validation/locale/es-ES';
 import table from '@univerjs/sheets-table/locale/es-ES';
 import tableUi from '@univerjs/sheets-table-ui/locale/es-ES';
 import filter from '@univerjs/sheets-filter-ui/locale/es-ES';
@@ -20,7 +21,9 @@ import commentUi from '@univerjs/thread-comment-ui/locale/es-ES';
 import find from '@univerjs/find-replace/locale/es-ES';
 
 export const sheetLocales = {[LocaleType.ES_ES]: mergeLocales(design, ui, docs, sheets, formula, numberFormat,
-  validation, table, tableUi, filter, sort, conditionalFormat, links, notes, drawings, drawingUi, comments, commentUi, find, {
+  validationRules, validation, table, tableUi, filter, sort, conditionalFormat, links, notes, drawings, drawingUi, comments, commentUi, find, {
+    design:{...design.design,Calendar:{...design.design.Calendar,weekDays:['Do','Lu','Ma','Mi','Ju','Vi','Sá'],months:['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']}},
+    'sheets-ui': {...sheets['sheets-ui'],info:{...sheets['sheets-ui']?.info,error:'Aviso de celda',forceStringInfo:'Este valor está guardado como texto.'}},
     'sheets-table-ui': {
       ...tableUi['sheets-table-ui'],
       selectRange:'Elegir celdas de la tabla', rename:'Cambiar nombre', renamePlaceholder:'Ej.: Ventas_2026',

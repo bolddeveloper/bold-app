@@ -4,8 +4,10 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
-        "postinstall": "node tools/patch_casual_sheets.mjs",
-        "dev": "vite --configLoader runner --host 0.0.0.0",
+        "postinstall": "node tools/patch_casual_sheets.mjs && node tools/ensure_dependencies.mjs --record",
+        "predev": "node tools/ensure_dependencies.mjs",
+        "dev": "vite --configLoader runner --host 0.0.0.0 --force",
+        "prebuild": "node tools/ensure_dependencies.mjs",
         "build": "vite build --configLoader runner",
         "preview": "vite preview --configLoader runner --host 0.0.0.0",
         "test": "node --test shared/image_controls.test.js shared/bold_dialog.test.js shared/presence.test.js shared/people.test.js keyboard_shortcuts.test.js google_cache.test.js module_cache.test.js onboarding*.test.js ../tareas/src/*.test.js ../tareas/src/services/*.test.js ../docs/*.test.js ../calendario/*.test.js ../notificaciones/*.test.js ../hojas/*.test.js",

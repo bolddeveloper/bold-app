@@ -11,7 +11,7 @@ def module_allowed(assignment, action="read"):
 
 def require_module(assignment, action="read"):
     if not module_allowed(assignment, "read") or action != "read" and not module_allowed(assignment, action):
-        raise PermissionDenied("No tienes permiso para esta acción en Hojas.")
+        raise PermissionDenied("No tienes permiso para esta acción en Sheets.")
 
 
 def accessible(assignment):

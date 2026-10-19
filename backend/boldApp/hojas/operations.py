@@ -16,7 +16,7 @@ from boldApp.administrativo.services import record_system_event
 from .access import require_file, require_module
 from .document import add_block, address, blank_sheet, blocks, cell_at, decorate, duplicate, put_cell, reconcile_markers, unique_sheet_name, validate_document
 from .models import Operation, Workbook
-from .task_bridge import apply_tasks, validate_connection
+from .task_bridge import apply_tasks, delete_removed_tasks, validate_connection
 
 
 class Conflict(APIException):
@@ -85,7 +85,13 @@ def _change_structure(document, change):
             snapshot["sheets"][sheet_id]["__bold"] = deepcopy(document["sheets"][sheet_id]["__bold"])
         if set(snapshot["sheetOrder"]) != set(document["sheetOrder"]):
             raise ValidationError("Elimina hojas desde las pestañas de BOLD.")
-        return reconcile_markers(snapshot)
+        reconcile_markers(snapshot)
+        tables = next((json.loads(item["data"] or "{}") for item in snapshot.get("resources", []) if item["name"] == "SHEET_TABLE_PLUGIN"), {})
+        for sheet_id, data in tables.items():
+            for block_id in list(data.get("disabledBlocks", [])):
+                if any(block["id"] == block_id for block in snapshot["sheets"][sheet_id]["__bold"]["blocks"]):
+                    _change_structure(snapshot, {"kind": "block.remove", "sheet": sheet_id, "block": block_id})
+        return snapshot
     if kind == "sheet.add":
         sheet = blank_sheet(unique_sheet_name(document, change.get("name", "Nueva hoja")))
         document["sheets"][sheet["id"]] = sheet
@@ -164,7 +170,45 @@ def _change_structure(document, change):
             decorate(sheet, block)
         elif kind == "block.remove":
             end = block["startRow"] + len(block["rowIds"]) + (2 if block["type"] in {"costs", "comparison"} else 1)
-            sheet["cellData"] = {row: cells for row, cells in sheet["cellData"].items() if not block["startRow"] <= int(row) < end}
+            area = {"startRow": block["startRow"], "endRow": end - 1, "startColumn": 0, "endColumn": len(block["columns"])}
+            def intersects(value):
+                return value["startRow"] < end and value["endRow"] >= block["startRow"] and value["startColumn"] <= area["endColumn"] and value["endColumn"] >= 0
+            def remaining(value):
+                if not intersects(value):
+                    return [value]
+                top, bottom = max(value["startRow"], area["startRow"]), min(value["endRow"], area["endRow"])
+                pieces = [
+                    {**value, "endRow": top - 1}, {**value, "startRow": bottom + 1},
+                    {**value, "startRow": top, "endRow": bottom, "endColumn": min(value["endColumn"], area["startColumn"] - 1)},
+                    {**value, "startRow": top, "endRow": bottom, "startColumn": max(value["startColumn"], area["endColumn"] + 1)},
+                ]
+                return [piece for piece in pieces if piece["startRow"] <= piece["endRow"] and piece["startColumn"] <= piece["endColumn"]]
+            for row, cells in list(sheet["cellData"].items()):
+                if area["startRow"] <= int(row) < end:
+                    sheet["cellData"][row] = {col: value for col, value in cells.items() if int(col) > area["endColumn"]}
+                    if not sheet["cellData"][row]:
+                        del sheet["cellData"][row]
+                        sheet.get("rowData", {}).pop(row, None)
+            sheet["mergeData"] = [value for value in sheet.get("mergeData", []) if not intersects(value)]
+            for resource in document.get("resources", []):
+                name = resource["name"]
+                if name not in {"SHEET_TABLE_PLUGIN", "SHEET_DATA_VALIDATION_PLUGIN", "SHEET_CONDITIONAL_FORMATTING_PLUGIN", "SHEET_RANGE_THEME_MODEL_PLUGIN", "SHEET_FILTER_PLUGIN"}:
+                    continue
+                data = json.loads(resource["data"] or "{}")
+                if name == "SHEET_TABLE_PLUGIN" and sheet["id"] in data:
+                    saved = data[sheet["id"]]
+                    saved["tables"] = [table for table in saved.get("tables", []) if table.get("meta", {}).get("boldBlock") != block["id"] and not intersects(table["range"])]
+                    saved["disabledBlocks"] = [value for value in saved.get("disabledBlocks", []) if value != block["id"]]
+                    saved["tableFilteredOutRows"] = [row for row in saved.get("tableFilteredOutRows", []) if not area["startRow"] <= row < end]
+                elif name in {"SHEET_DATA_VALIDATION_PLUGIN", "SHEET_CONDITIONAL_FORMATTING_PLUGIN"} and sheet["id"] in data:
+                    for rule in data[sheet["id"]]:
+                        rule["ranges"] = [piece for value in rule.get("ranges", []) for piece in remaining(value)]
+                    data[sheet["id"]] = [rule for rule in data[sheet["id"]] if rule["ranges"]]
+                elif name == "SHEET_RANGE_THEME_MODEL_PLUGIN":
+                    data["rangeThemeStyleRuleMap"] = {key: rule for key, rule in data.get("rangeThemeStyleRuleMap", {}).items() if rule["rangeInfo"]["subUnitId"] != sheet["id"] or not intersects(rule["rangeInfo"]["range"])}
+                elif name == "SHEET_FILTER_PLUGIN" and sheet["id"] in data and intersects(data[sheet["id"]]["ref"]):
+                    del data[sheet["id"]]
+                resource["data"] = json.dumps(data)
             sheet["__bold"]["blocks"].remove(block)
         elif kind == "block.move":
             order = change.get("order", [])
@@ -258,7 +302,7 @@ def apply_operation(workbook_id, request):
                         people = directory()
                     selected = []
                     for label in labels:
-                        candidates = [person for person in people if (not block.get("task", {}).get("enabled") or person["unit"] == block["task"]["unit"]) and label.strip() in {person["id"], person["name"], person["email"], person["name"] + " <" + person["email"] + ">"}]
+                        candidates = [person for person in people if (block["type"] == "tasks" or not block.get("task", {}).get("enabled") or person["unit"] == block["task"]["unit"]) and label.strip() in {person["id"], person["name"], person["email"], person["name"] + " <" + person["email"] + ">"}]
                         if len({person["employee"] for person in candidates}) != 1:
                             raise ValidationError("Persona desconocida o con nombre repetido. Selecciona su perfil desde Bloques.")
                         person = next((person for person in candidates if person["id"] in str(current.get("v") or "").split(",")), candidates[0])
@@ -278,7 +322,7 @@ def apply_operation(workbook_id, request):
             if change.get("kind") == "grid" and base != workbook.revision:
                 from .drive_merge import merge_documents
                 try:
-                    merged = merge_documents(change["baseDocument"], workbook.document, change["document"])
+                    merged = merge_documents(change["baseDocument"], workbook.document, change["document"], chart_preference="remote")
                 except Conflict as exc:
                     raise Conflict({**exc.detail, "revision": workbook.revision, "structural": True, "document": previous, "draft": changes}) from exc
                 except (KeyError, TypeError, AttributeError, ValueError) as exc:
@@ -298,6 +342,7 @@ def apply_operation(workbook_id, request):
         if block.get("task") != old_configurations.get(block["id"]) and block.get("task", {}).get("enabled"):
             require_module(request.assignment, "assign")
             validate_connection(block, request.assignment)
+    delete_removed_tasks(workbook, previous, request)
     apply_tasks(workbook, previous, request)
     workbook.revision += 1
     mark_pending(workbook)

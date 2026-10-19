@@ -167,6 +167,8 @@ class TaskStatusSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
+    pipeline = serializers.UUIDField(write_only=True, required=False)
+    pipeline_stage = serializers.UUIDField(write_only=True, required=False)
     image_creation_scope = serializers.ChoiceField(choices=["personal", "project"], write_only=True, required=False)
     voice_notes = VoiceNotesField(required=False)
     attachment_count = serializers.IntegerField(read_only=True)
@@ -251,6 +253,15 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
                 )
 
         project = attrs.get("project")
+        if "pipeline" in attrs or "pipeline_stage" in attrs:
+            from .pipelines import PipelineView, find_stage
+            view = PipelineView(); view.request = self.context["request"]
+            pipeline = view.pipeline(attrs.get("pipeline"))
+            if pipeline.project_id and (not project or project.pk != pipeline.project_id) and not (self.instance and self.instance.task_projects.filter(project_id=pipeline.project_id).exists()):
+                raise serializers.ValidationError({"pipeline": "Selecciona un pipeline del proyecto de la tarea."})
+            if not pipeline.project_id and (project or self.instance and self.instance.task_projects.filter(project__deleted_at__isnull=True).exists()):
+                raise serializers.ValidationError({"pipeline": "Esta tarea pertenece a un proyecto. Su pipeline de proyecto no se puede cambiar a Personal."})
+            find_stage(pipeline, attrs.get("pipeline_stage") or pipeline.stages[0]["id"])
         section = attrs.get("section")
         if section and not project:
             raise serializers.ValidationError({"section": "section requiere project en la misma operacion."})
@@ -272,6 +283,8 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        pipeline_id = validated_data.pop("pipeline", None)
+        pipeline_stage = validated_data.pop("pipeline_stage", None)
         follow_creator = validated_data.pop("follow_creator", True)
         project = validated_data.pop("project", None)
         creation_scope = validated_data.pop("image_creation_scope", "project" if project else "personal")
@@ -298,10 +311,31 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
                 section=section,
                 position=position,
                 added_by_assignment=assignment,
+                pipeline_id=pipeline_id, pipeline_stage=pipeline_stage,
             )
+        elif pipeline_id:
+            from .models import PersonalPipelineTask, Pipeline
+            pipeline = Pipeline.objects.get(pk=pipeline_id)
+            PersonalPipelineTask.objects.create(pipeline=pipeline, task=task, stage_id=pipeline_stage or pipeline.stages[0]["id"])
+        task.refresh_from_db()
         return task
 
+    @transaction.atomic
     def update(self, instance, validated_data):
+        pipeline_id = validated_data.pop("pipeline", None)
+        stage_id = validated_data.pop("pipeline_stage", None)
+        if pipeline_id:
+            from .pipelines import PipelineView, assign_stage
+            view = PipelineView(); view.request = self.context["request"]
+            pipeline = view.pipeline(pipeline_id)
+            assign_stage(view, pipeline, instance, stage_id or pipeline.stages[0]["id"])
+            instance.refresh_from_db()
+            validated_data.pop("status", None)
+        project = validated_data.pop("project", None)
+        if project:
+            instance._pipeline_project_id = project.pk
+        validated_data.pop("section", None)
+        validated_data.pop("project_position", None)
         validated_data.pop("follow_creator", None)
         validated_data.pop("image_creation_scope", None)
         return super().update(instance, validated_data)
@@ -320,6 +354,14 @@ class TaskProjectSerializer(serializers.ModelSerializer):
             section = getattr(self.instance, "section", None)
         if section and project and section.project_id != project.id:
             raise serializers.ValidationError({"section": "La seccion no pertenece al proyecto indicado."})
+        pipeline = attrs.get("pipeline") or getattr(self.instance, "pipeline", None)
+        stage = attrs.get("pipeline_stage", getattr(self.instance, "pipeline_stage", None))
+        if pipeline:
+            from .pipelines import find_stage
+            if pipeline.project_id != project.pk:
+                raise serializers.ValidationError({"pipeline": "El pipeline no pertenece al proyecto."})
+            if stage:
+                find_stage(pipeline, stage)
         return attrs
 
 

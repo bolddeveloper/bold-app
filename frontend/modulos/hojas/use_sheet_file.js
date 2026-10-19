@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api_base_url } from '../core/http_client.js';
 import { sheetsApi } from './sheets_api.js';
 import { sheetsCache } from './sheets_cache.js';
-import { advancePending, canonical, clone, newerFile, optimistic } from './sheets_model.js';
+import { advancePending, canonical, clone, newerFile, optimistic, repairRejectedDraft } from './sheets_model.js';
 export function useSheetFile(account, id, onRevoked) {
   const [file, setFile] = useState(null),
     [busy, setBusy] = useState(false),
@@ -75,6 +75,7 @@ export function useSheetFile(account, id, onRevoked) {
       while (alive.current && generation === epoch.current && journal.current.pending.length) {
         const operation = journal.current.pending[0];
         try {
+          if (operation.rejected) {delete operation.rejected;await persist();}
           const next = await sheetsApi.operation(id, operation);
           if (!alive.current || !storageAllowed.current || generation !== epoch.current) return;
           journal.current.pending.shift();
@@ -85,6 +86,16 @@ export function useSheetFile(account, id, onRevoked) {
           setError('');
         } catch (problem) {
           if (!alive.current || generation !== epoch.current) return;
+          if (problem.status===400 || problem.status===422) {
+            operation.rejected=true;
+            const repaired=journal.current.pending.length>1 && repairRejectedDraft(journal.current.pending,[]);
+            if (repaired) {
+              journal.current.pending=[{id:crypto.randomUUID(),...repaired}];
+              await persist();
+              continue;
+            }
+            await persist();
+          }
           if ([403, 404].includes(problem.status)) {
             try {
               await sheetsApi.get(id);
@@ -234,9 +245,12 @@ export function useSheetFile(account, id, onRevoked) {
   }, [account, id]);
   const queue = useCallback(async changes => {
     if (!storageAllowed.current || !journal.current.file?.can.edit || !changes.length) return;
+    const repaired=!running.current && repairRejectedDraft(journal.current.pending,changes);
+    const revision=repaired ? repaired.revision : journal.current.file.revision;
+    if (repaired) {changes=repaired.changes;journal.current.pending=[];}
     for (let offset = 0; offset < changes.length; offset += 1000) journal.current.pending.push({
       id: crypto.randomUUID(),
-      revision: journal.current.file.revision,
+      revision,
       changes: clone(changes.slice(offset, offset + 1000))
     });
     render();

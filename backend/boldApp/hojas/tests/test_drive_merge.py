@@ -1,11 +1,50 @@
 from copy import deepcopy
 import json
 from django.test import SimpleTestCase
-from boldApp.hojas.drive_merge import merge_documents
+from boldApp.hojas.drive_merge import merge_documents, saved_document
 from boldApp.hojas.operations import Conflict
 
 
 class DriveMergeTests(SimpleTestCase):
+    def test_bold_wins_drive_conflicts_in_view_structure_resources_and_deletion(self):
+        base = {"sheets": {"sheet": {"zoomRatio": 1, "rowCount": 100, "cellData": {}, "__bold": {"blocks": [{"id": "one", "name": "Base"}, {"id": "two", "name": "Base"}]}}}, "resources": [self.resource("SHEET_TABLE_PLUGIN", {"style": "base"})]}
+        local, remote = deepcopy(base), deepcopy(base)
+        local["sheets"]["sheet"].update(zoomRatio=.9, rowCount=150)
+        remote["sheets"]["sheet"].update(zoomRatio=.8, rowCount=200)
+        local["sheets"]["sheet"]["__bold"]["blocks"] = [{"id": "one", "name": "BOLD"}]
+        remote["sheets"]["sheet"]["__bold"]["blocks"][0]["name"] = "Drive"
+        remote["sheets"]["sheet"]["__bold"]["blocks"][1]["name"] = "Drive"
+        local["resources"] = []
+        remote["resources"][0] = self.resource("SHEET_TABLE_PLUGIN", {"style": "drive"})
+        remote["sheets"]["sheet"]["cellData"] = {"1": {"1": {"v": "Independiente"}}}
+        conflicts = []
+        merged = merge_documents(base, local, remote, prefer_local=True, cell_conflicts=conflicts)
+        expected = saved_document(local)
+        expected["sheets"]["sheet"]["cellData"] = remote["sheets"]["sheet"]["cellData"]
+        self.assertEqual(merged, expected)
+        self.assertIn("Archivo/sheets/sheet/zoomRatio", conflicts)
+        self.assertIn("Archivo/resources/SHEET_TABLE_PLUGIN", conflicts)
+        self.assertEqual(remote["sheets"]["sheet"]["zoomRatio"], .8)
+
+    def test_active_app_view_changes_do_not_conflict_with_a_stale_grid(self):
+        base = {"sheets": {"sheet": {"zoomRatio": 1, "cellData": {}}}}
+        server, app = deepcopy(base), deepcopy(base)
+        server["sheets"]["sheet"]["zoomRatio"] = .9
+        app["sheets"]["sheet"]["zoomRatio"] = .8
+        self.assertEqual(merge_documents(base, server, app, chart_preference="remote"), saved_document(app))
+
+    def test_app_chart_version_wins_conflicts_including_deletion(self):
+        name = "__casual_sheets_charts__"
+        base = {"resources": [self.resource(name, {"v": 1, "charts": [{"id": "chart", "pos": 1}]})]}
+        app, drive = deepcopy(base), deepcopy(base)
+        app["resources"][0] = self.resource(name, {"v": 1, "charts": [{"id": "chart", "pos": 2}]})
+        drive["resources"][0] = self.resource(name, {"v": 1, "charts": [{"id": "chart", "pos": 3}]})
+        self.assertEqual(merge_documents(base, app, drive, chart_preference="local"), saved_document(app))
+        self.assertEqual(merge_documents(base, drive, app, chart_preference="remote"), saved_document(app))
+        deleted = {"resources": []}
+        self.assertEqual(merge_documents(base, deleted, drive, chart_preference="local"), deleted)
+        self.assertEqual(merge_documents(base, drive, deleted, chart_preference="remote"), deleted)
+
     def resource(self, name, data):
         return {"name": name, "data": json.dumps(data)}
 

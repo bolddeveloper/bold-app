@@ -6553,22 +6553,22 @@ button {
     top: calc(100% + 8px);
     right: 0;
     z-index: 700;
-    width: 320px;
+    width: 243.6px;
     max-width: calc(100vw - 36px);
     box-sizing: border-box;
     background: #ffffff;
     border: 1px solid #dfdedb;
     border-radius: 14px;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15);
-    padding: 16px;
+    padding: 12px;
 }
 
 .custom_datepicker_nav {
     display: flex;
-    gap: 6px;
+    gap: 3px;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .custom_datepicker_nav select {
@@ -6584,7 +6584,7 @@ button {
 .custom_datepicker_grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 2px;
     text-align: center;
 }
 
@@ -6624,8 +6624,8 @@ button {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 14px;
-    padding-top: 10px;
+    margin-top: 8px;
+    padding-top: 8px;
     border-top: 1px solid #f1eeeb;
 }
 
@@ -10745,13 +10745,14 @@ button {
 }
 
 .custom_datepicker_nav > button {
-    flex: 0 0 28px;
+    flex: 0 0 24px;
+    width: 24px;
 }
 
 .custom_datepicker_nav .task_select {
-    width: 76px;
-    min-width: 76px;
-    flex: 0 0 76px;
+    width: 64px;
+    min-width: 64px;
+    flex: 0 0 64px;
 }
 
 .custom_datepicker_nav .task_select:first-of-type {
@@ -10767,7 +10768,7 @@ button {
 .custom_datepicker_popover .day_cell {
     width: 100%;
     min-width: 0;
-    height: 30px;
+    height: 28px;
     padding: 0;
     border-radius: 8px;
 }
@@ -10791,7 +10792,7 @@ button {
 .custom_datepicker_popover .day_header_cell {
     color: #94a3b8;
     font-size: 11px;
-    padding-bottom: 6px;
+    padding-bottom: 2px;
 }
 
 .custom_datepicker_popover .dp_apply_btn:disabled {
@@ -10800,13 +10801,24 @@ button {
 }
 
 .custom_datepicker_nav .task_select_trigger {
-    min-height: 32px;
-    padding: 4px 7px;
+    min-height: 28px;
+    padding: 4px 5px;
+    gap: 3px;
+    font-size: 12px;
     grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.custom_datepicker_nav .task_select_text strong {
+    font-size: 12px;
 }
 
 .custom_datepicker_nav .task_select_menu {
     min-width: 110px;
+}
+
+.custom_datepicker_nav .task_select_trigger svg {
+    width: 12px;
+    height: 12px;
 }
 
 @keyframes task_select_enter {
@@ -12748,3 +12760,32 @@ button.project_members_row:hover, .project_members_popup header button:hover { b
 .project_members_popup button:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 2px; }
 
 .project_members_popup .project_members_row > button.project_members_remove { display: grid; place-items: center; flex: 0 0 28px; width: 28px; min-width: 28px; max-width: 28px; height: 28px; min-height: 28px; padding: 0; margin: 0; box-sizing: border-box; }
+
+/* Shared board columns: transparent in personal, project and read-only views. */
+.tasks_module .board_view > .board_column,
+.tasks_module .board_view > .board_column > header,
+.tasks_module .board_view > .board_column > .board_card_stack {
+    background: transparent;
+}
+:root .tasks_module .board_view > .board_column {
+    border: 1px solid var(--team-line, var(--bold_line, #d8dce3));
+    border-radius: 14px;
+}
+.tasks_module .board_view > .board_column_new {
+    margin-top: 24px;
+}
+.tasks_module .board_view > .board_column > :is(.board_quick_add_button, .board_quick_task_form) {
+    margin-top: 10px;
+}
+:root .tasks_module .board_view > .board_column:not([data-section-drop]) {
+    box-shadow: none;
+}
+
+/* Task-section moves share the pipeline drop preview and arrival feedback. */
+.board_view:not(.board_view_readonly) .board_column {transition:outline-color 160ms ease,background 160ms ease}
+.board_view .board_drop_preview {flex-shrink:0;margin:0;max-width:100%;min-width:0}
+.board_view .board_card.board_card_just_moved {animation:pipeline_arrive 400ms ease}
+.board_view .board_column_arrived>header {animation:board_section_arrive 700ms ease}
+@keyframes board_section_arrive {from{color:var(--bold_red)}to{color:inherit}}
+@media(prefers-reduced-motion:reduce){.board_view .board_column,.board_view .board_card.board_card_just_moved,.board_view .board_column_arrived>header{animation:none;transition:none}}
+.board_view:not(.board_view_readonly) .board_card[data-dragging="true"] {animation:none;opacity:.35}

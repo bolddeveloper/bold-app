@@ -34,6 +34,10 @@ export async function importNativeCharts(buffer,document) {
       for (const chartRef of elements(drawingXml,'chart')) {
         const part = drawingLinks.get(chartRef.getAttribute('r:id')), chart = await read(part);
         if (!chart) continue;
+        const owned = manifest.charts?.find(item=>item.part===part);
+        const retained = owned && previous.find(item=>item.id===owned.id);
+        // BOLD is authoritative for its exported objects, including exact pixel geometry.
+        if (retained) {charts.push({...retained,excelPart:part});continue;}
         const plot = first(chart,'plotArea'), typeNodes = plot ? [...plot.childNodes].filter(item=>/^(barChart|lineChart|areaChart|pieChart|doughnutChart|scatterChart)$/.test(item.localName)) : [], typeNode=typeNodes[0];
         if(typeNodes.length>2) continue;
         const series = typeNodes.flatMap(item=>elements(item,'ser')), categories = series[0] && reference(first(first(series[0],'cat') || first(series[0],'xVal') || series[0],'f')?.textContent);
@@ -54,7 +58,7 @@ export async function importNativeCharts(buffer,document) {
         const seriesTypes={},seriesColors={},secondaryAxis={};
         for(const group of typeNodes) for(const item of elements(group,'ser')) {
           const index=series.indexOf(item), value=values[index], label=String(sheet.cellData?.[categories.startRow-1]?.[value.startColumn]?.v || '');
-          if(typeNodes.length>1) seriesTypes[label]=group.localName==='lineChart'?'line':'bar';
+          if(typeNodes.length>1 && group.localName!=='areaChart') seriesTypes[label]=group.localName==='lineChart'?'line':'bar';
           const color=first(first(item,'spPr'),'srgbClr')?.getAttribute('val'); if(/^[\da-f]{6}$/i.test(color || '')) seriesColors[label]='#'+color;
           const axes=elements(group,'axId').map(item=>item.getAttribute('val'));
           secondaryAxis[label]=elements(plot,'valAx').some(axis=>axes.includes(first(axis,'axId')?.getAttribute('val')) && first(axis,'axPos')?.getAttribute('val')==='r');

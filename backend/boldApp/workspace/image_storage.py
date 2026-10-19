@@ -95,7 +95,13 @@ def can_read(request, kind, instance, field=None, image=None):
     if kind == "project":
         return view.visible_projects().filter(pk=instance.pk).exists()
     task = instance if kind == "task" else instance.task
-    return not task.deleted_at and view.visible_tasks(type(task).objects.filter(pk=task.pk)).exists()
+    if not task.deleted_at and view.visible_tasks(type(task).objects.filter(pk=task.pk)).exists():
+        return True
+    if kind in ("task", "attachment"):
+        from boldApp.tareas.team import can_read_shared_task
+        if can_read_shared_task(request, task.pk):
+            return True
+    return False
 
 
 def authorized_image(request, image):

@@ -899,6 +899,18 @@
     transform: none !important;
 }
 
+.admin_select_trigger > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin_select_menu button > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .admin_select_trigger svg {
     color: #64748b;
     transition: transform 190ms cubic-bezier(.2, .8, .2, 1), color 150ms ease;

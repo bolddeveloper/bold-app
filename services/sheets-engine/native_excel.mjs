@@ -70,7 +70,8 @@ const render = (buffer,document) => new Promise((resolve,reject) => {
 });
 export async function addNativeObjects(buffer,document) {
   const charts = readModels(document,'__casual_sheets_charts__','charts'), pivots = readModels(document,'__casual_sheets_pivots__','pivots');
-  const clean = await clearNativeObjects(buffer,charts.map(item=>item.excelPart).filter(Boolean),pivots.map(item=>item.excelPart).filter(Boolean));
+  const deleted=JSON.parse(document.resources?.find(item=>item.name==='__casual_sheets_charts__')?.data || '{}').deletedParts || [];
+  const clean = await clearNativeObjects(buffer,[...charts.map(item=>item.excelPart).filter(Boolean),...deleted],pivots.map(item=>item.excelPart).filter(Boolean));
   if (!charts.length && !pivots.length) return clean;
   const before = await JSZip.loadAsync(clean), after = await JSZip.loadAsync(await render(clean,document));
   const added = Object.keys(after.files).filter(name=>!before.file(name) && ownedPart(name));

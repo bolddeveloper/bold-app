@@ -5,6 +5,36 @@ import { calculate, exportExcel, importExcel, shiftRows, recreateAgenda, changeS
 import JSZip from 'jszip';
 import {prepareBlockTables} from './excel_tables.mjs';
 
+test('las tablas de tareas exportan el encabezado violeta y conservan los datos del bloque',async()=>{
+  const source=workbook(),block=source.sheets.sheet.__bold.blocks[0];
+  block.type='tasks';
+  source.sheets.sheet.cellData[0][1].s={bg:{rgb:'#ef3340'},cl:{rgb:'#ffffff'}};
+  const original=structuredClone(source);
+  const {buffer}=await exportExcel(source,{recalculate:false});
+  const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
+  assert.equal(book.getWorksheet('Costos').getCell('B1').fill.fgColor.argb.slice(-6).toLowerCase(),'535fc1');
+  const zip=await JSZip.loadAsync(buffer);
+  assert.equal(zip.file(/^xl\/tables\/.*\.xml$/).length,1);
+  assert.match(await zip.file('xl/tables/table1.xml').async('string'),/ref="B1:E2"/);
+  assert.equal(book.getWorksheet('Costos').getCell('C2').value,22.75);
+  assert.deepEqual(source,original);
+});
+
+test('quitar una tabla se conserva al exportar e importar sin perder las celdas',async()=>{
+  const source=workbook();
+  const first=await exportExcel(source,{recalculate:false});
+  source.resources=[{name:'SHEET_TABLE_PLUGIN',data:JSON.stringify({sheet:{tables:[],tableFilteredOutRows:[],disabledBlocks:[blockId]}})}];
+  const {buffer}=await exportExcel(source,{recalculate:false,source:first.buffer.toString('base64')});
+  const zip=await JSZip.loadAsync(buffer);
+  assert.equal(zip.file(/^xl\/tables\/.*\.xml$/).length,0);
+  const imported=await importExcel(buffer,{document:source});
+  prepareBlockTables(imported.document);
+  const tables=JSON.parse(imported.document.resources.find(item=>item.name==='SHEET_TABLE_PLUGIN').data);
+  assert.deepEqual(tables.sheet.tables,[]);
+  assert.deepEqual(tables.sheet.disabledBlocks,[blockId]);
+  assert.equal(imported.document.sheets.sheet.cellData[1][2].v,22.75);
+});
+
 test('las listas con nombres internos precedidos de igual recuperan sus opciones', async () => {
   const source = workbook();
   source.sheets.sheet.__bold.blocks = [];
@@ -42,7 +72,7 @@ test('los bloques exportan tablas con filtros y franjas, sin duplicarse al ampli
   const first=await exportExcel(source,{recalculate:false});
   const book=new ExcelJS.Workbook();await book.xlsx.load(first.buffer);
   const table=book.getWorksheet('Costos').getTable('BOLD_'+blockId.replaceAll('-','_')).table;
-  assert.equal(table.ref,'B1');assert.equal(table.style.showRowStripes,true);
+  assert.equal(table.tableRef,'B1:E2');assert.equal(table.style.showRowStripes,true);
   assert.ok(table.columns.every(column=>column.filterButton));
   assert.deepEqual(source,before);
   const block=source.sheets.sheet.__bold.blocks[0];
@@ -67,7 +97,7 @@ test('las tablas de bloques respetan tablas importadas y conservan tamaños manu
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
   assert.ok(book.getWorksheet('Costos').getRow(2).height>21);
   assert.equal(book.getWorksheet('Costos').getRow(3).height,60);
-  assert.equal(book.getWorksheet('Costos').getTable('TablaOriginal').table.ref,'B1');
+  assert.equal(book.getWorksheet('Costos').getTable('TablaOriginal').table.tableRef,'B1:E2');
 });
 
 test('añadir un bloque al Excel existente permite volver a leer sus tablas y recalcular sin duplicarlas',async()=>{
@@ -76,7 +106,7 @@ test('añadir un bloque al Excel existente permite volver a leer sus tablas y re
   const original=await exportExcel(empty,{recalculate:false});
   const added=await exportExcel(source,{recalculate:false,source:original.buffer.toString('base64')});
   const book=new ExcelJS.Workbook();await book.xlsx.load(added.buffer);
-  assert.equal(book.getWorksheet('Costos').getTable('BOLD_'+blockId.replaceAll('-','_')).table.ref,'B1');
+  assert.equal(book.getWorksheet('Costos').getTable('BOLD_'+blockId.replaceAll('-','_')).table.tableRef,'B1:E2');
   const imported=await importExcel(added.buffer,{document:source,advanced:true});
   assert.equal(imported.issues.length,0);
   const calculated=await calculate(imported.document);
@@ -88,8 +118,10 @@ test('añadir un bloque al Excel existente permite volver a leer sus tablas y re
 
 test('añadir una hoja a un Excel existente conserva su lectura y las hojas anteriores',async()=>{
   const source=workbook(),original=await exportExcel(source,{recalculate:false});
-  const added=changeSheet(source,{action:'add',name:'Resumen'});
-  const id=added.sheetOrder.at(-1);
+  // sheet.add is implemented by the backend, not the engine's rename/copy/remove API.
+  const added=structuredClone(source),id='summary';
+  added.sheetOrder.push(id);
+  added.sheets[id]={...structuredClone(source.sheets.sheet),id,name:'Resumen',__bold:{blocks:[],technicalColumn:false}};
   added.sheets[id].cellData={0:{0:{v:'Nuevo resumen'}}};
   const updated=await exportExcel(added,{recalculate:false,source:original.buffer.toString('base64')});
   const book=new ExcelJS.Workbook();await book.xlsx.load(updated.buffer);
@@ -402,6 +434,20 @@ test('a responsible person with a comma in the name imports as one person',async
   const imported=await importExcel(Buffer.from(await book.xlsx.writeBuffer()),{document:source,directory});
   assert.equal(imported.document.sheets.sheet.cellData[1][1].v,'assignment');assert.equal(imported.issues.length,0);
 });
+test('task block import accepts responsible profiles outside the first row department',async()=>{
+  const source=workbook(),block=source.sheets.sheet.__bold.blocks[0];
+  block.type='tasks';block.task={enabled:true,unit:'marketing',status_map:{}};
+  block.columns[0]={id:'responsible',name:'Responsable',type:'responsible'};
+  source.sheets.sheet.cellData[0][1].v='Responsable';source.sheets.sheet.cellData[1][1].v='';
+  const directory=[{id:'david',employee:'employee',name:'David Urbina',email:'david@bold.gt',unit:'operations'}];
+  const {buffer}=await exportExcel(source,{directory,recalculate:false});
+  const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
+  book.getWorksheet('Costos').getCell('B2').value='David Urbina';
+  const imported=await importExcel(Buffer.from(await book.xlsx.writeBuffer()),{document:source,directory});
+  assert.equal(imported.document.sheets.sheet.cellData[1][1].v,'david');
+  assert.equal(imported.issues.length,0);
+});
+
 test('filter ranges and BOLD criteria survive export and import',async()=>{
   const source=workbook(),ref={startRow:0,endRow:1,startColumn:1,endColumn:4},filterColumns=[{colId:2,filters:{filters:['22.75']}}];
   source.resources=[{name:'SHEET_FILTER_PLUGIN',data:JSON.stringify({sheet:{ref,filterColumns}})}];

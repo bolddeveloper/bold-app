@@ -28,20 +28,22 @@ const mockIdentity = { directory: team_members, assignments: team_members, activ
 
 function ApplicationWorkspace() {
     const core = useCore();
-    const [canSheets, setCanSheets] = useState(false);
+    const permissionContext = `${core.account?.id || "demo"}:${core.activeAssignment?.id || "demo"}`;
+    const [sheetsPermission, setSheetsPermission] = useState(null);
+    const canSheets = sheetsPermission?.context === permissionContext && sheetsPermission.allowed;
     useEffect(() => {
         let alive = true;
-        const update = async () => {try {const allowed = await core.permissions.can("sheets.file.read"); if (alive) {setCanSheets(allowed); if (!allowed && core.account?.id) {window.dispatchEvent(new CustomEvent("bold:sheets:revoked"));sheetsCache.clear(core.account.id).catch(() => {});}}} catch {if (alive) setCanSheets(false);}};
-        setCanSheets(false); update();
+        const update = async () => {try {const allowed = await core.permissions.can("sheets.file.read"); if (alive) {setSheetsPermission({context: permissionContext, allowed}); if (!allowed && core.account?.id) {window.dispatchEvent(new CustomEvent("bold:sheets:revoked"));sheetsCache.clear(core.account.id).catch(() => {});}}} catch {if (alive) setSheetsPermission({context: permissionContext, allowed: false});}};
+        update();
         window.addEventListener("bold:permissions-revision", update);
         return () => {alive = false; window.removeEventListener("bold:permissions-revision", update);};
-    }, [core.account?.id, core.activeAssignment?.id, core.permissions.can]);
+    }, [permissionContext, core.permissions.can]);
     const canAdminister = canUseManagementModule("administration", core.account, core.activeUnit, core.activeAssignment);
     const canManagePermissions = canUseManagementModule("permissions", core.account, core.activeUnit, core.activeAssignment);
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
-        ...(canSheets ? [{id: "sheets", label: "Hojas", icon: "reports", group: "work"}] : []),
+        ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
@@ -51,10 +53,11 @@ function ApplicationWorkspace() {
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,
         suggestions: <SuggestionsModule />,
-        ...(canSheets ? {sheets: <Suspense fallback={<p>Abriendo editor de Hojas…</p>}><SheetsModule/></Suspense>} : {}),
+        ...(canSheets ? {sheets: <Suspense fallback={<p>Abriendo editor de Sheets…</p>}><SheetsModule/></Suspense>} : {}),
         ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };
+    if (sheetsPermission?.context !== permissionContext) return <p role="status">Restaurando vista...</p>;
     return <ShellProvider key={core.activeAssignment?.id || "demo"} contextId={core.activeAssignment?.id || "demo"} navigation={navigation}>
         <TasksModule externalModules={externalModules} />
     </ShellProvider>;

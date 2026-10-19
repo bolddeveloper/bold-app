@@ -177,6 +177,7 @@ export function taskPayload(task, statuses, { create = false, unitId } = {}) {
         if (!status) throw new Error("Selecciona un estado compatible con el equipo responsable.");
         payload.status = status.id;
     }
+    if (task.pipeline) Object.assign(payload, {pipeline:task.pipeline, pipeline_stage:task.pipeline_stage});
     if (create) {
         payload.unit = unit;
         if (task.image_creation_scope) payload.image_creation_scope = task.image_creation_scope;

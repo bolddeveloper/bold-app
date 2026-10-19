@@ -40,6 +40,8 @@ def capture_previous_task_state(sender, instance, **kwargs):
     instance._previous_status_id = previous["status_id"] if previous else None
     instance._previous_unit_id = previous["unit_id"] if previous else None
     instance._previous_deleted_at = previous["deleted_at"] if previous else None
+    from .pipelines import legacy_status_change
+    legacy_status_change(instance)
 
 
 # Dispara el evento de webhook correspondiente segun lo que cambio en la tarea.
@@ -145,3 +147,24 @@ for model in (*TASK_RELATION_EVENTS, Project, *PROJECT_RELATIONS, Tag, TaskStatu
     pre_save.connect(capture_previous_resource_scope, sender=model, dispatch_uid=f"tasks_previous_scope_{model.__name__}")
     post_save.connect(dispatch_resource_changed, sender=model, dispatch_uid=f"tasks_resource_saved_{model.__name__}")
     post_delete.connect(dispatch_resource_changed, sender=model, dispatch_uid=f"tasks_resource_deleted_{model.__name__}")
+
+
+@receiver(pre_save, sender=TaskProject)
+def initialize_pipeline_link(sender, instance, raw=False, **kwargs):
+    if not raw:
+        from .pipelines import initialize_link
+        initialize_link(instance)
+
+
+@receiver(post_save, sender=TaskProject)
+def synchronize_pipeline_link(sender, instance, raw=False, **kwargs):
+    if not raw:
+        from .pipelines import sync_task
+        sync_task(instance.task)
+
+
+@receiver(post_delete, sender=TaskProject)
+def synchronize_removed_pipeline_link(sender, instance, **kwargs):
+    if Task.objects.filter(pk=instance.task_id).exists():
+        from .pipelines import sync_task
+        sync_task(Task.objects.get(pk=instance.task_id))

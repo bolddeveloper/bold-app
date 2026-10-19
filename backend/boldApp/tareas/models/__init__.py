@@ -7,10 +7,12 @@ from .projects import Project, ProjectMember, Section, TaskStatus
 from .tags import Tag, TaskTag
 from .tasks import Task, TaskDependency, TaskProject
 from .webhooks import WebhookDelivery, WebhookEndpoint
-from .workspaces import SharedWorkspaceFolder, PersonalTaskBoard
+from .workspaces import SharedWorkspaceFolder, PersonalTaskBoard, TeamProfile, TeamTaskShare
 
 
 __all__ = [
+    "Pipeline",
+    "PersonalPipelineTask",
     "ActivityLog",
     "Attachment",
     "Comment",
@@ -19,6 +21,8 @@ __all__ = [
     "Section",
     "SharedWorkspaceFolder",
     "PersonalTaskBoard",
+    "TeamProfile",
+    "TeamTaskShare",
     "Tag",
     "Task",
     "TaskDependency",
@@ -30,3 +34,5 @@ __all__ = [
     "WebhookEndpoint",
 ]
 
+
+from .pipelines import Pipeline, PersonalPipelineTask

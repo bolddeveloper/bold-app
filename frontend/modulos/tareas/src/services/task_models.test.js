@@ -177,3 +177,9 @@ test("optimistic section move survives stale data and restores original on failu
     assert.equal(projectTask(rollbackPendingTaskChange(visible, mutation)[0], "project").section, "before");
     assert.equal(original.taskProjects[0].sectionId, "before");
 });
+
+test("task payload retains contextual pipeline without changing legacy status mapping", () => {
+    const payload = taskPayload({title: "Task", unitId: "u1", status: "Pending", pipeline: "flow", pipeline_stage: "stage"}, [{id: "s1", label: "Pending", unitId: "u1"}]);
+    assert.equal(payload.pipeline, "flow");
+    assert.equal(payload.pipeline_stage, "stage");
+});

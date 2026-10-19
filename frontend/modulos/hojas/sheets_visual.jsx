@@ -15,7 +15,8 @@ function PersonCell({
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
     [position, setPosition] = useState({}),
-    reference = useRef(null);
+    reference = useRef(null),
+    menu = useRef(null);
   const selected = String(value || '').split(',').filter(Boolean),
     choices = samePerson(people, unit),
     names = selected.map(id => people.find(person => person.id === id)?.name || 'Persona no disponible');
@@ -28,6 +29,7 @@ function PersonCell({
   }, []);
   useEffect(() => {
     if (!open) return;
+    menu.current.showPopover();
     const hide = event => {
       if (!reference.current?.contains(event.target)) setOpen(false);
     };
@@ -40,13 +42,15 @@ function PersonCell({
   }, [open]);
   return <div className="sheets_person_select" ref={reference}><button className="sheets_person_value" disabled={disabled} onClick={() => {
       const rect = reference.current.getBoundingClientRect();
+      const width=Math.min(260, window.innerWidth-16), maxHeight=Math.min(300, window.innerHeight-16);
       setPosition({
-        left: Math.min(rect.left, window.innerWidth - 300),
-        top: rect.bottom,
-        maxHeight: Math.max(120, window.innerHeight - rect.bottom - 16)
+        left: Math.max(8, Math.min(rect.left, window.innerWidth-width-8)),
+        top: Math.max(8, Math.min(rect.bottom+4, window.innerHeight-maxHeight-8)),
+        width,
+        maxHeight
       });
       setOpen(old => !old);
-    }} aria-expanded={open}>{names.length ? names.join(', ') : 'Sin asignar'}<ChevronDown size={13} /></button>{open && <div className="sheets_person_menu" style={position}><label><Search size={15} /><input autoFocus placeholder="Buscar persona" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+    }} aria-expanded={open}>{names.length ? names.join(', ') : 'Sin asignar'}<ChevronDown size={13} /></button>{open && <div className="sheets_person_menu" popover="manual" ref={menu} style={position}><label><Search size={15} /><input autoFocus placeholder="Buscar persona" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
           if (event.key === 'Escape') {
             event.stopPropagation();
             setOpen(false);
@@ -57,7 +61,7 @@ function PersonCell({
       }}>Sin asignar</button>{choices.filter(person => `${person.name} ${person.email}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(person => <button key={person.employee} onClick={() => {
         save(multiple ? (selected.includes(person.id) ? selected.filter(id => id !== person.id) : [...selected, person.id]).join(',') : person.id);
         if (!multiple) setOpen(false);
-      }} aria-pressed={selected.includes(person.id)}><span className="sheets_initials">{person.name.split(' ').map(word => word[0]).slice(0, 2).join('')}</span><span>{person.name}<small>{person.department}</small></span>{selected.includes(person.id) && '✓'}</button>)}</div>}</div>;
+      }} aria-pressed={selected.includes(person.id)}><span className="sheets_person_option" title={`${person.name} · ${person.department || ''}`}>{person.name}</span>{selected.includes(person.id) && <span className="sheets_person_check" aria-hidden="true">✓</span>}</button>)}</div>}</div>;
 }
 function InputCell({
   value,
@@ -125,7 +129,7 @@ function VisualCell({
     }
   }]);
   const disabled = !file.can.edit || ['responsible', 'collaborators'].includes(column.type) && !file.can.assign;
-  if (['responsible', 'collaborators'].includes(column.type)) return <PersonCell value={value} multiple={column.type === 'collaborators'} people={directory.people} unit={block.task.enabled ? block.task.unit : ''} disabled={disabled} save={save} />;
+  if (['responsible', 'collaborators'].includes(column.type)) return <PersonCell value={value} multiple={column.type === 'collaborators'} people={directory.people} unit={block.task.enabled && block.type !== 'tasks' ? block.task.unit : ''} disabled={disabled} save={save} />;
   if (column.type === 'dropdown') return <select className="sheets_cell_select" disabled={disabled} value={value} style={{
     color: column.options?.find(option => option.value === value)?.color
   }} onChange={event => save(event.target.value)}><option value="">Seleccionar</option>{(column.options || []).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>;
@@ -241,7 +245,7 @@ export function VisualSheet({
               sheet,
               block
             })}><Settings size={16} /></button><button aria-label={`Eliminar bloque ${block.title}`} onClick={async () => {
-              if (await confirmBold('¿Eliminar el bloque? Sus tareas se conservan y se desvinculan.')) queue([{
+              if (await confirmBold('¿Eliminar el bloque y sus tareas relacionadas? Las tareas se enviarán a la papelera.')) queue([{
                 kind: 'block.remove',
                 sheet: sheet.id,
                 block: block.id

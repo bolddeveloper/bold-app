@@ -1,3 +1,5 @@
+import {prepareBlockTables} from './block_tables.mjs';
+export {prepareBlockTables};
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import JSZip from 'jszip';
@@ -125,6 +127,9 @@ export function importTables(book, document, appearance, originalResources = [])
       (tables[sheet.id] ||= {tables:[],tableFilteredOutRows:[]}).tables.push({id,name,range,columns,options:{showHeader:header,showFooter:false,...(tableStyleId ? {tableStyleId} : {})}, filters:saved?.filters || {tableColumnFilterList:[]}, meta:{...saved?.meta,excelStyleName:styleName || '',excelName:name,excelRef:table.getAttribute('ref'),showRowStripes:info?.getAttribute('showRowStripes') === '1',showColumnStripes:info?.getAttribute('showColumnStripes') === '1',showFirstColumn:info?.getAttribute('showFirstColumn') === '1',showLastColumn:info?.getAttribute('showLastColumn') === '1'}});
     }
   }
+  for (const [sheetId,data] of Object.entries(previous)) if (document.sheets[sheetId] && data.disabledBlocks?.length) {
+    (tables[sheetId] ||= {tables:[],tableFilteredOutRows:[]}).disabledBlocks=data.disabledBlocks;
+  }
   document.resources = (document.resources || []).filter(item => !['SHEET_TABLE_PLUGIN','SHEET_RANGE_THEME_MODEL_PLUGIN'].includes(item.name));
   if (Object.keys(tables).length) document.resources.push({name:'SHEET_TABLE_PLUGIN',data:JSON.stringify(tables)});
   const unrelatedStyles = Object.fromEntries(Object.entries(oldThemes.rangeThemeStyleMapJson || {}).filter(([name]) => !name.startsWith('table-excel-')));
@@ -133,28 +138,6 @@ export function importTables(book, document, appearance, originalResources = [])
   if (Object.keys(themes.rangeThemeStyleMapJson).length || Object.keys(themes.rangeThemeStyleRuleMap).length) document.resources.push({name:'SHEET_RANGE_THEME_MODEL_PLUGIN',data:JSON.stringify(themes)});
 }
 
-export function prepareBlockTables(document) {
-  const resource=document.resources?.find(item=>item.name==='SHEET_TABLE_PLUGIN') || {name:'SHEET_TABLE_PLUGIN',data:'{}'};
-  const data=JSON.parse(resource.data || '{}');
-  for (const sheet of Object.values(document.sheets)) {
-    const blocks=sheet.__bold?.blocks || [],saved=data[sheet.id];
-    if (saved) saved.tables=saved.tables.filter(table=>!table.meta?.boldBlock || blocks.some(block=>block.id===table.meta.boldBlock && block.rowIds.length));
-    for (const block of blocks) {
-      if (['text','summary'].includes(block.type) || !block.rowIds.length) continue;
-      const range={startRow:block.startRow,endRow:block.startRow+block.rowIds.length,startColumn:1,endColumn:block.columns.length};
-      const tables=(data[sheet.id] ||= {tables:[],tableFilteredOutRows:[]}).tables;
-      const name='BOLD_'+block.id.replace(/[^a-zA-Z0-9_]/g,'_'),existing=tables.find(table=>table.meta?.boldBlock===block.id || table.name===name);
-      // Imported tables retain their own range and design; never add an overlapping table.
-      if (!existing && tables.some(table=>table.range.startRow<=range.endRow && table.range.endRow>=range.startRow && table.range.startColumn<=range.endColumn && table.range.endColumn>=range.startColumn)) continue;
-      const columns=block.columns.map(column=>({...(existing?.columns?.find(item=>item.id===column.id) || {id:column.id,dataType:'string',formula:'',meta:{},style:{}}),displayName:column.name}));
-      if (existing) Object.assign(existing,{range,columns,meta:{...existing.meta,boldBlock:block.id}});
-      else tables.push({id:'bold-table-'+block.id,name,range,columns,options:{showHeader:true,showFooter:false,tableStyleId:'table-default-0'},filters:{tableColumnFilterList:[]},meta:{boldBlock:block.id,excelStyleName:'TableStyleMedium2',showRowStripes:true}});
-    }
-  }
-  if (!Object.keys(data).length) return;
-  resource.data=JSON.stringify(data);
-  if (!document.resources?.includes(resource)) (document.resources ||= []).push(resource);
-}
 
 export function exportTables(worksheet, document, sheetId) {
   const resource = document.resources?.find(item => item.name === 'SHEET_TABLE_PLUGIN');

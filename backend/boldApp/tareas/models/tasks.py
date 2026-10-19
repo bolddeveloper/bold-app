@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 
 from boldApp.core.models import OrganizationalUnit, PositionAssignment
 
@@ -53,11 +53,17 @@ class Task(UUIDPrimaryKeyModel, SoftDeleteModel):
         ]
         constraints = [models.UniqueConstraint(fields=["recurrence_source", "recurrence_date"], name="unique_task_occurrence")]
 
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            return super().save(*args, **kwargs)
+
     def __str__(self):
         return self.title
 
 
 class TaskProject(models.Model):
+    pipeline = models.ForeignKey("Pipeline", null=True, blank=True, on_delete=models.PROTECT, related_name="project_tasks")
+    pipeline_stage = models.UUIDField(null=True, blank=True)
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="task_projects")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="task_projects")
     section = models.ForeignKey(

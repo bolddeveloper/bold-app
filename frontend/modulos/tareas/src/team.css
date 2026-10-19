@@ -1,0 +1,129 @@
+.task_page_title_sr {position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
+.tasks_module:has(>.task_page_title_sr) {padding-top:14px}
+.task_tabs_row {flex-wrap:wrap;min-width:0}
+.task_tabs_row .task_compact_actions {margin-left:auto;gap:8px;width:auto;flex-wrap:wrap}
+.task_tabs_row .task_compact_actions .view_switch_toggle {width:107.8px;height:30.8px;min-height:0;margin:0;border-radius:22px}
+.task_tabs_row .task_compact_actions .view_switch_toggle .toggle_side {height:100%;min-height:0}
+.task_tabs_row .task_compact_actions .view_switch_toggle svg {width:18.2px;height:15.4px}
+.projects_module_header_compact {justify-content:flex-end;margin-bottom:14px}
+.task_project_header_compact {justify-content:flex-end;margin-bottom:12px}
+.team_share_eye {display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;padding:5px;border:0;border-radius:6px;background:transparent;color:var(--text-muted,#7b8392);cursor:pointer;transition:background 160ms,color 160ms}
+.team_share_eye.is_shared {color:var(--accent,#cc2536);background:var(--accent-soft,rgba(204,37,54,.1))}
+.team_share_eye:hover:not(:disabled) {background:rgba(127,127,127,.16)}
+.team_share_eye:disabled {opacity:.45;cursor:default}
+.task_name_cell>.team_share_eye {margin-left:auto;flex-shrink:0}
+.team_panel {--team-bg:var(--bold_surface,#fff);--team-card:var(--bold_surface_soft,#f7f8fa);--team-line:var(--bold_line,#dce1e8);--team-text:var(--bold_text,#242b36);--team-muted:color-mix(in srgb,var(--bold_muted,#697586) 80%,var(--team-text));--team-hover:color-mix(in srgb,var(--team-text) 7%,var(--team-bg));--team-selected:color-mix(in srgb,var(--bold_red,#ef1f2d) 10%,var(--team-bg));display:grid;grid-template-columns:198px minmax(0,1fr);min-height:min(560px,70dvh);min-width:0;max-width:100%;background:var(--team-bg);color:var(--team-text);border:1px solid var(--team-line);border-radius:12px;color-scheme:light;box-sizing:border-box}
+.theme_dark .team_panel {color-scheme:dark}
+.team_panel button:where(:not(.custom_datepicker_popover *)),.team_panel input {font:inherit;color:inherit}
+.team_panel button:where(:not(.custom_datepicker_popover *)) {cursor:pointer;background:transparent;border:1px solid var(--team-line);border-radius:7px;padding:7px 10px;transition:background 160ms,border-color 160ms,color 160ms,transform 160ms}
+.team_panel button:where(:not(.custom_datepicker_popover *)):hover:not(:disabled) {background:var(--team-hover)}
+.team_panel button:where(:not(.custom_datepicker_popover *)):active:not(:disabled) {transform:scale(.98)}
+.team_panel button:where(:not(.custom_datepicker_popover *)):disabled {opacity:.5;cursor:default}
+.team_panel :is(button,input,summary):focus-visible,.team_share_eye:focus-visible,.team_calendar_sharing input:focus-visible {outline:2px solid #4f7bd9;outline-offset:3px}
+.team_panel h2 {font-size:16px;margin:0 0 4px}
+.team_panel h3 {font-size:13px;margin:14px 0 7px}
+.team_panel p {font-size:12px;line-height:1.5;color:var(--team-muted)}
+.team_panel :is(h2,h3,p,summary,label,dd,a) {overflow-wrap:anywhere;min-width:0}
+.team_directory {padding:16px 10px;min-width:0;border-right:1px solid var(--team-line);overflow:auto;max-height:calc(100dvh - 155px);scrollbar-width:thin}
+.team_directory>h2 {display:flex;align-items:center;gap:8px;padding:0 8px 12px;font-size:14px}
+.team_directory details {margin:3px 0 8px;interpolate-size:allow-keywords}
+.team_directory summary {display:flex;align-items:center;gap:8px;list-style:none;padding:9px 8px;cursor:pointer;font-size:12px;color:var(--team-muted);border-radius:6px;transition:background 160ms,color 160ms}
+.team_directory summary::-webkit-details-marker {display:none}
+.team_directory summary::before {content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform 180ms;flex:0 0 5px}
+.team_directory details[open]>summary::before {transform:rotate(45deg)}
+.team_directory summary:hover {background:var(--team-hover);color:var(--team-text)}
+.team_directory summary>span {margin-left:auto;font-size:10px;opacity:.8}
+.team_directory details::details-content {block-size:0;overflow:hidden;content-visibility:hidden;transition:block-size 200ms ease,content-visibility 200ms allow-discrete}
+.team_directory details[open]::details-content {block-size:auto;content-visibility:visible}
+.team_directory details button {display:flex;align-items:center;gap:8px;width:100%;border:0;text-align:left;font-size:13px;margin:2px 0;min-height:36px;padding:6px 9px}
+.team_directory button[aria-pressed=true] {background:var(--team-selected);color:var(--team-text);box-shadow:inset 2px 0 #f34a54}
+.team_person_initial {width:23px;height:23px;border-radius:50%;background:#465471;color:#fff;display:grid;place-items:center;flex-shrink:0;font-size:10px}
+.team_workspace {padding:16px 18px;min-width:0;max-width:100%;box-sizing:border-box}
+.team_profile_bar {display:flex;align-items:center;justify-content:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+.team_profile_header {display:flex;align-items:center;gap:14px;min-width:0;flex:0 1 auto}
+.team_profile_header p {margin:0}
+.team_profile_header>button {padding:6px;flex-shrink:0;border:0;color:var(--team-muted)}
+.team_profile_tabs {display:flex;gap:3px;align-items:center;flex-wrap:wrap;background:var(--team-card);padding:3px;border-radius:8px;font-size:12px}
+.team_profile_tabs>button {border:0;min-height:32px}
+.team_profile_tabs>button[aria-pressed=true] {background:var(--team-bg);color:var(--team-text);box-shadow:0 1px 3px #0002}
+.team_profile_tabs .team_meeting_date {font-size:12px;display:flex;align-items:center;gap:6px;padding-left:6px}
+.team_meeting_date .calendar_date_field {min-width:0;max-width:100%}
+.team_profile_tabs .team_meeting_date .bold_date_trigger_btn {min-height:32px;padding:5px 8px;font-size:12px;background:var(--team-bg);color:var(--team-text);border-color:var(--team-line)}
+.team_board_split {display:flex;gap:16px;min-width:0;align-items:flex-start}
+.team_named_board {flex:1 1 0;min-width:0;max-width:100%;box-sizing:border-box}
+.team_named_board>header {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 12px;font-size:11px;color:var(--team-muted)}
+.team_named_board>header>div {display:flex;align-items:baseline;gap:8px;min-width:0}
+.team_named_board>header h3 {font-size:14px;color:var(--team-text);margin:0;overflow-wrap:anywhere}
+.team_named_board>header>span {flex-shrink:0;background:var(--team-card);padding:3px 7px;border-radius:20px}
+.team_board_caption {font-size:11px;color:var(--team-muted)}
+.team_panel .board_view {display:flex;min-width:0;width:100%;max-width:100%;gap:16px;overflow:auto;padding:0 2px 12px;margin:0;box-sizing:border-box;scrollbar-color:var(--team-muted) transparent;scrollbar-width:thin;max-height:max(270px,calc(100dvh - 265px));overscroll-behavior:contain}
+.team_panel .board_view_readonly .board_column {display:flex;flex-direction:column;flex:0 0 min(310px,100%);width:min(310px,100%);min-width:0;max-width:310px;height:max(300px,calc(100dvh - 290px));max-height:680px;box-sizing:border-box;padding:16px;background:transparent;border:0;border-radius:14px;box-shadow:none;overflow:hidden}
+.team_panel .board_view_readonly .board_column>header {display:flex;align-items:center;justify-content:flex-start;flex-shrink:0;min-height:42px;padding:8px 9px 16px;margin:0;background:transparent;color:var(--team-text)}
+.team_panel .board_view_readonly .board_column h2 {font-size:15px;line-height:1.4;margin:0;font-weight:700}
+.team_panel .board_view_readonly .board_card_stack {display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:12px;min-width:0;min-height:0;padding:4px 2px 10px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--team-muted) transparent}
+.team_panel .board_view_readonly .board_card {display:grid;align-self:start;gap:12px;min-width:0;overflow-wrap:anywhere;margin:0;padding:14px;border-radius:14px;background:var(--team-card);border:1px solid var(--team-line);color:var(--team-text);box-shadow:0 2px 8px rgba(0,0,0,.08);animation:team_card_enter 200ms ease both;animation-delay:calc(var(--team-card-index,0)*22ms);transition:border-color 160ms,box-shadow 160ms,transform 160ms}
+.team_panel .board_view_readonly .board_card:hover {border-color:var(--team-muted);box-shadow:0 6px 16px rgba(0,0,0,.18);transform:translateY(-1px)}
+.team_panel .board_view_readonly .board_card:focus-within {border-color:#4f7bd9}
+.team_panel .board_view_readonly .board_card_topline {display:flex;align-items:center;gap:8px;min-height:18px;font-size:12px;color:var(--team-muted)}
+.team_status_dot {width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+.team_panel .board_view_readonly .board_title_button {display:flex;align-items:flex-start;gap:8px;border:0;background:transparent;padding:0;margin:0;color:var(--team-text);line-height:1.45}
+.team_panel .board_view_readonly .board_title_button:hover {background:transparent}
+.team_panel .board_view_readonly .board_title_text {color:var(--team-text);font-size:14px;font-weight:600;line-height:1.45;white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.team_panel .board_view_readonly .board_card p {font-size:13px;line-height:1.5;color:var(--team-muted);margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.team_panel .board_view_readonly .board_card footer {display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--team-muted);font-size:12px;margin:0}
+.team_panel .board_view_readonly .board_card footer>span {min-width:0;overflow-wrap:anywhere}
+.team_panel .board_view_readonly .board_card footer .avatar_small {width:30px;height:30px;flex-shrink:0;border:1px solid var(--team-line)}
+.team_panel .board_view_readonly .board_card footer .team_readonly_avatar {display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--team-hover);color:var(--team-text);font-size:11px}
+.team_panel .board_view_readonly .board_card .task_badge {min-width:64px;padding:6px 10px;font-size:11px;line-height:1.3;border-radius:6px;margin-left:auto;text-align:center}
+.team_meetings {display:grid;gap:9px;max-width:640px}
+.team_meetings article {display:flex;align-items:center;gap:12px;background:var(--team-card);border:1px solid var(--team-line);padding:12px 14px;border-radius:9px;animation:team_card_enter 200ms ease both;transition:border-color 160ms,background 160ms}
+.team_meetings article:hover {border-color:var(--team-muted);background:var(--team-hover)}
+.team_meetings h3,.team_meetings p {margin:0 0 3px}
+.team_empty {display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 16px;min-height:240px;color:var(--team-muted)}
+.team_sharing_error {padding:8px 16px;color:var(--text-primary,#a51a2b);font-size:13px}
+.team_calendar_sharing {display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;max-width:100%;min-width:0}
+.team_calendar_sharing label {display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;min-height:34px;padding:5px 9px;border:1px solid var(--bold_line,#dde5ee);border-radius:8px;background:var(--bold_surface_soft,#f6f8fb);box-sizing:border-box}
+.team_calendar_sharing label>span {font-size:12px;letter-spacing:0;color:var(--bold_text,#102d48);font-weight:500}
+.team_calendar_sharing input {appearance:none;position:relative;width:30px;height:18px;flex:0 0 30px;border:0;border-radius:20px;margin:0;background:#687487;cursor:pointer;transition:background 180ms}
+.team_calendar_sharing input::after {content:"";position:absolute;width:12px;height:12px;left:3px;top:3px;border-radius:50%;background:white;transition:transform 180ms}
+.team_calendar_sharing input:checked {background:var(--bold_red,#ef1f2d)}
+.team_calendar_sharing input:checked::after {transform:translateX(12px)}
+.team_calendar_sharing input:disabled {opacity:.5;cursor:default}
+.team_calendar_sharing small {font-size:11px;max-width:280px;overflow-wrap:anywhere}
+@keyframes team_card_enter {from {opacity:0;transform:translateY(5px)} to {opacity:1;transform:translateY(0)}}
+@media(max-width:700px) {.team_panel {grid-template-columns:minmax(0,1fr)}.team_directory {max-height:210px;border-right:0;border-bottom:1px solid var(--team-line);padding:12px}.team_workspace {padding:14px}.team_profile_tabs {width:100%;box-sizing:border-box}.team_profile_tabs .team_meeting_date {margin-left:auto}.team_panel button:where(:not(.custom_datepicker_popover *)),.team_directory summary {min-height:40px}.team_panel .board_column {flex-basis:230px;max-width:290px}.team_share_eye {width:36px;height:36px;flex-basis:36px}.task_tabs_row .task_compact_actions .primary_button {display:none}}
+@media(prefers-reduced-motion:reduce) {.team_panel *,.team_panel *::before,.team_panel *::after,.team_panel details::details-content,.team_calendar_sharing *,.team_calendar_sharing *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}.team_panel .board_card:hover {transform:none}}
+
+/* Equipo is a sibling entry in task navigation, with its own workspace. */
+.team_sidebar_button {margin-top:2px}
+.team_module {min-width:0;max-width:100%}
+.team_module .team_panel {grid-template-columns:208px minmax(0,1fr);min-height:min(680px,calc(100dvh - 125px));border-radius:16px;box-shadow:0 4px 20px rgb(0 0 0 / 3%)}
+.team_module .team_directory {padding:18px 12px;max-height:calc(100dvh - 130px);scrollbar-gutter:stable}
+.team_module .team_directory>h2 {font-size:14px;letter-spacing:.01em;padding:0 8px 18px;margin:0}
+.team_module .team_directory details {padding-bottom:6px;margin:0 0 8px;border-bottom:1px solid color-mix(in srgb,var(--team-line) 65%,transparent)}
+.team_module .team_directory details:last-child {border-bottom:0}
+.team_module .team_directory summary {font-weight:600;min-height:38px;box-sizing:border-box}
+.team_module .team_directory details button {min-height:42px;gap:9px;border-radius:8px;padding:7px 9px;font-size:12px;line-height:1.4}
+.team_module .team_person_initial {width:26px;height:26px;background:color-mix(in srgb,var(--team-muted) 18%,var(--team-bg));color:var(--team-text);font-weight:600}
+.team_module .team_directory button[aria-pressed=true] .team_person_initial {background:var(--bold_red);color:white}
+.team_module .team_workspace {padding:20px;min-width:0}
+.team_module .team_profile_bar {padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--team-line);gap:12px;align-items:center}
+.team_module .team_profile_header {flex:1 1 180px}
+.team_module .team_profile_header h2 {font-size:17px;line-height:1.35;margin-bottom:4px}
+.team_module .team_profile_header p {font-size:11px}
+.team_module .team_profile_header>button {width:32px;height:32px;display:grid;place-items:center}
+.team_module .team_profile_tabs {margin-left:auto;max-width:100%;box-sizing:border-box;border:1px solid var(--team-line);border-radius:10px}
+.team_module .team_profile_tabs>button {min-height:32px;padding:6px 12px;border-radius:7px;font-weight:500}
+.team_module .team_panel .board_view_readonly .board_column {border:1px solid var(--team-line);box-shadow:none}
+.team_module .team_named_board>header {padding:0 2px 12px}
+.team_module .team_meetings {max-width:760px}
+.team_module .team_meetings article {padding:15px 16px;border-radius:12px;gap:14px;box-shadow:0 2px 7px rgb(0 0 0 / 3%)}
+.team_module .team_meetings h3 {font-size:13px;line-height:1.45}
+.team_module .team_empty {border:1px dashed var(--team-line);border-radius:12px;background:var(--team-card);min-height:220px;box-sizing:border-box}
+@media(max-width:850px){.team_module .team_panel{grid-template-columns:175px minmax(0,1fr)}.team_module .team_workspace{padding:16px}.team_module .team_profile_tabs{margin-left:0}}
+@media(max-width:700px){.team_module .team_panel{grid-template-columns:minmax(0,1fr);min-height:0}.team_module .team_directory{max-height:200px;padding:14px 10px}.team_module .team_directory>h2{padding-bottom:10px}.team_module .team_workspace{padding:14px 12px}.team_module .team_profile_header{flex-basis:100%}.team_module .team_profile_tabs{width:auto}.team_module .team_profile_bar{margin-bottom:14px;padding-bottom:14px}.team_module .team_directory details button,.team_module .team_directory summary{min-height:44px}.team_module .team_meetings article{padding:12px}.team_module .team_profile_tabs .team_meeting_date{flex-wrap:wrap;padding:4px}.team_module .team_panel .board_view_readonly .board_column{padding:12px}}
+
+/* Saving blocks duplicate clicks without dimming every sharing control. */
+.team_share_eye.is_syncing:disabled {opacity:1}
+.team_share_eye.is_syncing:disabled:hover {background:rgba(127,127,127,.16)}
+.team_panel .board_view_readonly .board_column>header>.team_status_dot {flex:0 0 8px;width:8px;height:8px;min-width:0;min-height:0;padding:0;border-radius:50%}

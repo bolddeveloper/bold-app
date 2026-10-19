@@ -1,4 +1,7 @@
 /* Calendario: navegación, vistas y edición de eventos. */
+.bold_calendar .bold_calendar_header_compact {flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.bold_calendar .bold_calendar_header_compact>p {display:flex;align-items:center;gap:7px;font-size:12px;margin:0;min-width:0;overflow-wrap:anywhere}
+.bold_calendar_header_compact>.team_calendar_sharing {margin-left:auto}
 .bold_calendar {
     --cal-surface: var(--bold_surface, #fff);
     --cal-soft: var(--bold_surface_soft, #f6f8fb);

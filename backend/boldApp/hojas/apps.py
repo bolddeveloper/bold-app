@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class HojasConfig(AppConfig):
     name = "boldApp.hojas"
     label = "boldApp_hojas"
-    verbose_name = "BOLD - Hojas"
+    verbose_name = "BOLD - Sheets"
 
     def ready(self):
         from . import signals  # noqa: F401

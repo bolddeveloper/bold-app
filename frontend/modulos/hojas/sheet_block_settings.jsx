@@ -9,7 +9,7 @@ const money=['USD','HNL','GTQ','MXN','EUR'];
 export function BlockConfiguration({sheet,block,directory,close,save,canAssign}) {
   const [draft,setDraft]=useState(()=>clone(block)),[error,setError]=useState('');
   const costs=['costs','comparison'].includes(draft.type),tasks=draft.task.enabled || draft.type==='tasks';
-  const statuses=directory.statuses.filter(status=>!status.unit || status.unit===draft.task.unit);
+  const statuses=directory.statuses.filter(status=>draft.type==='tasks' || !status.unit || status.unit===draft.task.unit);
   const change=(key,value)=>setDraft(old=>({...old,[key]:value}));
   const columnChange=(id,data)=>setDraft(old=>({...old,columns:old.columns.map(column=>column.id===id?{...column,...data}:column)}));
   function submit(event) {
@@ -17,7 +17,7 @@ export function BlockConfiguration({sheet,block,directory,close,save,canAssign})
     if (!draft.title.trim() || draft.columns.some(column=>!column.name.trim())) return setError('Pon un nombre al bloque y a cada columna.');
     if (new Set(draft.columns.map(column=>column.name.trim().toLocaleLowerCase())).size!==draft.columns.length) return setError('Cada columna necesita un nombre diferente.');
     if (draft.columns.some(column=>column.type==='dropdown' && (!column.options?.length || column.options.some(option=>!option.label.trim())))) return setError('Añade al menos una opción con nombre a cada lista.');
-    if (draft.task.enabled && (!draft.task.unit || draft.columns.find(column=>column.id==='status')?.options?.some(option=>!draft.task.status_map[option.value]))) return setError('En «Crear tareas», elige departamento y relaciona cada estado.');
+    if (draft.type!=='tasks' && draft.task.enabled && (!draft.task.unit || draft.columns.find(column=>column.id==='status')?.options?.some(option=>!draft.task.status_map[option.value]))) return setError('En «Crear tareas», elige departamento y relaciona cada estado.');
     const configuration=Object.fromEntries(['title','columns','currency','tax','discount','task','conversion'].map(key=>[key,draft[key] ?? (key==='conversion'?{}:draft[key])]));
     save({kind:'block.configure',sheet:sheet.id,block:block.id,configuration});
     close();
@@ -53,13 +53,14 @@ export function BlockConfiguration({sheet,block,directory,close,save,canAssign})
         const enabled=event.target.checked;
         setDraft(old=>({...old,task:{...old.task,enabled},columns:enabled?[...old.columns,...clone(taskColumns.filter(column=>!old.columns.some(existing=>existing.id===column.id)))]:old.columns}));
       }}/>Crear tareas al asignar personas</label>}
-      {tasks && <><label>Departamento<select value={draft.task.unit || ''} onChange={event=>change('task',{...draft.task,unit:event.target.value,status_map:{}})}><option value="">{draft.type==='tasks' && !draft.task.enabled?'Automático según la persona':'Elige departamento'}</option>{directory.units.map(unit=><option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
-        {!draft.task.unit && !draft.task.enabled && <p>El departamento y los estados se eligen al asignar la primera persona.</p>}
-        {(draft.task.enabled || draft.task.unit) && <details className="sheets_settings_advanced" open={draft.task.enabled || undefined}><summary>Relacionar estados<ChevronDown size={16}/></summary><p>Elige qué estado tendrá la tarea al cambiar esta lista.</p>{draft.columns.find(column=>column.id==='status')?.options?.map(option=><label key={option.value} className="sheets_status_mapping"><span><i style={{background:option.color}}/>{option.label}</span><select value={draft.task.status_map[option.value] || ''} onChange={event=>change('task',{...draft.task,status_map:{...draft.task.status_map,[option.value]:event.target.value}})}><option value="">{draft.task.enabled?'Elige estado':'Automático'}</option>{statuses.map(status=><option key={status.id} value={status.id}>{status.name}</option>)}</select></label>)}</details>}
+      {tasks && draft.type==='tasks' && <p>Cada fila usa el departamento de su responsable. Sin responsable, usa el del primer colaborador.</p>}
+      {tasks && <>{draft.type!=='tasks' && <label>Departamento<select value={draft.task.unit || ''} onChange={event=>change('task',{...draft.task,unit:event.target.value,status_map:{}})}><option value="">Elige departamento</option>{directory.units.map(unit=><option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>}
+        {draft.type!=='tasks' && !draft.task.unit && !draft.task.enabled && <p>El departamento y los estados se eligen al asignar la primera persona.</p>}
+        {(draft.type==='tasks' || draft.task.enabled || draft.task.unit) && <details className="sheets_settings_advanced" open={draft.task.enabled || undefined}><summary>Relacionar estados<ChevronDown size={16}/></summary><p>Elige qué estado tendrá la tarea al cambiar esta lista. En bloques Tareas se usa su equivalente por categoría en el departamento de cada fila.</p>{draft.columns.find(column=>column.id==='status')?.options?.map(option=><label key={option.value} className="sheets_status_mapping"><span><i style={{background:option.color}}/>{option.label}</span><select value={draft.task.status_map[option.value] || ''} onChange={event=>change('task',{...draft.task,status_map:{...draft.task.status_map,[option.value]:event.target.value}})}><option value="">{draft.type==='tasks' || !draft.task.enabled?'Automático':'Elige estado'}</option>{statuses.map(status=><option key={status.id} value={status.id}>{status.name}</option>)}</select></label>)}</details>}
       </>}
     </fieldset>
     {!canAssign && <p>Necesitas permiso para cambiar la conexión con tareas.</p>}
-    <small>Quitar una fila conserva su tarea.</small>{error && <p className="sheets_error" role="alert">{error}</p>}
+    <small>Quitar una fila envía su tarea a la papelera.</small>{error && <p className="sheets_error" role="alert">{error}</p>}
     <footer><button type="button" onClick={close}>Cancelar</button><button type="submit" className="sheets_primary">Guardar ajustes</button></footer>
   </form></SheetDialog>;
 }

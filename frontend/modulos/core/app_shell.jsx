@@ -22,12 +22,12 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const storageKey = `bold_shell_module:${contextId}`;
     const [active_module, set_module] = useState(() => {
         let saved;
-        try { saved = sessionStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
+        try { saved = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
         return entranceModule(navigation, saved);
     });
     useEffect(() => {
         if (isShellModuleAllowed(active_module, navigation)) {
-            try { sessionStorage.setItem(storageKey, active_module); } catch { /* No authorization is stored here. */ }
+            try { localStorage.setItem(storageKey, active_module); sessionStorage.setItem(storageKey, active_module); } catch { /* No authorization is stored here. */ }
         }
     }, [active_module, storageKey, navigation]);
     const [is_sidebar_open, set_is_sidebar_open] = useState(false);

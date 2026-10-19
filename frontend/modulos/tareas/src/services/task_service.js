@@ -1,6 +1,7 @@
+import {confirmBold} from "../../../core/shared/bold_dialog.js";
 import { api } from "./tasks_api.js";
 import { notificationsApi } from "../../../notificaciones/notifications_api.js";
-import { is_using_real_backend } from "../../../core/http_client.js";
+import { is_using_real_backend, http } from "../../../core/http_client.js";
 import { normalizeProject, normalizeStatus, normalizeSection, normalizeTask, normalizeTaskProject, taskPayload } from "./task_models.js";
 
 export async function loadTaskData({ directory, units }, { catalogCache, notificationClient = notificationsApi } = {}) {
@@ -84,6 +85,10 @@ export async function saveTaskDraft(draft, data, original = null, { onCreated } 
     draft.attachmentBaseline = (draft.attachmentBaseline || original?.attachments || []).map(item => ({ ...item }));
     const unitId = draft.unitId || original?.unitId;
     const payload = taskPayload(draft, data.statuses, { create: !original, unitId });
+    const newProjectLink = original && draft.project_id && !original.taskProjects.some(item => item.projectId === draft.project_id);
+    if (newProjectLink && original.taskProjects.length && !await confirmPipelineLink()) throw new Error("No se agregó la tarea al otro proyecto.");
+    if (newProjectLink) {delete payload.pipeline;delete payload.pipeline_stage;}
+
     if (original && original.unitId !== unitId) {
         await api.moveTask(original.id, { unit: unitId, status: payload.status, assignee_assignment: payload.assignee_assignment || null });
     }
@@ -95,7 +100,7 @@ export async function saveTaskDraft(draft, data, original = null, { onCreated } 
         if (original && draft.project_id) {
             const link = original.taskProjects.find(item => item.projectId === draft.project_id);
             const section = draft.section === "unsectioned" ? null : draft.section || null;
-            if (!link) await api.create("task-projects", { task: dto.id, project: draft.project_id, section, position: "1000" });
+            if (!link) await api.create("task-projects", { task: dto.id, project: draft.project_id, section, position: "1000", ...(draft.pipeline ? {pipeline:draft.pipeline,pipeline_stage:draft.pipeline_stage} : {}) });
             else if (link.sectionId !== section) await api.updateTaskProjectLink(link.id, { section, position: draft.position || link.position });
         }
         await saveSubtasks({ id: dto.id, unitId: dto.unit }, draft.subtasks || [], data);
@@ -116,4 +121,9 @@ export async function saveTaskDraft(draft, data, original = null, { onCreated } 
         }
         return dto;
     } catch (error) { error.partialDraft = draft; throw error; }
+}
+
+export function confirmPipelineLink() {
+    const session = http.getSession();
+    return confirmBold("Esta tarea participa en varios pipelines de proyecto. Para completarla, deberá llegar a Completada en cada uno. Cambiar su etapa en un proyecto no modifica las etapas de los demás. No volver a mostrar acepta el cambio y guarda tu preferencia.", {title:"Tarea en varios pipelines", rememberKey:`bold_pipeline_multiple:${session.email || session.assignmentId}`});
 }

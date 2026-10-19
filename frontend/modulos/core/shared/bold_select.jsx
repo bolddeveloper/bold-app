@@ -1,3 +1,4 @@
+import {useAnchoredPopover} from "./use_anchored_popover.js";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { filterSelectOptions } from "./bold_select_options.js";
@@ -8,7 +9,8 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const rootRef = useRef(null);
-    const triggerRef = useRef(null);
+    const triggerRef = useRef(null), menuRef = useRef(null);
+    useAnchoredPopover(open, triggerRef, menuRef, {maxHeight: 240});
     const currentValue = controlled ? value : internalValue;
     const selected = options.find(option => String(option.value) === String(currentValue)) || options[0];
     const visibleOptions = filterSelectOptions(options, query, searchable);
@@ -16,10 +18,10 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
     useEffect(() => {
         if (!open) return undefined;
         const closeOutside = event => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
-        const closeEscape = event => { if (event.key === "Escape") { setOpen(false); triggerRef.current?.focus(); } };
+        const closeEscape = event => { if (event.key === "Escape" && rootRef.current?.contains(event.target)) { event.preventDefault(); event.stopImmediatePropagation(); setOpen(false); triggerRef.current?.focus(); } };
         document.addEventListener("pointerdown", closeOutside);
-        document.addEventListener("keydown", closeEscape);
-        return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape); };
+        document.addEventListener("keydown", closeEscape, true);
+        return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeEscape, true); };
     }, [open]);
     useEffect(() => { if (!open && query) setQuery(""); }, [open]);
 
@@ -56,7 +58,7 @@ export function BoldSelect({ defaultValue, label, menuFooter, name, onValueChang
         }}>
             <span>{selected?.label || "Seleccionar"}</span><ChevronDown size={16} />
         </button>
-        {open && <div className="admin_select_menu">
+        {open && <div ref={menuRef} className="admin_select_menu" popover="manual">
             {searchable && <label className="admin_select_search"><Search size={15} /><input autoFocus type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} />{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery("")}><X size={14} /></button>}</label>}
             <div className="admin_select_options" role="listbox" aria-label={label}>{visibleOptions.map(option => <button className={String(option.value) === String(currentValue) ? "is_selected" : ""} type="button" role="option" aria-selected={String(option.value) === String(currentValue)} key={option.value} onClick={() => select(option.value)}><span>{option.label}</span>{String(option.value) === String(currentValue) && <Check size={15} />}</button>)}
                 {!visibleOptions.length && <p className="admin_select_empty">No se encontraron resultados.</p>}
