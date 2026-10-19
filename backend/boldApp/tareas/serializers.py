@@ -246,10 +246,6 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
             raise serializers.ValidationError({"status": "El estado no pertenece a la unidad responsable."})
         if assignee:
             validate_active_assignment(assignee, "assignee_assignment")
-            if unit and assignee.position.unit_id != unit.id:
-                raise serializers.ValidationError(
-                    {"assignee_assignment": "La asignacion responsable debe pertenecer a la unidad de la tarea."}
-                )
 
         project = attrs.get("project")
         if "pipeline" in attrs or "pipeline_stage" in attrs:
@@ -515,10 +511,6 @@ class TaskMoveSerializer(serializers.Serializer):
             raise serializers.ValidationError({"status": "El estado no pertenece a la nueva unidad."})
         if assignee:
             validate_active_assignment(assignee, "assignee_assignment")
-            if assignee.position.unit_id != unit.id:
-                raise serializers.ValidationError(
-                    {"assignee_assignment": "La asignacion no pertenece a la nueva unidad."}
-                )
         if section and not project:
             raise serializers.ValidationError({"section": "section requiere project."})
         if section and section.project_id != project.id:

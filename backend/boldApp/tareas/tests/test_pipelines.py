@@ -46,6 +46,16 @@ class PipelineTests(TestCase):
     def move(self, pipeline, stage, task=None):
         return self.client.put(f"/api/v2/pipelines/{pipeline.pk}/tasks/{(task or self.task).pk}/", {"stage": stage["id"]}, format="json")
 
+    def test_move_returns_confirmed_completion_for_the_checkbox(self):
+        result = self.move(self.pipeline, self.stage(self.pipeline, "completed"))
+        self.assertEqual(result.status_code, 200, result.data)
+        self.task.refresh_from_db()
+        self.assertTrue(result.data["status_is_final"])
+        self.assertEqual(result.data["status"], str(self.task.status_id))
+        self.assertEqual(result.data["status_name"], self.task.status.name)
+        result = self.move(self.pipeline, self.pipeline.stages[0])
+        self.assertFalse(result.data["status_is_final"])
+
     def stage(self, pipeline, kind):
         return next(stage for stage in pipeline.stages if stage["kind"] == kind)
 

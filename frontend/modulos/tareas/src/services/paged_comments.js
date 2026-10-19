@@ -1,10 +1,12 @@
+import {taskSyncOptions} from "./task_sync_options.js";
+
 export function commentQueries({ scope, projectId, taskIds = [] } = {}) {
     if (scope === "project") return projectId ? [{ recent: "1", project: projectId }] : [];
     if (scope === "mine") return [{ recent: "1", mine: "1" }];
     const ids = [...new Set(taskIds.map(String))].filter(id => /^[0-9a-f-]{36}$/i.test(id)).sort();
     return Array.from({ length: Math.ceil(ids.length / 50) }, (_, i) => ({ recent: "1", tasks: ids.slice(i * 50, (i + 1) * 50).join(",") }));
 }
-export const pagedCommentsEnabled = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true" && import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true" && import.meta.env?.VITE_TASK_PAGED_COMMENTS === "true";
+export const pagedCommentsEnabled = () => taskSyncOptions(import.meta.env).pagedComments;
 export function notifyCommentViews(tasks = null, purge = false) {
     globalThis.window?.dispatchEvent(new CustomEvent("bold:task-comments", { detail: { tasks, purge } }));
 }

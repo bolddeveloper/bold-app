@@ -12,6 +12,27 @@ export const releaseNotes = [
         ]}],
     },
     {
+        id: "2026-10-19-cross-department-responsibles", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Responsables de otros departamentos",
+        summary: "Puedes asignar tareas a personas de otros departamentos y buscarlas por nombre o correo.",
+        sections: [{title: "Responsables", items: [
+            "Los selectores de responsables incluyen personas de todos los departamentos, con búsqueda por nombre y correo interno.",
+            "Cambiar el responsable conserva el equipo de la tarea. La persona asignada puede consultar y completar esa tarea sin obtener acceso a otros proyectos privados.",
+            "Las actualizaciones avisan también al equipo del responsable. Se conservan los permisos de asignación y las denegaciones explícitas.",
+        ]}],
+    },
+    {
+        id: "2026-10-19-task-loading-completion", date: "2026-10-19", category: "Correcciones", icon: "update",
+        title: "Carga de tareas y confirmación al completar",
+        summary: "Las tareas compartidas cargan con menos consultas y la marca de completado refleja la respuesta del servidor.",
+        sections: [{title: "Tareas", items: [
+            "La carga consulta la participación en las tareas por lote, conservando las reglas de acceso y las denegaciones.",
+            "Completar o reabrir desde un pipeline actualiza la marca al confirmarse el guardado, sin esperar la recarga completa del tablero.",
+            "Después de cambiar una etapa se actualiza la tarea afectada. Los proyectos con varios pipelines conservan sus reglas de finalización.",
+            "La sincronización incremental está activa por defecto. El historial y los adjuntos se consultan al abrirlos; volver repetidamente a la ventana no provoca una recarga completa cada vez.",
+        ]}],
+    },
+    {
         id: "2026-10-19-permissions-dark-contrast", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Contraste en Permisos y políticas",
         summary: "El modo oscuro mantiene legibles las acciones y descripciones de las políticas.",

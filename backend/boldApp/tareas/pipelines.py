@@ -396,16 +396,19 @@ class PipelineTaskView(PipelineView):
     def put(self, request, pipeline_id, task_id):
         self.pipeline(pipeline_id)
         pipeline = Pipeline.objects.select_for_update(of=("self",)).select_related("project").get(pk=pipeline_id)
-        task = self.visible_tasks().select_for_update().filter(pk=task_id).first()
+        task = self.visible_tasks(Task.objects.filter(pk=task_id)).select_for_update().first()
         if not task:
             raise NotFound()
         stage = assign_stage(self, pipeline, task, request.data.get("stage"))
-        return Response({"task": str(task.pk), "pipeline": str(pipeline.pk), "stage": stage["id"]})
+        task.refresh_from_db()
+        return Response({"task": str(task.pk), "pipeline": str(pipeline.pk), "stage": stage["id"],
+            "status": str(task.status_id), "status_name": task.status.name,
+            "status_category": task.status.category, "status_is_final": task.status.is_final})
 
 
 class TaskPipelinesView(PipelineView):
     def get(self, request, task_id):
-        task = self.visible_tasks().filter(pk=task_id).first()
+        task = self.visible_tasks(Task.objects.filter(pk=task_id)).first()
         if not task:
             raise NotFound()
         assignment = request.assignment
@@ -421,4 +424,7 @@ class TaskPipelinesView(PipelineView):
             if not link.pipeline_id:
                 initialize_link(link); link.save(update_fields=["pipeline", "pipeline_stage"])
             projects.append({"project": str(link.project_id), "project_name": link.project.name, "pipeline": self.pack(link.pipeline), "stage": str(link.pipeline_stage)})
-        return Response({"personal": personal, "projects": projects, "project_managed": project_managed})
+        opposite = TaskStatus.objects.filter(unit=task.unit, is_final=not task.status.is_final).order_by("position", "pk").first()
+        completion_status = {"id": str(opposite.pk), "label": opposite.name, "category": opposite.category, "isFinal": opposite.is_final} if opposite else None
+        can_complete_without_project = project_managed and task.assignee_assignment_id == assignment.pk and task.task_projects.filter(project__deleted_at__isnull=True).count() == 1
+        return Response({"personal": personal, "projects": projects, "project_managed": project_managed, "completion_status": completion_status, "can_complete_without_project": can_complete_without_project})

@@ -52,6 +52,19 @@ def task_authorization_context(resource_id):
     }
 
 
+def task_reader_contexts(tasks, assignment):
+    """Load this viewer's explicit task memberships once for the HTTP request."""
+    ids = [task.pk for task in tasks]
+    followed = set(TaskFollower.objects.filter(task_id__in=ids, assignment=assignment).values_list("task_id", flat=True))
+    projects = Project.objects.filter(
+        Q(owner_assignment=assignment) | Q(members__assignment=assignment, members__status="active", members__removed_at__isnull=True)
+    )
+    invited = set(TaskProject.objects.filter(task_id__in=ids, project__in=projects).values_list("task_id", flat=True))
+    return {str(task.pk): {"task_reader_assignment_ids": {assignment.pk} if not task.deleted_at and (
+        assignment.pk in (task.created_by_assignment_id, task.assignee_assignment_id) or task.pk in followed or task.pk in invited
+    ) else set()} for task in tasks}
+
+
 def project_authorization_context(resource_id):
     try:
         project = Project.objects.filter(pk=resource_id).first()

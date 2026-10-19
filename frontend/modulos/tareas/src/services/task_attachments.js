@@ -1,4 +1,5 @@
-export const pagedAttachmentsEnabled = () => import.meta.env?.VITE_USE_REAL_BACKEND === "true" && import.meta.env?.VITE_TASK_INCREMENTAL_SYNC === "true" && import.meta.env?.VITE_TASK_PAGED_ATTACHMENTS === "true";
+import {taskSyncOptions} from "./task_sync_options.js";
+export const pagedAttachmentsEnabled = () => taskSyncOptions(import.meta.env).pagedAttachments;
 export function notifyAttachmentViews(tasks = null, purge = false) {
     globalThis.window?.dispatchEvent(new CustomEvent("bold:task-attachments", { detail: { tasks, purge } }));
 }
