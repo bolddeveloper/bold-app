@@ -110,16 +110,32 @@ Comprobaciones locales del 19 de octubre de 2026:
   funciona; estas pruebas locales no vuelven a verificar su conexión externa.
 
 Las comprobaciones locales pasan. Sigue pendiente validar la imagen Linux ARM64
-y el entorno publicado antes de declarar Sheets listo para producción. El commit
-de preparación contiene infraestructura y controles; no incluye todos los cambios
-funcionales pendientes del árbol de trabajo. Integrar y validar esos cambios en
-una revisión de entrega antes de usarla para desplegar.
+y el entorno publicado antes de declarar Sheets listo para producción. La entrega
+incluye la preparación de infraestructura y las correcciones funcionales; utilizar
+la revisión integrada completa para el futuro despliegue.
 
 La revisión de integración incorpora los cambios funcionales de Sheets, Equipo
 y pipelines, junto con `Develop` en `3dc97715`. Incluye la migración
 `0017_merge_0016_optional_unsectioned_0016_task_pipelines`, que une ambas ramas de
 migraciones de Tareas sin borrar datos. Aplicar todas las migraciones de esa
 revisión completa durante el futuro despliegue; no copiar solo archivos del motor.
+
+## Cambiar de rama y preparar un merge local
+
+`node_modules`, `.vite`, `.vite-local` y `dist` son archivos generados y no deben
+estar rastreados. No agregar sus cambios a un commit. La revisión integrada los
+excluye de Git, conservando los paquetes y las compilaciones en disco.
+
+Si una rama antigua sigue rastreando estos archivos, detener Vite y guardar solo
+sus cambios generados en un stash antes de integrar la revisión corregida. No
+restaurar esa caché antigua sobre la revisión integrada. Los cambios propios de
+código se revisan y conservan por separado; no usar un descarte general.
+
+Tras cambiar de rama, ejecutar `npm ci` y `npm run dev` dentro de
+`frontend/modulos/core`. Para producción, `npm run build` genera `dist` de nuevo;
+el despliegue de Cloudflare existente ya realiza esa compilación. Comprobar que
+`git ls-files frontend/modulos/core/node_modules frontend/modulos/core/dist`
+no devuelve archivos y que compilar no ensucia los archivos rastreados.
 
 ## Verificación posterior, cuando se autorice el despliegue
 
