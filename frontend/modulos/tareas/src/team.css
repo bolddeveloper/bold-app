@@ -127,3 +127,5 @@
 .team_share_eye.is_syncing:disabled {opacity:1}
 .team_share_eye.is_syncing:disabled:hover {background:rgba(127,127,127,.16)}
 .team_panel .board_view_readonly .board_column>header>.team_status_dot {flex:0 0 8px;width:8px;height:8px;min-width:0;min-height:0;padding:0;border-radius:50%}
+
+.team_people_search{display:flex;align-items:center;gap:6px;border:1px solid var(--team-line);border-radius:8px;padding:6px 8px;margin:12px 0;min-width:0}.team_people_search input{width:100%;min-width:0;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;outline-offset:4px}.team_people_search svg{flex-shrink:0}

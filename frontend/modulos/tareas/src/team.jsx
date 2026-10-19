@@ -1,5 +1,5 @@
 import {createContext, useContext, useEffect, useRef, useState} from "react";
-import {Eye, EyeOff, Users, CalendarDays, RefreshCw} from "lucide-react";
+import {Eye, EyeOff, Users, CalendarDays, RefreshCw, Search} from "lucide-react";
 import {http} from "../../core/http_client.js";
 import {backgroundRefresh} from "../../core/google_cache.js";
 import {normalizeTask} from "./services/task_models.js";
@@ -134,6 +134,9 @@ export function TeamCalendarSharing({assignmentId}) {
 
 export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarDateField}) {
     const directory = useTeamQuery(enabled ? "directory/" : null, assignmentId);
+    const [search, setSearch] = useState("");
+    const needle = search.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+    const departments = (directory.value?.departments || []).map(unit => ({...unit, people: unit.people.filter(item => item.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().includes(needle))})).filter(unit => unit.people.length);
     const [person, setPerson] = useState(null), [view, setView] = useState("tasks"), [day, setDay] = useState(today);
     useEffect(() => {
         if (view !== "meetings") return;
@@ -164,9 +167,11 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
     return <div className="team_panel">
         <aside className="team_directory" aria-label="Personas por departamento">
             <h2><Users size={18} aria-hidden="true"/> Equipo</h2>
+            <label className="team_people_search"><Search size={15} aria-hidden="true"/><input type="search" aria-label="Buscar persona en Equipo" placeholder="Buscar persona" value={search} onChange={event => setSearch(event.target.value)}/></label>
             <QueryNotice query={directory}/>
             {!enabled && <p>Conecta con BOLD para consultar el equipo.</p>}
-            {directory.value?.departments.filter(unit => unit.people.length).map(unit => <details key={unit.id}>
+            {needle && !departments.length && !directory.loading && <p role="status">No hay coincidencias. Prueba otro nombre.</p>}
+            {departments.map(unit => <details key={`${unit.id}:${Boolean(needle)}`} open={needle ? true : undefined}>
                 <summary>{unit.name}<span>{unit.people.length}</span></summary>
                 <div>{unit.people.length ? unit.people.map(item => <button type="button" key={item.id} aria-pressed={person?.id === item.id}
                     onClick={() => {setPerson(item); setView("tasks");}}>

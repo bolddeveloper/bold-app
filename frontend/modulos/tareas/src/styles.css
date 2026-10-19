@@ -12804,3 +12804,5 @@ button.project_members_row:hover, .project_members_popup header button:hover { b
 @keyframes board_section_arrive {from{color:var(--bold_red)}to{color:inherit}}
 @media(prefers-reduced-motion:reduce){.board_view .board_column,.board_view .board_card.board_card_just_moved,.board_view .board_column_arrived>header{animation:none;transition:none}}
 .board_view:not(.board_view_readonly) .board_card[data-dragging="true"] {animation:none;opacity:.35}
+
+.task_mention_menu{display:flex;flex-direction:column;gap:3px;margin:6px 0;padding:6px;border:1px solid var(--border-color,#424852);border-radius:8px;max-height:230px;overflow:auto;background:var(--bg-secondary,#fff)}.task_mention_menu>button{display:flex;align-items:center;gap:8px;min-height:42px;padding:7px 9px;text-align:left;color:inherit;background:transparent;border:0;border-radius:6px}.task_mention_menu>button[aria-selected=true]{background:color-mix(in srgb,var(--accent-color,#ef3340) 12%,transparent)}.task_mention_menu span{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}.task_mention_menu small{font-size:12px;opacity:.75}.theme_dark .task_mention_menu{background:#252b34}

@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Bold, ChevronDown, ImagePlus, Italic, Link, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { AtSign, ArrowUp, Bold, ChevronDown, ImagePlus, Italic, Link, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { ImageGallery } from "./image_gallery.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
 import { editorDisplayHTML, inlineTextClasses, saveRichText, richImageSources } from "./rich_text.js";
 import {linkifyEditor, linkMarkup, normalizedLink} from "./editor_links.js";
 import {transferredFiles, validateEditorImages} from "./editor_media.js";
+
+import {getCoreState, subscribeCore} from "../../core/core_store.js";
+import {mentionAtCaret, mentionPeople} from "./mentions.js";
 
 const formats = [["Deshacer", "undo", Undo2], ["Rehacer", "redo", Redo2], ["Negrita", "bold", Bold], ["Cursiva", "italic", Italic], ["Tachado", "strikeThrough", Strikethrough], ["Subrayado", "underline", Underline], ["Lista", "insertUnorderedList", List], ["Lista numerada", "insertOrderedList", ListOrdered]];
 const textStyles = [["3", "Texto normal"], ["5", "Título"], ["4", "Subtítulo"], ["2", "Cita"]];
@@ -33,6 +36,26 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
     const [imageError, setImageError] = useState("");
     const [imagesBusy, setImagesBusy] = useState(false);
     const images = richImageSources(value);
+    const core = useSyncExternalStore(subscribeCore, getCoreState, getCoreState);
+    const mentionId = useId();
+    const [mention, setMention] = useState(null), [mentionIndex, setMentionIndex] = useState(0);
+    const mentionRange = useRef(null);
+    const candidates = mention && !core.securityUncertain ? mentionPeople(core.directory || [], mention.query) : [];
+    function findMention() {
+        if (!compact || disabled) return;
+        const range = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null;
+        const match = range?.collapsed && editor.current?.contains(range.endContainer) && range.endContainer.nodeType === Node.TEXT_NODE ? mentionAtCaret(range.endContainer.textContent.slice(0, range.endOffset)) : null;
+        mentionRange.current = match ? range.cloneRange() : null;
+        if (match) mentionRange.current.setStart(range.endContainer, range.endOffset - match.length);
+        setMention(match); setMentionIndex(0);
+    }
+    function insertMention(person) {
+        if (!mentionRange.current || disabled) return;
+        editor.current.focus();
+        const current = window.getSelection(); current.removeAllRanges(); current.addRange(mentionRange.current);
+        document.execCommand("insertText", false, `@${person.email} `);
+        setMention(null); mentionRange.current = null; save();
+    }
     useEffect(() => {
         const closeMenu = event => { if (styleMenu.current && !styleMenu.current.contains(event.target)) styleMenu.current.open = false; };
         document.addEventListener("pointerdown", closeMenu);
@@ -102,16 +125,25 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         </div>
         {linkOpen && <div className="task_editor_link"><input type="url" aria-label="Dirección del enlace" value={link} onChange={event => setLink(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setLinkOpen(false); editor.current.focus(); } }} /><input type="text" aria-label="Alias del enlace" placeholder="Alias (opcional)" maxLength={120} value={linkAlias} onChange={event => setLinkAlias(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } }} /><button type="button" disabled={disabled} onClick={insertLink}>Insertar</button><button type="button" onClick={() => setLinkOpen(false)}>Cancelar</button>{linkError && <small role="alert">{linkError}</small>}</div>}
         <ImageGallery images={images} disabled={disabled || imagesBusy} onRemove={index => {const image = editor.current?.querySelectorAll("img")[index]; if (image) {image.remove(); selection.current = null; save();}}}/>
-        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder} onInput={event => { if (!event.nativeEvent.isComposing) save(); }} onCompositionEnd={save} onKeyUp={remember} onMouseUp={remember} onBlur={remember} onPaste={event => { event.preventDefault(); if (disabled) return; const files = transferredFiles(event.clipboardData); if (files.length) { void insertImages(files); return; } remember(); command("insertText", event.clipboardData.getData("text/plain")); }} onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }} onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
+        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-controls={mention ? mentionId : undefined} aria-activedescendant={mention && candidates.length ? `${mentionId}-${mentionIndex}` : undefined} aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder} onInput={event => { if (!event.nativeEvent.isComposing) {save(); findMention();} }} onCompositionEnd={() => {save(); findMention();}} onKeyUp={event => {remember(); if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) findMention();}} onMouseUp={() => {remember(); findMention();}} onBlur={event => {remember(); if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) setMention(null);}} onPaste={event => { event.preventDefault(); if (disabled) return; const files = transferredFiles(event.clipboardData); if (files.length) { void insertImages(files); return; } remember(); command("insertText", event.clipboardData.getData("text/plain")); }} onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }} onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
             if (event.nativeEvent.isComposing) return;
+            if (mention && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
+                event.preventDefault(); event.stopPropagation();
+                if (event.key === "Escape") setMention(null);
+                else if (event.key === "Enter" && candidates.length) insertMention(candidates[mentionIndex % candidates.length]);
+                else if (candidates.length) setMentionIndex(index => (index + (event.key === "ArrowUp" ? -1 : 1) + candidates.length) % candidates.length);
+                return;
+            }
             if (event.key === "Enter" && !event.shiftKey && onSubmit) { event.preventDefault(); event.stopPropagation(); if (!submitDisabled && !disabled && !imagesBusy && !event.repeat) onSubmit(); return; }
             if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && ["Título", "Subtítulo"].includes(style)) { event.preventDefault(); remember(); command("insertParagraph"); command("fontSize", "3"); }
             if ((event.ctrlKey || event.metaKey) && ["b", "i", "u"].includes(event.key.toLowerCase())) { event.preventDefault(); command(({ b: "bold", i: "italic", u: "underline" })[event.key.toLowerCase()]); }
         }} />
+        {mention && <div id={mentionId} className="task_mention_menu" role="listbox" aria-label="Personas para mencionar">{candidates.length ? candidates.map((person, index) => <button id={`${mentionId}-${index}`} type="button" role="option" aria-selected={index === mentionIndex} key={person.email} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(person)}><AtSign size={15}/><span><strong>{person.name}</strong><small>{person.email}</small></span></button>) : <small>No hay coincidencias. Busca por nombre o correo.</small>}</div>}
         {limitReached && <small className="task_editor_limit" role="alert">Se alcanzó el límite de texto de este campo.</small>}
         {allowVoiceNotes && <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />}
         <div className="task_editor_footer"><div className="task_editor_insert" ref={controls}>
             {allowImages && <label className="detail_comment_image_button" title="Adjuntar imagen"><ImagePlus size={17} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Adjuntar imágenes" disabled={disabled || imagesBusy} onChange={event => { const files = Array.from(event.target.files); event.target.value = ""; void insertImages(files); }} /></label>}
+            {compact && <button type="button" aria-label="Mencionar persona" title="Mencionar persona (@)" disabled={disabled} onMouseDown={event => {event.preventDefault(); remember();}} onClick={() => {command("insertText", " @"); findMention();}}><AtSign size={17}/></button>}
         </div>{onSubmit ? <button type="button" className="task_editor_send" title="Enviar comentario (Enter). Nueva línea: Shift+Enter" aria-label="Enviar comentario" disabled={disabled || imagesBusy || submitDisabled} onClick={onSubmit}><ArrowUp size={16} /></button> : <small>{label}</small>}</div>
         {imageError && <small role="alert">{imageError}</small>}
     </div>;

@@ -4384,7 +4384,9 @@ function TaskAppContent({ externalModules = {} }) {
     const mobile = useMediaQuery("(max-width: 760px)");
     const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(!!active_modal && !["project_menu", "task", "edit_task", "project"].includes(active_modal), '[role="dialog"][aria-modal="true"]', () => set_active_modal(null));
-    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(false);
+    const tasks_menu_key = `${navigation_key}:sidebar-open`;
+    const [is_tasks_menu_open, set_is_tasks_menu_open] = use_state(() => {try { return localStorage.getItem(tasks_menu_key) === "true"; } catch { return false; }});
+    use_effect(() => {try { localStorage.setItem(tasks_menu_key, String(is_tasks_menu_open)); } catch {}}, [tasks_menu_key, is_tasks_menu_open]);
     const [search_query, set_search_query] = use_state("");
     const [stored_tasks, set_tasks] = use_state(() => real ? (cached_data.current?.tasks || []).filter(item => !item.parentTaskId || !cached_data.current.tasks.some(parent => parent.id === item.parentTaskId)) : merge_saved_comments(starter_tasks));
     const [selected_task_id, set_selected_task_id] = use_state(null);

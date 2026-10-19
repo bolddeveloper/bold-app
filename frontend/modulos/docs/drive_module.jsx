@@ -334,10 +334,12 @@ function FolderTree({active, disabled, onNavigate, onDrop, selectedFiles, connec
     return <div className="drive_tree"><button aria-expanded={opened} onClick={() => {setOpened(value => !value); if (!nodes.root?.loaded) expand("root");}}>{opened ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}Carpetas</button>{opened && branch("root", [])}{error && <small role="alert">{error}<button onClick={() => {setError(""); expand("root");}}>Reintentar</button></small>}</div>;
 }
 // Selector compartido por creación, cargas y movimiento de archivos.
-export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aquí", disabled = false, initialRoot = "root", initialPath = [], foldersOnly = false}) {
+export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aquí", disabled = false, submitDisabled = false, initialRoot = "root", initialPath = [], foldersOnly = false}) {
     const [path, setPath] = useState(initialPath), [root, setRoot] = useState(initialRoot), [folders, setFolders] = useState([]), [next, setNext] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(true), [search, setSearch] = useState("");
     const [sharedDrives, setSharedDrives] = useState(drives || []);
     const [newFolder, setNewFolder] = useState(null), [creatingFolder, setCreatingFolder] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const searchController = useRef(null);
     const request = useRef(0), target = path.at(-1)?.id || root;
     useEffect(() => {
         if (drives) {setSharedDrives(drives); return;}
@@ -346,14 +348,21 @@ export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aqu
         loadDrives().catch(() => {});
         return () => {current = false;};
     }, [drives]);
-    async function load(page = "") {
+    async function load(page = "", query = searchTerm) {
+        searchController.current?.abort();
+        const controller = new AbortController(); searchController.current = controller;
         const ticket = ++request.current; setBusy(true); setError("");
         if (!page) {setFolders([]); setNext("");}
-        try {const result = await workspaceApi.files({view: "all", type: "folder", parent: target, drive: root === "root" ? "" : root, page}); if (ticket === request.current) {setFolders(old => page ? [...old, ...result.files] : result.files); setNext(result.nextPageToken || "");}}
+        try {const result = await workspaceApi.files({view: "all", type: "folder", parent: query ? "" : target, search: query, drive: root === "root" ? "" : root, page}, {signal: controller.signal}); if (ticket === request.current) {setFolders(old => page ? [...old, ...result.files] : result.files); setNext(result.nextPageToken || "");}}
         catch (problem) {if (ticket === request.current) setError(problem.message);}
         finally {if (ticket === request.current) setBusy(false);}
     }
-    useEffect(() => {setSearch(""); load(); return () => {++request.current;};}, [target, root]);
+    useEffect(() => {setSearch(""); setSearchTerm(""); load("", ""); return () => {++request.current; searchController.current?.abort();};}, [target, root]);
+    useEffect(() => {
+        if (search.trim() === searchTerm) return;
+        const timer = setTimeout(() => {const query = search.trim(); setSearchTerm(query); void load("", query);}, 250);
+        return () => clearTimeout(timer);
+    }, [search, searchTerm, target, root]);
     async function createFolder() {
         if (creatingFolder || disabled || !newFolder?.trim()) return;
         setCreatingFolder(true); setError("");
@@ -365,18 +374,18 @@ export function DriveFolderPicker({rows = [], drives, submit, label = "Mover aqu
         finally {setCreatingFolder(false);}
     }
     const pickerDisabled = disabled || creatingFolder;
-    const displayed = folders.filter(file => file.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+    const displayed = folders;
     return <div className="drive_move_picker">
         <div className="drive_destination_heading"><Cloud size={24}/><strong>Drive</strong><select aria-label={foldersOnly ? "Unidad de Drive" : "Unidad de destino"} disabled={pickerDisabled} value={root} onChange={event => {setNewFolder(null); setRoot(event.target.value); setPath([]);}}><option value="root">Mi unidad</option>{sharedDrives.map(drive => <option key={drive.id} value={drive.id}>{drive.name}</option>)}</select></div>
         <nav className="drive_destination_path" aria-label={foldersOnly ? "Ruta de carpeta de Drive" : "Carpeta de destino"}><button type="button" disabled={pickerDisabled} onClick={() => setPath([])}>Raíz</button>{path.map((file, index) => <button type="button" key={file.id} disabled={pickerDisabled} onClick={() => setPath(old => old.slice(0, index + 1))}><ChevronRight size={14}/>{file.name}</button>)}</nav>
-        <label className="drive_destination_search"><Search size={17}/><input aria-label="Buscar carpetas en este destino" placeholder="Buscar carpetas" value={search} disabled={pickerDisabled} onChange={event => setSearch(event.target.value)}/></label>
+        <label className="drive_destination_search"><Search size={17}/><input aria-label="Buscar carpetas en Drive" type="search" placeholder="Buscar en Drive" value={search} onKeyDown={event => {if (event.key === "Enter") {event.preventDefault(); event.stopPropagation();}}} disabled={pickerDisabled} onChange={event => setSearch(event.target.value)}/></label>
         {error && <p role="alert">{error}<button type="button" onClick={() => load()}>Reintentar</button></p>}
-        <div className="drive_destination_folders" aria-busy={busy}>{displayed.map(file => <button type="button" key={file.id} disabled={pickerDisabled || busy || rows.some(row => row.id === file.id)} onClick={() => setPath(old => [...old, file])}><Folder size={20}/><span>{file.name}</span><ChevronRight size={16}/></button>)}{busy ? <p role="status">Cargando carpetas…</p> : !displayed.length && !error && <p>{search ? "No hay carpetas con ese nombre." : "Esta carpeta no tiene subcarpetas."}</p>}{next && <button type="button" disabled={busy || pickerDisabled} onClick={() => load(next)}>Más carpetas</button>}</div>
+        <div className="drive_destination_folders" aria-busy={busy}>{displayed.map(file => <button type="button" key={file.id} disabled={pickerDisabled || busy || rows.some(row => row.id === file.id)} onClick={() => {setSearch(""); setSearchTerm(""); setPath(old => searchTerm ? [file] : [...old, file]);}}><Folder size={20}/><span>{file.name}</span><ChevronRight size={16}/></button>)}{busy ? <p role="status">Cargando carpetas…</p> : !displayed.length && !error && <p>{search ? "No hay carpetas con ese nombre." : "Esta carpeta no tiene subcarpetas."}</p>}{next && <button type="button" disabled={busy || pickerDisabled} onClick={() => load(next)}>Más carpetas</button>}</div>
         {newFolder === null ? <button type="button" disabled={pickerDisabled || busy || path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => setNewFolder("")}><Plus size={16}/>Crear carpeta</button> : <div className="drive_destination_create">
             <label>Nombre de la carpeta<input autoFocus maxLength={255} value={newFolder} disabled={pickerDisabled} onChange={event => setNewFolder(event.target.value)} onKeyDown={event => {if (event.key === "Enter") {event.preventDefault(); event.stopPropagation(); createFolder();} if (event.key === "Escape") {event.preventDefault(); event.stopPropagation(); if (!creatingFolder) setNewFolder(null);}}}/></label>
             <div><button type="button" disabled={pickerDisabled || !newFolder.trim()} onClick={createFolder}>{creatingFolder ? "Creando…" : "Crear carpeta"}</button><button type="button" disabled={creatingFolder} onClick={() => setNewFolder(null)}>Cancelar</button></div>
         </div>}
-        <button type="button" className="drive_primary" disabled={pickerDisabled || busy || !!error || foldersOnly && !path.length || rows.some(row => row.id === target) || !foldersOnly && path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => submit(target, path.at(-1) || {id: root, name: sharedDrives.find(item => item.id === root)?.name || "Mi unidad"})}>{label}</button>
+        <button type="button" className="drive_primary" disabled={submitDisabled || pickerDisabled || busy || !!error || foldersOnly && !path.length || rows.some(row => row.id === target) || !foldersOnly && path.length > 0 && !path.at(-1)?.capabilities?.canAddChildren} onClick={() => submit(target, path.at(-1) || {id: root, name: sharedDrives.find(item => item.id === root)?.name || "Mi unidad"})}>{label}</button>
     </div>;
 }
 function SharePermissions({file, report}) {

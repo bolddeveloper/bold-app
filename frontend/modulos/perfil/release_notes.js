@@ -1,6 +1,17 @@
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-10-19-people-search-drive-mentions", date: "2026-10-19", category: "Mejoras", icon: "update",
+        title: "Encuentra personas y carpetas con más facilidad",
+        summary: "Equipo incorpora búsqueda de personas y los comentarios permiten elegir a quién mencionar.",
+        sections: [{title: "Búsqueda y navegación", items: [
+            "Busca personas por nombre en Equipo; los departamentos con coincidencias se despliegan al buscar.",
+            "Escribe @ o usa Mencionar persona en comentarios para buscar por nombre o correo. Las menciones solo notifican a quienes tienen acceso a la tarea.",
+            "El menú de Tareas recuerda si lo dejaste abierto o cerrado en este navegador, por cargo activo.",
+            "Al elegir dónde guardar un archivo, el buscador consulta carpetas de Drive y descarta resultados de búsquedas anteriores.",
+        ]}],
+    },
+    {
         id: "2026-10-19-pipeline-postgres-fix", date: "2026-10-19", category: "Correcciones", icon: "update",
         title: "Corrección al mover tareas entre etapas",
         summary: "Se corrige el error del servidor al cambiar etapas o configurar el pipeline personal.",
