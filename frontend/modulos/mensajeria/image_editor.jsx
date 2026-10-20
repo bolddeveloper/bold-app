@@ -9,12 +9,12 @@ export default function ChatImageEditor({file, onSave, onCancel}) {
     const [mode, setMode] = useState("crop"), [crop, setCrop] = useState({x: 0, y: 0, w: 100, h: 100});
     const [strokes, setStrokes] = useState([]), [color, setColor] = useState("#ed2635"), [size, setSize] = useState(1600);
     useEffect(() => {
-        const returnFocus = document.activeElement;
-        dialog.current?.showModal();
+        const returnFocus = document.activeElement, node = dialog.current;
+        node?.showModal();
         const url = URL.createObjectURL(file), picture = new Image(); let active = true;
         picture.onload = () => {if (!active) return; if (picture.naturalWidth * picture.naturalHeight > 24000000) {setError("La imagen supera los 24 megapíxeles."); return;} image.current = picture; setSize(Math.min(1600, picture.naturalWidth)); setReady(true);};
         picture.onerror = () => active && setError("No se pudo abrir esta imagen."); picture.src = url;
-        return () => {active = false; URL.revokeObjectURL(url); returnFocus?.focus?.();};
+        return () => {active = false; URL.revokeObjectURL(url); if (node?.open) node.close(); if (returnFocus?.isConnected) returnFocus.focus();};
     }, [file]);
     function draw(context, width, height) {
         context.drawImage(image.current, 0, 0, width, height);

@@ -155,6 +155,89 @@ buscar un punto del audio y alternar velocidades. Probar también teclado móvil
 abierto, letra ampliada y un códec grabado por cada navegador utilizado por IT.
 Las pruebas DOM no sustituyen reproducción física ni revisión visual en dispositivos.
 
+## Cola de imágenes: revisión local posterior
+
+Preparada localmente, pendiente de aceptación visual y publicación. Mantiene la
+restricción IT y reutiliza el endpoint privado de Drive sin migración ni permisos nuevos.
+
+- Elegir, pegar o arrastrar varias imágenes abre una cola de revisión, no el editor.
+  Hasta diez imágenes y 50 MB totales por conversación; diez MB por archivo, PNG,
+  JPEG o WebP. Una selección inválida se rechaza completa y no altera lo ya preparado.
+- Miniaturas para navegar, vista previa grande, quitar una imagen, añadir más,
+  descripción individual opcional y botón explícito para editar/recortar/dibujar.
+  Cancelar el editor conserva el archivo anterior y su texto. Editar una imagen
+  no modifica las demás. El texto escrito antes de adjuntar pasa a la primera imagen.
+- El envío es secuencial: cada imagen es un mensaje independiente, con su UUID,
+  autor, texto y confirmaciones de entrega/lectura. No hay álbum agrupado todavía.
+  No se suben archivos ni se consulta Drive al preparar o revisar la cola.
+- Solo se retiran de la cola los envíos confirmados. Si se pierde la respuesta,
+  el reintento conserva UUID, archivo y descripción: recupera el mensaje confirmado
+  por el servidor en vez de duplicarlo. Mientras no pueda confirmarse, ese contenido
+  no es editable. Una respuesta definitiva de validación sí permite corregirlo.
+- Quitar una imagen pendiente de confirmar solo la retira del borrador local:
+  no elimina un mensaje que ya hubiese llegado al servidor. La interfaz lo advierte.
+  Quitar toda la cola conserva las descripciones como texto, sin truncarlas en silencio.
+- Las colas son temporales y separadas por conversación mientras Chat está abierto;
+  no se almacenan en disco ni se conservan al salir del módulo, cambiar identidad o
+  recargar. Las URL de previsualización se liberan al sustituir, quitar o cerrar.
+- Una nota de voz y una cola de imágenes no se mezclan en el mismo borrador.
+
+Pruebas DOM añadidas: selección múltiple sin abrir editor, descripciones por imagen,
+editar/cancelar, añadir/quitar, pegado/arrastre, progreso, doble clic, envío parcial,
+respuesta perdida después de commit, reintento con el mismo UUID y liberación de blobs.
+Esto usa API/Drive simulados; no constituye una nueva prueba contra Drive real.
+Revisar manualmente la cola y su desplazamiento con teclado móvil abierto y ambos temas.
+
+## Reenvío privado: preparado localmente
+
+- Acción «Reenviar» en mensajes de texto propios o recibidos y en imágenes con
+  su descripción. Selector con búsqueda de otro empleado habilitado para Chat;
+  excluye al propio usuario y al interlocutor del chat de origen. Un destinatario
+  por operación, con confirmación explícita antes de descargar o enviar contenido.
+- Es una copia enviada por quien reenvía, no una suplantación del autor original.
+  No transporta participantes, identidad del autor original, enlaces al chat ni
+  identificadores de Drive. La conversación original no se comparte ni se modifica.
+- Las imágenes se obtienen mediante la descarga autenticada del origen y se suben
+  como un mensaje nuevo por el endpoint existente del destino. El servidor vuelve
+  a comprobar acceso y pertenencia al piloto. Se conserva el almacenamiento Drive
+  configurado; cada copia consume almacenamiento adicional. No crea enlaces públicos.
+- El destino conserva el envío/entrega/lectura y el plazo de edición de un mensaje
+  nuevo. No hay indicador persistente «reenviado» ni referencia al mensaje original.
+  Las notas de voz no se incluyen en esta primera opción de reenvío.
+- Doble clic y reintentos comparten UUID y archivo para recuperar respuestas
+  perdidas sin duplicar el envío. Los reintentos pendientes se conservan en memoria
+  mientras siga abierto este módulo bajo la misma identidad; no sobreviven una
+  recarga. Cerrar el selector no revierte un envío que ya haya llegado al servidor.
+- Selector nativo modal, búsqueda etiquetada, selección con teclado, retorno de
+  foco y estados de carga/error. Reutiliza tokens claro/oscuro y no añade sondeos.
+  La skill UI/UX Pro Max guio foco visible, confirmación explícita y controles táctiles.
+- Sin cambios de backend, migraciones ni permisos nuevos. Preparado y probado en
+  local; no implica commit, despliegue ni una nueva validación contra Drive real.
+
+Verificación automática: texto/imagen, autor del nuevo envío, destinatarios IT,
+escape/cancelación, doble clic, respuesta perdida y reintento idempotente,
+denegación de acceso, aborto al desmontar y rechazo de archivos inesperados.
+Pendiente aceptación visual manual: selector en móvil y ambos temas.
+
+### Validación real previa a publicación — 20 de octubre de 2026
+
+- Tres cuentas existentes de IT: chat A/B como origen y B/C como destino. API real
+  del servidor con autenticación forzada de prueba en proceso; sin sesiones de
+  navegador, contraseñas nuevas ni lectura de conversaciones existentes.
+- Texto e imagen sintéticos: envío 201, descarga del destinatario 200 y reintento
+  200 sin duplicar mensajes ni crear archivos adicionales en Drive. Autoría nueva
+  de B, descripción conservada, copia privada independiente y digest verificado.
+- Drive configurado accesible, unidad compartida `BOLD APP`, mismo destino de
+  almacenamiento. No se crearon permisos públicos ni se movió la raíz configurada.
+- Terceros de IT: 404 al intentar acceder al otro chat. Cuenta externa a IT: 403.
+  Entrega y lectura: 200. Edición propia dentro del plazo: 200; edición ajena: 403.
+- Toda la base de prueba se revirtió; ninguna notificación/evento se publicó.
+  Seis elementos nuevos de Drive se enviaron a papelera recuperable, verificando
+  sus identificadores, padres y marcadores para no tocar archivos preexistentes.
+- Chat: 34 pruebas más React/DOM; sincronización: 21; proxy: siete; PWA: siete.
+  La publicación y sus versiones se registran aparte tras verificar los proveedores.
+  Esta prueba API no sustituye aceptación visual ni login con dos navegadores.
+
 ## Apertura posterior al piloto
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.

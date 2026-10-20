@@ -6,14 +6,16 @@ export function installMessagingFixture(target = globalThis) {
     const me = {employee_id: actor, name: "Persona de prueba", avatar_url: null, available: true, departments: ["Equipo demo"]};
     const peer = {employee_id: peerId, name: "Compañera de demostración con nombre extenso", avatar_url: null, available: true, departments: ["Diseño", "Equipo demo"]};
     const conversation = {id: conversationId, me, peer, updated_at: now.toISOString()};
+    const forwardPeer = {employee_id:"33333333-3333-4333-8333-333333333333",name:"Destino de prueba IT",avatar_url:null,available:true,departments:["Equipo de IT"]};
     let rows = [
         {id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", conversation_id: conversationId, author_id: peerId, body: "Hola. Revisemos este enlace: https://example.com/una/ruta/que/es/muy/larga?documento=una-propuesta-compartida. <script>no ejecutar</script>\n¿Coordinamos el siguiente paso?", created_at: new Date(now - 86400000).toISOString(), version: 1, can_edit: false},
         {id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", conversation_id: conversationId, author_id: actor, body: "De acuerdo. Lo reviso y te comento 👍", created_at: new Date(now - 120000).toISOString(), editable_until: new Date(+now + 480000).toISOString(), version: 1, can_edit: true},
     ];
-    const fixture = {actor, peer, conversation, calls, enterBehavior:"send", sendDelay: null, failSend: false, getRows: () => rows};
+    const fixture = {actor, peer, conversation, calls, enterBehavior:"send", sendDelay: null, failSend: false, mediaSends:[], failMediaAt:null, failMediaStatus:500, loseMediaResponseAt:null, getRows: () => rows};
+    fixture.forwardDestination = {id:"dddddddd-dddd-4ddd-8ddd-dddddddddddd",me,peer:forwardPeer,updated_at:now.toISOString()};
     target.__messagingCore = {
         account: {id: "fixture-account", employee: actor}, employee: {id: actor}, activeAssignment: {id: "fixture-assignment", personId: actor, chat_enabled: true},
-        directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}],
+        directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}, {id:"forward-assignment",personId:forwardPeer.employee_id,name:forwardPeer.name,chat_enabled:true}],
         presence: {rows: [{...peer, status: "online", units:[{id:"it", name:"Equipo de IT"}]}], units: [{id:"it", name:"Equipo de IT"}]},
         messaging: {connection:"open", markDelivered:()=>{}, markRead:()=>{}, unread:{total:2,byEmployee:{[peerId]:2},byConversation:{[conversationId]:{count:2,version:2}}}},
     };
@@ -22,13 +24,15 @@ export function installMessagingFixture(target = globalThis) {
         preferences: async () => ({enter_behavior:fixture.enterBehavior}),
         savePreferences: async value => {fixture.enterBehavior=value; return {enter_behavior:value};},
         list: async () => {calls.push("list"); return {results: [{id: conversationId, peer, updated_at: now.toISOString(), preview: "De acuerdo. Lo reviso y te comento 👍"}], next: null};},
-        open: async () => {calls.push("open"); return conversation;},
-        detail: async () => {calls.push("detail"); return conversation;},
-        messages: async () => {calls.push("messages"); return {results: [...rows].reverse(), next: null, server_now: new Date().toISOString()};},
+        open: async employee => {calls.push("open"); return fixture.forwardDestination?.peer.employee_id === employee ? fixture.forwardDestination : conversation;},
+        detail: async id => {calls.push("detail"); return id===fixture.forwardDestination.id ? fixture.forwardDestination : conversation;},
+        messages: async id => {calls.push("messages"); return {results: rows.filter(row=>row.conversation_id===id).reverse(), next: null, server_now: new Date().toISOString()};},
         send: async (id, body, clientId) => {
             calls.push("send");
             if (fixture.sendDelay) await fixture.sendDelay;
             if (fixture.failSend) {const error = new Error("Synthetic failure"); error.status = 500; throw error;}
+            const duplicate = rows.find(row=>row.client_id===clientId);
+            if (duplicate) {if (duplicate.body!==body) {const error=new Error("Synthetic idempotency conflict"); error.status=409; throw error;} return {message:duplicate,server_now:new Date().toISOString()};}
             const sent = new Date();
             const row = {id: clientId, client_id: clientId, conversation_id: id, author_id: actor, body, created_at: sent.toISOString(), editable_until: new Date(+sent + 600000).toISOString(), version: 1, can_edit: true};
             rows.push(row); return {message: row, server_now: sent.toISOString()};
@@ -41,9 +45,13 @@ export function installMessagingFixture(target = globalThis) {
         },
         media: async (_conversation, message) => {calls.push("media"); return mediaBlobs.get(message) || new Blob(["synthetic voice"], {type:"audio/webm"});},
         sendMedia: async (id, body, clientId, file) => {
+            fixture.mediaSends.push({id,body,clientId,file});
+            const attempt = fixture.mediaSends.length;
+            if (attempt===fixture.failMediaAt) {const error=new Error("Synthetic media failure"); error.status=fixture.failMediaStatus; throw error;}
             const result = await target.__messagingApi.send(id,body,clientId);
             result.message.media = {id:clientId,kind:file.type.startsWith("image/") ? "image" : "audio",mime_type:file.type,size_bytes:file.size,width:200,height:120};
             mediaBlobs.set(result.message.id,file);
+            if (attempt===fixture.loseMediaResponseAt) throw new Error("Synthetic response lost after commit");
             return result;
         },
     };

@@ -43,3 +43,46 @@ test("dark shadows do not derive from white text; motion and mobile preserve red
     assert.match(css,/@media \(prefers-reduced-motion: reduce\).*\.messaging_arriving \{animation: none;/s);
     assert.match(css,/var\(--chat_vh,100dvh\)/);
 });
+test("text bubbles restore their earlier width and reduce height without changing composer or image bubbles", () => {
+    const css = readFileSync(new URL("./messaging.css",import.meta.url),"utf8");
+    const rules = selector => [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(match=>match[1].trim()===selector).map(match=>match[2]);
+    const text = rules(".messaging_bubble:not(:has(.messaging_media))");
+    assert.match(text[0],/max-width: min\(78%,660px\)/);
+    assert.match(text[0],/padding: 6px 16px/);
+    assert.match(text[0],/border-radius: 18px 18px 18px 8px/);
+    assert.match(rules(".messaging_mine .messaging_bubble:not(:has(.messaging_media))")[0],/border-radius: 18px 18px 8px 18px/);
+    assert.match(text[0],/grid-template-columns: minmax\(0,1fr\) auto/);
+    assert.doesNotMatch(text[0],/(?:^|;)\s*(?:max-|min-)?height:/,"text must grow, never be clipped");
+    assert.match(text[1],/max-width: calc\(100% - 34px\)/,"mobile keeps its earlier responsive width");
+    assert.match(text[1],/padding-inline: 14px/);
+    assert.match(rules(".messaging_bubble:has(.messaging_media_image)")[0],/max-width: min\(72%, 300px\)/);
+    assert.match(rules(".messaging_bubble:has(.messaging_media_image)")[1],/280px/);
+    assert.match(rules(".messaging_composer")[0],/max-width: 760px/);
+    assert.match(rules(".messaging_composer textarea")[0],/min-height: 40px/);
+    assert.match(rules(".messaging_bubble header button").at(-1),/min-height: 44px/);
+});
+test("chat palettes separate canvas and bubbles with readable text, metadata and links in both themes", () => {
+    const css = readFileSync(new URL("./messaging.css",import.meta.url),"utf8");
+    const luminance = hex => {
+        const rgb = hex.match(/[a-f\d]{2}/gi).map(value=>parseInt(value,16)/255).map(value=>value<=.04045 ? value/12.92 : ((value+.055)/1.055)**2.4);
+        return rgb[0]*.2126 + rgb[1]*.7152 + rgb[2]*.0722;
+    };
+    const contrast = (a,b) => {const values=[luminance(a),luminance(b)].sort((x,y)=>y-x); return (values[0]+.05)/(values[1]+.05);};
+    for (const selector of [".messaging_module", ".theme_dark .messaging_module"]) {
+        const declarations = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(match=>match[1].trim()===selector)[2];
+        const palette = Object.fromEntries([...declarations.matchAll(/--chat_(\w+):\s*(#[a-f\d]{6})/gi)].map(match=>[match[1],match[2]]));
+        assert.notEqual(palette.received,palette.sent);
+        for (const [background, prefix] of [[palette.received,""],[palette.sent,"sent_"]]) {
+            for (const name of ["ink","meta","link"]) assert.ok(contrast(background,palette[prefix+name])>=4.5,`${selector}: ${prefix+name} on ${background}`);
+            assert.ok(contrast(background,palette[prefix+"read"])>=3,"read rings remain distinguishable");
+            assert.ok(contrast(background,palette[prefix+"wave"])>=3,"voice progress track remains distinguishable");
+            assert.ok(contrast(background,palette.canvas)>1.15,"bubble surface separates from the chat canvas");
+        }
+        assert.ok(contrast(palette.sent,palette.sent_accent)>=3,"outgoing audio accent remains visible on crimson");
+    }
+    assert.match(css,/background-color: var\(--chat_canvas\)/);
+    assert.match(css,/background: var\(--chat_received\); color: var\(--chat_ink\)/);
+    assert.match(css,/\.messaging_mine \.messaging_bubble \{[^}]+background: var\(--chat_sent\)/);
+    for (const name of ["ink","meta","link","read","wave"]) assert.ok(css.includes(`--chat_${name}: var(--chat_sent_${name})`),`own bubbles must use their ${name} contrast token`);
+    assert.match(css,/\.messaging_mine \.messaging_audio_play \{color: var\(--chat_ink\)/);
+});
