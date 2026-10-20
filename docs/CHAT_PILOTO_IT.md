@@ -127,6 +127,34 @@ La revisión visual se delega al usuario por problemas de sesión de la extensi�
 Las pruebas automáticas de DOM, controles y permisos no equivalen a esa aceptación
 visual ni a una subida de prueba con el Drive corporativo real.
 
+## Revisión visual local del 20 de octubre de 2026
+
+Preparada localmente; no implica publicación ni apertura a otros departamentos.
+Se conserva el piloto IT y no se modifica el contrato de archivos privados en Drive.
+
+- Burbujas más contenidas y editor centrado de una línea que crece con el texto,
+  hasta un límite con desplazamiento; conserva Enter configurable y borradores.
+- Voz con controles compactos inspirados en WhatsApp: reproducir/pausar, progreso
+  accesible con teclado, tiempo, avatar y 1×/1,5×/2×. Solo una nota suena a la vez.
+  No descarga el historial de audios: la primera pulsación carga y reproduce; las
+  siguientes reutilizan el blob privado. La duración se muestra al obtenerla, no
+  se inventa antes de descargar. Si el códec permite decodificación local, se genera
+  su onda real; si no, queda un indicador neutro y la reproducción nativa continúa.
+- Imágenes sin descarga inline ni enlaces que abran otra pestaña. Se conservan
+  autor, imagen, texto opcional, hora y confirmaciones de envío/entrega/lectura.
+- Visor interno con ajuste a pantalla, zoom hasta 3×, desplazamiento, descarga y
+  cierre explícito o con Escape; restaura el foco a la miniatura. Abrir o ampliar
+  reutiliza el archivo descargado, sin solicitudes adicionales a Drive.
+- Controles táctiles y foco visible; colores de audio específicos para ambos temas,
+  sombras neutras y sin librerías nuevas ni cambios de backend/migración.
+
+Antes de aceptar visualmente: revisar 320/375/414 px, escritorio y ambos temas;
+abrir imágenes verticales y horizontales, hacer zoom y desplazarse, cerrar con
+Escape y confirmar retorno a la miniatura; reproducir dos notas consecutivas,
+buscar un punto del audio y alternar velocidades. Probar también teclado móvil
+abierto, letra ampliada y un códec grabado por cada navegador utilizado por IT.
+Las pruebas DOM no sustituyen reproducción física ni revisión visual en dispositivos.
+
 ## Apertura posterior al piloto
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.

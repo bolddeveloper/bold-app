@@ -41,6 +41,7 @@ if (process.argv.includes("--serve")) {
     for (const key of ["window", "document", "navigator", "localStorage", "sessionStorage", "HTMLElement", "MutationObserver", "Element", "HTMLTextAreaElement", "CustomEvent", "Event"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
     globalThis.requestAnimationFrame = callback => setTimeout(callback, 0);
     const fixture = installMessagingFixture();
+    console.log("Messaging DOM: loading isolated components…");
     const {default: React} = await import("react"), {createRoot} = await import("react-dom/client");
     const {default: Messaging} = await server.ssrLoadModule(`/@fs/${path.resolve("../mensajeria/messaging_module.jsx").replaceAll("\\", "/")}`);
     const {default: Preferences} = await server.ssrLoadModule(`/@fs/${path.resolve("../perfil/messaging_preferences.jsx").replaceAll("\\", "/")}`);
@@ -54,7 +55,10 @@ if (process.argv.includes("--serve")) {
     const submit = () => document.querySelector("form").dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
     try {
         root.render(React.createElement(Messaging)); await waitFor(() => document.querySelectorAll(".messaging_message").length === 2);
+        console.log("Messaging DOM: conversation rendered; checking interactions…");
         assert.equal(document.querySelectorAll(".messaging_message").length, 2);
+        assert.equal(document.querySelector('#messaging_input').rows,1,"composer starts with one compact row");
+        assert.ok(document.querySelector('[aria-label="Enviar mensaje"]'),"compact mobile send keeps an accessible name");
         assert.ok(document.querySelector('.messaging_chat_row .chat_unread_dot'));
         document.querySelector('[aria-label="Plegar conversaciones"]').click(); await settle();
         assert.ok(document.querySelector('.messaging_module.messaging_compact'));
@@ -117,17 +121,72 @@ if (process.argv.includes("--serve")) {
         assert.ok(document.querySelector('[aria-label^="Ver perfil de"]'), "profile remains usable outside IT");
         root.unmount();
         const {MessageMedia, VoiceRecorder} = await server.ssrLoadModule(`/@fs/${path.resolve("../mensajeria/message_media.jsx").replaceAll("\\", "/")}`);
+        console.log("Messaging DOM: checking audio, viewer and recorder…");
         const oldCreate = URL.createObjectURL, oldRevoke = URL.revokeObjectURL, revoked = [];
         URL.createObjectURL = () => "blob:private-fixture"; URL.revokeObjectURL = value => revoked.push(value);
+        const play = dom.window.HTMLMediaElement.prototype.play, pause = dom.window.HTMLMediaElement.prototype.pause;
+        const audioContext = window.AudioContext; let decodes=0, contextClosed=0;
+        window.AudioContext = class {
+            constructor(options) {assert.equal(options.sampleRate,16000); this.state="running";}
+            async decodeAudioData() {decodes++; return {duration:83,getChannelData:()=>new Float32Array([0,.5,0,1])};}
+            async close() {this.state="closed"; contextClosed++;}
+        };
+        dom.window.HTMLMediaElement.prototype.play = function () {this.dispatchEvent(new Event("play")); return Promise.resolve();};
+        dom.window.HTMLMediaElement.prototype.pause = function () {this.dispatchEvent(new Event("pause"));};
         root = createRoot(document.getElementById("root"));
         root.render(React.createElement(MessageMedia, {message: {id:"voice",conversation_id:fixture.conversation.id,media:{id:"voice",kind:"audio",mime_type:"audio/webm"}}})); await settle();
         const mediaCalls = fixture.calls.filter(value=>value==="media").length;
         await settle(); assert.equal(fixture.calls.filter(value=>value==="media").length,mediaCalls,"audio must not download until requested");
-        document.querySelector('.messaging_media_load').click(); await settle();
+        document.querySelector('[aria-label="Reproducir nota de voz"]').click(); await settle();
         assert.ok(document.querySelector('audio[preload="none"]'));
+        assert.ok(document.querySelector('[aria-label="Pausar nota de voz"]'),"one tap downloads and starts playback");
+        assert.equal(decodes,1); assert.equal(contextClosed,1,"waveform decoding releases its audio context");
+        const audioNode = document.querySelector('audio');
+        Object.defineProperty(audioNode,"duration",{configurable:true,value:83});
+        audioNode.dispatchEvent(new Event("loadedmetadata")); audioNode.currentTime=23; audioNode.dispatchEvent(new Event("timeupdate")); await settle();
+        const seek = document.querySelector('[aria-label="Posición de la nota de voz"]');
+        assert.equal(seek.disabled,false); assert.equal(seek.getAttribute('aria-valuetext'),"0:23 de 1:23");
+        assert.ok(document.querySelector('.messaging_wave_bars i[data-played="true"]'));
         document.querySelector('[aria-label="Velocidad de reproducción: 1×"]').click(); await settle();
         assert.equal(document.querySelector('audio').playbackRate,1.5);
-        assert.ok(document.querySelector('a[download]')); root.unmount(); assert.ok(revoked.includes("blob:private-fixture"));
+        document.querySelector('[aria-label="Velocidad de reproducción: 1.5×"]').click(); await settle(); assert.equal(audioNode.playbackRate,2);
+        document.querySelector('[aria-label="Velocidad de reproducción: 2×"]').click(); await settle(); assert.equal(audioNode.playbackRate,1);
+        window.dispatchEvent(new CustomEvent("bold:chat-audio-play",{detail:{}})); await settle();
+        assert.ok(document.querySelector('[aria-label="Reproducir nota de voz"]'),"starting another note pauses the current player");
+        document.querySelector('[aria-label="Reproducir nota de voz"]').click(); await settle();
+        assert.equal(fixture.calls.filter(value=>value==="media").length,mediaCalls+1,"replay reuses the private blob");
+        assert.equal(decodes,1,"replay reuses the decoded waveform");
+        document.querySelector('[aria-label="Pausar nota de voz"]').click(); await settle();
+        dom.window.HTMLMediaElement.prototype.play = () => Promise.reject(new Error("Synthetic playback failure"));
+        document.querySelector('[aria-label="Reproducir nota de voz"]').click(); await settle();
+        assert.match(document.querySelector('[role="alert"]').textContent,/No se pudo reproducir/);
+        assert.ok(!document.querySelector('[aria-label="Reproducir nota de voz"]').disabled,"playback failure allows retry");
+        window.AudioContext=audioContext;
+        assert.equal(document.querySelector('a[download]'),null); root.unmount(); assert.ok(revoked.includes("blob:private-fixture"));
+        console.log("Messaging DOM: audio passed; checking in-app image viewer…");
+        dom.window.HTMLDialogElement.prototype.showModal = function () {this.setAttribute("open","");};
+        dom.window.HTMLDialogElement.prototype.close = function () {this.removeAttribute("open");};
+        root = createRoot(document.getElementById("root"));
+        root.render(React.createElement(MessageMedia,{message:{id:"image",conversation_id:fixture.conversation.id,created_at:new Date().toISOString(),media:{id:"image",kind:"image",mime_type:"image/webp",width:640,height:360}},author:{name:"Equipo IT"}})); await settle();
+        document.querySelector('.messaging_media_load').click(); await settle();
+        const imageTrigger = document.querySelector('[aria-label="Ver imagen completa"]');
+        assert.ok(!document.querySelector('a[target="_blank"]'),"image must not open a browser tab"); assert.ok(!document.querySelector('a[download]'),"download belongs inside the viewer only");
+        const imageCalls=fixture.calls.filter(value=>value==="media").length;
+        imageTrigger.focus(); imageTrigger.click(); await waitFor(()=>document.querySelector('dialog[open]'));
+        console.log("Messaging DOM: viewer opened…");
+        assert.ok(document.querySelector('dialog a[download]')); assert.match(document.querySelector('dialog').textContent,/Equipo IT/);
+        document.querySelector('[aria-label="Ampliar imagen"]').click(); await settle();
+        assert.equal(document.querySelector('dialog img').style.getPropertyValue('--image_zoom'),"1.5");
+        document.querySelector('[aria-label="Ajustar imagen a la pantalla"]').click(); await settle();
+        assert.equal(document.querySelector('[aria-label="Alejar imagen"]').disabled,true);
+        document.querySelector('dialog').dispatchEvent(new Event("cancel",{cancelable:true})); await settle();
+        assert.ok(!document.querySelector('dialog'),"Escape/cancel closes the viewer"); assert.ok(document.activeElement===imageTrigger,"closing the viewer restores focus to its image trigger");
+        imageTrigger.click(); await waitFor(()=>document.querySelector('dialog[open]'));
+        document.querySelector('[aria-label="Cerrar imagen"]').click(); await settle(); assert.ok(!document.querySelector('dialog'),"explicit close dismisses the viewer");
+        assert.equal(fixture.calls.filter(value=>value==="media").length,imageCalls,"viewer and zoom make no new requests");
+        root.unmount(); assert.ok(!document.querySelector('dialog'),"unmount removes the private viewer");
+        console.log("Messaging DOM: image viewer passed…");
+        dom.window.HTMLMediaElement.prototype.play=play; dom.window.HTMLMediaElement.prototype.pause=pause;
         URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke;
         let tracksStopped = 0, received = null, recording = false, recordingError = "";
         const track = {stop:()=>{tracksStopped++;}}, tracks = {getTracks:()=>[track]};
@@ -165,7 +224,7 @@ if (process.argv.includes("--serve")) {
         [...document.querySelectorAll('dialog button')].find(node=>node.textContent==="Usar imagen").click(); await settle();
         assert.equal(editedImage.type,"image/webp"); assert.ok(editedImage.size>0); root.unmount();
         assert.ok(revoked.includes("blob:editor-fixture")); URL.createObjectURL=oldCreate; URL.revokeObjectURL=oldRevoke;
-        console.log("Messaging UI: private conversation entry, safe links/HTML, presence, edit ownership, dates, no idle polling, double-submit prevention, reset and failure draft retention passed.");
+        console.log("Messaging UI passed: private entry, safe links, presence, own edits, dates, no idle polling, double-submit/draft protection, compact composer, audio controls/waveform/retry, private in-app image viewer and recorder/editor.");
     } finally {await server.close(); dom.window.close();}
     process.exit(0); // Existing private-image cache owns a BroadcastChannel in Node.
 }

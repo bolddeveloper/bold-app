@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {cropRect, imageFileError, MAX_CHAT_FILE, mediaPreview, recordingMime} from "./media_helpers.js";
+import {audioTime, cropRect, imageFileError, MAX_CHAT_FILE, mediaPreview, recordingMime, waveformPeaks} from "./media_helpers.js";
 import {createMessagingApi} from "./messaging_api.js";
 import {readFileSync} from "node:fs";
 
@@ -14,6 +14,13 @@ test("camera crop cannot exceed bounds and image uploads reject SVG or oversize"
 test("recording negotiates a supported audio container, with a safe unsupported fallback", () => {
     assert.equal(recordingMime({isTypeSupported:type=>type==="audio/mp4"}), "audio/mp4");
     assert.equal(recordingMime({isTypeSupported:()=>false}), "");
+});
+test("voice time and waveform handle silence, missing duration and short buffers without inventing peaks", () => {
+    assert.equal(audioTime(Infinity), "0:00"); assert.equal(audioTime(NaN), "0:00");
+    assert.equal(audioTime(-1), "0:00"); assert.equal(audioTime(83.9), "1:23");
+    assert.deepEqual(waveformPeaks(new Float32Array(100)), Array(32).fill(.12));
+    assert.deepEqual(waveformPeaks(new Float32Array([0,.5,0,1]), 4), [.12,.5,.12,1]);
+    assert.equal(waveformPeaks(new Float32Array()).length,32);
 });
 test("media uses authenticated multipart and nested, validated private download routes", async () => {
     const calls = [], api = createMessagingApi({request:async (...args)=>calls.push(args)});
