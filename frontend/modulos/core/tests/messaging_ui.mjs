@@ -135,10 +135,14 @@ if (process.argv.includes("--serve")) {
         dom.window.HTMLMediaElement.prototype.pause = function () {this.dispatchEvent(new Event("pause"));};
         root = createRoot(document.getElementById("root"));
         root.render(React.createElement(MessageMedia, {message: {id:"voice",conversation_id:fixture.conversation.id,media:{id:"voice",kind:"audio",mime_type:"audio/webm"}}})); await settle();
+        assert.ok(document.querySelector('.messaging_waveform input[type="range"]').disabled,"before loading duration, the hidden native seek control is disabled");
+        assert.equal(document.querySelectorAll('.messaging_wave_thumb').length,1,"only one custom playback thumb is rendered");
         const mediaCalls = fixture.calls.filter(value=>value==="media").length;
         await settle(); assert.equal(fixture.calls.filter(value=>value==="media").length,mediaCalls,"audio must not download until requested");
         document.querySelector('[aria-label="Reproducir nota de voz"]').click(); await settle();
         assert.ok(document.querySelector('audio[preload="none"]'));
+        assert.ok(document.querySelector('.messaging_audio > .messaging_audio_rate'),"speed shares the playback row instead of adding height below the waveform");
+        assert.ok(!document.querySelector('.messaging_audio_meta button'),"duration metadata is a compact, non-interactive row");
         assert.ok(document.querySelector('[aria-label="Pausar nota de voz"]'),"one tap downloads and starts playback");
         assert.equal(decodes,1); assert.equal(contextClosed,1,"waveform decoding releases its audio context");
         const audioNode = document.querySelector('audio');

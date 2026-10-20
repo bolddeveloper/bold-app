@@ -61,6 +61,33 @@ test("text bubbles restore their earlier width and reduce height without changin
     assert.match(rules(".messaging_composer textarea")[0],/min-height: 40px/);
     assert.match(rules(".messaging_bubble header button").at(-1),/min-height: 44px/);
 });
+test("audio bubbles use two compact rows without shrinking playback or speed touch targets", () => {
+    const css = readFileSync(new URL("./messaging.css",import.meta.url),"utf8");
+    const rules = selector => [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(match=>match[1].trim()===selector).map(match=>match[2]);
+    const bubble=rules(".messaging_bubble:has(.messaging_media_audio)");
+    assert.match(bubble[0],/width: 360px/); assert.match(bubble[1],/width: 340px/);
+    assert.ok(bubble.every(rule=>/max-width: (?:min\(100%,360px\)|100%)/.test(rule)));
+    assert.ok(bubble.every(rule=>/padding: 6px 10px/.test(rule)));
+    assert.match(rules(".messaging_bubble:has(.messaging_media_audio) > footer")[0],/grid-row: 1/);
+    assert.match(rules(".messaging_bubble:has(.messaging_media_audio) > .messaging_media_audio")[0],/grid-row: 2; margin: 0/);
+    assert.match(rules(".messaging_audio")[0],/44px minmax\(0,1fr\) 44px 40px/);
+    assert.match(rules(".messaging_waveform")[0],/height: 28px/);
+    assert.match(rules(".messaging_waveform input")[0],/height: 44px/);
+    assert.match(rules(".messaging_module .messaging_audio button")[0],/min-width: 44px; min-height: 44px/);
+    assert.doesNotMatch(bubble.join(""),/(?:^|;)\s*(?:max-|min-)?height:|overflow:\s*hidden/,"captions, long names and errors can still grow");
+});
+
+test("the native audio slider stays invisible even under the dark disabled-control rule", () => {
+    const css = readFileSync(new URL("./messaging.css",import.meta.url),"utf8");
+    const theme = readFileSync(new URL("../tareas/src/theme_rework.css",import.meta.url),"utf8");
+    assert.match(theme,/\.theme_dark :is\(input, textarea, select, button\):disabled\s*\{\s*opacity: \.65/);
+    // These scoped selectors have higher specificity than the shared theme's
+    // disabled rule, independently of stylesheet loading order. No !important.
+    assert.match(css,/\.messaging_audio \.messaging_waveform input\[type="range"\], \.messaging_audio \.messaging_waveform input\[type="range"\]:disabled \{opacity: 0; appearance: none; background: transparent; border: 0; padding: 0;/);
+    assert.match(css,/\.messaging_waveform:has\(input:focus-visible\) \{outline: 2px/);
+    assert.match(css,/\.messaging_waveform input \{[^}]*height: 44px/);
+});
+
 test("chat palettes separate canvas and bubbles with readable text, metadata and links in both themes", () => {
     const css = readFileSync(new URL("./messaging.css",import.meta.url),"utf8");
     const luminance = hex => {
