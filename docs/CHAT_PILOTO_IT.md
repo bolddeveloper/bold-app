@@ -758,6 +758,124 @@ sincronización (21) y PWA (7) pasaron antes del commit. Los resultados efectivo
 de publicación, versiones, respaldo y aceptación de producción se registrarán
 por separado al verificarlos, no se presuponen en esta nota.
 
+### Ampliación de acceso — avance local, aún no publicado
+
+Solicitud posterior del usuario: permitir canales sin departamento, canales
+privados con participantes autorizados y control departamental del acceso de
+otros empleados. El avance independiente y la ampliación posterior de privacidad
+se registran por separado a continuación. Ninguno implica publicación en Oracle.
+
+Preparado y probado localmente el 21 de octubre:
+
+- `unit` opcional y migración `0010_independent_channels`. No se crea una unidad
+  ficticia ni se mueven canales existentes. La migración se aplicó solo en bases
+  efímeras de test, no en staging persistente ni en Oracle.
+- Nombre único, sin distinguir mayúsculas, dentro del grupo independiente. Los
+  nombres departamentales mantienen su namespace. Un canal archivado conserva
+  su nombre; el índice también protege frente a creación concurrente.
+- Crear con `unit_id: null` u omitirlo, agrupar/filtrar «Sin departamento», abrir
+  el canal y editar su nombre/descripción. No se cambia de departamento a un
+  canal existente. UI/UX Pro Max guio la opción explícita y etiquetada, con los
+  estados de guardado y el aspecto existente, sin rediseñar BOLD.
+- Los permisos del cargo y las excepciones de la asignación activa siguen
+  evaluándose para los canales independientes. La ausencia de departamento no
+  evita el cierre del piloto IT, el rechazo a edición ajena ni el control de Drive.
+- Archivos bajo el grupo propio `Slack / Canales independientes / Canal / Empleado`,
+  mediante los mismos marcadores idempotentes y descargas privadas. Ensayo con
+  Drive simulado: no se subieron archivos nuevos al proveedor real en esta revisión.
+- Siete casos nuevos aprobados en SQLite y los mismos siete en PostgreSQL,
+  además de cuatro comprobaciones reales de concurrencia en PostgreSQL. No sumar
+  los motores como si fueran escenarios diferentes. Las once comprobaciones
+  PostgreSQL pasaron en 19,017 s y su base de test se eliminó al terminar.
+- Contrato DOM de Slack ampliado: crear sin departamento, enviar `null`, agrupar,
+  filtrar y reabrir la configuración sin desreferenciar un departamento ausente.
+  También pasaron 56 pruebas unitarias de Chat/Slack, el contrato DOM de Chat y
+  la compilación frontend (advertencia conocida de chunks grandes).
+- Regresión final local de Mensajería: 108 comprobaciones, 104 aprobadas y las
+  cuatro de concurrencia omitidas explícitamente por SQLite. Estas cuatro sí
+  pasaron en PostgreSQL en la ejecución separada anterior. Un rechazo de lectura
+  también desactiva la capacidad ofrecida para crear canales independientes.
+
+Decisión confirmada por el usuario: **solo las personas invitadas pueden leer los
+canales privados**, sin lectura implícita del propietario, administradores ni
+responsables departamentales. La administración de invitaciones es independiente
+de la lectura. Quien dispone de esa administración puede añadirse explícitamente;
+el cambio queda registrado, no constituye una lectura administrativa silenciosa.
+
+El catálogo permite editar los nombres de cargo y nivel; no existe una marca
+inequívoca de «jefe de departamento». No inferir esa autoridad por títulos como
+«Jefe» o «Gerente». La administración de acceso necesita una capacidad explícita,
+configurable mediante Permisos y acotada al departamento/recurso autorizado.
+La capacidad administrativa y la lectura de contenidos deben resolverse por
+separado. Se registra `slack.channel.access`, que no se incluye en concesiones
+ordinarias por defecto ni en preselecciones masivas. Para un responsable, asignar
+este permiso con alcance «Mi unidad» desde Permisos; no asignarlo globalmente por
+comodidad. «Mi unidad» no concede administración sobre canales independientes de
+otras personas. El creador conserva gestión de acceso salvo denegación explícita.
+
+#### Privacidad e invitaciones — implementación local
+
+- Tres modalidades: todos los empleados, departamento de la asignación activa
+  con excepciones, o privado solo por invitación. «Departamento» exige uno real.
+  Los canales existentes siguen siendo públicos; no se modifica su historial.
+- Excepciones por persona: leer y participar, solo lectura, o sin acceso. Una
+  exclusión prevalece también en canales públicos. Las políticas Core y el
+  piloto IT siguen siendo requisitos adicionales, no se sustituyen por invitaciones.
+- El creador de un canal privado se incorpora como invitado explícito. Si se le
+  retira después, pierde lectura; no existe una excepción implícita permanente.
+- La frontera se aplica antes del acceso heredado del propietario en Core.
+  Mensajes, hilos, descargas, referencias, avisos, no leídos y pistas del socket
+  usan la misma política. El filtrado ocurre antes de construir los cursores.
+- Catálogo separado «Administrar acceso» para responsables autorizados que no
+  participan: solo metadatos de configuración, nunca historial, archivos,
+  descripciones, actividad ni totales pendientes. La configuración se guarda con
+  control de versión, bloqueo del canal y auditoría.
+- Migraciones `0011_channel_access` y `0012_channel_access_epoch`. El contador de
+  recuperación persiste solo para las personas cuyo nivel efectivo cambia.
+  Usa la conexión y el arrendamiento de seguridad existentes, sin otro sondeo.
+  Una creación ordinaria no invalida borradores. Ante una revocación se purgan
+  historial, adjuntos abiertos, borradores privados e indicadores de Slack.
+- UI/UX Pro Max aplicada a etiquetas, ayudas de alcance, permisos por persona,
+  estados de carga/error y controles usables por teclado y móvil, sin rediseñar
+  los componentes ni la identidad visual de BOLD.
+
+Las migraciones se han ensayado en bases efímeras, no en el staging persistente
+con OAuth ni en Oracle. La comprobación visual usa cuentas ficticias y Drive
+simulado; no se ha repetido una subida a Google real para esta ampliación.
+El acceso directo a Google Drive sigue dependiendo de sus propios permisos.
+La revocación en BOLD no puede retirar copias ya descargadas ni accesos externos.
+
+La nota de usuario se prepara en `pendingPilotReleaseNotes` de `release_notes.js`,
+fuera de la lista publicada y sin cambiar el alcance de visibilidad de novedades.
+No se hizo commit, push o despliegue de este avance ni se abrió el piloto.
+
+Verificación final de esta ampliación (21 de octubre):
+
+- PostgreSQL 18: **125 pruebas de Mensajería aprobadas**, incluidas seis de
+  concurrencia; no se omitieron las comprobaciones de bloqueo. La base
+  `test_bold_validation` se eliminó automáticamente al finalizar, sin modificar
+  el staging persistente. `makemigrations --check --dry-run`: sin diferencias.
+- 57 pruebas unitarias Chat/Slack, contratos DOM de ambos módulos y 21 pruebas
+  de sincronización/notificaciones aprobadas. Regresión general frontend:
+  392 aprobadas y una omitida (393 ejecutadas); tras preparar el borrador se
+  verificaron sus cinco pruebas de notas. No sumar ejecuciones repetidas como
+  escenarios nuevos. Compilación final aprobada, con advertencias conocidas de
+  chunks grandes. `git diff --check` sin errores de whitespace.
+- Revisión visual con cuentas ficticias: 375 px y escritorio, claro/oscuro;
+  horizontal de 812 × 375 sin overflow horizontal y con cierre accesible. Los
+  selectores y botones de invitados medidos tienen 44 px de alto. Se verificó
+  cierre por Escape. Capturas guardadas en la carpeta local de revisión.
+- Dos sesiones reales de navegador, con identidades **ficticias** y Drive
+  simulado: crear un canal privado independiente, añadir a la segunda persona
+  con solo lectura, leer un mensaje sintético, comprobar que no puede escribir
+  ni gestionar invitaciones, revocar con el canal abierto y comprobar la retirada
+  inmediata de nombre, texto y compositor sin recargar. El canal público siguió
+  visible. Restaurar la invitación volvió a incluir el canal en el listado.
+- La pestaña de revisión usa el entorno sintético de localhost, no producción
+  ni el staging con OAuth real. La cuenta empresarial de Google no se utilizó
+  para esta aceptación. Falta la aprobación de lanzamiento y la configuración
+  explícita de los cargos gestores antes de migrar/desplegar fuera de los tests.
+
 ## Apertura posterior al piloto
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.

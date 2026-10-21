@@ -24,7 +24,7 @@ class ChannelConcurrencyTests(TransactionTestCase):
 
     def setUp(self):
         # TransactionTestCase flushes catalog migration rows between methods.
-        for resource,action in (("channel","read"),("channel","create"),("channel","manage"),("message","create"),("message","update")):
+        for resource,action in (("channel","read"),("channel","create"),("channel","manage"),("channel","access"),("message","create"),("message","update")):
             Permission.objects.get_or_create(code=f"slack.{resource}.{action}",defaults={"module_code":"slack","resource":resource,"action":action,"risk_level":"low"})
         base.DepartmentChannelTests.setUp(self)
 
@@ -71,3 +71,30 @@ class ChannelConcurrencyTests(TransactionTestCase):
         self.assertTrue(state.following)
         self.assertEqual(state.revision,2)
         self.assertEqual(ChannelReadState.objects.get(channel_id=self.channel_id,employee=self.bob.employee).sequence,1)
+
+    def test_independent_name_is_unique_across_departments_under_parallel_creation(self):
+        def create(assignment):
+            return self.as_person(assignment).post(self.root,{"name":"Espacio común","unit_id":None},format="json")
+        results=self.parallel([lambda:create(self.alice),lambda:create(self.bob)])
+        self.assertEqual(sorted(code for code,data in results),[201,409])
+        self.assertEqual(DepartmentChannel.objects.filter(unit__isnull=True,name="Espacio común").count(),1)
+
+    def test_access_updates_require_the_same_version_under_concurrency(self):
+        def change(visibility):
+            return self.as_person(self.alice).patch(self.url+"access/",{"visibility":visibility,
+                "members":[{"employee_id":str(self.alice.employee_id),"access":"write"}],"version":1},format="json")
+        results=self.parallel([lambda:change("department"),lambda:change("private")])
+        self.assertEqual(sorted(code for code,data in results),[200,409])
+        self.assertEqual(DepartmentChannel.objects.get(pk=self.channel_id).version,2)
+
+    def test_revocation_and_send_serialize_on_the_channel(self):
+        from .models import ChannelAccessRule
+        def revoke():
+            return self.as_person(self.alice).patch(self.url+"access/",{"visibility":"private",
+                "members":[{"employee_id":str(self.alice.employee_id),"access":"write"}],"version":1},format="json")
+        results=self.parallel([revoke,lambda:self.post(self.bob,uuid.uuid4())])
+        self.assertEqual(results[0][0],200,results)
+        self.assertIn(results[1][0],(201,404),results)
+        self.assertEqual(ChannelMessage.objects.count(),1 if results[1][0]==201 else 0)
+        self.assertFalse(ChannelAccessRule.objects.filter(channel_id=self.channel_id,employee=self.bob.employee).exists())
+        self.assertEqual(self.post(self.bob,uuid.uuid4()).status_code,404)

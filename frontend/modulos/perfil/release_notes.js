@@ -1,3 +1,17 @@
+// Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
+// aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
+export const pendingPilotReleaseNotes = [{
+    id: "2026-10-21-slack-channel-access-pilot", date: "2026-10-21", category: "Piloto IT", icon: "update",
+    title: "Canales con privacidad e invitaciones",
+    summary: "Espacios independientes y controles para decidir quién puede leer o participar en cada canal.",
+    sections: [{title: "Organiza tus conversaciones", items: [
+        "Crea canales sin departamento o vincúlalos a uno. Elige acceso para todos, para el departamento con excepciones, o solo por invitación.",
+        "Añade personas con permiso para leer y participar, solo leer, o sin acceso. En un canal privado, ser propietario o administrador no concede lectura automática.",
+        "Los responsables autorizados pueden administrar invitaciones sin recibir acceso implícito a los mensajes ni a los archivos del canal.",
+        "Los cambios de acceso actualizan el historial abierto y los indicadores de no leídos. Las pruebas siguen limitadas al departamento de IT.",
+    ]}],
+}];
+
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {

@@ -19,7 +19,7 @@ class ChannelSocketTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
         # TransactionTestCase flushes data-migration rows between methods.
-        for resource, action in (("channel", "read"), ("channel", "create"), ("channel", "manage"), ("message", "create"), ("message", "update")):
+        for resource, action in (("channel", "read"), ("channel", "create"), ("channel", "manage"), ("channel", "access"), ("message", "create"), ("message", "update")):
             Permission.objects.get_or_create(code=f"slack.{resource}.{action}", defaults={"module_code":"slack", "resource":resource, "action":action, "risk_level":"low"})
         self.people = []
         for name in ("alpha", "beta"):
@@ -107,6 +107,35 @@ class ChannelSocketTests(TransactionTestCase):
                         break
                     event = await socket.receive_json_from()
                     self.assertNotEqual(event.get("event_type"), "slack.changed")
+            finally:
+                await socket.disconnect()
+        async_to_sync(scenario)()
+
+    def test_private_invitation_revocation_invalidates_the_existing_security_lease(self):
+        from .models import ChannelAccessRule
+        self.channel.visibility="private";self.channel.save(update_fields=["visibility"])
+        ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=self.channel,employee=person[1].employee,access="write") for person in self.people])
+        socket=self.socket(1)
+        def revoke():
+            account,assignment,_=self.people[0]
+            client=APIClient();client.force_authenticate(account);client.credentials(HTTP_X_ASSIGNMENT_ID=str(assignment.pk))
+            return client.patch(f"/api/v2/messaging/channels/{self.channel.pk}/access/",{"visibility":"private","version":1,
+                "members":[{"employee_id":str(assignment.employee_id),"access":"write"}]},format="json")
+        async def scenario():
+            try:
+                self.assertTrue((await socket.connect())[0])
+                initial=await receive_event(socket,"control.ready")
+                response=await database_sync_to_async(revoke)()
+                self.assertEqual(response.status_code,200,response.data)
+                revision=await receive_event(socket,"permissions.revision")
+                self.assertTrue(revision["payload"]["force"])
+                self.assertNotEqual(initial["payload"]["state"],revision["payload"]["state"])
+                self.assertNotIn(str(self.channel.pk),str(revision),"a revoked channel's identifier is not a control payload")
+                await get_channel_layer().group_send("slack_watch",{"type":"slack.changed","channel_id":str(self.channel.pk),"kind":"message.created"})
+                for _ in range(12):
+                    if await socket.receive_nothing(timeout=.1):break
+                    event=await socket.receive_json_from()
+                    self.assertNotEqual(event.get("event_type"),"slack.changed")
             finally:
                 await socket.disconnect()
         async_to_sync(scenario)()

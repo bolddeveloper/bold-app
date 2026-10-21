@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {releaseNotes} from "./release_notes.js";
+import {pendingPilotReleaseNotes,releaseNotes} from "./release_notes.js";
+
+test("las notas preparadas del piloto conservan el formato sin publicarse",()=>{
+    assert.ok(pendingPilotReleaseNotes.length>0);
+    for(const note of pendingPilotReleaseNotes){
+        assert.equal(releaseNotes.some(row=>row.id===note.id),false);
+        assert.equal(note.category,"Piloto IT");assert.match(note.date,/^\d{4}-\d{2}-\d{2}$/);
+        assert.ok(note.title && note.summary && note.icon && note.sections.every(section=>section.title && section.items.length));
+    }
+});
 
 test("el chat piloto no se anuncia como lanzamiento público", () => {
     assert.equal(releaseNotes.some(note => ["2026-10-19-live-messaging-receipts", "2026-10-19-direct-messaging-foundation"].includes(note.id)), false);

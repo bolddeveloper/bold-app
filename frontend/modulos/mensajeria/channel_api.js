@@ -11,7 +11,7 @@ export function channelPage(collection, next, filters = {}) {
     if (next) {
         const page = new URL(next, "https://pagination.invalid");
         if (page.pathname !== collection || !page.searchParams.get("cursor")) throw Error("Página de canal no válida.");
-        for (const key of ["parent", "archived", "q"]) {
+        for (const key of ["parent", "archived", "q", "unit"]) {
             if ((page.searchParams.get(key) || "") !== (params.get(key) || "")) throw Error("La página pertenece a otra vista.");
         }
         params.set("cursor", page.searchParams.get("cursor"));
@@ -23,6 +23,10 @@ export function createChannelApi(client = http) {
     const detail = channel => `${root}${id(channel)}/`, messages = channel => detail(channel) + "messages/";
     return {
         departments: options => client.request("/api/v2/messaging/departments/", options),
+        managed: (next,options) => client.request(channelPage(root+"managed/",next),options),
+        access: (channel,options) => client.request(detail(channel)+"access/",options),
+        setAccess: (channel,values,options) => client.request(detail(channel)+"access/",{...options,method:"PATCH",body:values}),
+        people: (filters,options) => client.request(root+"people/?"+new URLSearchParams(filters),options),
         detail: (channel,options) => client.request(detail(channel),options),
         message: (channel,message,options)=>client.request(messages(channel)+id(message)+"/",options),
         follow: (channel,following,options)=>client.request(detail(channel)+"following/",{...options,method:"PUT",body:{following}}),
@@ -61,7 +65,7 @@ export function channelError(error) {
     if (error?.status === 404) return "Este canal o hilo ya no está disponible para tu asignación activa.";
     if (error?.status === 429) return "Demasiadas acciones seguidas. Conservamos el texto; espera antes de reintentar.";
     const fields = error?.fields;
-    const detail = [fields?.detail,fields?.name,fields?.description,fields?.unit_id,fields?.body,fields?.file,fields?.non_field_errors].flat().find(value => typeof value === "string" && value.length <= 500);
+    const detail = [fields?.detail,fields?.name,fields?.description,fields?.unit_id,fields?.visibility,fields?.members,fields?.body,fields?.file,fields?.non_field_errors].flat().find(value => typeof value === "string" && value.length <= 500);
     if (detail) return detail;
     if (error?.status === 403) return "Tu asignación activa no permite esta acción en Slack.";
     if (error?.status === 409) return "El contenido cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a guardar.";

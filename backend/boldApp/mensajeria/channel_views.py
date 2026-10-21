@@ -12,7 +12,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
 
-from boldApp.core.models import OrganizationalUnit
+from boldApp.core.models import OrganizationalUnit, Permission
 from .channel_access import ChannelPolicy
 from .channel_events import publish_channel
 from .channel_tasks import TaskReferences
@@ -20,15 +20,17 @@ from .channel_media import store_channel_media
 from .channel_unread import channel_states, thread_counts, unread_messages
 from .channel_notifications import notify_channel_message, mark_channel_notices_read
 from .media import BoundedUpload, MAX_BYTES, media_data, prepare, private_media_response
-from .models import DepartmentChannel, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
+from .models import DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
 from .serializers import StrictInputSerializer, EditMessageSerializer
 from .views import PrivateChatView, Conflict
 
 
 class CreateChannel(StrictInputSerializer):
-    unit_id = serializers.UUIDField()
+    unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     name = serializers.CharField(max_length=80)
     description = serializers.CharField(max_length=500, allow_blank=True, default="")
+    visibility = serializers.ChoiceField(choices=["public", "department", "private"], default="public")
+    members = serializers.ListField(child=serializers.DictField(), max_length=200, required=False, default=list)
 
 
 class UpdateChannel(StrictInputSerializer):
@@ -75,6 +77,8 @@ class ChannelMessagePages(CursorPagination):
 
 
 def department_data(unit):
+    if unit is None:
+        return None
     # Existing organizational colors are honored only when they are valid CSS
     # hex colors. A stable palette gives unconfigured departments distinct tags.
     palette = ("#4760A8", "#9250A3", "#287065", "#A14B30", "#A32D50", "#59602B")
@@ -89,9 +93,11 @@ def channel_data(channel, policy):
         policy.channel_states.update(channel_states([channel], policy.assignment.employee_id))
     return {"id": str(channel.pk), "name": channel.name, "description": channel.description,
             "department": department_data(channel.unit), "archived_at": channel.archived_at,
+            "visibility": channel.visibility,
             "version": channel.version, "activity_version": channel.activity_version,
             "created_at": channel.created_at, "updated_at": channel.updated_at,
             "can_manage": policy.allows("slack.channel.manage", channel.unit, channel.pk),
+            "can_manage_access": policy.allows("slack.channel.access", channel.unit, channel.pk),
             "can_send": not channel.archived_at and policy.allows("slack.message.create", channel.unit, channel.pk),
             **policy.channel_states[str(channel.pk)]}
 
@@ -121,10 +127,11 @@ class SlackView(PrivateChatView):
         return self._channel_policy
 
     def channel(self, channel_id, *, lock=False):
-        rows = DepartmentChannel.objects.select_related("unit")
+        rows = DepartmentChannel.objects.select_related("unit", "creator")
         if lock:
             rows = rows.select_for_update(of=("self",))
         channel = get_object_or_404(rows, pk=channel_id)
+        self.policy().prime([channel])
         if not self.policy().allows("slack.channel.read", channel.unit, channel.pk):
             raise NotFound("Este canal no está disponible para tu asignación activa.")
         return channel
@@ -139,45 +146,69 @@ class DepartmentListView(SlackView):
     def get(self, request):
         policy = self.policy()
         units = OrganizationalUnit.objects.order_by("name", "id")[:200]
-        return Response({"results": [{**department_data(unit), "can_create": policy.allows("slack.channel.create", unit)}
+        return Response({"can_create_independent": policy.allows("slack.channel.read", None) and policy.allows("slack.channel.create", None), "results": [{**department_data(unit), "can_create": policy.allows("slack.channel.create", unit)}
             for unit in units if policy.allows("slack.channel.read", unit)]})
 
 
 class ChannelListView(SlackView):
     def get(self, request):
-        rows = DepartmentChannel.objects.select_related("unit")
+        from .channel_acl import readable_channels
+        rows = readable_channels(DepartmentChannel.objects.select_related("unit", "creator"), self.actor(), request.assignment.position.unit_id)
         if request.query_params.get("archived") != "true":
             rows = rows.filter(archived_at__isnull=True)
         unit = request.query_params.get("unit")
-        if unit:
+        if unit == "independent":
+            rows = rows.filter(unit__isnull=True)
+        elif unit:
             try:
                 unit = serializers.UUIDField().run_validation(unit)
             except serializers.ValidationError:
                 raise ValidationError("Departamento no válido.")
             rows = rows.filter(unit_id=unit)
-        pages = ChannelPages()
-        page = pages.paginate_queryset(rows, request)
         policy = self.policy()
+        candidates = list(rows)
+        policy.prime(candidates)
+        # Apply both the structural boundary and Core restrictions BEFORE the
+        # cursor is formed. A cursor must not encode a hidden channel's name.
+        visible = [row.pk for row in candidates if policy.allows("slack.channel.read", row.unit, row.pk)]
+        pages = ChannelPages()
+        page = pages.paginate_queryset(rows.filter(pk__in=visible), request)
         policy.channel_states = channel_states(page, self.actor())
-        return pages.get_paginated_response([channel_data(row, policy) for row in page
-            if policy.allows("slack.channel.read", row.unit, row.pk)])
+        return pages.get_paginated_response([channel_data(row, policy) for row in page])
 
     @transaction.atomic
     def post(self, request):
         form = CreateChannel(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
-        unit = get_object_or_404(OrganizationalUnit.objects.select_for_update(), pk=values["unit_id"])
+        unit = get_object_or_404(OrganizationalUnit.objects.select_for_update(), pk=values["unit_id"]) if values["unit_id"] else None
         self.policy().require("slack.channel.read", unit)
         self.policy().require("slack.channel.create", unit)
+        from .channel_access_views import AccessMember, validate_access
+        member_form = AccessMember(data=values["members"], many=True)
+        member_form.is_valid(raise_exception=True)
+        members = member_form.validated_data
+        if values["visibility"] == "private" and not any(row["employee_id"] == self.actor() for row in members):
+            members.append({"employee_id": self.actor(), "access": "write"})
+        if len(members) > 200:
+            raise ValidationError({"members": "El límite es de 200 personas, incluido el creador."})
+        validate_access(values["visibility"], members, values["unit_id"])
+        if unit is None:
+            # Serialize the independent namespace across active departments,
+            # including its bounded count; NULL cannot be locked as a unit.
+            Permission.objects.select_for_update().get(code="slack.channel.create")
         if DepartmentChannel.objects.filter(unit=unit).count() >= 200:
-            raise ValidationError("Este departamento alcanzó el límite inicial de 200 canales, incluidos los archivados.")
+            raise ValidationError("Este grupo alcanzó el límite inicial de 200 canales, incluidos los archivados.")
         try:
             with transaction.atomic():
-                channel = DepartmentChannel.objects.create(unit=unit, name=values["name"], description=values["description"], creator=request.assignment)
+                channel = DepartmentChannel.objects.create(unit=unit, name=values["name"], description=values["description"], visibility=values["visibility"], creator=request.assignment)
+                ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=channel, **row) for row in members])
         except IntegrityError:
-            raise Conflict("Ya existe un canal con ese nombre en el departamento, posiblemente archivado.")
+            raise Conflict("Ya existe un canal con ese nombre en este grupo, posiblemente archivado.")
         publish_channel(channel, "channel.created")
+        if not self.policy().allows("slack.channel.read", channel.unit, channel.pk):
+            return Response({"id": str(channel.pk), "name": channel.name, "visibility": channel.visibility,
+                "version": channel.version, "access_only": True}, status=201)
         return Response(channel_data(channel, self.policy()), status=201)
 
 

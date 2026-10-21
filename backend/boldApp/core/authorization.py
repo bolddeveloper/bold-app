@@ -393,6 +393,11 @@ def resolve_access(
         if not assignment_can_chat(assignment):
             return _decision(False, "Slack permanece en el piloto de IT.", "slack_pilot_restricted",
                              "system", policy_version=context.policy_version)
+        if resource_id is not None:
+            from boldApp.mensajeria.channel_acl import boundary_allows
+            if not boundary_allows(assignment, permission, target_unit, resource_id, context):
+                return _decision(False, "El acceso al canal requiere una invitación vigente y suficiente.",
+                                 "slack_channel_boundary", "system", policy_version=context.policy_version)
     if assignment.employee.user_account.is_superuser:
         return _decision(
             True,
@@ -490,6 +495,16 @@ def resolve_access(
                 policy_version=context.policy_version,
             )
 
+    # An independent channel has no department to delegate. Do not turn an
+    # own-unit manager into the manager of every independent private channel.
+    if permission.code == "slack.channel.access" and resource_id is not None:
+        from boldApp.mensajeria.channel_acl import channel_context
+        channel = channel_context(assignment, resource_id, context)
+        if channel and channel["unit_id"] is None:
+            applicable_direct = [rule for rule in applicable_direct if rule.scope_type == AccessGrant.SCOPE_GLOBAL
+                or (rule.resource_id and str(rule.resource_id) == str(resource_id))]
+            applicable_role = [rule for rule in applicable_role if rule.scope_type == JobRolePermission.SCOPE_GLOBAL]
+
     for rule in applicable_direct:
         if rule.effect == AccessGrant.EFFECT_ALLOW:
             return _decision(
@@ -583,6 +598,13 @@ def resolve_access(
                     "task_assignment",
                     policy_version=context.policy_version,
                 )
+
+    if permission.code == "slack.channel.access" and resource_id is not None:
+        from boldApp.mensajeria.channel_acl import channel_context
+        channel = channel_context(assignment, resource_id, context)
+        if channel and channel["creator__employee_id"] == assignment.employee_id:
+            return _decision(True, "El creador administra las invitaciones, sin lectura implícita.",
+                             "slack_channel_creator_access", "system", policy_version=context.policy_version)
 
     # Deliberate product default: employees may collaborate unless an explicit
     # role/direct denial above applies. Unknown/inactive permissions stay closed.

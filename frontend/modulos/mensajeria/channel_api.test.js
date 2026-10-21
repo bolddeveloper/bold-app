@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {channelPage, channelError, createChannelApi, createChannelRefresh, mergeChannelMessages} from "./channel_api.js";
 
 const channel = "00000000-0000-4000-8000-000000000001", parent = "00000000-0000-4000-8000-000000000002";
@@ -17,6 +18,18 @@ test("channel errors describe the actual fields without borrowing private-chat m
     assert.equal(channelError({status:400,fields:{name:["Usa un nombre más corto."]}}),"Usa un nombre más corto.");
     assert.match(channelError({status:404}),/canal o hilo/);
     assert.match(channelError({status:0}),/sin duplicarlo/);
+    assert.equal(channelError({status:400,fields:{members:["Falta una persona invitada."]}}),"Falta una persona invitada.");
+});
+
+test("channel access management has its own API and invalidates Core unread state on a security revision", async()=>{
+    const calls=[];const api=createChannelApi({request:async(...args)=>{calls.push(args);return {};}});
+    await api.managed(null);await api.access(channel);await api.setAccess(channel,{visibility:"private",members:[],version:1});await api.people({channel,q:"Persona"});
+    assert.equal(calls[0][0],"/api/v2/messaging/channels/managed/");
+    assert.equal(calls[1][0],`/api/v2/messaging/channels/${channel}/access/`);
+    assert.equal(calls[2][1].method,"PATCH");assert.equal(calls[2][1].body.visibility,"private");
+    assert.equal(calls[3][0],`/api/v2/messaging/channels/people/?channel=${channel}&q=Persona`);
+    const provider=readFileSync(new URL("../core/core_provider.jsx",import.meta.url),"utf8");
+    assert.match(provider,/\[chatAllowed,state\.activeAssignment\?\.id,state\.authorizationRevision\]/);
 });
 
 test("channel API uses authenticated bounded endpoints and never supplies author or department", async () => {

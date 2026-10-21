@@ -21,10 +21,11 @@ globalThis.__channelsCore = core;
 globalThis.__channelsShell = {open_direct_chat:person => opens.push(person.employee_id),set_active_module:module => opens.push(module)};
 const channelId="00000000-0000-4000-8000-000000000001", departmentId="00000000-0000-4000-8000-000000000002";
 const department={id:departmentId,name:"IT",color:"#4760A8",can_create:true};
-let channel={id:channelId,name:"General",description:"Contexto del equipo",department,version:1,activity_version:2,can_manage:true,can_send:true,archived_at:null};
+let channel={id:channelId,name:"General",description:"Contexto del equipo",department,version:1,activity_version:2,can_manage:true,can_manage_access:true,can_send:true,archived_at:null,visibility:"public"};
+let accessMembers=[],accessReads=0,accessWrites=0,peopleQueries=[];
 const makeMessage=(id,body,parent=null,author="me") => ({id,body,parent_id:parent,channel_id:channelId,sequence:Number(id),version:1,author:{employee_id:author,name:author === "me" ? "Mi cuenta" : "Colega"},department:{name:author === "me" ? "IT" : "Marketing",color:"#9250A3"},created_at:new Date().toISOString(),editable_until:new Date(Date.now()+600000).toISOString(),can_edit:author === "me",reply_count:0});
 let rows=[makeMessage("1","Guía https://example.com <script>no ejecutar</script>",null,"peer"),makeMessage("2","Mi mensaje")];
-let calls=0, sends=0, failSend=false, attempted=[], releaseSend;
+let calls=0, sends=0, failSend=false, attempted=[], releaseSend, channelCreates=[];
 let mediaAttempts=[],failMediaAt=0,validationMedia=false,mediaDownloads=0;
 const taskId="00000000-0000-4000-8000-000000000010", taskFixture={id:taskId,title:"Revisión de prueba",status:"Pendiente",completed:false};
 let taskReadable=true, searches=0;
@@ -33,7 +34,11 @@ const pendingCount=()=>rows.filter(row=>row.author.employee_id!=="me" && row.seq
 const channelSnapshot=()=>({...channel,activity_version:rows.at(-1)?.sequence || 0,unread_count:pendingCount()});
 const confirmed=new Map();
 globalThis.__channelsApi={
-    departments:async () => {calls++; return {results:[department]};},
+    departments:async () => {calls++; return {results:[department],can_create_independent:true};},
+    people:async filters=>{peopleQueries.push(filters);return {results:[{employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado"}]};},
+    managed:async()=>({results:[channel],next:null}),
+    access:async()=>{accessReads++;return {...channel,members:accessMembers};},
+    setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
     list:async archived => {calls++; return {results:!channel.archived_at || archived ? [channelSnapshot()] : [],next:null};},
     detail:async()=>{deepLoads++;return channelSnapshot();},
     message:async(_,id)=>({message:rows.find(row=>row.id===id)}),
@@ -62,7 +67,7 @@ globalThis.__channelsApi={
     media:async (_,id)=>{mediaDownloads++;assert.ok(rows.find(row=>row.id===id)?.media);return new Blob(["private-pixels"],{type:"image/webp"});},
     edit:async (_,id,values) => {const index=rows.findIndex(row => row.id === id); rows[index]={...rows[index],body:values.body,version:rows[index].version+1,edited_at:new Date().toISOString()}; return {message:rows[index]};},
     update:async (_,values) => {channel={...channel,...values,version:channel.version+1,...("archived" in values ? {archived_at:values.archived ? new Date().toISOString() : null,can_send:!values.archived} : {})}; return channel;},
-    create:async values => {channel={...channel,name:values.name,description:values.description,version:1}; return channel;},
+    create:async values => {channelCreates.push(values);channel={...channel,id:"00000000-0000-4000-8000-000000000003",name:values.name,description:values.description,department:values.unit_id ? department : null,version:1}; return channel;},
 };
 const replacements=[
     ["/core/core_provider.jsx","export const useCore=()=>globalThis.__channelsCore;"],
@@ -245,8 +250,45 @@ try {
     // is selected or another channel's message did not fetch this list again.
     core.slack={unread:{ready:true,total:9,byChannel:{[channelId]:9},truncated:false}};root.render(React.createElement(Channels));await settle();
     assert.match(document.querySelector('.slack_sidebar nav button').getAttribute('aria-label'),/9 mensajes sin leer/);
+    // Independent creation uses an actual null department, not the active unit.
+    document.querySelector('[aria-label="Crear canal"]').click();await waitFor(()=>document.querySelector('.slack_editor'));
+    assert.equal(document.querySelector('.slack_editor select').value,"");
+    const independentName=[...document.querySelectorAll('.slack_editor label')].find(node=>node.textContent.startsWith('Nombre')).querySelector('input');
+    input(independentName,'Espacio independiente');await settle();
+    document.querySelector('.slack_editor form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>!document.querySelector('.slack_editor'));
+    assert.equal(channelCreates.at(-1).unit_id,null);
+    assert.match(document.querySelector('.slack_header').textContent,/Sin departamento/);
+    assert.match(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
+    const groupFilter=document.querySelector('.slack_sidebar select');groupFilter.value='independent';groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert.match(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
+    groupFilter.value=departmentId;groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert.doesNotMatch(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
+    groupFilter.value='';groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>document.querySelector('.slack_editor'));
+    assert.equal(document.querySelector('.slack_editor select'),null,'editing an independent channel does not dereference its missing department');
+    document.querySelector('[aria-label="Cerrar configuración"]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
+    // Invitation management is separate from opening a readable channel.
+    button('Administrar acceso').click();await waitFor(()=>document.querySelector('.slack_access_catalog button'));
+    document.querySelector('.slack_access_catalog button').click();await waitFor(()=>document.querySelector('.slack_access_fields'));
+    assert.equal(accessReads,1);
+    const privacy=document.querySelector('.slack_access_fields select');privacy.value='private';privacy.dispatchEvent(new Event('change',{bubbles:true}));
+    await waitFor(()=>button('Añadir a Colega invitado'));
+    assert.ok(peopleQueries.length>0);
+    button('Añadir a Colega invitado').click();await settle();
+    const memberAccess=document.querySelector('.slack_access_members select');memberAccess.value='read';memberAccess.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert.match(document.querySelector('.slack_access_hint').textContent,/administradores/);
+    button('Guardar acceso').click();await waitFor(()=>!document.querySelector('.slack_access_editor'));
+    assert.equal(accessWrites,1);assert.equal(channel.visibility,'private');assert.equal(accessMembers[0].access,'read');
+    assert.equal(document.querySelector('.slack_message'),null,'saving privacy clears the open history before reauthorization');
+    document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
+    input(document.querySelector('#slack_message'),'Borrador privado');await settle();
+    core.authorizationRevision=1;root.render(React.createElement(Channels));await waitFor(()=>!document.querySelector('#slack_message'));
+    assert.equal(document.querySelector('.slack_message'),null,'a resource-access revision purges history even without session uncertainty');
+    document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
+    assert.equal(document.querySelector('#slack_message').value,'','private drafts are not retained across revocation');
     core.securityUncertain=true; root.render(React.createElement(Channels)); await settle();
     assert.equal(document.querySelector(".slack_message"),null);
     assert.match(document.querySelector('[role="status"]').textContent,/sesión autorizada/);
-    console.log("Slack DOM passed: channels, following/unread, scoped visible reads, notification thread targets, tasks/permissions, image queues/editor/viewer, partial retry, voice, security uncertainty and no idle polling.");
+    console.log("Slack DOM passed: channels, independent creation, invitation management/read-only, scoped visible reads, notifications/threads, tasks, multimedia, revision purge and no idle polling.");
 } finally {root.unmount(); await server.close(); dom.window.close();}

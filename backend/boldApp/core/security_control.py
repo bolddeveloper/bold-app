@@ -45,6 +45,12 @@ def security_snapshot(session_id, assignment_id):
     context = hashlib.sha256(json.dumps([assignment, session.user_account.is_superuser,
         session.user_account.employee.full_name, units], sort_keys=True, default=str).encode()).hexdigest()
     state.append(context)
+    # Invitation revocation uses the existing security lease/socket, including
+    # heartbeat recovery after a dropped broadcast. The wire gets only a hash.
+    # No new polling loop, message payloads or channel names are introduced.
+    if not settings.MESSAGING_PILOT_ENABLED or str(assignment["position__unit_id"]) in settings.MESSAGING_PILOT_UNIT_IDS:
+        from boldApp.mensajeria.channel_models import ChannelAccessEpoch
+        state.append(ChannelAccessEpoch.objects.filter(employee_id=session.user_account.employee_id).values_list("revision", flat=True).first() or 0)
     # Both modules may have different MFA freshness windows. Include each boundary.
     for window in sorted({settings.PERMISSIONS_STEP_UP_MFA_SECONDS, settings.ADMIN_STEP_UP_MFA_SECONDS}):
         expiry = session.mfa_verified_at + timedelta(seconds=window) if session.mfa_verified_at else None

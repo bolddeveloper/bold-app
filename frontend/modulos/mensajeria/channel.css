@@ -75,6 +75,21 @@
 .slack_editor header {display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;}
 .slack_editor>p {font-size:13px; line-height:1.5; color:var(--slack_muted);}
 .slack_editor fieldset {border:0; padding:16px 0; margin:0; display:grid; gap:14px; min-width:0;}
+.slack_access_editor {width:min(100%,620px);}
+.slack_editor .slack_access_fields {border-top:1px solid var(--bold_line);margin-top:8px;}
+.slack_access_fields legend {font-weight:700;padding:8px 0;}
+.slack_access_hint {font-size:13px;line-height:1.5;color:var(--slack_muted);margin:0;}
+.slack_access_candidates {display:grid;gap:8px;max-height:176px;overflow:auto;}
+.slack_access_members {list-style:none;margin:0;padding:0;display:grid;gap:12px;}
+.slack_access_members li {display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,190px) 44px;align-items:center;gap:8px;border-bottom:1px solid var(--bold_line);padding-bottom:8px;}
+.slack_access_members li>span {flex:1 1 120px;overflow-wrap:anywhere;}
+.slack_access_members li label {flex:1 1 170px;}
+.slack_access_catalog {display:grid;gap:8px;}
+.slack_access_catalog button {display:grid;text-align:left;gap:4px;}
+.slack_access_fields button,.slack_access_members select,.slack_access_catalog button,.slack_access_action {min-height:44px;}
+.slack_access_action {margin:12px 16px 0;align-self:flex-start;flex-shrink:0;max-width:calc(100% - 32px);white-space:normal;}
+.slack_sr_only {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+@media(max-width:640px) {.slack_access_members li {grid-template-columns:minmax(0,1fr) 44px;} .slack_access_members li>span,.slack_access_members li>label {grid-column:1;} .slack_access_members li>button {grid-column:2;grid-row:1 / span 2;}}
 .slack_task_search {display:flex; align-items:flex-end; gap:10px; margin:18px 0;}
 .slack_task_search label {flex:1; min-width:0;}
 .slack_task_results {list-style:none; padding:0; margin:12px 0; display:grid; gap:8px;}

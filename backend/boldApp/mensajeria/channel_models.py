@@ -8,7 +8,9 @@ from boldApp.core.models.mixins import UUIDPrimaryKeyModel
 
 
 class DepartmentChannel(UUIDPrimaryKeyModel):
-    unit = models.ForeignKey("boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, related_name="communication_channels")
+    VISIBILITIES = [("public", "Todos los empleados"), ("department", "Departamento e invitados"), ("private", "Solo personas invitadas")]
+    unit = models.ForeignKey("boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, related_name="communication_channels", null=True, blank=True)
+    visibility = models.CharField(max_length=12, choices=VISIBILITIES, default="public")
     name = models.CharField(max_length=80)
     description = models.CharField(max_length=500, blank=True)
     creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
@@ -21,8 +23,32 @@ class DepartmentChannel(UUIDPrimaryKeyModel):
     class Meta:
         db_table = "messaging_department_channels"
         ordering = ["name", "id"]
-        constraints = [models.UniqueConstraint(Lower("name"), "unit", name="unique_department_channel_name")]
+        constraints = [
+            models.UniqueConstraint(Lower("name"), "unit", name="unique_department_channel_name"),
+            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True), name="unique_independent_channel_name"),
+            models.CheckConstraint(condition=~models.Q(visibility="department") | models.Q(unit__isnull=False), name="department_channel_has_unit"),
+        ]
         indexes = [models.Index(fields=["unit", "archived_at"], name="slack_department_channels")]
+
+
+class ChannelAccessRule(models.Model):
+    channel = models.ForeignKey(DepartmentChannel, on_delete=models.CASCADE, related_name="access_rules")
+    employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.CASCADE)
+    access = models.CharField(max_length=8, choices=[("read", "Solo lectura"), ("write", "Leer y participar"), ("blocked", "Sin acceso")])
+
+    class Meta:
+        db_table = "messaging_channel_access"
+        constraints = [models.UniqueConstraint(fields=["channel", "employee"], name="unique_channel_access_employee")]
+
+
+class ChannelAccessEpoch(models.Model):
+    # Only access changes increment this counter. Creating/renaming a channel
+    # or sending a message must not clear everybody's open drafts.
+    employee = models.OneToOneField("boldApp_core.Employee", primary_key=True, on_delete=models.CASCADE)
+    revision = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        db_table = "messaging_channel_access_epochs"
 
 
 class ChannelMessage(UUIDPrimaryKeyModel):

@@ -71,7 +71,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         document.addEventListener("visibilitychange",recover);recover();
         return ()=>{unread.dispose();window.removeEventListener("bold:slack-event",receive);window.removeEventListener("bold:slack-state",invalidate);
             window.removeEventListener("bold:messaging-reconnect",invalidate);window.removeEventListener("online",invalidate);window.removeEventListener("focus",recover);document.removeEventListener("visibilitychange",recover);};
-    },[chatAllowed,state.activeAssignment?.id]);
+    },[chatAllowed,state.activeAssignment?.id,state.authorizationRevision]);
     useEffect(() => {
         const assignmentId = state.activeAssignment?.id;
         setUnreadChats({assignmentId, total: 0, byEmployee: {}, byConversation: {}});

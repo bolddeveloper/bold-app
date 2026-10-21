@@ -15,8 +15,8 @@ def store_channel_media(message, prepared):
     if not root:
         raise ValidationError("Configura el destino corporativo de Drive en Administración → Conectores para enviar archivos.")
     user = storage_user(root)
-    folder = drive_folder(root, [("slack", "Slack"),
-        (f"department:{message.channel.unit_id}", f"Departamento · {message.channel.unit_id}"),
+    grouping = (f"department:{message.channel.unit_id}", f"Departamento · {message.channel.unit_id}") if message.channel.unit_id else ("independent", "Canales independientes")
+    folder = drive_folder(root, [("slack", "Slack"), grouping,
         (f"channel:{message.channel_id}", f"Canal · {message.channel_id}"),
         (f"employee:{message.author_id}", f"Empleado · {message.author_id}")])
     identity = uuid.uuid5(uuid.NAMESPACE_URL, f"bold-slack:{message.channel_id}:{message.author_id}:{message.client_id}:{prepared['digest']}")
