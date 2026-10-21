@@ -13,6 +13,7 @@ export const notificationEvents = [
     ["comment.created", "Comentarios nuevos"], ["comment.mentioned", "Menciones en comentarios"],
     ["calendar.meeting_reminder", "Recordatorios de reuniones: 30 minutos, 5 minutos y al inicio"],
     ["messaging.message_created", "Mensajes privados de Chat"],
+    ["slack.message_created", "Mensajes de canales seguidos de Slack"],
 ];
 
 export default function NotificationPreferences() {
@@ -61,7 +62,7 @@ export default function NotificationPreferences() {
         finally {if (alive.current) setBusy(false);}
     }
     return <section className="bold_notification_preferences"><BackgroundSyncNotice active={refreshing} label="Actualizando preferencias…" /><h2><Volume2 size={22}/>Notificaciones</h2><p>Elige cómo recibir los avisos de BOLD. Las preferencias se guardan en tu cuenta.</p>{error && <p role="alert">{error}<button type="button" onClick={load}>Reintentar</button></p>}{notice && <p role="status">{notice}</p>}{!settings ? <div aria-busy="true" /> : <form onSubmit={save}>
-        <fieldset disabled={busy}><legend>Eventos que quiero recibir</legend><p>Controla los avisos nuevos dentro de BOLD y sus alertas. Los avisos anteriores se conservan.</p>{notificationEvents.filter(([id]) => !id.startsWith("messaging.") || core.activeAssignment?.chat_enabled === true).map(([id, label]) => <label className="bold_notification_toggle" key={id}><input type="checkbox" checked={settings.events?.[id] !== false} onChange={event => setSettings(value => ({...value, events: {...value.events, [id]: event.target.checked}}))}/>{label}</label>)}</fieldset>
+        <fieldset disabled={busy}><legend>Eventos que quiero recibir</legend><p>Controla los avisos nuevos dentro de BOLD y sus alertas. Los avisos anteriores se conservan.</p>{notificationEvents.filter(([id]) => !(id.startsWith("messaging.") || id.startsWith("slack.")) || core.activeAssignment?.chat_enabled === true).map(([id, label]) => <label className="bold_notification_toggle" key={id}><input type="checkbox" checked={settings.events?.[id] !== false} onChange={event => setSettings(value => ({...value, events: {...value.events, [id]: event.target.checked}}))}/>{label}</label>)}</fieldset>
         <fieldset disabled={busy}><legend>Campana</legend><label>Recordar avisos sin leer cada (minutos)<input type="number" min="1" max="60" step="1" required value={settings.bell_interval_minutes ?? 5} onChange={event => setSettings({...settings, bell_interval_minutes: Number(event.target.value)})}/></label><small>Elige entre 1 y 60 minutos. Por defecto: 5 minutos. La campana se mueve durante 2 segundos y descansa hasta el siguiente intervalo.</small></fieldset>
         <label className="bold_notification_toggle"><input type="checkbox" checked={settings.enabled} disabled={busy} onChange={event => setSettings({...settings, enabled: event.target.checked})}/>Sonido de notificaciones</label>
         <fieldset disabled={busy}><legend>Sonido</legend>{[...notificationSounds,["custom","Personalizado"]].map(([id,label]) => <label className="bold_notification_choice" key={id}><input type="radio" name="notification-sound" value={id} checked={settings.sound === id} disabled={id === "custom" && !settings.custom_audio} onChange={() => setSettings({...settings, sound: id})}/>{label}</label>)}</fieldset>

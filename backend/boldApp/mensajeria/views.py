@@ -17,7 +17,7 @@ from .presenters import available, message_data, people, person_data
 from .events import publish_change
 from .unread import summaries
 from .notifications import notify_message, mark_notices_read
-from .media import prepare, store, EXTENSIONS, BoundedUpload, MAX_BYTES
+from .media import prepare, store, BoundedUpload, MAX_BYTES
 
 
 class Conflict(APIException):
@@ -249,26 +249,14 @@ class ReceiptView(PrivateChatView):
 
 class MessageMediaView(PrivateChatView):
     def get(self, request, conversation_id, message_id):
-        import hashlib
-        from django.http import HttpResponse
-        from boldApp.workspace.image_storage import storage_user
-        from boldApp.workspace.service import google, file_id
+        from .media import private_media_response
         conversation = self.conversation(conversation_id)
         message = get_object_or_404(conversation.messages.select_related("media__root__user"), pk=message_id)
         media = getattr(message, "media", None)
         if not media:
             from rest_framework.exceptions import NotFound
             raise NotFound("Este mensaje no contiene un archivo.")
-        result = google(storage_user(media.root), "GET", "/files/" + file_id(media.drive_id),
-            params={"alt": "media", "supportsAllDrives": "true"}, raw=True)
-        content = result.content
-        if len(content) != media.size_bytes or hashlib.sha256(content).hexdigest() != media.digest:
-            raise ValidationError("El archivo de Drive cambió fuera de BOLD. No se puede mostrar esta versión.")
-        response = HttpResponse(content, content_type=media.mime_type)
-        response["Content-Disposition"] = f'inline; filename="bold-{media.kind}-{media.pk}.{EXTENSIONS[media.mime_type]}"'
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Content-Security-Policy"] = "default-src 'none'; sandbox"
-        return response
+        return private_media_response(media)
 
 
 class PreferencesView(PrivateChatView):

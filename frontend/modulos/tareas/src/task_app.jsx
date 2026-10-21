@@ -4285,7 +4285,7 @@ class TaskAppErrorBoundary extends react_component {
 function TaskAppContent({ externalModules = {} }) {
     const [project_preview, set_project_preview] = use_state(null);
     const session = useCore();
-    const { active_module, set_active_module, set_is_sidebar_open, open_direct_chat } = useShell();
+    const { active_module, set_active_module, set_is_sidebar_open, open_direct_chat, open_channel } = useShell();
     const task_content_active = requiresTaskData(active_module);
     const task_activity = use_ref(task_content_active);
     task_activity.current = task_content_active;
@@ -5755,6 +5755,10 @@ function TaskAppContent({ externalModules = {} }) {
         if (real && !notification_item.is_read) queue_notification_read(notification_item.id, true);
         else set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
         const route = notification_item.route || {};
+        if (route.module === "slack" && route.channel_id) {
+            open_channel({channel_id:route.channel_id,parent_id:route.parent_id || null});
+            return;
+        }
         if (route.module === "messaging" && route.employee_id) {
             open_direct_chat({employee_id: route.employee_id});
             return;

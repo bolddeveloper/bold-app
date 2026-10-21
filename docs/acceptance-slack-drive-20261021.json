@@ -1,0 +1,58 @@
+{
+  "accepted": true,
+  "project": "bold-app-slack-pruebas",
+  "approved_private_folder": true,
+  "two_local_accounts": true,
+  "one_google_connection": true,
+  "cases": [
+    {
+      "kind": "image",
+      "upload": 200,
+      "resumed_existing": true,
+      "attempts": 1,
+      "retry": 200,
+      "peer_download": 200,
+      "anonymous": 401,
+      "sha256": "e25dd6c561f19852e02b920951012eeacdd9fde31511249b66954817273107c2",
+      "private_google_acl": true
+    },
+    {
+      "kind": "webm",
+      "upload": 200,
+      "resumed_existing": true,
+      "attempts": 1,
+      "retry": 200,
+      "peer_download": 200,
+      "anonymous": 401,
+      "sha256": "35009c9b06138389c1f9b42b1e18452751b1571fcb260ef6a4085712a493cf9a",
+      "private_google_acl": true
+    },
+    {
+      "kind": "ogg",
+      "upload": 201,
+      "resumed_existing": false,
+      "attempts": 1,
+      "retry": 200,
+      "peer_download": 200,
+      "anonymous": 401,
+      "sha256": "2c14c53ab5ab40b9d5573efae53bf870a05a5e2e06d5ec5057f574cb483ae6e1",
+      "private_google_acl": true
+    },
+    {
+      "kind": "m4a",
+      "upload": 201,
+      "resumed_existing": false,
+      "attempts": 1,
+      "retry": 200,
+      "peer_download": 200,
+      "anonymous": 401,
+      "sha256": "2c48a797d899bc6ea5968840af1198661f5d19ffe0fe76b730123b0a0b616a0c",
+      "private_google_acl": true
+    }
+  ],
+  "revoked_download": 404,
+  "scoped_folders": 5,
+  "production_touched": false,
+  "microphone_hardware_verified": false,
+  "note": "Synthetic image and valid encoded audio; physical recording and browser playback remain separate acceptance."
+}

@@ -3,13 +3,16 @@ export function installMessagingFixture(target = globalThis) {
     const actor = "11111111-1111-4111-8111-111111111111", peerId = "22222222-2222-4222-8222-222222222222";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const now = new Date(), calls = [], mediaBlobs = new Map();
+    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate()-1); yesterday.setHours(12,0,0,0);
     const me = {employee_id: actor, name: "Persona de prueba", avatar_url: null, available: true, departments: ["Equipo demo"]};
     const peer = {employee_id: peerId, name: "Compañera de demostración con nombre extenso", avatar_url: null, available: true, departments: ["Diseño", "Equipo demo"]};
     const conversation = {id: conversationId, me, peer, updated_at: now.toISOString()};
     const forwardPeer = {employee_id:"33333333-3333-4333-8333-333333333333",name:"Destino de prueba IT",avatar_url:null,available:true,departments:["Equipo de IT"]};
     let rows = [
-        {id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", conversation_id: conversationId, author_id: peerId, body: "Hola. Revisemos este enlace: https://example.com/una/ruta/que/es/muy/larga?documento=una-propuesta-compartida. <script>no ejecutar</script>\n¿Coordinamos el siguiente paso?", created_at: new Date(now - 86400000).toISOString(), version: 1, can_edit: false},
-        {id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", conversation_id: conversationId, author_id: actor, body: "De acuerdo. Lo reviso y te comento 👍", created_at: new Date(now - 120000).toISOString(), editable_until: new Date(+now + 480000).toISOString(), version: 1, can_edit: true},
+        {id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", conversation_id: conversationId, author_id: peerId, body: "Hola. Revisemos este enlace: https://example.com/una/ruta/que/es/muy/larga?documento=una-propuesta-compartida. <script>no ejecutar</script>\n¿Coordinamos el siguiente paso?", created_at: yesterday.toISOString(), version: 1, can_edit: false},
+        // Keep a genuinely current-day message even in the first two minutes
+        // after midnight; subtracting two minutes made the day-group test flaky.
+        {id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", conversation_id: conversationId, author_id: actor, body: "De acuerdo. Lo reviso y te comento 👍", created_at: now.toISOString(), editable_until: new Date(+now + 600000).toISOString(), version: 1, can_edit: true},
     ];
     const fixture = {actor, peer, conversation, calls, enterBehavior:"send", sendDelay: null, failSend: false, mediaSends:[], failMediaAt:null, failMediaStatus:500, loseMediaResponseAt:null, getRows: () => rows};
     fixture.forwardDestination = {id:"dddddddd-dddd-4ddd-8ddd-dddddddddddd",me,peer:forwardPeer,updated_at:now.toISOString()};

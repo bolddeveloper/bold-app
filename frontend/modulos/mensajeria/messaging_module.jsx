@@ -1,5 +1,5 @@
 import {lazy, Suspense, useCallback, useEffect, useRef, useState} from "react";
-import {ArrowLeft, ChevronDown, Forward, ImagePlus, LoaderCircle, LockKeyhole, MessageCircle, PanelLeftClose, PanelLeftOpen, Pencil, RefreshCw, Search, Send, Settings2, Smile, Users, X} from "lucide-react";
+import {ArrowLeft, ChevronDown, Forward, ImagePlus, ListChecks, LoaderCircle, LockKeyhole, MessageCircle, PanelLeftClose, PanelLeftOpen, Pencil, RefreshCw, Search, Send, Settings2, Smile, Users, X} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
 import {useShell} from "../core/app_shell.jsx";
 import {is_using_real_backend} from "../core/http_client.js";
@@ -12,7 +12,7 @@ import {MediaDraft, MessageMedia, VoiceRecorder} from "./message_media.jsx";
 import {mediaPreview} from "./media_helpers.js";
 import ImageQueue from "./image_queue.jsx";
 import {appendImages, canReviseFailedImage, captionQueuedImage, replaceQueuedImage} from "./image_queue_model.js";
-import {canForward, createMessageForwarder} from "./message_forwarding.js";
+import {canForward, createMessageForwarder, MAX_FORWARD_MESSAGES, toggleForwardSelection} from "./message_forwarding.js";
 const ChatImageEditor = lazy(() => import("./image_editor.jsx"));
 const ForwardMessageDialog = lazy(() => import("./forward_message_dialog.jsx"));
 
@@ -43,6 +43,20 @@ export default function MessagingModule() {
     const [imageQueues, setImageQueues] = useState({}), [selectedImages, setSelectedImages] = useState({}), [uploadProgress, setUploadProgress] = useState(null);
     const queueStore = useRef({});
     const [forwardSource, setForwardSource] = useState(null);
+    const [selecting, setSelecting] = useState(false), [selectedForwards, setSelectedForwards] = useState([]);
+    const selectedForwardRows = useRef([]), selectionBar = useRef(null), selectionTrigger = useRef(null);
+    const selectedForwardIds = new Set(selectedForwards.map(row => row.id));
+    function selectForwardRows(rows) {selectedForwardRows.current = rows; setSelectedForwards(rows);}
+    function exitSelection() {setSelecting(false); selectForwardRows([]); if (selecting) requestAnimationFrame(() => selectionTrigger.current?.focus());}
+    function startSelection(rows = []) {
+        if (sending || recording || loading || imageEditing || queuedImages.length) return;
+        selectForwardRows(rows); setSelecting(true); setForwardSource(null); setEmojiOpen(false); setError("");
+    }
+    function toggleSelectedMessage(message) {
+        try {selectForwardRows(toggleForwardSelection(selectedForwardRows.current, message)); setError("");}
+        catch (err) {setError(err.message);}
+    }
+    useEffect(() => {if (selecting) requestAnimationFrame(() => selectionBar.current?.focus());}, [selecting]);
     const forwarder = useRef(null);
     if (!forwarder.current) forwarder.current = createMessageForwarder(messagingApi);
     const [animatedIds, setAnimatedIds] = useState(new Set()), [viewportHeight, setViewportHeight] = useState(null);
@@ -134,6 +148,7 @@ export default function MessagingModule() {
     async function selectConversation(id, employee = null) {
         if (busy.current) return;
         read.current?.abort();
+        exitSelection(); setForwardSource(null);
         const controller = new AbortController(); read.current = controller;
         activeId.current = null; setConversation(null); setMessages([]); setOlder(null); setLoading(true); setRefreshing(false); setEdit(null); setEmojiOpen(false); setContactOpen(false); setError(""); setNotice("");
         try {
@@ -311,7 +326,7 @@ export default function MessagingModule() {
     const editExpired = edit && !canEditMessage(edit, actorId, now);
 
     if (!real) return <section className="messaging_module"><h1>Chat</h1><p>Los chats privados requieren iniciar sesión con el servidor de BOLD. No se muestran conversaciones simuladas.</p></section>;
-    return <section className={`messaging_module ${conversation || loading ? "messaging_has_chat" : ""} ${collapsed && !newChat ? "messaging_compact" : ""}`} style={viewportHeight ? {"--chat_vh": `${viewportHeight}px`} : undefined} aria-label="Mensajería privada">
+    return <section className={`messaging_module ${conversation || loading ? "messaging_has_chat" : ""} ${collapsed && !newChat ? "messaging_compact" : ""} ${selecting ? "messaging_selecting" : ""}`} style={viewportHeight ? {"--chat_vh": `${viewportHeight}px`} : undefined} aria-label="Mensajería privada" onKeyDown={event => {if (event.key === "Escape" && selecting && !forwardSource) {event.preventDefault(); exitSelection();}}}>
         <aside className="messaging_sidebar" aria-label="Conversaciones">
             <header className="messaging_list_header"><div><h1>Chat</h1><p>Conversaciones directas</p></div><div className="messaging_list_tools"><button type="button" className="messaging_collapse" aria-label={collapsed ? "Desplegar conversaciones" : "Plegar conversaciones"} title={collapsed ? "Desplegar conversaciones" : "Solo avatares"} aria-expanded={!collapsed} aria-controls="messaging_conversations_list" onClick={() => {compact(!collapsed); setNewChat(false);}}>{collapsed ? <PanelLeftOpen size={19} aria-hidden="true"/> : <PanelLeftClose size={19} aria-hidden="true"/>}</button><button type="button" aria-label={newChat ? "Ver conversaciones" : "Nuevo chat"} title={newChat ? "Ver conversaciones" : "Nuevo chat"} aria-pressed={newChat} onClick={() => {setNewChat(value => !value); setQuery("");}}><MessageCircle size={20} aria-hidden="true"/></button></div></header>
             <label className="messaging_search"><Search size={17} aria-hidden="true"/><input type="search" placeholder={newChat ? "Buscar empleado…" : "Buscar conversación…"} aria-label={newChat ? "Buscar empleado" : "Buscar conversación"} value={query} onChange={event => setQuery(event.target.value)}/></label>
@@ -322,9 +337,15 @@ export default function MessagingModule() {
             <footer><LockKeyhole size={15} aria-hidden="true"/><span>Solo los dos participantes pueden acceder desde BOLD.</span></footer>
         </aside>
         <div className="messaging_conversation">
-            {conversation ? <><header className="messaging_chat_header"><button type="button" className="messaging_back" aria-label="Volver a conversaciones" disabled={sending} onClick={() => {read.current?.abort(); activeId.current = null; setConversation(null); setEdit(null); setLoading(false); setRefreshing(false); setError("");}}><ArrowLeft size={20} aria-hidden="true"/></button><button type="button" className="messaging_peer" aria-expanded={contactOpen} aria-label={`Información de ${peer.name}`} onClick={() => setContactOpen(value => !value)}><Avatar person={peer} status={presence?.status}/><span><strong>{peer.name}</strong><small>{peer.available ? statusText : "Cuenta no disponible"}</small></span></button><button type="button" aria-label="Actualizar conversación" title="Actualizar conversación" disabled={refreshing || loading || sending} onClick={() => refresh()}><RefreshCw className={refreshing ? "messaging_spin" : ""} size={19} aria-hidden="true"/></button></header>
+            {conversation ? <><header className="messaging_chat_header">
+                <button type="button" className="messaging_back" aria-label="Volver a conversaciones" disabled={sending} onClick={() => {read.current?.abort(); exitSelection(); activeId.current = null; setConversation(null); setEdit(null); setLoading(false); setRefreshing(false); setError("");}}><ArrowLeft size={20} aria-hidden="true"/></button>
+                <button type="button" className="messaging_peer" aria-expanded={contactOpen} aria-label={`Información de ${peer.name}`} onClick={() => setContactOpen(value => !value)}><Avatar person={peer} status={presence?.status}/><span><strong>{peer.name}</strong><small>{peer.available ? statusText : "Cuenta no disponible"}</small></span></button>
+                <button ref={selectionTrigger} type="button" aria-label="Seleccionar mensajes para reenviar" title="Seleccionar varios mensajes" aria-pressed={selecting} disabled={sending || loading || recording || !!imageEditing || !!queuedImages.length} onClick={() => selecting ? exitSelection() : startSelection()}><ListChecks size={20} aria-hidden="true"/></button>
+                <button type="button" aria-label="Actualizar conversación" title="Actualizar conversación" disabled={refreshing || loading || sending} onClick={() => refresh()}><RefreshCw className={refreshing ? "messaging_spin" : ""} size={19} aria-hidden="true"/></button>
+            </header>
                 {contactOpen && <section className="messaging_contact"><strong>{peer.name}</strong><p>{peer.departments.join(" · ") || "Sin departamento activo"}</p><p>Solo sus dos participantes pueden acceder desde BOLD. Las imágenes y notas de voz se guardan en el Drive corporativo; quienes tengan acceso directo a esa carpeta en Google podrán verlas fuera de BOLD.</p><button type="button" onClick={() => setContactOpen(false)}>Cerrar información</button></section>}
                 <p className="messaging_stage_note"><LockKeyhole size={13} aria-hidden="true"/>{core.messaging?.connection === "open" ? "Conversación privada · Sincronización en tiempo real" : "Reconectando la conversación · Puedes actualizar manualmente mientras vuelve la conexión"}</p>
+                {selecting && <div className="messaging_selection_bar" ref={selectionBar} tabIndex={-1} role="group" aria-label="Reenvío múltiple"><span><strong role="status" aria-live="polite" aria-atomic="true">{selectedForwards.length} mensajes seleccionados</strong><small>Hasta {MAX_FORWARD_MESSAGES} textos o imágenes · Escape para cancelar</small></span><button type="button" aria-label="Cancelar selección de mensajes" onClick={exitSelection}><X size={18} aria-hidden="true"/></button><button type="button" className="messaging_selection_send" disabled={!selectedForwards.length} onClick={() => setForwardSource({rows:[...selectedForwardRows.current], peerId:peer.employee_id})}><Forward size={18} aria-hidden="true"/>Reenviar{selectedForwards.length ? ` ${selectedForwards.length}` : ""}</button></div>}
                 <div className="messaging_log" role="region" aria-label={`Mensajes con ${peer.name}`} tabIndex={0} ref={viewport} aria-busy={loading || refreshing}>
                     {older && <button type="button" className="messaging_more" disabled={refreshing || loading} onClick={() => refresh(true)}>{refreshing ? "Cargando…" : "Ver mensajes anteriores"}</button>}
                     {loading ? <p role="status">Cargando mensajes…</p> : !messages.length && <div className="messaging_welcome"><MessageCircle size={36} aria-hidden="true"/><h2>Conversa con {peer.name.split(/\s+/)[0]}</h2><p>Comparte una idea, haz una consulta o coordina el siguiente paso.</p></div>}
@@ -333,14 +354,17 @@ export default function MessagingModule() {
                         const day = dayLabel(message.created_at), showDay = index === 0 || dayLabel(messages[index - 1].created_at) !== day;
                         return <div className="messaging_message_group" key={message.id}>
                             {showDay && <div className="messaging_day">{day}</div>}
+                            <div className={`messaging_message_row ${selectedForwardIds.has(message.id) ? "messaging_message_selected" : ""}`}>
+                            {selecting && canForward(message) && <label className="messaging_message_select"><input type="checkbox" checked={selectedForwardIds.has(message.id)} aria-label={`Seleccionar mensaje ${index + 1} de ${author.name}`} onChange={() => toggleSelectedMessage(message)}/></label>}
                             <article className={`messaging_message ${mine ? "messaging_mine" : ""} ${animatedIds.has(message.id) ? "messaging_arriving" : ""}`} onAnimationEnd={() => setAnimatedIds(current => {const next = new Set(current); next.delete(message.id); return next;})} aria-label={`Mensaje de ${author.name}`}>
                                 <Avatar person={author}/><div className="messaging_bubble">
-                                    <header><strong>{author.name}</strong><span className="messaging_message_actions">{canForward(message) && <button type="button" aria-label={message.media ? "Reenviar imagen" : "Reenviar mensaje"} title="Reenviar a otro chat" disabled={sending || recording || loading} onClick={() => setForwardSource({...message, media: message.media && {...message.media}})}><Forward size={16} aria-hidden="true"/></button>}{canEditMessage(message, actorId, now) && <button type="button" aria-label="Editar mi mensaje" title="Editar durante los primeros diez minutos" disabled={sending || recording} onClick={() => {setEdit({...message}); setEmojiOpen(false); setError("");}}><Pencil size={14} aria-hidden="true"/></button>}</span></header>
+                                    <header><strong>{author.name}</strong><span className="messaging_message_actions">{!selecting && canForward(message) && <button type="button" aria-label={message.media ? "Reenviar imagen" : "Reenviar mensaje"} title="Reenviar a otro chat" disabled={sending || recording || loading} onClick={() => setForwardSource({rows:[{...message, media: message.media && {...message.media}}],peerId:peer.employee_id})}><Forward size={16} aria-hidden="true"/></button>}{!selecting && canEditMessage(message, actorId, now) && <button type="button" aria-label="Editar mi mensaje" title="Editar durante los primeros diez minutos" disabled={sending || recording} onClick={() => {setEdit({...message}); setEmojiOpen(false); setError("");}}><Pencil size={14} aria-hidden="true"/></button>}</span></header>
                                     {message.media && <MessageMedia message={message} author={author}/>}
                                     {message.body && <MessageText body={message.body}/>}
                                     <footer data-receipt-id={mine ? undefined : message.id}><time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString("es")}>{new Date(message.created_at).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit"})}</time>{message.edited_at && <span>editado</span>}{mine && <DeliveryMark message={message}/>}</footer>
                                 </div>
                             </article>
+                            </div>
                         </div>;
                     })}
                 </div>
@@ -362,11 +386,11 @@ export default function MessagingModule() {
             </> : <div className="messaging_empty"><MessageCircle size={44} aria-hidden="true"/><h2>{loading ? "Abriendo conversación…" : "Un espacio para conversar"}</h2><p>Elige un compañero para iniciar un chat privado.</p><button type="button" aria-label="Actualizar conversaciones" disabled={listLoading} onClick={() => loadList()}><RefreshCw size={17} aria-hidden="true"/> Actualizar</button>{error && <div className="messaging_error" role="alert">{error}</div>}</div>}
         </div>
         {imageEditing && <Suspense fallback={<p role="status">Abriendo editor de imagen…</p>}><ChatImageEditor file={imageEditing.file} onCancel={() => setImageEditing(null)} onSave={file => {try {updateQueue(imageEditing.conversationId, rows => replaceQueuedImage(rows, imageEditing.imageId, file));} catch (err) {setError(err.message);} setImageEditing(null);}}/></Suspense>}
-        {forwardSource && <Suspense fallback={<p role="status">Abriendo reenvío…</p>}><ForwardMessageDialog source={forwardSource} people={roster.filter(row => eligible.has(String(row.employee_id)) && row.employee_id !== peer?.employee_id)} forward={forwarder.current} onClose={() => setForwardSource(null)} onSent={(result, person) => {
+        {forwardSource && <Suspense fallback={<p role="status">Abriendo reenvío…</p>}><ForwardMessageDialog sources={forwardSource.rows} people={roster.filter(row => eligible.has(String(row.employee_id)) && row.employee_id !== forwardSource.peerId)} forward={forwarder.current} onClose={() => setForwardSource(null)} onSelectMore={rows => startSelection(rows)} onComplete={(result, person) => {exitSelection(); setNotice(`${result.confirmed === 1 ? "Mensaje reenviado" : `${result.confirmed} mensajes reenviados`} a ${person.name}.`);}} onSent={(result, person, source) => {
+            selectForwardRows(selectedForwardRows.current.filter(row => row.id !== source.id));
             clock(result);
             if (activeId.current === result.message.conversation_id) {scrollBottom.current = true; animateNew([result.message]); setMessages(current => merge(current, [result.message]));}
             setConversations(current => [{id: result.conversation.id, peer: result.conversation.peer, updated_at: result.message.created_at, preview: mediaPreview(result.message)}, ...current.filter(row => row.id !== result.conversation.id)].sort((a,b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
-            setNotice(`Mensaje reenviado a ${person.name}.`);
         }}/></Suspense>}
     </section>;
 }

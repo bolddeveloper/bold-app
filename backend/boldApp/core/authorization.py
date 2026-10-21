@@ -388,6 +388,11 @@ def resolve_access(
             "system",
             policy_version=context.policy_version,
         )
+    if permission.code.startswith("slack."):
+        from boldApp.mensajeria.access import assignment_can_chat
+        if not assignment_can_chat(assignment):
+            return _decision(False, "Slack permanece en el piloto de IT.", "slack_pilot_restricted",
+                             "system", policy_version=context.policy_version)
     if assignment.employee.user_account.is_superuser:
         return _decision(
             True,
@@ -578,6 +583,14 @@ def resolve_access(
                     "task_assignment",
                     policy_version=context.policy_version,
                 )
+
+    # Deliberate product default: employees may collaborate unless an explicit
+    # role/direct denial above applies. Unknown/inactive permissions stay closed.
+    # This lives in Core so the Permissions UI and runtime use the same decision.
+    if permission.code in {"slack.channel.read", "slack.channel.create", "slack.channel.manage",
+                            "slack.message.create", "slack.message.update"}:
+        return _decision(True, "Colaboración de empleados habilitada salvo restricción explícita.",
+                         "slack_employee_default", "system", policy_version=context.policy_version)
 
     return _decision(
         False,

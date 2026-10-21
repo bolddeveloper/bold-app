@@ -23,7 +23,10 @@ necesario para invalidar las cachés de autorización de todos los módulos.
 El diseño sigue cuatro principios:
 
 - **Denegar por defecto**: si ninguna regla vigente permite una acción, se
-  rechaza.
+  rechaza. Excepción explícita de producto: las cinco capacidades registradas
+  de colaboración de Slack permiten a empleados activos colaborar salvo
+  denegación aplicable. La excepción se resuelve en Core, después de las
+  denegaciones, y no omite el piloto IT ni los requisitos de sesión.
 - **Una asignación por decisión**: los permisos de dos plazas de un mismo
   empleado nunca se combinan.
 - **Autoridad explícita y acotada**: `is_staff` solo habilita el Django Admin;

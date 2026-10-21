@@ -390,6 +390,7 @@ class PermissionControlPlaneSecurityTests(TestCase):
         )
         self.assertEqual(legacy_write.status_code, 405, getattr(legacy_write, "data", None))
 
+    @override_settings(MESSAGING_PILOT_ENABLED=False)
     def test_owner_always_has_access_and_cannot_be_a_permission_target(self):
         future_permission = Permission.objects.create(
             code="future.reports.export",
@@ -400,7 +401,9 @@ class PermissionControlPlaneSecurityTests(TestCase):
             is_delegable=False,
         )
 
-        # El acceso del propietario es una invariante del motor: no depende de
+        # Fuera de las fronteras estructurales de pilotos (cubiertas también
+        # para el propietario en mensajeria.test_channels), la herencia del
+        # propietario es una invariante del motor: no depende de
         # replicar reglas por cargo ni concesiones individuales al registrar un
         # permiso actual o uno agregado posteriormente por cualquier módulo.
         for permission in Permission.objects.filter(is_active=True):

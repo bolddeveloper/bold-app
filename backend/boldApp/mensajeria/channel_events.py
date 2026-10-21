@@ -1,0 +1,43 @@
+"""Bounded invalidation hints on the existing socket; no message-body fanout."""
+import logging
+from types import SimpleNamespace
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.db import transaction
+
+from boldApp.core.events import build_event_envelope
+from boldApp.core.models import PositionAssignment
+from .channel_access import ChannelPolicy
+from .models import DepartmentChannel
+
+log = logging.getLogger(__name__)
+
+
+def publish_channel(channel, kind, employee_id=None):
+    event = {"type": "slack.changed", "channel_id": str(channel.pk), "kind": kind,
+             "activity_version": channel.activity_version, "version": channel.version}
+
+    def dispatch():
+        try:
+            layer = get_channel_layer()
+            if layer is not None:
+                async_to_sync(layer.group_send)(f"messaging_employee_{employee_id}" if employee_id else "slack_watch", event)
+        except Exception:
+            log.warning("Slack push unavailable; persisted channel remains available")
+    transaction.on_commit(dispatch, robust=True)
+
+
+def channel_event(assignment_id, event, session_id=None):
+    assignment = PositionAssignment.objects.select_related("employee__user_account", "position__unit", "position__job_role").filter(pk=assignment_id).first()
+    channel = DepartmentChannel.objects.select_related("unit").filter(pk=event.get("channel_id")).first()
+    request = None
+    if session_id:
+        from boldApp.autenticacion.models import AuthSession
+        session = AuthSession.objects.filter(pk=session_id, user_account__employee_id=getattr(assignment, "employee_id", None)).first()
+        request = SimpleNamespace(auth=session)
+    if not assignment or not channel or not ChannelPolicy(assignment, request).allows("slack.channel.read", channel.unit, channel.pk):
+        return None
+    # Read current revisions, not a delayed or reordered broadcast's old values.
+    return build_event_envelope("slack.changed", "slack_channel", channel.pk,
+        {"channel_id": str(channel.pk), "kind": event["kind"], "activity_version": channel.activity_version, "version": channel.version})

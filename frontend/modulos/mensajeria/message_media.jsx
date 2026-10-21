@@ -97,7 +97,7 @@ export function AudioPlayer({src, file, loadSource, author, label = "Nota de voz
     </div>;
 }
 
-export function MessageMedia({message, author}) {
+export function MessageMedia({message, author, fetchMedia = messagingApi.media}) {
     const [url, setUrl] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [viewing, setViewing] = useState(false);
     const host = useRef(null), pending = useRef(false), controller = useRef(null), objectUrl = useRef(null), sourceBlob = useRef(null);
     async function load() {
@@ -106,7 +106,7 @@ export function MessageMedia({message, author}) {
         pending.current = true; setBusy(true); setError("");
         const abort = new AbortController(); controller.current = abort;
         try {
-            const blob = await messagingApi.media(message.conversation_id, message.id, {signal: abort.signal});
+            const blob = await fetchMedia(message.conversation_id || message.channel_id, message.id, {signal: abort.signal});
             if (abort.signal.aborted) return;
             sourceBlob.current = blob; objectUrl.current = URL.createObjectURL(blob); setUrl(objectUrl.current);
             return {url: objectUrl.current, blob};

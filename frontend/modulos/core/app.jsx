@@ -14,6 +14,7 @@ import { canUseManagementModule } from "./core_models.js";
 import {lazy, Suspense, useEffect, useState} from "react";
 import {sheetsCache} from "../hojas/sheets_cache.js";
 const MessagingModule = lazy(() => import("../mensajeria/messaging_module.jsx"));
+const ChannelModule = lazy(() => import("../mensajeria/channel_module.jsx"));
 const SheetsModule = lazy(() => import("../hojas/sheets_module.jsx"));
 
 const baseNavigation = [
@@ -49,6 +50,7 @@ function ApplicationWorkspace() {
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
         ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: core.messaging?.unread?.total > 0}] : []),
+        ...(canChat ? [{id: "slack", label: "Slack", icon: "slack", group: "work", unread:core.slack?.unread?.total>0}] : []),
         ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
@@ -56,6 +58,7 @@ function ApplicationWorkspace() {
     const externalModules = {
         profile: <ProfileModule/>,
         ...(canChat ? {messaging: <Suspense fallback={<p role="status">Cargando chat…</p>}><MessagingModule key={permissionContext}/></Suspense>} : {}),
+        ...(canChat ? {slack: <Suspense fallback={<p role="status">Cargando canales…</p>}><ChannelModule key={permissionContext}/></Suspense>} : {}),
         calendar: <CalendarModule key="calendar" />,
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,

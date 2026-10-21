@@ -117,3 +117,21 @@ def media_data(message):
         return None
     return {"id": str(media.pk), "kind": media.kind, "mime_type": media.mime_type,
             "size_bytes": media.size_bytes, "width": media.width, "height": media.height}
+
+
+def private_media_response(media):
+    # Both domains authorize their own parent resource before entering here.
+    # This helper never decides membership and never exposes a remote identifier.
+    from django.http import HttpResponse
+    from boldApp.workspace.image_storage import storage_user
+    from boldApp.workspace.service import google, file_id
+    result = google(storage_user(media.root), "GET", "/files/" + file_id(media.drive_id),
+        params={"alt": "media", "supportsAllDrives": "true"}, raw=True)
+    content = result.content
+    if len(content) != media.size_bytes or hashlib.sha256(content).hexdigest() != media.digest:
+        raise ValidationError("El archivo de Drive cambió fuera de BOLD. No se puede mostrar esta versión.")
+    response = HttpResponse(content, content_type=media.mime_type)
+    response["Content-Disposition"] = f'inline; filename="bold-{media.kind}-{media.pk}.{EXTENSIONS[media.mime_type]}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response

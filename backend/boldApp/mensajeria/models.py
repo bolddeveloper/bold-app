@@ -4,6 +4,7 @@ from django.db import models
 from django.conf import settings
 
 from boldApp.core.models.mixins import UUIDPrimaryKeyModel
+from .channel_models import DepartmentChannel, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState  # noqa: F401
 
 
 class DirectConversation(UUIDPrimaryKeyModel):

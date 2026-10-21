@@ -76,7 +76,7 @@ def notification_identity_is_active(session_id, assignment_id):
 
 
 @database_sync_to_async
-def notification_resource_is_readable(assignment_id, notification_id):
+def notification_resource_is_readable(assignment_id, notification_id, session_id=None):
     from .models import Notification
     from .services import _readable_assignments
 
@@ -86,6 +86,11 @@ def notification_resource_is_readable(assignment_id, notification_id):
     ).filter(pk=notification_id, recipient_assignment_id=assignment_id).first()
     if not notification:
         return False
+    if notification.module == "slack":
+        from boldApp.autenticacion.models import AuthSession
+        from boldApp.mensajeria.channel_notifications import notification_channel_readable
+        session = AuthSession.objects.filter(pk=session_id, user_account__employee_id=notification.recipient_assignment.employee_id).first() if session_id else None
+        return notification_channel_readable(notification.recipient_assignment, notification, session, push=True)
     if notification.module == "messaging":
         from boldApp.mensajeria.access import assignment_can_chat
         from boldApp.mensajeria.events import _conversations
@@ -117,7 +122,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.groups_joined = (self.notification_group, self.session_group,
                               f"assignment_{self.assignment_id}", "permission_watch", "presence_watch")
         if identity["chat_allowed"]:
-            self.groups_joined += (f"messaging_employee_{self.employee_id}",)
+            self.groups_joined += (f"messaging_employee_{self.employee_id}", "slack_watch")
         for group in self.groups_joined:
             await self.channel_layer.group_add(group, self.channel_name)
         self.control_channel = str(uuid.uuid4())
@@ -245,7 +250,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             self.closing = True
             await self.close(code=4403)
             return
-        if not await notification_resource_is_readable(self.assignment_id, event["envelope"].get("entity_id")):
+        if not await notification_resource_is_readable(self.assignment_id, event["envelope"].get("entity_id"), self.session_id):
             return
         await self.send_json(event["envelope"])
 
@@ -275,6 +280,18 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             return
         from boldApp.mensajeria.events import private_event
         envelope = await database_sync_to_async(private_event)(self.employee_id, event)
+        if envelope:
+            await self.send_json(envelope)
+
+    async def slack_changed(self, event):
+        if self.closing:
+            return
+        if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
+            await self.close(code=4403)
+            return
+        from boldApp.mensajeria.channel_events import channel_event
+        envelope = await database_sync_to_async(channel_event)(self.assignment_id, event, self.session_id)
         if envelope:
             await self.send_json(envelope)
 

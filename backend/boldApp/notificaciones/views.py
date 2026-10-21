@@ -57,6 +57,12 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         from boldApp.mensajeria.access import assignment_can_chat
         from boldApp.mensajeria.events import _conversations
         visible_chats = _conversations(self.request.assignment.employee_id).values_list("pk", flat=True) if assignment_can_chat(self.request.assignment) else []
+        from boldApp.mensajeria.channel_access import ChannelPolicy
+        from boldApp.mensajeria.models import DepartmentChannel
+        channel_ids = base.filter(module="slack", resource_type="slack_channel").values_list("resource_id", flat=True)
+        policy = ChannelPolicy(self.request.assignment, self.request)
+        visible_channels = [channel.pk for channel in DepartmentChannel.objects.select_related("unit").filter(pk__in=channel_ids)
+            if policy.allows("slack.channel.read", channel.unit, channel.pk)]
         return base.select_related(
             "actor_assignment__employee", "recipient_assignment", "task", "project"
         ).filter(
@@ -67,6 +73,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             ~Q(module="sheets") | Q(resource_type="file", resource_id__in=visible_sheets),
         ).filter(
             ~Q(module="messaging") | Q(resource_type="direct_conversation", resource_id__in=visible_chats),
+        ).filter(
+            ~Q(module="slack") | Q(resource_type="slack_channel", resource_id__in=visible_channels),
         ).order_by("-created_at", "pk")
 
     @action(detail=False, methods=["post"], url_path="clear")

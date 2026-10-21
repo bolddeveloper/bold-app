@@ -10,6 +10,7 @@ EVENT_TYPES = (
     "comment.created", "comment.mentioned",
     "calendar.meeting_reminder",
     "messaging.message_created",
+    "slack.message_created",
 )
 DEFAULTS = {"enabled": True, "sound": "post", "volume": 60, "custom_audio": "", "custom_name": "", "desktop_enabled": False, "bell_interval_minutes": 5,
             "events": dict.fromkeys(EVENT_TYPES, True)}

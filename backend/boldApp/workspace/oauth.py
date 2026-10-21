@@ -39,8 +39,22 @@ class StartView(APIView):
         service = request.data.get("service", "all")
         if service != "all" and service not in SERVICE_SCOPES:
             raise ValidationError("Servicio Google inválido.")
-        # Meet is opt-in: existing Drive/Calendar consent must not require new scopes.
-        requested_scopes = SERVICE_SCOPES["meet"] if service == "meet" else set().union(*(scopes for key, scopes in SERVICE_SCOPES.items() if key != "meet"))
+        allowed_services = getattr(settings, "GOOGLE_WORKSPACE_OAUTH_ALLOWED_SERVICES", None)
+        if allowed_services is None:
+            # Preserve the existing production consent. Meet remains opt-in.
+            requested_scopes = SERVICE_SCOPES["meet"] if service == "meet" else set().union(*(scopes for key, scopes in SERVICE_SCOPES.items() if key != "meet"))
+        else:
+            # Isolated acceptance can request Drive without Gmail/Calendar/etc.
+            # Invalid restrictions must fail closed, not fall back to all scopes.
+            if (not isinstance(allowed_services, (tuple, list, set, frozenset)) or not allowed_services
+                    or not all(isinstance(key, str) and key in SERVICE_SCOPES for key in allowed_services)):
+                raise ValidationError("No hay servicios Google autorizados en este entorno.")
+            if service != "all" and service not in allowed_services:
+                raise ValidationError("Este servicio Google no está habilitado en el entorno de pruebas.")
+            selected = {service} if service != "all" else set(allowed_services) - {"meet"}
+            if not selected:
+                raise ValidationError("Selecciona un servicio Google autorizado.")
+            requested_scopes = set().union(*(SERVICE_SCOPES[key] for key in selected))
         identity, _ = credentials()
         config = configuration()
         nonce = secrets.token_urlsafe(32)
@@ -48,7 +62,7 @@ class StartView(APIView):
         origin = origin if origin in settings.CORS_ALLOWED_ORIGINS else settings.FRONTEND_URL.rstrip("/")
         cache.set("bold-workspace-oauth:" + nonce, str(request.auth.pk), timeout=600)
         state = signing.dumps({"session": str(request.auth.pk), "nonce": nonce, "origin": origin, "service": service, "version": config["version"]}, salt="bold-workspace")
-        return Response({"authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": identity, "redirect_uri": settings.GOOGLE_WORKSPACE_REDIRECT_URI, "response_type": "code", "scope": "openid email " + " ".join(sorted(requested_scopes)), "include_granted_scopes": "true", "access_type": "offline", "prompt": "consent select_account", "login_hint": request.user.email, "hd": settings.GOOGLE_WORKSPACE_COMPANY_DOMAIN, "state": state})})
+        return Response({"authorization_url": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({"client_id": identity, "redirect_uri": settings.GOOGLE_WORKSPACE_REDIRECT_URI, "response_type": "code", "scope": "openid email " + " ".join(sorted(requested_scopes)), "include_granted_scopes": "true" if allowed_services is None else "false", "access_type": "offline", "prompt": "consent select_account", "login_hint": request.user.email, "hd": settings.GOOGLE_WORKSPACE_COMPANY_DOMAIN, "state": state})})
 
 
 def popup(status, origin=None):

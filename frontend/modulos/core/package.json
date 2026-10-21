@@ -15,6 +15,7 @@
         "test:notification-sync": "node --test notification_sync.test.js ../tareas/src/session_lifecycle.test.js",
         "test:brands-ui": "node tests/brands_ui.mjs",
         "test:messaging": "node --test messaging_session.test.js messaging_unread.test.js ../mensajeria/*.test.js && node tests/messaging_ui.mjs",
+        "test:channels-ui": "node tests/channels_ui.mjs",
         "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",
         "test:comment-editor-ui": "node tests/comment_editor_ui.mjs",
         "test:worker": "node --test worker/*.test.js",

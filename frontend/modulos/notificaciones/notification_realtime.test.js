@@ -54,3 +54,21 @@ test("control capability, disconnect and session-terminal reason propagate indep
     socket.listeners.message({ data: JSON.stringify({ event_version: 2, event_type: "permissions.revision" }) });
     assert.equal(controls.length, 1);
 });
+
+test("Slack hints use the same session socket without entering private messaging or notifications", async () => {
+    let socket, opened=0;
+    class Socket {
+        constructor() {this.listeners={}; socket=this; opened++;}
+        addEventListener(name,fn) {this.listeners[name]=fn;}
+        close() {}
+    }
+    const slack=[], messages=[], notifications=[];
+    const realtime=createNotificationRealtime({WebSocketImpl:Socket});
+    realtime.connect({assignmentId:"it",getTicket:async()=>({ticket:"one"}),onSlack:event=>slack.push(event),onMessaging:event=>messages.push(event),onNotification:event=>notifications.push(event)});
+    await new Promise(resolve=>setImmediate(resolve));
+    socket.listeners.message({data:JSON.stringify({event_version:2,event_type:"slack.changed",payload:{channel_id:"one"}})});
+    assert.equal(opened,1); assert.equal(slack.length,1); assert.deepEqual(messages,[]); assert.deepEqual(notifications,[]);
+    realtime.disconnect();
+    socket.listeners.message({data:JSON.stringify({event_version:2,event_type:"slack.changed"})});
+    assert.equal(slack.length,1);
+});

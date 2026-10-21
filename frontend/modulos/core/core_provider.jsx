@@ -11,6 +11,7 @@ import { createPermissionMonitor } from "./permission_monitor.js";
 import { createNotificationRealtime } from "./session_realtime.js";
 import {createMessagingSession} from "./messaging_session.js";
 import {createMessagingUnread} from "./messaging_unread.js";
+import {createSlackUnread} from "./slack_unread.js";
 import { createSessionNotifications } from "./session_notifications.js";
 import {createNotificationSync} from "./notification_sync.js";
 import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
@@ -31,6 +32,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const messagingController = useRef(null);
     const [messagingConnection, setMessagingConnection] = useState("disconnected");
     const [unreadChats, setUnreadChats] = useState({assignmentId: null, total: 0, byEmployee: {}, byConversation: {}});
+    const [unreadChannels,setUnreadChannels]=useState({assignmentId:null,total:0,byChannel:{},ready:false});
     const markDelivered = useCallback((conversation, ids) => messagingController.current?.delivered(conversation, ids), []);
     const markRead = useCallback((conversation, ids) => messagingController.current?.read(conversation, ids), []);
     const [notificationSnapshot, setNotificationSnapshot] = useState({ assignmentId: null, rows: [], error: "" });
@@ -57,6 +59,19 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [mfaAssuranceRevision, setMfaAssuranceRevision] = useState(0);
     const real = is_using_real_backend();
     const chatAllowed = real && state.sessionStatus === "ready" && state.activeAssignment?.chat_enabled === true && !state.securityUncertain;
+    useEffect(()=>{
+        const assignmentId=state.activeAssignment?.id;
+        setUnreadChannels({assignmentId,total:0,byChannel:{},ready:false});
+        if(!chatAllowed) return;
+        const unread=createSlackUnread({fetchSummary:options=>http.request("/api/v2/messaging/channels/unread/",options),
+            visible:()=>!document.hidden && navigator.onLine!==false,onChange:snapshot=>setUnreadChannels({assignmentId,...snapshot,ready:true})});
+        const receive=event=>unread.receive(event.detail),recover=()=>unread.recover(),invalidate=()=>unread.invalidate();
+        window.addEventListener("bold:slack-event",receive);window.addEventListener("bold:slack-state",invalidate);
+        window.addEventListener("bold:messaging-reconnect",invalidate);window.addEventListener("online",invalidate);window.addEventListener("focus",recover);
+        document.addEventListener("visibilitychange",recover);recover();
+        return ()=>{unread.dispose();window.removeEventListener("bold:slack-event",receive);window.removeEventListener("bold:slack-state",invalidate);
+            window.removeEventListener("bold:messaging-reconnect",invalidate);window.removeEventListener("online",invalidate);window.removeEventListener("focus",recover);document.removeEventListener("visibilitychange",recover);};
+    },[chatAllowed,state.activeAssignment?.id]);
     useEffect(() => {
         const assignmentId = state.activeAssignment?.id;
         setUnreadChats({assignmentId, total: 0, byEmployee: {}, byConversation: {}});
@@ -291,6 +306,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
             onMessaging: envelope => chat.receive(envelope),
+            onSlack: envelope => {if (mounted && !getCoreState().securityUncertain) window.dispatchEvent(new CustomEvent("bold:slack-event", {detail:envelope}));},
             onControl: envelope => {
                 if (!mounted) return;
                 updateCore({presence: Array.isArray(envelope.payload?.presence?.rows) ? envelope.payload.presence : null});
@@ -451,7 +467,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         updateCore({account: {...current.account, avatar_url: profile.avatar_url, biography: profile.biography, banner_color: profile.banner_color}, employee: {...current.employee, full_name: profile.name}, assignments, activeAssignment: assignments.find(row => row.id === current.activeAssignment?.id) || current.activeAssignment, directory: current.directory.map(change), presence: current.presence ? {...current.presence, rows: current.presence.rows.map(row => row.employee_id === employeeId ? {...row, name: profile.name, avatar_url: profile.avatar_url} : row)} : null});
     }
     const unread = chatAllowed && unreadChats.assignmentId === state.activeAssignment?.id ? unreadChats : {total: 0, byEmployee: {}, byConversation: {}};
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const slackUnread=chatAllowed && unreadChannels.assignmentId===state.activeAssignment?.id ? unreadChannels : {total:0,byChannel:{},ready:false};
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

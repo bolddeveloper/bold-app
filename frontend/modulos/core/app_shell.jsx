@@ -15,6 +15,7 @@ import { searchNavigation } from "./global_search.js";
 import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
 import { startNotificationBellReminder } from "./notification_bell.js";
 const icon_map = { messaging: message_square_plus_icon, brands: users_icon, profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
+icon_map.slack = users_icon;
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
 export const useShell = () => useContext(ShellContext);
@@ -34,6 +35,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const [profile_editing, set_profile_editing] = useState(false);
     const [profile_tab, set_profile_tab] = useState("account");
     const [chat_target, set_chat_target] = useState(null);
+    const [slack_target,set_slack_target]=useState(null);
     const profile_dirty = useRef(false);
     const set_profile_dirty = value => {profile_dirty.current = value;};
     const [workspace_file, set_workspace_file] = useState(null);
@@ -112,7 +114,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
-    return <ShellContext.Provider value={{ chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
+    return <ShellContext.Provider value={{ slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, children }) {
     const shell = useShell();
@@ -186,6 +188,7 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         </div>
         <div id="bold-overlay-root" />
         <span className="chat_unread_status" role="status" aria-atomic="true">{membersActions.unreadChats ? `${core.messaging.unread.total} mensajes de Chat sin leer` : ""}</span>
+        <span className="chat_unread_status" role="status" aria-atomic="true">{core.slack?.unread?.total>0 ? `${core.slack.unread.total} ${core.slack.unread.total===1 ? "mensaje" : "mensajes"} de Slack sin leer` : ""}</span>
         {profileAnchor && <ProfileQuickMenu anchor={profileAnchor} close={() => setProfileAnchor(null)} openProfile={shell.open_profile} changeDepartment={async id => {if (!await shell.can_change_department()) return false; core.setActiveAssignment(id); return true;}}/>}
         {overlays}
     </div>;
