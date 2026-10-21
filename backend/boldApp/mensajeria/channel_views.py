@@ -23,12 +23,14 @@ from .media import BoundedUpload, MAX_BYTES, media_data, prepare, private_media_
 from .models import DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
 from .serializers import StrictInputSerializer, EditMessageSerializer
 from .views import PrivateChatView, Conflict
+from .channel_search import channel_matches
 
 
 class CreateChannel(StrictInputSerializer):
     unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     name = serializers.CharField(max_length=80)
     description = serializers.CharField(max_length=500, allow_blank=True, default="")
+    color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", max_length=7, allow_blank=True, default="")
     visibility = serializers.ChoiceField(choices=["public", "department", "private"], default="public")
     members = serializers.ListField(child=serializers.DictField(), max_length=200, required=False, default=list)
 
@@ -36,6 +38,7 @@ class CreateChannel(StrictInputSerializer):
 class UpdateChannel(StrictInputSerializer):
     name = serializers.CharField(max_length=80, required=False)
     description = serializers.CharField(max_length=500, allow_blank=True, required=False)
+    color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", max_length=7, allow_blank=True, required=False)
     archived = serializers.BooleanField(required=False)
     version = serializers.IntegerField(min_value=1)
 
@@ -91,7 +94,7 @@ def channel_data(channel, policy):
         policy.channel_states = {}
     if str(channel.pk) not in policy.channel_states:
         policy.channel_states.update(channel_states([channel], policy.assignment.employee_id))
-    return {"id": str(channel.pk), "name": channel.name, "description": channel.description,
+    return {"id": str(channel.pk), "name": channel.name, "description": channel.description, "color": channel.color,
             "department": department_data(channel.unit), "archived_at": channel.archived_at,
             "visibility": channel.visibility,
             "version": channel.version, "activity_version": channel.activity_version,
@@ -170,11 +173,17 @@ class ChannelListView(SlackView):
         policy.prime(candidates)
         # Apply both the structural boundary and Core restrictions BEFORE the
         # cursor is formed. A cursor must not encode a hidden channel's name.
-        visible = [row.pk for row in candidates if policy.allows("slack.channel.read", row.unit, row.pk)]
+        query = request.query_params.get("q", "").strip()[:80]
+        visible = [row.pk for row in candidates if policy.allows("slack.channel.read", row.unit, row.pk) and channel_matches(row.name, query)]
         pages = ChannelPages()
         page = pages.paginate_queryset(rows.filter(pk__in=visible), request)
         policy.channel_states = channel_states(page, self.actor())
-        return pages.get_paginated_response([channel_data(row, policy) for row in page])
+        response = pages.get_paginated_response([channel_data(row, policy) for row in page])
+        visible_ids = set(visible)
+        matching = {str(row.unit_id) if row.unit_id else "independent": department_data(row.unit) or {"id": "independent", "name": "Sin departamento"}
+            for row in candidates if row.pk in visible_ids}
+        response.data["departments"] = list(matching.values())
+        return response
 
     @transaction.atomic
     def post(self, request):
@@ -201,7 +210,7 @@ class ChannelListView(SlackView):
             raise ValidationError("Este grupo alcanzó el límite inicial de 200 canales, incluidos los archivados.")
         try:
             with transaction.atomic():
-                channel = DepartmentChannel.objects.create(unit=unit, name=values["name"], description=values["description"], visibility=values["visibility"], creator=request.assignment)
+                channel = DepartmentChannel.objects.create(unit=unit, name=values["name"], description=values["description"], color=values["color"], visibility=values["visibility"], creator=request.assignment)
                 ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=channel, **row) for row in members])
         except IntegrityError:
             raise Conflict("Ya existe un canal con ese nombre en este grupo, posiblemente archivado.")
@@ -225,7 +234,7 @@ class ChannelDetailView(SlackView):
         values = form.validated_data
         if values["version"] != channel.version:
             raise Conflict("Otro empleado modificó el canal. Actualízalo antes de volver a guardar.")
-        for key in ("name", "description"):
+        for key in ("name", "description", "color"):
             if key in values:
                 setattr(channel, key, values[key])
         if "archived" in values:
@@ -234,7 +243,7 @@ class ChannelDetailView(SlackView):
         channel.updated_at = timezone.now()
         try:
             with transaction.atomic():
-                channel.save(update_fields=["name", "description", "archived_at", "version", "updated_at"])
+                channel.save(update_fields=["name", "description", "color", "archived_at", "version", "updated_at"])
         except IntegrityError:
             raise Conflict("Ya existe un canal con ese nombre en el departamento.")
         publish_channel(channel, "channel.updated")

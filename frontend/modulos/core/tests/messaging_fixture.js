@@ -22,7 +22,7 @@ export function installMessagingFixture(target = globalThis) {
         presence: {rows: [{...peer, status: "online", units:[{id:"it", name:"Equipo de IT"}]}], units: [{id:"it", name:"Equipo de IT"}]},
         messaging: {connection:"open", markDelivered:()=>{}, markRead:()=>{}, unread:{total:2,byEmployee:{[peerId]:2},byConversation:{[conversationId]:{count:2,version:2}}}},
     };
-    target.__messagingShell = {chat_target: {employee_id: peerId}, open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
+    target.__messagingShell = {chat_target: {employee_id: peerId}, set_active_module:module=>calls.push(`module:${module}`), open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
     target.__messagingApi = {
         preferences: async () => ({enter_behavior:fixture.enterBehavior}),
         savePreferences: async value => {fixture.enterBehavior=value; return {enter_behavior:value};},

@@ -1,6 +1,6 @@
 """Invitation administration is deliberately separate from reading content."""
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
@@ -15,6 +15,8 @@ from .channel_views import SlackView, ChannelPages, department_data
 from .models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch
 from .serializers import StrictInputSerializer
 from .views import Conflict
+from .channel_people import with_identity, person_data
+from rest_framework.pagination import CursorPagination
 
 
 class AccessMember(StrictInputSerializer):
@@ -43,9 +45,11 @@ def validate_access(visibility, members, unit_id):
 
 
 def access_data(channel):
+    people = with_identity(Employee.objects.filter(channelaccessrule__channel=channel))
+    identities = {person.pk: person_data(person) for person in people}
     return {"id": str(channel.pk), "name": channel.name, "department": department_data(channel.unit),
-        "visibility": channel.visibility, "version": channel.version,
-        "members": [{"employee_id": str(rule.employee_id), "name": rule.employee.full_name, "access": rule.access}
+        "color": channel.color, "visibility": channel.visibility, "version": channel.version,
+        "members": [{**identities[rule.employee_id], "access": rule.access}
             for rule in channel.access_rules.select_related("employee").order_by("employee__full_name", "employee_id")]}
 
 
@@ -133,7 +137,12 @@ class ChannelManagementView(SlackView):
         pages = ChannelPages()
         page = pages.paginate_queryset(rows.filter(pk__in=ids), request)
         return pages.get_paginated_response([{"id": str(row.pk), "name": row.name,
-            "department": department_data(row.unit), "visibility": row.visibility, "version": row.version} for row in page])
+            "department": department_data(row.unit), "color": row.color, "visibility": row.visibility, "version": row.version} for row in page])
+
+
+class InvitationPages(CursorPagination):
+    page_size = 30
+    ordering = ("full_name", "id")
 
 
 class ChannelPeopleView(SlackView):
@@ -156,9 +165,30 @@ class ChannelPeopleView(SlackView):
         query = request.query_params.get("q", "").strip()[:80]
         rows = Employee.objects.filter(is_active=True, user_account__is_active=True,
             position_assignments__is_active=True, position_assignments__released_at__isnull=True)
+        from boldApp.core.models import OrganizationalUnit
+        active_assignments = PositionAssignment.objects.filter(is_active=True, released_at__isnull=True, employee__in=rows)
+        units = OrganizationalUnit.objects.filter(pk__in=active_assignments.values("position__unit_id")).order_by("name", "id")
+        counts = {row["position__unit_id"]: row["total"] for row in active_assignments.values("position__unit_id").annotate(total=Count("employee_id", distinct=True))}
+        departments = [{**department_data(unit), "count": counts[unit.pk]} for unit in units]
+        department = request.query_params.get("department")
+        if department:
+            try:
+                department = serializers.UUIDField().run_validation(department)
+            except serializers.ValidationError:
+                raise ValidationError("Departamento de invitación no válido.")
+            rows = rows.filter(pk__in=active_assignments.filter(position__unit_id=department).values("employee_id"))
         if query:
-            rows = rows.filter(full_name__icontains=query)
+            # Normalize in Python for consistent accents on SQLite and PostgreSQL.
+            from .channel_search import normalized
+            query = normalized(query)
+            candidates = with_identity(rows.distinct())
+            ids = [person.pk for person in candidates if query in normalized(" ".join([person.full_name,
+                person.user_account.email, *[row.position.unit.name for row in person.invitation_assignments]]))]
+            rows = rows.filter(pk__in=ids)
         # A corporate invitation is not a pilot admission. Outside IT remains
         # unable to open Slack even if named here for a future rollout.
-        rows = rows.distinct().order_by("full_name", "id")[:30]
-        return Response({"results": [{"employee_id": str(row.pk), "name": row.full_name} for row in rows]})
+        pages = InvitationPages()
+        page = pages.paginate_queryset(with_identity(rows.distinct().order_by("full_name", "id")), request)
+        response = pages.get_paginated_response([person_data(row) for row in page])
+        response.data["departments"] = departments
+        return response

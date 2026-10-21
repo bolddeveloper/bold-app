@@ -1,6 +1,17 @@
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
+    id: "2026-10-21-slack-discovery-invitations-polish", date: "2026-10-21", category: "Piloto IT", icon: "update",
+    title: "Canales más fáciles de encontrar y compartir",
+    summary: "Búsqueda mientras escribes, colores de canal y selectores de personas con más contexto.",
+    sections: [{title: "Búsqueda y organización", items: [
+        "Busca canales por fragmentos del nombre, sin depender de las tildes y con tolerancia a pequeños errores. Solo aparecen los departamentos con coincidencias.",
+        "Identifica los canales por su color y cámbialo desde Configurar canal. El color automático utiliza el del departamento.",
+        "Busca e invita personas viendo su avatar, nombre y departamentos. Los accesos individuales se gestionan en una lista desplegable con búsqueda.",
+        "Invita a las personas activas actuales de un departamento en un solo paso, sin duplicarlas ni sustituir accesos ya configurados. Los cambios se aplican al guardar.",
+        "Desde Chat puedes ir directamente a Slack. Las pruebas y el acceso continúan limitados a IT.",
+    ]}],
+}, {
     id: "2026-10-21-slack-channel-access-pilot", date: "2026-10-21", category: "Piloto IT", icon: "update",
     title: "Canales con privacidad e invitaciones",
     summary: "Espacios independientes y controles para decidir quién puede leer o participar en cada canal.",

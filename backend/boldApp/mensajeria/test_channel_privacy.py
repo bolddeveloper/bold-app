@@ -56,7 +56,7 @@ class ChannelPrivacyTests(TestCase):
         # no history, files, descriptions, activity or unread information.
         data = self.as_person(self.owner).get(url+"access/")
         self.assertEqual(data.status_code, 200)
-        self.assertEqual(set(data.data), {"id", "name", "department", "visibility", "version", "members"})
+        self.assertEqual(set(data.data), {"id", "name", "department", "color", "visibility", "version", "members"})
 
     def test_invited_reader_can_read_but_cannot_send_edit_or_rename(self):
         channel, url = self.private(members=self.rules((self.bob,"write")))

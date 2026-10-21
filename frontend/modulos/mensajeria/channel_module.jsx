@@ -6,15 +6,19 @@ import {AvatarImage} from "../core/shared/avatar_image.jsx";
 import {useDialog} from "../core/shared/use_dialog.js";
 import {channelApi, channelError, createChannelRefresh, mergeChannelDetails, mergeChannelMessages} from "./channel_api.js";
 import {useChannelReader} from "./use_channel_reader.js";
-import {dayLabel, enterSends, initials, linkParts, normalizeQuery} from "./messaging_models.js";
+import {dayLabel, enterSends, initials, linkParts} from "./messaging_models.js";
 import {MediaDraft, MessageMedia, VoiceRecorder} from "./message_media.jsx";
 import ImageQueue from "./image_queue.jsx";
 import {appendImages, canReviseFailedImage, captionQueuedImage, replaceQueuedImage} from "./image_queue_model.js";
 import {lockChannelMedia, unlockRejectedChannelMedia} from "./channel_outbox.js";
 import "./messaging.css";
 import "./channel.css";
+import "./channel_controls.css";
 import ChannelTaskPicker from "./channel_task_picker.jsx";
 import ChannelAccessEditor, {ChannelAccessFields} from "./channel_access_editor.jsx";
+import {SearchField} from "./channel_picker.jsx";
+import ChannelColorField from "./channel_color_field.jsx";
+import {channelMatches, channelColor} from "./channel_discovery.js";
 const ImageEditor = lazy(() => import("./image_editor.jsx"));
 
 function Department({value}) {
@@ -25,36 +29,38 @@ function Department({value}) {
 function ChannelEditor({channel, departments, canCreateIndependent, onClose, onSaved}) {
     const [unit, setUnit] = useState(channel ? channel.department?.id || "" : canCreateIndependent ? "" : departments.find(row => row.can_create)?.id || "");
     const [name, setName] = useState(channel?.name || ""), [description, setDescription] = useState(channel?.description || "");
+    const [color,setColor]=useState(channel?.color || ""),[inviting,setInviting]=useState(false);
     const [visibility,setVisibility]=useState("public"),[members,setMembers]=useState([]);
     const [busy, setBusy] = useState(false), [error, setError] = useState("");
     const active = useRef(true), request = useRef(null), sending = useRef(false);
     useEffect(() => {active.current = true; return () => {active.current = false; request.current?.abort();};}, []);
-    useDialog(true, ".slack_editor", () => {if (!sending.current) onClose();});
+    useDialog(true, ".slack_editor", () => {if (!sending.current && !inviting) onClose();});
     async function save(event) {
         event.preventDefault();
-        if (sending.current) return;
+        if (sending.current || inviting) return;
         sending.current = true; setBusy(true); setError("");
         request.current = new AbortController();
         try {
             const options = {signal:request.current.signal};
-            const result = channel ? await channelApi.update(channel.id, {name, description, version:channel.version}, options)
-                : await channelApi.create({unit_id:unit || null, name, description,visibility,members:members.map(({employee_id,access})=>({employee_id,access}))}, options);
+            const result = channel ? await channelApi.update(channel.id, {name, description, color, version:channel.version}, options)
+                : await channelApi.create({unit_id:unit || null, name, description,color,visibility,members:members.map(({employee_id,access})=>({employee_id,access}))}, options);
             if (active.current) onSaved(result);
         } catch (err) {if (active.current && err.name !== "AbortError") setError(channelError(err));}
         finally {sending.current = false; if (active.current) setBusy(false);}
     }
     return <div className="slack_editor_scrim"><section role="dialog" aria-modal="true" aria-labelledby="slack_editor_title" className="slack_editor">
-        <header><h2 id="slack_editor_title">{channel ? "Configurar canal" : "Crear canal"}</h2><button type="button" onClick={onClose} disabled={busy} aria-label="Cerrar configuración"><X aria-hidden="true" size={20}/></button></header>
+        <header><h2 id="slack_editor_title">{channel ? "Configurar canal" : "Crear canal"}</h2><button type="button" onClick={onClose} disabled={busy || inviting} aria-label="Cerrar configuración"><X aria-hidden="true" size={20}/></button></header>
         <p>Un espacio compartido entre empleados. Los permisos se administran desde el módulo Permisos.</p>
         <form onSubmit={save} aria-busy={busy}>
-            <fieldset disabled={busy}>
+            <fieldset disabled={busy || inviting}>
                 {!channel && <label>Departamento<select value={unit} onChange={event => {setUnit(event.target.value);if(!event.target.value && visibility==="department")setVisibility("private");}} required={!canCreateIndependent}>{canCreateIndependent && <option value="">Sin departamento</option>}{departments.filter(row => row.can_create).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select>{canCreateIndependent && <small>Elige «Sin departamento» para un espacio independiente.</small>}</label>}
                 <label>Nombre del canal<input autoComplete="off" value={name} onChange={event => setName(event.target.value)} maxLength={80} required/></label>
                 <label>Descripción<textarea rows={3} value={description} onChange={event => setDescription(event.target.value)} maxLength={500}/></label>
-                {!channel && <ChannelAccessFields unit={unit} visibility={visibility} members={members} onVisibility={setVisibility} onMembers={setMembers} disabled={busy}/>}
+                <ChannelColorField value={color} onChange={setColor} department={channel?.department || departments.find(row=>row.id===unit)}/>
+                {!channel && <ChannelAccessFields unit={unit} visibility={visibility} members={members} onVisibility={setVisibility} onMembers={setMembers} onBusyChange={setInviting} disabled={busy}/>}
             </fieldset>
             {error && <p className="slack_error" role="alert">{error}</p>}
-            <button type="submit" className="slack_primary" disabled={busy || !name.trim() || (!channel && !unit && !canCreateIndependent)}>{busy ? "Guardando…" : "Guardar canal"}</button>
+            <button type="submit" className="slack_primary" disabled={busy || inviting || !name.trim() || (!channel && !unit && !canCreateIndependent)}>{busy ? "Guardando…" : "Guardar canal"}</button>
         </form>
     </section></div>;
 }
@@ -63,6 +69,7 @@ export default function ChannelModule() {
     const core = useCore(), shell = useShell();
     const allowed = core.activeAssignment?.chat_enabled === true && !core.securityUncertain;
     const [departments, setDepartments] = useState([]), [channels, setChannels] = useState([]), [channelNext, setChannelNext] = useState(null);
+    const [searchGroups,setSearchGroups]=useState({query:"",rows:[]});
     const [canCreateIndependent, setCanCreateIndependent] = useState(false);
     const [selected, setSelected] = useState(null), [messages, setMessages] = useState([]), [older, setOlder] = useState(null);
     const [parent, setParent] = useState(null), [query, setQuery] = useState(""), [department, setDepartment] = useState("");
@@ -80,7 +87,7 @@ export default function ChannelModule() {
     const [newBelow,setNewBelow]=useState(false);
     const mounted = useRef(false), state = useRef({}), reads = useRef(null), writes = useRef(null), busy = useRef(false), retries = useRef(new Map()), viewport = useRef(null), field = useRef(null), refresh = useRef(null);
     const key = `${selected?.id || ""}:${parent?.id || ""}`;
-    state.current = {selected, parent, archived, key};
+    state.current = {selected, parent, archived, key, query};
     const actorId = core.account?.employee || core.employee?.id || core.activeAssignment?.personId;
     const attachments=mediaDrafts[key] || [], images=attachments.filter(item=>item.file.type.startsWith("image/"));
     const activeMedia=images.find(item=>item.id===activeImage) || images[0] || attachments[0];
@@ -111,6 +118,7 @@ export default function ChannelModule() {
         state.current={...state.current,selected:null,parent:null,key:":"};
         reads.current?.abort();writes.current?.abort();followWrite.current?.abort();openingTask.current?.abort();
         setMessages([]);setChannels([]);setChannelNext(null);setSelected(null);setParent(null);setOlder(null);setEdit(null);setEditor(null);setAccessEditor(null);
+        setSearchGroups({query:"",rows:[]});
         setDrafts({});setTaskDrafts({});setTaskPicker(false);setMediaDrafts({});mediaState.current={};setImageEditor(null);setActiveImage(null);retries.current.clear();
     }
     function report(err) {if (mounted.current && err.name !== "AbortError") {if ([401,403,404].includes(err.status)) clearPrivateState();setError(channelError(err));}}
@@ -125,9 +133,11 @@ export default function ChannelModule() {
     }
     async function load(signal) {
         const archivedSnapshot = state.current.archived;
-        const page = await channelApi.list(archivedSnapshot, null, {signal});
-        if (signal.aborted || !mounted.current || archivedSnapshot !== state.current.archived) return;
+        const querySnapshot=state.current.query;
+        const page = await channelApi.list(archivedSnapshot, null, {signal},querySnapshot ? {q:querySnapshot} : {});
+        if (signal.aborted || !mounted.current || archivedSnapshot !== state.current.archived || querySnapshot!==state.current.query) return;
         setChannels(current=>page.results.map(row=>mergeChannelDetails(current.find(old=>old.id===row.id),row))); setChannelNext(page.next);
+        setSearchGroups({query:querySnapshot,rows:page.departments || []});
     }
     async function loadMessages(signal, next = null) {
         const snapshot = state.current;
@@ -159,9 +169,9 @@ export default function ChannelModule() {
         if (!allowed) return;
         reads.current?.abort(); const controller = new AbortController(); reads.current = controller;
         setLoading(true);
-        load(controller.signal).catch(report).finally(() => {if (!controller.signal.aborted) setLoading(false);});
-        return () => controller.abort();
-    }, [allowed, archived]);
+        const timer=setTimeout(()=>load(controller.signal).catch(report).finally(() => {if (!controller.signal.aborted) setLoading(false);}),query ? 180 : 0);
+        return () => {clearTimeout(timer);controller.abort();};
+    }, [allowed, archived, query]);
     useEffect(() => {
         if (!allowed || !selected) return;
         const controller = new AbortController();
@@ -300,8 +310,10 @@ export default function ChannelModule() {
         finally {if (openingTask.current===controller) openingTask.current=null;if (mounted.current) setOpeningTaskId(null);}
     }
     if (!allowed) return <section className="slack_module"><p role="status">Slack permanece disponible únicamente para el piloto de IT con una sesión autorizada.</p></section>;
-    const groups = [{id:"independent",name:"Sin departamento"},...departments];
-    const grouped = groups.filter(unit => !department || department === unit.id).map(unit => ({...unit, channels:channels.filter(row => (row.department?.id || "independent") === unit.id && normalizeQuery(row.name).includes(normalizeQuery(query)))}));
+    const matchingChannels=channels.filter(row=>channelMatches(row.name,query));
+    const matchingUnits=new Set([...matchingChannels.map(row=>row.department?.id || "independent"),...(searchGroups.query===query ? searchGroups.rows.map(row=>row.id) : [])]);
+    const groups = [...new Map([{id:"independent",name:"Sin departamento"},...departments,...(searchGroups.query===query ? searchGroups.rows : [])].map(row=>[row.id,row])).values()].filter(row=>!query.trim() || matchingUnits.has(row.id));
+    const grouped = groups.filter(unit => !department || department === unit.id).map(unit => ({...unit, channels:matchingChannels.filter(row => (row.department?.id || "independent") === unit.id)}));
     function unreadFor(row) {
         const summary=core.slack?.unread;
         if(summary?.ready && (Object.hasOwn(summary.byChannel,row.id) || !summary.truncated)) return summary.byChannel[row.id] || 0;
@@ -312,11 +324,11 @@ export default function ChannelModule() {
     return <section className={`slack_module ${selected ? "slack_channel_open" : ""}`} aria-label="Slack de BOLD">
         <aside className="slack_sidebar" aria-label="Departamentos y canales" inert={editor || accessEditor || taskPicker || imageEditor || recording ? true : undefined}>
             <header><div><h1>Slack</h1><small>Canales de BOLD · Piloto IT</small></div><button type="button" aria-label="Crear canal" disabled={sending || !(canCreateIndependent || departments.some(row => row.can_create))} onClick={() => setEditor({create:true})}><Plus size={20} aria-hidden="true"/></button></header>
-            <label>Buscar canal<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre del canal"/></label>
+            <div className="slack_channel_search"><span className="slack_field_label">Buscar canal</span><SearchField label="Buscar canal" value={query} onChange={value=>{setQuery(value);setDepartment("");}} placeholder="Nombre del canal"/></div>
             <label>Departamento<select value={department} onChange={event => setDepartment(event.target.value)}><option value="">Todos los canales</option>{groups.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
             <label className="slack_archive_filter"><input type="checkbox" checked={archived} onChange={event => setArchived(event.target.checked)}/> Incluir archivados</label>
-            <nav aria-label="Canales">{grouped.map(unit => <section key={unit.id}><h2><Department value={unit}/></h2>{unit.channels.map(row => <button type="button" key={row.id} aria-current={selected?.id === row.id ? "page" : undefined} aria-label={unreadFor(row)>0 ? `${row.name}, ${unreadFor(row)} ${unreadFor(row)===1 ? "mensaje" : "mensajes"} sin leer` : undefined} disabled={sending} onClick={() => select(row)}><Hash size={17} aria-hidden="true"/><span>{row.name}</span>{row.following && <Bell size={14} aria-label="Siguiendo"/>}{unreadFor(row)>0 && <strong className="slack_unread_badge" aria-hidden="true">{unreadFor(row)>99 ? "99+" : unreadFor(row)}</strong>}{row.archived_at && <Archive size={15} aria-label="Archivado"/>}</button>)}{!unit.channels.length && <small>Sin canales cargados</small>}</section>)}</nav>
-            {channelNext && <button type="button" disabled={loading} onClick={async () => {setLoading(true);const controller=reads.current;try {const page = await channelApi.list(archived,channelNext,{signal:controller.signal}); if (!controller.signal.aborted && mounted.current) {setChannels(current => [...new Map([...current,...page.results].map(row => [row.id,row])).values()]); setChannelNext(page.next);}} catch(err) {if(!controller.signal.aborted)report(err);} finally {if (mounted.current && !controller.signal.aborted) setLoading(false);}}}>Cargar más canales</button>}
+            <nav aria-label="Canales" aria-busy={loading}>{grouped.map(unit => <section key={unit.id}><h2><Department value={unit}/></h2>{unit.channels.map(row => <button type="button" key={row.id} style={{"--channel-color":channelColor(row)}} aria-current={selected?.id === row.id ? "page" : undefined} aria-label={unreadFor(row)>0 ? `${row.name}, ${unreadFor(row)} ${unreadFor(row)===1 ? "mensaje" : "mensajes"} sin leer` : undefined} disabled={sending} onClick={() => select(row)}><Hash className="slack_channel_hash" size={17} aria-hidden="true"/><span>{row.name}</span>{row.following && <Bell size={14} aria-label="Siguiendo"/>}{unreadFor(row)>0 && <strong className="slack_unread_badge" aria-hidden="true">{unreadFor(row)>99 ? "99+" : unreadFor(row)}</strong>}{row.archived_at && <Archive size={15} aria-label="Archivado"/>}</button>)}{!unit.channels.length && <small>{query ? "Más coincidencias en la siguiente página" : "Sin canales cargados"}</small>}</section>)}{query && !grouped.length && <p className="slack_search_empty" role="status">{loading ? "Buscando canales…" : "No hay canales coincidentes."}</p>}</nav>
+            {channelNext && <button type="button" disabled={loading} onClick={async () => {setLoading(true);const controller=reads.current,querySnapshot=query;try {const page = await channelApi.list(archived,channelNext,{signal:controller.signal},query ? {q:query} : {}); if (!controller.signal.aborted && mounted.current && querySnapshot===state.current.query) {setChannels(current => [...new Map([...current,...page.results].map(row => [row.id,row])).values()]); setChannelNext(page.next);}} catch(err) {if(!controller.signal.aborted)report(err);} finally {if (mounted.current && !controller.signal.aborted) setLoading(false);}}}>Cargar más canales</button>}
             <button type="button" disabled={sending || recording} onClick={()=>setAccessEditor({channel:null})}><LockKeyhole size={18} aria-hidden="true"/>Administrar acceso</button>
             <button type="button" onClick={() => shell.set_active_module("messaging")}><MessageSquare size={18} aria-hidden="true"/>Ir al Chat privado</button>
         </aside>
@@ -363,7 +375,7 @@ export default function ChannelModule() {
                 </form>
             </>}
         </main>
-        {editor && <ChannelEditor channel={editor.channel} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onSaved={row => {setEditor(null); if(!row.access_only)select(row);refresh.current?.request();}}/>}
+        {editor && <ChannelEditor channel={editor.channel} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}
         {taskPicker && selected && <ChannelTaskPicker channelId={selected.id} onClose={()=>setTaskPicker(false)} onSelect={task=>{setTaskDrafts(current=>({...current,[key]:task}));setTaskPicker(false);field.current?.focus();}}/>}
         {imageEditor && <Suspense fallback={<div role="status" className="slack_editor_scrim">Abriendo editor…</div>}><ImageEditor file={imageEditor.file} onCancel={()=>setImageEditor(null)} onSave={file=>{if(key!==state.current.key || !mounted.current)return;try{setAttachments(key,replaceQueuedImage(attachments,imageEditor.id,file));setImageEditor(null);field.current?.focus();}catch(err){setError(err.message);}}}/></Suspense>}

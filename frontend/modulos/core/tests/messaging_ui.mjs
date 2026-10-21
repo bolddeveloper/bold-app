@@ -56,6 +56,7 @@ if (process.argv.includes("--serve")) {
     try {
         root.render(React.createElement(Messaging)); await waitFor(() => document.querySelectorAll(".messaging_message").length === 2);
         console.log("Messaging DOM: conversation rendered; checking interactions…");
+        document.querySelector('[aria-label="Ir a Slack"]').click();await settle();assert.ok(fixture.calls.includes('module:slack'));
         assert.equal(document.querySelectorAll(".messaging_message").length, 2);
         assert.equal(document.querySelector('#messaging_input').rows,1,"composer starts with one compact row");
         assert.ok(document.querySelector('[aria-label="Enviar mensaje"]'),"compact mobile send keeps an accessible name");

@@ -11,7 +11,7 @@ export function channelPage(collection, next, filters = {}) {
     if (next) {
         const page = new URL(next, "https://pagination.invalid");
         if (page.pathname !== collection || !page.searchParams.get("cursor")) throw Error("Página de canal no válida.");
-        for (const key of ["parent", "archived", "q", "unit"]) {
+        for (const key of ["parent", "archived", "q", "unit", "channel", "department"]) {
             if ((page.searchParams.get(key) || "") !== (params.get(key) || "")) throw Error("La página pertenece a otra vista.");
         }
         params.set("cursor", page.searchParams.get("cursor"));
@@ -26,12 +26,12 @@ export function createChannelApi(client = http) {
         managed: (next,options) => client.request(channelPage(root+"managed/",next),options),
         access: (channel,options) => client.request(detail(channel)+"access/",options),
         setAccess: (channel,values,options) => client.request(detail(channel)+"access/",{...options,method:"PATCH",body:values}),
-        people: (filters,options) => client.request(root+"people/?"+new URLSearchParams(filters),options),
+        people: (filters,options,next) => client.request(channelPage(root+"people/",next,filters),options),
         detail: (channel,options) => client.request(detail(channel),options),
         message: (channel,message,options)=>client.request(messages(channel)+id(message)+"/",options),
         follow: (channel,following,options)=>client.request(detail(channel)+"following/",{...options,method:"PUT",body:{following}}),
         read: (channel,message,options)=>client.request(detail(channel)+"read/",{...options,method:"POST",body:{message_id:id(message)}}),
-        list: (archived, next, options) => client.request(channelPage(root, next, archived ? {archived:"true"} : {}), options),
+        list: (archived, next, options,filters={}) => client.request(channelPage(root, next, {...filters,...(archived ? {archived:"true"} : {})}), options),
         create: (values, options) => client.request(root, {...options, method:"POST", body:values}),
         update: (channel, values, options) => client.request(detail(channel), {...options, method:"PATCH", body:values}),
         messages: (channel, parent, next, options) => client.request(channelPage(messages(channel), next, parent ? {parent:id(parent)} : {}), options),

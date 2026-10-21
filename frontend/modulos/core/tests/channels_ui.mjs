@@ -35,7 +35,7 @@ const channelSnapshot=()=>({...channel,activity_version:rows.at(-1)?.sequence ||
 const confirmed=new Map();
 globalThis.__channelsApi={
     departments:async () => {calls++; return {results:[department],can_create_independent:true};},
-    people:async filters=>{peopleQueries.push(filters);return {results:[{employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado"}]};},
+    people:async (filters,options,next)=>{peopleQueries.push(filters);const person={employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado",avatar_url:null,departments:[department]};return {results:next ? [{...person,employee_id:"00000000-0000-4000-8000-000000000022",name:"Segunda colega"}] : [person],departments:[{...department,count:2}],next:filters.department && !next ? `/api/v2/messaging/channels/people/?channel=${channel.id}&department=${departmentId}&cursor=two` : null};},
     managed:async()=>({results:[channel],next:null}),
     access:async()=>{accessReads++;return {...channel,members:accessMembers};},
     setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
@@ -98,6 +98,11 @@ try {
     assert.equal([...document.querySelectorAll("button")].filter(node=>node.textContent === "Editar mi mensaje").length,1);
     document.querySelector('[aria-label="Abrir chat con Colega"]').click(); assert.deepEqual(opens,["peer"]);
     const idle=calls; await settle(); assert.equal(calls,idle,"idle does not poll");
+    const channelSearch=document.querySelector('.slack_channel_search input');
+    input(channelSearch,'genreal');await settle();assert.match(document.querySelector('.slack_sidebar nav').textContent,/General/);
+    assert.equal(document.querySelector('.slack_sidebar select').options.length,2,'only departments with matching channels remain');
+    input(channelSearch,'inexistente');await settle();assert.equal(document.querySelector('.slack_sidebar nav section'),null);
+    document.querySelector('[aria-label="Limpiar buscar canal"]').click();await settle();await waitFor(()=>document.querySelector('.slack_sidebar nav button'));
     assert.equal(reads,0,"loading history without visibility evidence never acknowledges it");
     document.querySelector('.slack_sidebar nav button').click();await settle();assert.equal(document.querySelectorAll('.slack_message').length,2,"reselecting the same channel keeps its history");
     button("Seguir canal").click();await waitFor(()=>button("Dejar de seguir canal"));assert.equal(button("Dejar de seguir canal").getAttribute("aria-pressed"),"true");
@@ -255,9 +260,11 @@ try {
     assert.equal(document.querySelector('.slack_editor select').value,"");
     const independentName=[...document.querySelectorAll('.slack_editor label')].find(node=>node.textContent.startsWith('Nombre')).querySelector('input');
     input(independentName,'Espacio independiente');await settle();
+    document.querySelector('[aria-label="Usar color #9250A3"]').click();await settle();
     document.querySelector('.slack_editor form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
     await waitFor(()=>!document.querySelector('.slack_editor'));
     assert.equal(channelCreates.at(-1).unit_id,null);
+    assert.equal(channelCreates.at(-1).color,'#9250A3');
     assert.match(document.querySelector('.slack_header').textContent,/Sin departamento/);
     assert.match(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
     const groupFilter=document.querySelector('.slack_sidebar select');groupFilter.value='independent';groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
@@ -270,16 +277,32 @@ try {
     document.querySelector('[aria-label="Cerrar configuración"]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
     // Invitation management is separate from opening a readable channel.
     button('Administrar acceso').click();await waitFor(()=>document.querySelector('.slack_access_catalog button'));
-    document.querySelector('.slack_access_catalog button').click();await waitFor(()=>document.querySelector('.slack_access_fields'));
+    document.querySelector('.slack_access_catalog button').click();await waitFor(()=>document.querySelector('.slack_access_catalog [data-picker-option]'));
+    document.querySelector('.slack_access_catalog [data-picker-option]').click();await waitFor(()=>document.querySelector('.slack_access_fields'));
     assert.equal(accessReads,1);
     const privacy=document.querySelector('.slack_access_fields select');privacy.value='private';privacy.dispatchEvent(new Event('change',{bubbles:true}));
-    await waitFor(()=>button('Añadir a Colega invitado'));
+    button('Invitar personas').click();
+    await waitFor(()=>document.querySelector('[aria-label="Añadir a Colega invitado"]'));
     assert.ok(peopleQueries.length>0);
-    button('Añadir a Colega invitado').click();await settle();
+    assert.match(document.querySelector('.slack_access_candidates').textContent,/IT/);
+    document.querySelector('[aria-label="Añadir a Colega invitado"]').click();await settle();
+    const escape=new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true});
+    document.querySelector('.slack_access_candidates').dispatchEvent(escape);await settle();
+    assert.ok(document.querySelector('.slack_access_editor'),'Escape closes the dropdown, not the parent editor');
+    [...document.querySelectorAll('.slack_dropdown_trigger')].find(node=>node.textContent.includes('Personas con acceso')).click();await settle();
     const memberAccess=document.querySelector('.slack_access_members select');memberAccess.value='read';memberAccess.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    assert.match(document.querySelector('.slack_access_members').textContent,/IT/);
+    button('Invitar personas').click();await settle();
+    button('Departamentos').click();await waitFor(()=>document.querySelector('[aria-label="Invitar departamento IT"]'));
+    document.querySelector('[aria-label="Invitar departamento IT"]').click();await waitFor(()=>[...document.querySelectorAll('.slack_dropdown_trigger')].some(node=>node.textContent.includes('Personas con acceso o excepción (2)')));
+    const invitedTrigger=[...document.querySelectorAll('.slack_dropdown_trigger')].find(node=>node.textContent.includes('Personas con acceso'));
+    if(invitedTrigger.getAttribute('aria-expanded')!=='true')invitedTrigger.click();await settle();
+    assert.equal(document.querySelector('.slack_access_candidates'),null,'switching disclosures closes the other panel after the trigger click');
+    assert.equal(document.querySelectorAll('.slack_access_members li').length,2,'bulk invitations fetch every page and deduplicate');
+    assert.equal(document.querySelector('.slack_access_members select').value,'read','bulk invitations preserve an existing read-only rule');
     assert.match(document.querySelector('.slack_access_hint').textContent,/administradores/);
     button('Guardar acceso').click();await waitFor(()=>!document.querySelector('.slack_access_editor'));
-    assert.equal(accessWrites,1);assert.equal(channel.visibility,'private');assert.equal(accessMembers[0].access,'read');
+    assert.equal(accessWrites,1);assert.equal(channel.visibility,'private');assert.equal(accessMembers[0].access,'read');assert.equal(accessMembers.length,2);
     assert.equal(document.querySelector('.slack_message'),null,'saving privacy clears the open history before reauthorization');
     document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
     input(document.querySelector('#slack_message'),'Borrador privado');await settle();

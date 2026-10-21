@@ -1,5 +1,6 @@
 """Department channels are company resources, never extensions of private DMs."""
 from datetime import timedelta
+from django.core.validators import RegexValidator
 
 from django.db import models
 from django.db.models.functions import Lower
@@ -13,6 +14,7 @@ class DepartmentChannel(UUIDPrimaryKeyModel):
     visibility = models.CharField(max_length=12, choices=VISIBILITIES, default="public")
     name = models.CharField(max_length=80)
     description = models.CharField(max_length=500, blank=True)
+    color = models.CharField(max_length=7, blank=True, default="", validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Usa un color hexadecimal de seis dígitos.")])
     creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
     archived_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
