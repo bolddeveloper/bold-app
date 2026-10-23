@@ -11,7 +11,7 @@ export function channelPage(collection, next, filters = {}) {
     if (next) {
         const page = new URL(next, "https://pagination.invalid");
         if (page.pathname !== collection || !page.searchParams.get("cursor")) throw Error("Página de canal no válida.");
-        for (const key of ["parent", "archived", "q", "unit", "channel", "department"]) {
+        for (const key of ["parent", "archived", "q", "unit", "channel", "department", "purpose"]) {
             if ((page.searchParams.get(key) || "") !== (params.get(key) || "")) throw Error("La página pertenece a otra vista.");
         }
         params.set("cursor", page.searchParams.get("cursor"));
@@ -35,7 +35,7 @@ export function createChannelApi(client = http) {
         create: (values, options) => client.request(root, {...options, method:"POST", body:values}),
         update: (channel, values, options) => client.request(detail(channel), {...options, method:"PATCH", body:values}),
         messages: (channel, parent, next, options) => client.request(channelPage(messages(channel), next, parent ? {parent:id(parent)} : {}), options),
-        tasks: (channel, query, next, options) => client.request(channelPage(detail(channel)+"tasks/",next,{q:query}),options),
+        tasks: (channel, query, next, options, purpose) => client.request(channelPage(detail(channel)+"tasks/",next,{q:query,...(purpose==="page" ? {purpose:"page"}:{})}),options),
         task: (task, options) => client.request(`/api/v2/tasks/${id(task)}/`,options),
         send: (channel, values, options) => client.request(messages(channel), {...options, method:"POST", body:values}),
         sendMedia: (channel, values, file, options) => {

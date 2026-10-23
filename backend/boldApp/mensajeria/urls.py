@@ -4,8 +4,13 @@ from .views import ConversationDetailView, ConversationListView, MessageDetailVi
 from .channel_views import DepartmentListView, ChannelListView, ChannelDetailView, ChannelMessageListView, ChannelMessageDetailView, ChannelReadView, ChannelTaskSearchView, ChannelMediaView, ChannelFollowView, ChannelUnreadView
 from .channel_access_views import ChannelAccessView, ChannelManagementView, ChannelPeopleView
 from .phone_views import PhoneCreateView, PhoneDetailView, PhoneApproveView, PhoneDownloadView, PhoneClaimView, PhoneUploadView, PhoneSealView
+from .page_views import PageListView, PageDetailView, PageHistoryView, PageRevisionView
 
 urlpatterns = [
+    path("channels/<uuid:channel_id>/pages/", PageListView.as_view()),
+    path("channels/<uuid:channel_id>/pages/<uuid:page_id>/", PageDetailView.as_view()),
+    path("channels/<uuid:channel_id>/pages/<uuid:page_id>/history/", PageHistoryView.as_view()),
+    path("channels/<uuid:channel_id>/pages/<uuid:page_id>/history/<int:version>/", PageRevisionView.as_view()),
     path("phone-transfers/", PhoneCreateView.as_view()),
     path("phone-transfers/<uuid:identity>/", PhoneDetailView.as_view()),
     path("phone-transfers/<uuid:identity>/approve/", PhoneApproveView.as_view()),

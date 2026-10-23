@@ -938,7 +938,7 @@ Backend: 139 pruebas ejecutadas, 133 aprobadas y seis de concurrencia PostgreSQL
 omitidas por usar SQLite. Las diez nuevas de QR pasaron. No presentar esto como
 validación concurrente sobre PostgreSQL ni como prueba de cámara física.
 
-### Flujo propuesto después del QR: páginas y notas (todavía no implementado)
+### Páginas y notas — componente preparado localmente el 22 de octubre
 
 1. Abrir un canal y su pestaña «Páginas»; crear una página vacía con título e icono.
 2. Escribir bloques básicos: párrafos, títulos, listas, listas de comprobación y
@@ -952,8 +952,63 @@ validación concurrente sobre PostgreSQL ni como prueba de cámara física.
 6. Añadir coedición real en una entrega posterior, con presencia, cursores y mezcla
    de cambios. Un indicador de presencia no sustituye la resolución de concurrencia.
 
-La profundidad de subpáginas, los bloques admitidos y los permisos finales deben
-acordarse antes de implementar páginas; este flujo no anuncia funciones publicadas.
+Implementado en la rama `feature/chat-directo`; no implica despliegue ni publicación.
+La migración `0015_channel_pages` incorpora páginas, historial, referencias desde
+mensajes y el catálogo de permisos `slack.page.read/create/update/manage`. No modifica
+la configuración del piloto ni concede lectura a administradores de canales privados.
+
+- Páginas planas, con hasta 200 bloques y 100 KB de JSON normalizado por página.
+  Texto plano, títulos, listas, casillas y referencias a tareas. No interpreta HTML
+  ni permite protocolos ejecutables en enlaces. No incluye subpáginas, plantillas,
+  imágenes dentro de las páginas ni coedición de bloques en esta entrega.
+- Guardado automático tras 1,2 segundos de pausa, con un máximo de diez segundos
+  mientras se escribe continuamente. Una petición en curso; el reintento conserva
+  su UUID y contenido exactos cuando no se conoce el resultado. Un error detiene
+  los reintentos automáticos. La interfaz conserva el borrador y respeta Retry-After.
+- Revisión esperada obligatoria, escritura atómica y bloqueo de la fila del canal.
+  Un 409 muestra la versión guardada sin sustituir el borrador. La resolución es
+  explícita y el historial conserva ambas versiones. Elegir el servidor permite
+  recuperar el borrador anterior mientras la página siga abierta.
+- Se consulta una instantánea histórica solo al abrirla. Los listados de páginas
+  (50) y revisiones (25) son paginados y no descargan todos los documentos.
+  Recuperar contenido crea una revisión nueva; archivar no destruye el historial.
+  Las revisiones completas se conservan: evaluar su volumen antes de fijar una
+  política futura de retención. No existe borrado permanente en esta interfaz.
+- Borradores solo en memoria. Salir del canal, pestaña o módulo con cambios requiere
+  confirmación; cerrar/recargar la ventana activa el aviso nativo. No se promete
+  recuperación tras un cierre forzoso. Un cambio de autorización retira el contenido
+  privado y cancela solicitudes; no persiste texto en localStorage ni en la PWA.
+- Las referencias a tareas se proyectan con los permisos actuales, incluso dentro
+  del historial. Quien no puede leer una tarea ve un bloque opaco, sin título ni ID;
+  puede conservar una referencia existente al editar el resto de la página, pero
+  no añadir referencias a nuevas tareas inaccesibles. El selector usa permisos de
+  página, no el permiso independiente de enviar mensajes.
+- Compartir crea una tarjeta en el mismo canal, con título actualizado al consultar
+  los mensajes. Copiar enlace usa `slack_channel` y `slack_page`; volver a abrirlo
+  verifica sesión, piloto, canal y permiso de página. No invita ni comparte con clientes.
+- Los eventos en vivo invalidan páginas sin retransmitir su texto, crear no leídos
+  por cada guardado ni recargar la lista de mensajes con cada edición. No hay sondeo
+  periódico de páginas. Cambiar de pestaña a Páginas desactiva la lectura de mensajes.
+- UI/UX Pro Max se aplicó preservando colores, tipografía y componentes de BOLD:
+  feedback de guardado, contraste oscuro específico, controles por teclado para
+  reordenar bloques, objetivos táctiles de al menos 44 px y vista móvil de un panel.
+
+Validación local: contratos backend de permisos, privacidad, versiones, reintentos,
+archivo, historial y referencias; contratos DOM de autosave, borrador sin conexión,
+conflicto, lectura segura y revocación. Recorrido HTTP real con dos cuentas ficticias:
+crear, guardar, publicar tarjeta, abrir desde la otra cuenta, provocar conflicto,
+conservar ambos cambios en el historial y recuperar una revisión como versión nueva.
+Drive fue simulado por el entorno; páginas no utilizan Drive ni credenciales de Google.
+La cámara física del QR y la aceptación del piloto en producción siguen separadas.
+
+Las pruebas de bloqueo concurrente se prepararon para PostgreSQL aislado y se omiten
+en SQLite. No hay PostgreSQL de pruebas disponible en esta máquina; el recorrido de
+dos cuentas comprueba HTTP/versiones, no sustituye esa validación de bloqueos.
+
+Orden restante: validar páginas con IT → plantillas reutilizables → coedición real.
+Después podrán evaluarse automatizaciones. Llamadas y clientes permanecen fuera de
+este componente. Notas de la entrega preparadas en `pendingPilotReleaseNotes`, no
+visibles públicamente hasta la autorización de publicación.
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.
 Ese cambio abre el módulo a otras unidades, no concede lectura a administradores:

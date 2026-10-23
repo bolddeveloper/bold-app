@@ -68,6 +68,7 @@ class ChannelMessage(UUIDPrimaryKeyModel):
     # An immutable reference, not a grant or a copy of confidential task data.
     # Retain the UUID after task deletion so history can show an unavailable card.
     task_id = models.UUIDField(null=True, blank=True)
+    page_id = models.UUIDField(null=True, blank=True)
     parent = models.ForeignKey("self", on_delete=models.PROTECT, related_name="replies", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)

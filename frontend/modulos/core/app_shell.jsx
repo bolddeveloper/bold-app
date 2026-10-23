@@ -24,6 +24,8 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const [active_module, set_module] = useState(() => {
         let saved;
         try { saved = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
+        const query=new URLSearchParams(window.location.search);
+        if(query.has("slack_channel") && query.has("slack_page") && isShellModuleAllowed("slack",navigation))return "slack";
         return entranceModule(navigation, saved);
     });
     useEffect(() => {
@@ -35,7 +37,13 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const [profile_editing, set_profile_editing] = useState(false);
     const [profile_tab, set_profile_tab] = useState("account");
     const [chat_target, set_chat_target] = useState(null);
-    const [slack_target,set_slack_target]=useState(null);
+    const [slack_target,set_slack_target]=useState(()=>{
+        const query=new URLSearchParams(window.location.search),channel_id=query.get("slack_channel"),page_id=query.get("slack_page");
+        const valid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || "");
+        return valid(channel_id) && valid(page_id) ? {channel_id,page_id,requestId:crypto.randomUUID()}:null;
+    });
+    const slack_dirty=useRef(false);
+    const set_slack_dirty=value=>{slack_dirty.current=value;};
     const profile_dirty = useRef(false);
     const set_profile_dirty = value => {profile_dirty.current = value;};
     const [workspace_file, set_workspace_file] = useState(null);
@@ -55,6 +63,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const set_workspace_busy = value => {workspace_busy.current = value;};
     const set_active_module = async value => {
         if (!isShellModuleAllowed(value, navigation)) return false;
+        if(active_module==="slack" && value!=="slack" && slack_dirty.current && !await confirmBold("¿Salir de Slack y descartar el borrador de la página sin guardar?"))return false;
         if (active_module === "profile" && value !== "profile" && profile_dirty.current && !await confirmBold("¿Salir del perfil y descartar los cambios sin guardar?")) return false;
         if (active_module === "docs" && value !== "docs" && workspace_busy.current) return;
         if (active_module === "docs" && value !== "docs" && workspace_dirty.current && !await confirmBold("¿Salir de Docs y descartar los cambios sin guardar?")) return;
@@ -114,7 +123,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
-    return <ShellContext.Provider value={{ slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
+    return <ShellContext.Provider value={{ set_slack_dirty, slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current || slack_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, children }) {
     const shell = useShell();

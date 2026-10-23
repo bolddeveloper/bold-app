@@ -24,6 +24,7 @@ from .models import DepartmentChannel, ChannelAccessRule, ChannelMessage, Channe
 from .serializers import StrictInputSerializer, EditMessageSerializer
 from .views import PrivateChatView, Conflict
 from .channel_search import channel_matches
+from .page_content import page_card, prime_page_cards
 
 
 class CreateChannel(StrictInputSerializer):
@@ -53,10 +54,13 @@ class SendChannelMessage(StrictInputSerializer):
     body = serializers.CharField(max_length=5000, allow_blank=True)
     parent_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     task_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    page_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     file = serializers.FileField(required=False, max_length=200)
 
     def validate(self, data):
-        if not data["body"] and data["task_id"] is None and not data.get("file"):
+        if data["page_id"] and (data["task_id"] or data.get("file")):
+            raise serializers.ValidationError("Comparte la página por separado de las tareas y archivos.")
+        if not data["body"] and data["task_id"] is None and data["page_id"] is None and not data.get("file"):
             raise serializers.ValidationError("Escribe un mensaje, selecciona una tarea o adjunta una imagen o nota de voz.")
         return data
 
@@ -112,6 +116,7 @@ def channel_message_data(message, actor_id, policy):
     return {"id": str(message.pk), "channel_id": str(message.channel_id), "client_id": str(message.client_id),
             "sequence": message.sequence, "body": message.body, "parent_id": str(message.parent_id) if message.parent_id else None,
             "task": policy.task_references.data(message.task_id) if message.task_id else None,
+            "page": page_card(message.page_id, message.channel, policy) if message.page_id else None,
             "media": media_data(message),
             "author": {"employee_id": str(message.author_id), "name": message.author.full_name,
                        "avatar_url": account.avatar_url if account else None},
@@ -272,6 +277,8 @@ class ChannelMessageListView(SlackView):
         pages = ChannelMessagePages()
         page = pages.paginate_queryset(rows, request)
         self.policy().thread_counts = thread_counts([row.pk for row in page], self.actor()) if not parent_id else {}
+        if any(row.page_id for row in page):
+            prime_page_cards((row.page_id for row in page), channel, self.policy())
         if any(row.task_id for row in page):
             self.policy().task_references = TaskReferences(request.assignment, request)
             self.policy().task_references.prime(row.task_id for row in page)
@@ -296,6 +303,8 @@ class ChannelMessageListView(SlackView):
         if values["task_id"] is not None:
             # Keep the historical digest for text-only retries unchanged.
             payload["task"] = str(values["task_id"])
+        if values["page_id"] is not None:
+            payload["page"] = str(values["page_id"])
         if prepared:
             payload["media"] = prepared["digest"]
         digest = hashlib.sha256(json.dumps(payload,
@@ -307,11 +316,13 @@ class ChannelMessageListView(SlackView):
             return Response({"message": channel_message_data(old, self.actor(), self.policy())})
         if values["task_id"] is not None:
             TaskReferences(request.assignment, request).require(values["task_id"])
+        if values["page_id"] is not None and not page_card(values["page_id"], channel, self.policy()).get("available"):
+            raise NotFound("Página no disponible en este canal.")
         department = department_data(request.assignment.position.unit)
         channel.activity_version += 1
         message = ChannelMessage.objects.create(channel=channel, author_id=self.actor(), author_assignment=request.assignment,
             department_name=department["name"], department_color=department["color"], sequence=channel.activity_version,
-            body=values["body"], task_id=values["task_id"], parent=parent, client_id=values["client_id"], payload_digest=digest)
+            body=values["body"], task_id=values["task_id"], page_id=values["page_id"], parent=parent, client_id=values["client_id"], payload_digest=digest)
         if prepared:
             store_channel_media(message, prepared)
         channel.updated_at = message.created_at
@@ -340,7 +351,7 @@ class ChannelMessageDetailView(SlackView):
             raise PermissionDenied("Solo puedes editar tus propios mensajes durante los primeros diez minutos.")
         form = EditMessageSerializer(data=request.data)
         form.is_valid(raise_exception=True)
-        if not form.validated_data["body"] and message.task_id is None and not hasattr(message, "media"):
+        if not form.validated_data["body"] and message.task_id is None and message.page_id is None and not hasattr(message, "media"):
             raise ValidationError("El mensaje no puede quedar vacío.")
         if form.validated_data["version"] != message.version:
             raise Conflict()
@@ -423,7 +434,13 @@ class ChannelMediaView(SlackView):
 class ChannelTaskSearchView(SlackView):
     def get(self, request, channel_id):
         channel = self.channel(channel_id)
-        self.writable(channel)
+        if request.query_params.get("purpose") == "page":
+            self.policy().require("slack.page.read", channel.unit, channel.pk)
+            self.policy().require("slack.page.update", channel.unit, channel.pk)
+            if channel.archived_at:
+                raise Conflict("El canal está archivado.")
+        else:
+            self.writable(channel)
         query = request.query_params.get("q", "").strip()
         if not 2 <= len(query) <= 120:
             raise ValidationError("Busca una tarea con entre 2 y 120 caracteres.")

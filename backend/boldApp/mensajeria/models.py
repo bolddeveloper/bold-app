@@ -6,6 +6,7 @@ from django.conf import settings
 from boldApp.core.models.mixins import UUIDPrimaryKeyModel
 from .channel_models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState  # noqa: F401
 from .phone_models import PhoneTransfer, PhoneImage  # noqa: F401
+from .page_models import ChannelPage, PageRevision  # noqa: F401
 
 
 class DirectConversation(UUIDPrimaryKeyModel):

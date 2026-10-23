@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-22",
+  "timezone": "America/Caracas",
+  "branch": "feature/chat-directo",
+  "component": "Slack: paginas y notas",
+  "state": "local_verified_not_deployed",
+  "migration": "boldApp_mensajeria.0015_channel_pages",
+  "environment": {
+    "database": "new isolated temporary SQLite databases, never production",
+    "accounts": "two fictitious employee accounts in the local HTTP validation harness",
+    "drive": "simulated by the harness; pages store no files in Drive",
+    "billing_or_cloud_changes": false
+  },
+  "automated": {
+    "messaging_backend": {"total": 153, "passed": 145, "skipped_postgresql_only": 8},
+    "final_page_backend_recheck": {"total": 12, "passed": 12},
+    "general_frontend_after_clean_install": {"total": 394, "passed": 393, "skipped": 1},
+    "messaging_frontend": {"total": 75, "passed": 75},
+    "final_editor_and_unread_contracts": {"total": 14, "passed": 14},
+    "pages_dom": "passed: editing, autosave, safe preview, offline draft, conflict, share, history, idle, revocation",
+    "channels_dom": "passed: channels, access, read-only, reads, notifications, threads, tasks, media and revision purge",
+    "chat_dom": "passed: private entry, images, audio, forwarding, selection, partial failures and retry",
+    "migration_drift": "none",
+    "production_build": "passed after clean npm ci; pre-existing large Sheets chunks warning"
+  },
+  "browser_http": {
+    "create_edit_autosave": "passed",
+    "share_and_open_from_second_identity": "passed",
+    "two_identity_stale_revision_conflict": "passed: later draft retained, explicit resolution saved a new version",
+    "history_and_restore": "passed: both authors retained in history; restore created a new version",
+    "task_picker_and_reference": "passed with final backend",
+    "deep_link": "passed: authenticated new tab opened the intended channel page",
+    "module_exit_guard": "passed: cancelling Chat navigation retained the page draft",
+    "themes": "light and dark inspected; dark accent uses a lighter semantic color",
+    "mobile_portrait": "375px: one-pane page navigation, no horizontal overflow",
+    "mobile_landscape": "812x375px: no horizontal overflow; outer main scroll and 320px page pane keep editor reachable",
+    "reduced_motion": "enabled during responsive checks; no required animation",
+    "toolbar_touch_targets": "measured at least 44px height and width for icon actions"
+  },
+  "privacy_and_cost": {
+    "pilot": "existing IT-only configuration unchanged",
+    "private_channels": "invitation required even for owner/admin",
+    "page_permissions": ["slack.page.read", "slack.page.create", "slack.page.update", "slack.page.manage"],
+    "task_references": "live authorization in current and historical content; unavailable title/id not projected",
+    "page_save_events": "no message unread increment and no unread-summary refresh; no periodic page polling",
+    "history": "immutable full snapshots; no silent overwrite or permanent deletion",
+    "limits": "200 blocks and 100000 serialized bytes per normalized page",
+    "drafts": "memory-only; no forced-close recovery guarantee; revoked access purges private state"
+  },
+  "remaining": [
+    "Run the eight concurrency contracts on explicitly isolated PostgreSQL before production acceptance.",
+    "Apply migrations 0014 and 0015 only in an authorized environment; this work migrated test databases only.",
+    "Team review and production/provider acceptance are not implied by local tests or commit.",
+    "Templates, subpages, page media blocks, true coediting, automations and calls are not part of this component.",
+    "Earlier phone QR acceptance still requires physical camera/gallery and real Drive checks on reachable HTTPS."
+  ],
+  "release_notes": "prepared in pendingPilotReleaseNotes, not publicly published",
+  "push": false,
+  "oracle_deploy": false,
+  "cloudflare_deploy": false
+}

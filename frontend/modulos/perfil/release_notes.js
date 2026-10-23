@@ -1,6 +1,17 @@
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
+    id: "2026-10-22-slack-pages-pilot", date: "2026-10-22", category: "Piloto IT", icon: "update",
+    title: "Páginas y notas dentro de tus canales",
+    summary: "Reúne acuerdos, listas y referencias a tareas junto a la conversación del equipo.",
+    sections: [{title: "Un lugar para el contexto", items: [
+        "Abre Páginas dentro de un canal. Crea una nota con título e icono y añade texto, títulos, listas, casillas o referencias a tareas.",
+        "El guardado automático informa si los cambios están guardados, pendientes o sin confirmar. Ante un conflicto, conserva tu borrador para que decidas qué versión guardar.",
+        "Consulta el historial y recupera una versión sin borrar las anteriores. Archiva páginas que ya no utilices y restáuralas cuando lo necesites.",
+        "Comparte una página en el mismo canal o copia su enlace. Compartir no concede acceso al canal ni a las tareas referenciadas.",
+        "Los permisos de lectura, creación, edición y archivo son configurables. El piloto continúa limitado a IT; las plantillas y la coedición aún no forman parte de esta entrega.",
+    ]}],
+}, {
     id: "2026-10-22-phone-images-pilot", date: "2026-10-22", category: "Piloto IT", icon: "update",
     title: "Prepara imágenes desde tu teléfono",
     summary: "Vincula tu móvil con un QR temporal y lleva sus imágenes al borrador de Chat o Slack.",

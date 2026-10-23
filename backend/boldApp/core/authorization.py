@@ -610,7 +610,8 @@ def resolve_access(
     # role/direct denial above applies. Unknown/inactive permissions stay closed.
     # This lives in Core so the Permissions UI and runtime use the same decision.
     if permission.code in {"slack.channel.read", "slack.channel.create", "slack.channel.manage",
-                            "slack.message.create", "slack.message.update"}:
+                            "slack.message.create", "slack.message.update", "slack.page.read", "slack.page.create",
+                            "slack.page.update", "slack.page.manage"}:
         return _decision(True, "Colaboración de empleados habilitada salvo restricción explícita.",
                          "slack_employee_default", "system", policy_version=context.policy_version)
 

@@ -16,11 +16,14 @@ import {lockChannelMedia, unlockRejectedChannelMedia} from "./channel_outbox.js"
 import "./messaging.css";
 import "./channel.css";
 import "./channel_controls.css";
+import "./channel_pages.css";
 import ChannelTaskPicker from "./channel_task_picker.jsx";
 import ChannelAccessEditor, {ChannelAccessFields} from "./channel_access_editor.jsx";
 import {SearchField} from "./channel_picker.jsx";
 import ChannelColorField from "./channel_color_field.jsx";
 import {channelMatches, channelColor} from "./channel_discovery.js";
+import {confirmBold} from "../core/shared/bold_dialog.js";
+const ChannelPages = lazy(() => import("./channel_pages.jsx"));
 const ImageEditor = lazy(() => import("./image_editor.jsx"));
 
 function Department({value}) {
@@ -70,6 +73,11 @@ function ChannelEditor({channel, departments, canCreateIndependent, onClose, onS
 export default function ChannelModule() {
     const [phoneTarget, setPhoneTarget] = useState(null);
     const core = useCore(), shell = useShell();
+    const [channelTab,setChannelTab]=useState("messages"),[pageTarget,setPageTarget]=useState(null);
+    const pageDirty=useRef(false);
+    const pageDirtyChanged=value=>{pageDirty.current=value;shell.set_slack_dirty?.(value);};
+    const mayLeavePage=async()=>!pageDirty.current || await confirmBold("¿Salir de la página y descartar el borrador sin guardar?");
+    async function changeTab(tab){if(tab!==channelTab && await mayLeavePage()){setChannelTab(tab);pageDirtyChanged(false);}}
     const allowed = core.activeAssignment?.chat_enabled === true && !core.securityUncertain;
     const [departments, setDepartments] = useState([]), [channels, setChannels] = useState([]), [channelNext, setChannelNext] = useState(null);
     const [searchGroups,setSearchGroups]=useState({query:"",rows:[]});
@@ -118,6 +126,7 @@ export default function ChannelModule() {
         setDrafts(current=>({...current,[key]:activeMedia?.caption || current[key] || ""}));setAttachments(key,[]);setActiveImage(null);
     }
     function clearPrivateState() {
+        pageDirtyChanged(false);setChannelTab("messages");setPageTarget(null);
         state.current={...state.current,selected:null,parent:null,key:":"};
         reads.current?.abort();writes.current?.abort();followWrite.current?.abort();openingTask.current?.abort();
         setMessages([]);setChannels([]);setChannelNext(null);setSelected(null);setParent(null);setOlder(null);setEdit(null);setEditor(null);setAccessEditor(null);
@@ -125,8 +134,10 @@ export default function ChannelModule() {
         setDrafts({});setTaskDrafts({});setTaskPicker(false);setMediaDrafts({});mediaState.current={};setImageEditor(null);setActiveImage(null);retries.current.clear();
     }
     function report(err) {if (mounted.current && err.name !== "AbortError") {if ([401,403,404].includes(err.status)) clearPrivateState();setError(channelError(err));}}
-    function select(row) {
+    async function select(row) {
         if (busy.current || recording) return;
+        if(row?.id!==state.current.selected?.id && !await mayLeavePage())return false;
+        if(row?.id!==state.current.selected?.id){setChannelTab("messages");setPageTarget(null);pageDirtyChanged(false);}
         if(row && row.id===state.current.selected?.id && !state.current.parent) {
             setSelected(current=>mergeChannelDetails(current,row));jumpToLatest();refresh.current?.request();return;
         }
@@ -161,6 +172,7 @@ export default function ChannelModule() {
         refresh.current.request();
         const update = event => {
             const channel = event.detail?.payload;
+            if(channel?.kind?.startsWith("page."))return;
             if (!channel || channel.kind?.startsWith("channel.") || channel.channel_id === state.current.selected?.id) refresh.current.request();
         };
         window.addEventListener("bold:slack-event", update);
@@ -199,7 +211,7 @@ export default function ChannelModule() {
         setChannels(current=>current.map(channel=>channel.id===row.id ? mergeChannelDetails(channel,row) : channel));
         window.dispatchEvent(new Event("bold:slack-state"));
     }
-    const markViewRead=useChannelReader({channelId:selected?.id,parentId:parent?.id,messages,viewport,enabled:allowed && !!selected && !loading && !editor && !taskPicker && !imageEditor,
+    const markViewRead=useChannelReader({channelId:selected?.id,parentId:parent?.id,messages,viewport,enabled:allowed && channelTab==="messages" && !!selected && !loading && !editor && !taskPicker && !imageEditor,
         onRead:applyPersonalState,onError:err=>{if([401,403,404].includes(err.status)) report(err);else if(mounted.current)setError("No se pudo confirmar la lectura. Conservamos los indicadores; vuelve a intentarlo dentro de un minuto.");}});
     async function toggleFollowing() {
         if(followWrite.current || !selected) return;
@@ -218,10 +230,14 @@ export default function ChannelModule() {
             if(controller.signal.aborted || !mounted.current) return;
             if(thread?.parent_id) throw Error("La referencia no es un hilo principal.");
             openedTarget.current=target.requestId;
+            if(target.page_id){
+                if(channel.id!==state.current.selected?.id && await select(channel)===false)return;
+                setSelected(channel);setChannelTab("pages");setPageTarget({id:target.page_id,requestId:target.requestId});return;
+            }
             if(state.current.key===`${channel.id}:${thread?.id || ""}`) {
                 setSelected(current=>mergeChannelDetails(current,channel));if(thread)setParent(thread);jumpToLatest();refresh.current?.request();return;
             }
-            select(channel);
+            if(await select(channel)===false)return;
             if(thread){state.current={...state.current,parent:thread,key:`${channel.id}:${thread.id}`};setMessages([]);setOlder(null);setLoading(true);setParent(thread);}
         })().catch(err=>{if(!controller.signal.aborted){openedTarget.current=target.requestId;report(err);}});
         return ()=>controller.abort();
@@ -340,9 +356,11 @@ export default function ChannelModule() {
             <header className="slack_header"><button type="button" className="slack_back" aria-label="Ver canales" disabled={sending || recording} onClick={() => select(null)}><ArrowLeft size={20} aria-hidden="true"/></button><div>{selected ? <><h2># {selected.name}</h2><Department value={selected.department}/><p>{selected.description || "Comparte contexto y mantén las conversaciones organizadas."}</p></> : <><h2>El trabajo, en conversación</h2><p>Elige un canal o crea uno para tu departamento.</p></>}</div><button type="button" className="slack_desktop_action" aria-label="Actualizar canales" onClick={() => refresh.current?.request()}><RefreshCw size={18} aria-hidden="true"/></button>{selected?.can_manage && <><button type="button" className="slack_desktop_action" aria-label="Configurar canal" disabled={sending || recording} onClick={() => setEditor({channel:selected})}><Settings2 size={18} aria-hidden="true"/></button><button type="button" className="slack_desktop_action" aria-label={selected.archived_at ? "Restaurar canal" : "Archivar canal"} disabled={sending || recording} onClick={archive}><Archive size={18} aria-hidden="true"/></button></>}<details className="slack_mobile_menu"><summary aria-label="Opciones del canal"><MoreHorizontal size={20} aria-hidden="true"/></summary><div role="group" aria-label="Acciones del canal"><button type="button" onClick={event=>{event.currentTarget.closest("details").open=false;refresh.current?.request();}}><RefreshCw size={17} aria-hidden="true"/>Actualizar canales</button>{selected?.can_manage && <><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;setEditor({channel:selected});}}><Settings2 size={17} aria-hidden="true"/>Configurar canal</button><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;archive();}}><Archive size={17} aria-hidden="true"/>{selected.archived_at ? "Restaurar canal" : "Archivar canal"}</button></>}</div></details></header>
             {error && <p role="alert" className="slack_error">{error}</p>}
             {notice && <p role="status" className="slack_notice">{notice}</p>}
-            {selected && <>
+            {selected && <nav className="slack_channel_tabs" aria-label="Contenido del canal"><button type="button" aria-pressed={channelTab==="messages"} disabled={sending || recording} onClick={()=>changeTab("messages")}>Mensajes</button><button type="button" aria-pressed={channelTab==="pages"} disabled={sending || recording} onClick={()=>changeTab("pages")}>Páginas</button></nav>}
+            {selected && channelTab==="pages" && <Suspense fallback={<p role="status">Abriendo páginas…</p>}><ChannelPages key={`${selected.id}:${core.authorizationRevision}`} channel={selected} targetPage={pageTarget} onDirty={pageDirtyChanged} onDenied={report} onTask={openTask} onShared={message=>{setMessages(current=>mergeChannelMessages(current,[message]));refresh.current?.request();}}/></Suspense>}
+            {selected && channelTab==="messages" && <>
                 <div className="slack_channel_actions"><button type="button" aria-pressed={!!selected.following} disabled={followingBusy || sending || recording} onClick={toggleFollowing}>{selected.following ? <Bell size={17} aria-hidden="true"/> : <BellOff size={17} aria-hidden="true"/>}{followingBusy ? "Guardando…" : selected.following ? "Dejar de seguir canal" : "Seguir canal"}</button><small>{selected.following ? "Avisos activados para este canal" : "Sin avisos; los no leídos se conservan"}</small><button type="button" disabled={loading || !messages.length} onClick={markViewRead}><CheckCheck size={17} aria-hidden="true"/>Marcar vista como leída</button></div>
-                {parent && <section className="slack_thread_context"><div><strong>Hilo · {parent.author.name}</strong><p>{parent.body || (parent.media ? parent.media.kind==="image" ? "Imagen compartida" : "Nota de voz" : "Tarea compartida")}</p></div><button type="button" disabled={sending || recording} onClick={() => {setParent(null); setEdit(null); setMessages([]);}} aria-label="Volver al canal"><X size={20} aria-hidden="true"/></button></section>}
+                {parent && <section className="slack_thread_context"><div><strong>Hilo · {parent.author.name}</strong><p>{parent.body || (parent.media ? parent.media.kind==="image" ? "Imagen compartida" : "Nota de voz" : parent.page ? "Página compartida" : "Tarea compartida")}</p></div><button type="button" disabled={sending || recording} onClick={() => {setParent(null); setEdit(null); setMessages([]);}} aria-label="Volver al canal"><X size={20} aria-hidden="true"/></button></section>}
                 <div ref={viewport} className="slack_messages" aria-label={parent ? "Respuestas del hilo" : "Mensajes del canal"} onScroll={event=>{const node=event.currentTarget;stickToBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<48;if(stickToBottom.current)setNewBelow(false);}}>
                     {older && <button type="button" disabled={loading} onClick={async () => {const controller = new AbortController(); reads.current?.abort(); reads.current = controller; setLoading(true); try {await loadMessages(controller.signal,older);} catch(err) {report(err);} finally {if (!controller.signal.aborted) setLoading(false);}}}>Cargar mensajes anteriores</button>}
                     {loading && <p role="status">Cargando mensajes…</p>}
@@ -354,6 +372,7 @@ export default function ChannelModule() {
                             <div className="slack_message_card"><header><strong>{message.author.name}</strong><Department value={message.department}/><time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString("es")}>{new Date(message.created_at).toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}</time>{message.edited_at && <small>editado</small>}</header>
                                 {message.body && <p className="slack_message_body">{linkParts(message.body).map((part,i) => part.href ? <a key={i} href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</p>}
                                 {message.media && <MessageMedia message={message} author={message.author} fetchMedia={channelApi.media}/>}
+                                {message.page && (message.page.available ? <button type="button" className="slack_task_card" onClick={()=>{setChannelTab("pages");setPageTarget({id:message.page.id,requestId:crypto.randomUUID()});}}><MessageSquare size={20} aria-hidden="true"/><span><strong>{message.page.title}</strong><small>{message.page.archived ? "Página archivada":"Página del canal"}</small></span><span>Abrir página</span></button>:<p className="slack_task_unavailable">Página no disponible para tu asignación activa.</p>)}
                                 {message.task && (message.task.available ? <button type="button" className="slack_task_card" disabled={!!openingTaskId} onClick={()=>openTask(message.task)}><CheckCheck size={22} aria-hidden="true"/><span><strong>{message.task.title}</strong><small>{openingTaskId===message.task.id ? "Verificando acceso…" : message.task.status}</small></span><span>Abrir tarea</span></button> : <p className="slack_task_unavailable"><LockKeyhole size={16} aria-hidden="true"/>Tarea no disponible para tu asignación activa</p>)}
                                 <footer>{!parent && <button type="button" disabled={sending || recording} onClick={() => {setParent(message); setEdit(null); setMessages([]);}}><MessageSquare size={15} aria-hidden="true"/>{message.reply_count ? `${message.reply_count} ${message.reply_count===1 ? "respuesta" : "respuestas"}` : "Responder en hilo"}{message.unread_reply_count>0 && <strong className="slack_unread_badge">{message.unread_reply_count} sin leer</strong>}</button>}{message.can_edit && Date.now() < Date.parse(message.editable_until) && <button type="button" disabled={sending || recording} onClick={() => setEdit({...message})}>Editar mi mensaje</button>}</footer>
                             </div>
