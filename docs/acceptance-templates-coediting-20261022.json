@@ -1,0 +1,57 @@
+{
+  "component": "Slack channel templates and collaborative pages",
+  "status": "deployed_it_pilot",
+  "branch": "feature/chat-directo",
+  "code_commit": "89682955f27b996b2353874a7130d2009dbcbb95",
+  "backend": {
+    "image": "bold-app-backend:slack-89682955",
+    "healthy": true,
+    "migrations_applied": ["0014_phonetransfer_phoneimage", "0015_channel_pages", "0016_templates_collaboration"],
+    "backup": "boldapp-pre-coediting-20261023T024821Z.dump",
+    "backup_archive_index_verified": true,
+    "backup_full_restore_tested": false,
+    "sheets_rebuilt_or_restarted": false
+  },
+  "cloudflare": {
+    "worker": "boldapp",
+    "version": "9322568f-a525-4bb4-93cf-b68086f585e9",
+    "public_health_status": 200,
+    "exact_asset_hashes_verified": ["index.html", "sw.js", "assets/index-BueU3yAf.js", "assets/channel_pages-Dioeq2nz.js", "assets/page_templates-CGzw4_uM.js", "assets/yjs-BlnMIvRm.js", "assets/channel_module-B7bIyrta.css"],
+    "anonymous_pages_status": 401,
+    "anonymous_templates_status": 401,
+    "anonymous_page_websocket_status": 403
+  },
+  "pilot": {
+    "enabled": true,
+    "units": ["Equipo de IT"],
+    "route_acl_it": {"chat": 200, "slack": 200, "pages": 200, "templates": 200},
+    "route_acl_other_unit": {"chat": 403, "slack": 403, "pages": 403, "templates": 403},
+    "production_test_accounts_or_content_created": false,
+    "release_note": "2026-10-22-slack-templates-coediting-pilot",
+    "release_note_published": false
+  },
+  "local_validation": {
+    "isolated_postgresql_18_tests": 200,
+    "postgresql_concurrent_crdt_writers": "passed",
+    "crdt_regression_tests": 7,
+    "javascript_python_javascript_unicode_and_headings": "passed",
+    "asgi_websocket_tests": 3,
+    "messaging_unit_tests": 83,
+    "general_frontend_passed": 393,
+    "general_frontend_existing_skipped": 1,
+    "worker_tests": 7,
+    "pwa_tests": 7,
+    "chat_dom": "passed_isolated",
+    "pages_dom": "passed",
+    "production_build": "passed",
+    "browser_two_synthetic_identities": ["same_title_converges", "different_blocks_converge", "both_saved", "peer_presence", "capture_template", "other_identity_instantiates_independent_copy"],
+    "responsive_widths": [375, 720],
+    "light_dark_and_reduced_motion": "checked"
+  },
+  "limitations": [
+    "Draft recovery is in-memory within the editor session, not durable offline storage.",
+    "Security revalidation that removes the module purges private content and can discard unsaved drafts.",
+    "Browser acceptance used isolated fictitious identities; live checks covered route ACL, anonymous access, health and exact assets.",
+    "Physical phone camera and team acceptance remain separate pilot checks before general release."
+  ]
+}

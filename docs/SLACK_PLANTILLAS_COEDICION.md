@@ -1,6 +1,6 @@
 # Plantillas y coedición de páginas — piloto IT
 
-Estado: validación local aprobada; despliegue pendiente. No acredita producción.
+Estado: desplegado y verificado en Oracle y Cloudflare; piloto exclusivo de IT.
 Rama: `feature/chat-directo`. Base: `8459c3c1`.
 
 ## Entrega solicitada
@@ -42,10 +42,10 @@ Rama: `feature/chat-directo`. Base: `8459c3c1`.
 - [x] Coedición, cursores, reconexión, revocación e historial probados.
 - [x] PostgreSQL aislado y recorrido de dos usuarios aprobados.
 - [x] Interfaz clara/oscura/móvil y compilación aprobadas.
-- [ ] Nota de parche preparada y commit publicado en la rama del piloto.
-- [ ] Oracle: respaldo, migración, versión y salud verificados.
-- [ ] Cloudflare: versión/assets/salud verificados.
-- [ ] IT autorizado; otra unidad denegada, sin abrir el piloto.
+- [x] Nota de parche preparada y commit publicado en la rama del piloto.
+- [x] Oracle: respaldo, migración, versión y salud verificados.
+- [x] Cloudflare: versión/assets/salud verificados.
+- [x] IT autorizado; otra unidad denegada, sin abrir el piloto.
 
 ## Evidencia local del 22 de octubre
 
@@ -72,3 +72,28 @@ durable. Una reconexión del editor conserva los cambios; recargar o retirar el
 módulo por revalidación de seguridad puede descartarlos. La revocación debe
 purgar el contenido. Cámara física/Drive y aceptación del equipo siguen siendo
 comprobaciones independientes; páginas y plantillas no consumen Drive.
+
+## Verificación de entrega
+
+- Código publicado: `89682955f27b996b2353874a7130d2009dbcbb95`, rama
+  `feature/chat-directo`. Incluye los componentes previos de QR y páginas.
+- Respaldo previo comprobado con el índice de `pg_restore`:
+  `boldapp-pre-coediting-20261023T024821Z.dump`. No se eliminaron respaldos.
+- Migraciones 0014, 0015 y 0016 aplicadas. Backend y worker usan la imagen
+  `bold-app-backend:slack-89682955`; backend saludable. Sheets conservó su imagen
+  y contenedor anteriores, sin reinicio.
+- Cloudflare Worker `boldapp`, versión
+  `9322568f-a525-4bb4-93cf-b68086f585e9`. Comparación SHA-256 exacta de HTML,
+  service worker, entrada principal, editor, plantillas, Yjs y CSS publicados.
+- Salud pública `/health/`: HTTP 200. Rutas anónimas de páginas y plantillas:
+  HTTP 401 y `private, no-store`; WebSocket de página sin ticket: HTTP 403.
+- Diagnóstico de rutas/ACL dentro del contenedor con asignaciones existentes:
+  IT obtiene 200 en Chat, Slack, páginas y plantillas; otra unidad obtiene 403
+  en las cuatro. No se crearon cuentas, sesiones, canales o contenido de prueba
+  en producción para esta comprobación.
+- `MESSAGING_PILOT_ENABLED=true`, exclusivamente «Equipo de IT». Las notas
+  permanecen en `pendingPilotReleaseNotes`, fuera del listado publicado.
+
+La comprobación del archivo de respaldo valida su formato e índice, no constituye
+una restauración completa del respaldo en otra base. La aprobación funcional del
+equipo y la publicación general siguen pendientes de autorización.
