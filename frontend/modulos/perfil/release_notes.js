@@ -1,6 +1,17 @@
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
+    id: "2026-10-22-slack-templates-coediting-pilot", date: "2026-10-22", category: "Piloto IT", icon: "update",
+    title: "Plantillas y páginas para trabajar en equipo",
+    summary: "Empieza con una plantilla y reúne al equipo en la misma página, sin sustituir sus cambios.",
+    sections: [{title: "Del punto de partida al trabajo compartido", items: [
+        "Crea notas de reunión, briefs o seguimientos semanales con las plantillas de BOLD. Guarda páginas como plantillas del canal, actualízalas y archívalas sin modificar las páginas ya creadas.",
+        "Varias personas pueden editar el título y los bloques de una página al mismo tiempo. Sus cambios se combinan y la página muestra quién está presente y dónde está trabajando.",
+        "El estado de sincronización diferencia los cambios pendientes de los guardados. Si se interrumpe la conexión, el borrador permanece abierto para recuperarlo al reconectar.",
+        "El historial conserva instantáneas recuperables. Restaurar una versión inicia una nueva sesión de colaboración; un borrador anterior solo vuelve a incorporarse si lo eliges expresamente.",
+        "Las plantillas, las páginas y las referencias a tareas respetan sus permisos. El piloto sigue limitado a IT; estas notas se publicarán al autorizar la apertura a los demás departamentos.",
+    ]}],
+}, {
     id: "2026-10-22-slack-pages-pilot", date: "2026-10-22", category: "Piloto IT", icon: "update",
     title: "Páginas y notas dentro de tus canales",
     summary: "Reúne acuerdos, listas y referencias a tareas junto a la conversación del equipo.",

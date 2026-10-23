@@ -1,5 +1,7 @@
 """Run on isolated PostgreSQL; SQLite does not certify the row-lock protocol."""
 import uuid
+import base64
+from types import SimpleNamespace
 from unittest import skipUnless
 from django.db import connection
 from django.test import TransactionTestCase, override_settings
@@ -7,6 +9,10 @@ from boldApp.core.models import Permission
 from . import test_channel_concurrency as concurrency
 from . import test_channels as base
 from .models import ChannelPage, PageRevision
+from .page_collaboration import initial_state, commit_update
+from .page_crdt import encode, load_document
+from boldApp.autenticacion.services import create_session
+from django.test import RequestFactory
 
 
 @skipUnless(connection.vendor == "postgresql", "Requires isolated PostgreSQL; SQLite cannot prove row locks")
@@ -42,3 +48,28 @@ class PageConcurrencyTests(TransactionTestCase):
         self.assertEqual([code for code,_ in results],[200,200])
         self.assertEqual(ChannelPage.objects.get().version, 2)
         self.assertEqual(PageRevision.objects.count(), 2)
+
+    def test_simultaneous_crdt_writers_merge_under_postgresql_row_locks(self):
+        sessions=[]
+        for assignment in (self.alice,self.bob):
+            _,session=create_session(assignment.employee.user_account,RequestFactory().get("/",REMOTE_ADDR="127.0.0.1"))
+            sessions.append(session)
+        page=ChannelPage.objects.get()
+        snapshot=initial_state(sessions[0].pk,self.alice.pk,page.pk)
+        documents=[load_document(base64.b64decode(snapshot["update"])) for _ in range(2)]
+        state=documents[0].get_state()
+        documents[0]["title"] += " / Alfa"
+        documents[1]["title"] += " / Beta"
+        operations=[]
+        for assignment,session,doc in zip((self.alice,self.bob),sessions,documents):
+            payload={"type":"update","epoch":snapshot["epoch"],"client_id":str(uuid.uuid4()),"update":encode(doc.get_update(state)),"state":encode(doc.get_state())}
+            operations.append((assignment.pk,session.pk,payload))
+        def apply(operation):
+            assignment_id,session_id,payload=operation
+            return SimpleNamespace(status_code=200,data=commit_update(session_id,assignment_id,page.pk,payload,"concurrency"))
+        results=self.parallel([lambda:apply(operations[0]),lambda:apply(operations[1])])
+        self.assertEqual([code for code,_ in results],[200,200])
+        page.refresh_from_db()
+        self.assertEqual(page.version,3)
+        self.assertIn("Alfa",page.title)
+        self.assertIn("Beta",page.title)

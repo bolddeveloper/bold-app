@@ -1,4 +1,5 @@
 """Revision-checked channel documents; no silent last-writer-wins saves."""
+import uuid
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -49,16 +50,24 @@ class RevisionPagination(CursorPagination):
 def page_data(page, channel, policy, *, content=True):
     writable = not channel.archived_at and not page.archived_at
     return {"id": str(page.pk), "channel_id": str(channel.pk), "title": page.title, "icon": page.icon,
+            "collaboration_enabled": True,
             "version": page.version, "archived_at": page.archived_at, "created_at": page.created_at,
             "updated_at": page.updated_at, "updated_by": page.updated_by.full_name,
             "can_edit": writable and policy.allows("slack.page.update", channel.unit, channel.pk),
             "can_manage": not channel.archived_at and policy.allows("slack.page.manage", channel.unit, channel.pk),
+            "can_create_template": not channel.archived_at and policy.allows("slack.template.create", channel.unit, channel.pk),
+            "can_update_templates": not channel.archived_at and policy.allows("slack.template.update", channel.unit, channel.pk),
             **({"blocks": project_blocks(page.blocks, policy)} if content else {})}
 
 
 def record(page, actor, client_id, payload_digest):
     PageRevision.objects.create(page=page, version=page.version, actor_id=actor, client_id=client_id,
         payload_digest=payload_digest, title=page.title, icon=page.icon, blocks=page.blocks, archived=bool(page.archived_at))
+
+
+def checkpoint(page):
+    if not page.revisions.filter(version=page.version).exists():
+        record(page, page.updated_by_id, uuid.uuid4(), digest({"checkpoint":page.version}))
 
 
 class PageView(SlackView):
@@ -87,6 +96,7 @@ class PageListView(PageView):
         page = paginator.paginate_queryset(rows, request)
         response = paginator.get_paginated_response([page_data(row, channel, self.policy(), content=False) for row in page])
         response.data["can_create"] = not channel.archived_at and self.policy().allows("slack.page.create", channel.unit, channel.pk)
+        response.data["can_templates"] = self.policy().allows("slack.template.read", channel.unit, channel.pk)
         return response
 
     @transaction.atomic
@@ -138,11 +148,14 @@ class PageDetailView(PageView):
         # A user who has changed no content should not create history on blur.
         if (values["title"], values["icon"], blocks) == (page.title, page.icon, page.blocks):
             return Response(page_data(page, channel, self.policy()))
+        checkpoint(page)
         page.title, page.icon, page.blocks = values["title"], values["icon"], blocks
         page.version += 1
         page.updated_by_id = self.actor()
         page.save()
         record(page, self.actor(), values["client_id"], receipt)
+        from .page_collaboration import reset_collaboration
+        reset_collaboration(page)
         publish_channel(channel, "page.changed")
         return Response({**page_data(page, channel, self.policy()), "accepted_version": page.version})
 
@@ -165,16 +178,20 @@ class PageDetailView(PageView):
         if "archived" in values:
             if values["archived"] == bool(page.archived_at):
                 return Response(page_data(page, channel, self.policy()))
+            checkpoint(page)
             page.archived_at = timezone.now() if values["archived"] else None
         else:
             if page.archived_at:
                 raise Conflict("Restaura la página antes de recuperar contenido.")
             revision = get_object_or_404(page.revisions, version=values["restore_version"])
+            checkpoint(page)
             page.title, page.icon, page.blocks = revision.title, revision.icon, revision.blocks
         page.version += 1
         page.updated_by_id = self.actor()
         page.save()
         record(page, self.actor(), values["client_id"], receipt)
+        from .page_collaboration import reset_collaboration
+        reset_collaboration(page)
         publish_channel(channel, "page.changed")
         return Response(page_data(page, channel, self.policy()))
 
@@ -187,14 +204,21 @@ class PageHistoryView(PageView):
         paginator = RevisionPagination()
         revisions = paginator.paginate_queryset(rows, request)
         # History is metadata only. Fetch a snapshot deliberately, not 25 full documents.
-        return paginator.get_paginated_response([{"version": row.version, "title": row.title,
+        response = paginator.get_paginated_response([{"version": row.version, "title": row.title,
             "actor": row.actor.full_name, "created_at": row.created_at, "archived": row.archived} for row in revisions])
+        if not request.query_params.get("cursor") and not page.revisions.filter(version=page.version).exists():
+            response.data["results"].insert(0, {"version": page.version, "title": page.title, "actor": page.updated_by.full_name,
+                "created_at": page.updated_at, "archived": bool(page.archived_at), "current": True})
+        return response
 
 
 class PageRevisionView(PageView):
     def get(self, request, channel_id, page_id, version):
         channel = self.scope(channel_id)
         page = get_object_or_404(channel.pages, pk=page_id)
+        if version == page.version:
+            return Response({"version": page.version, "title": page.title, "icon": page.icon,
+                "blocks": project_blocks(page.blocks, self.policy()), "created_at": page.updated_at, "actor": page.updated_by.full_name})
         row = get_object_or_404(page.revisions, version=version)
         return Response({"version": row.version, "title": row.title, "icon": row.icon,
             "blocks": project_blocks(row.blocks, self.policy()), "created_at": row.created_at, "actor": row.actor.full_name})

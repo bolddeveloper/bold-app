@@ -5,8 +5,14 @@ from .channel_views import DepartmentListView, ChannelListView, ChannelDetailVie
 from .channel_access_views import ChannelAccessView, ChannelManagementView, ChannelPeopleView
 from .phone_views import PhoneCreateView, PhoneDetailView, PhoneApproveView, PhoneDownloadView, PhoneClaimView, PhoneUploadView, PhoneSealView
 from .page_views import PageListView, PageDetailView, PageHistoryView, PageRevisionView
+from .page_templates import TemplateListView, TemplateDetailView, TemplatePageView
+from .page_ticket import PageTicketView
 
 urlpatterns = [
+    path("channels/<uuid:channel_id>/pages/<uuid:page_id>/ticket/", PageTicketView.as_view()),
+    path("channels/<uuid:channel_id>/templates/", TemplateListView.as_view()),
+    path("channels/<uuid:channel_id>/templates/<str:template_id>/", TemplateDetailView.as_view()),
+    path("channels/<uuid:channel_id>/templates/<str:template_id>/pages/", TemplatePageView.as_view()),
     path("channels/<uuid:channel_id>/pages/", PageListView.as_view()),
     path("channels/<uuid:channel_id>/pages/<uuid:page_id>/", PageDetailView.as_view()),
     path("channels/<uuid:channel_id>/pages/<uuid:page_id>/history/", PageHistoryView.as_view()),

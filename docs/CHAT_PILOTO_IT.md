@@ -1001,14 +1001,26 @@ conservar ambos cambios en el historial y recuperar una revisión como versión 
 Drive fue simulado por el entorno; páginas no utilizan Drive ni credenciales de Google.
 La cámara física del QR y la aceptación del piloto en producción siguen separadas.
 
-Las pruebas de bloqueo concurrente se prepararon para PostgreSQL aislado y se omiten
-en SQLite. No hay PostgreSQL de pruebas disponible en esta máquina; el recorrido de
-dos cuentas comprueba HTTP/versiones, no sustituye esa validación de bloqueos.
+La revisión inicial de páginas se realizó con SQLite. En esta entrega se preparó
+PostgreSQL 18.6 aislado y se aprobaron 200 pruebas de integración, incluidos los
+bloqueos y dos escritores CRDT simultáneos. La instancia de pruebas no reutiliza
+credenciales ni datos de producción.
 
-Orden restante: validar páginas con IT → plantillas reutilizables → coedición real.
-Después podrán evaluarse automatizaciones. Llamadas y clientes permanecen fuera de
-este componente. Notas de la entrega preparadas en `pendingPilotReleaseNotes`, no
-visibles públicamente hasta la autorización de publicación.
+Plantillas reutilizables y coedición real se incorporan en esta entrega. El recorrido
+con dos cuentas ficticias comprobó mezcla del mismo título y bloques distintos,
+presencia, guardado y uso de una plantilla desde la otra cuenta. El contenido vive
+en PostgreSQL, no en Drive. La biblioteca hereda los permisos del canal y conserva
+la proyección individual de referencias a tareas.
+
+Los borradores de coedición sobreviven a la reconexión del socket de página dentro
+de la sesión. No son un almacén offline persistente: cerrar/recargar, cambiar de
+cuenta o una revalidación de seguridad que retire el módulo puede descartarlos.
+Guardar antes de esas acciones. No conservar contenido revocado prima sobre la
+recuperación automática. El historial guarda puntos de recuperación, no cada tecla.
+
+Orden restante: aceptación del piloto de IT → apertura autorizada con notas de
+parche → evaluar automatizaciones. Llamadas y clientes siguen fuera de alcance.
+Notas de la entrega preparadas en `pendingPilotReleaseNotes`, sin publicación general.
 
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.
 Ese cambio abre el módulo a otras unidades, no concede lectura a administradores:

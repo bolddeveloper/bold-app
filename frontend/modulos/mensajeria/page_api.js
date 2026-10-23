@@ -1,4 +1,4 @@
-import {http} from "../core/http_client.js";
+import {http,api_base_url} from "../core/http_client.js";
 import {channelPage} from "./channel_api.js";
 const uuid = value => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || "")) throw Error("Identificador de página no válido.");
@@ -10,6 +10,7 @@ export function createPageApi(client=http) {
     return {
         list:(channel,archived,next,options)=>client.request(channelPage(list(channel),next,archived ? {archived:"true"}:{}),options),
         get:(channel,page,options)=>client.request(detail(channel,page),options),
+        ticket:(channel,page,options)=>client.request(detail(channel,page)+"ticket/",{...options,method:"POST",body:{},timeoutMs:15000}),
         create:(channel,values,options)=>client.request(list(channel),{...options,method:"POST",body:values,timeoutMs:15_000}),
         save:(channel,page,values,options)=>client.request(detail(channel,page),{...options,method:"PUT",body:values,timeoutMs:15_000}),
         action:(channel,page,values,options)=>client.request(detail(channel,page),{...options,method:"PATCH",body:values,timeoutMs:15_000}),
@@ -21,6 +22,12 @@ export function createPageApi(client=http) {
     };
 }
 export const pageApi=createPageApi();
+export async function connectPage(channel,page,options){
+    const result=await pageApi.ticket(channel,page,options),url=new URL(api_base_url);
+    url.protocol=url.protocol==="https:" ? "wss:":"ws:";url.pathname=`/ws/pages/${uuid(page)}/`;url.search="";url.hash="";url.searchParams.set("ticket",result.ticket);
+    if(options?.signal?.aborted)throw new DOMException("Contexto cancelado","AbortError");
+    return new WebSocket(url.href);
+}
 
 export function pageError(error) {
     if ([401,403,404].includes(error?.status)) return "La página ya no está disponible con tus permisos actuales.";

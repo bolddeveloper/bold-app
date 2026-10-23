@@ -16,3 +16,4 @@ gunicorn==23.0.0
 cryptography==46.0.3
 argon2-cffi==25.1.0
 Pillow==13.0.0
+pycrdt==0.14.10
