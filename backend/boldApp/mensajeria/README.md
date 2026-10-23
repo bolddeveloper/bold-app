@@ -107,4 +107,8 @@ La siguiente entrega puede incorporar reacciones, imágenes y archivos. Mantener
 
 Después se incorporarán imágenes y archivos. El usuario confirmó como destino la unidad o carpeta corporativa «BOLD APP»: se debe verificar su identificador real y el acceso del conector antes de crear la estructura de Mensajería. Las carpetas y los archivos no se crean en esta entrega. La integración deberá comprobar permisos de conversación también al descargar; una URL o un identificador de Drive nunca serán autorización suficiente. Las personas con acceso directo al destino en Google podrán conservar acceso fuera de BOLD, de acuerdo con sus permisos en Drive.
 
-Audio, carga móvil con QR de corta duración, edición de imágenes, historial multimedia, personalización y previsualización de enlaces corresponden a entregas posteriores. Canales, páginas, plantillas y coedición son componentes separados. Las llamadas quedan fuera de la prioridad actual.
+El detalle actualizado de entregas y límites está en `docs/CHAT_PILOTO_IT.md`:
+audio, cola y edición de imágenes y canales se incorporaron después de esta base.
+El puente QR está preparado localmente con `0014_phonetransfer_phoneimage`; requiere
+revisión física en teléfono y publicación autorizada. Páginas, plantillas y coedición
+siguen siendo componentes posteriores. Las llamadas permanecen fuera de prioridad.

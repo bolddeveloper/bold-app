@@ -8,6 +8,7 @@ import {createForwardBatch, forwardMessageBatch} from "./message_forwarding.js";
 export default function ForwardMessageDialog({sources, people, forward, onSent, onComplete, onSelectMore, onClose}) {
     const dialog = useRef(null), search = useRef(null), controller = useRef(null), busy = useRef(false), mounted = useRef(false);
     const batch = useRef(null);
+    const restoreTrigger = useRef(true);
     if (!batch.current) batch.current = createForwardBatch(sources);
     const [query, setQuery] = useState(""), [recipient, setRecipient] = useState(""), [sending, setSending] = useState(false), [error, setError] = useState("");
     const [progress, setProgress] = useState(null);
@@ -17,7 +18,7 @@ export default function ForwardMessageDialog({sources, people, forward, onSent, 
         mounted.current = true;
         const trigger = document.activeElement, node = dialog.current;
         node.showModal(); search.current?.focus();
-        return () => {mounted.current = false; controller.current?.abort(); if (node.open) node.close(); if (trigger?.isConnected) trigger.focus();};
+        return () => {mounted.current = false; controller.current?.abort(); if (node.open) node.close(); if (restoreTrigger.current && trigger?.isConnected) trigger.focus();};
     }, []);
     async function submit(event) {
         event.preventDefault();
@@ -37,7 +38,7 @@ export default function ForwardMessageDialog({sources, people, forward, onSent, 
     }
     return createPortal(<dialog ref={dialog} className="messaging_media_dialog messaging_forward_dialog" aria-labelledby="chat_forward_title" aria-describedby="chat_forward_privacy" onCancel={event => {event.preventDefault(); if (!busy.current) onClose();}}>
         <header><div><h2 id="chat_forward_title">Reenviar a un chat</h2><p id="chat_forward_privacy">Se enviará una copia como mensaje tuyo. No se comparte el acceso al chat original.</p></div><button type="button" aria-label="Cerrar reenvío" disabled={sending} onClick={onClose}><X size={20} aria-hidden="true"/></button></header>
-        <div className="messaging_forward_preview"><strong>{batch.current.total === 1 ? "1 mensaje" : `${batch.current.total} mensajes`} · Orden original</strong><ol>{batch.current.pending.map(source => <li key={source.id}>{source.media && <span><ImageIcon size={18} aria-hidden="true"/> Imagen{source.body ? " con descripción" : ""}</span>}{source.body && <p>{source.body}</p>}</li>)}</ol>{onSelectMore && !batch.current.employeeId && <button type="button" onClick={() => onSelectMore(batch.current.pending)}>Seleccionar varios mensajes</button>}</div>
+        <div className="messaging_forward_preview"><strong>{batch.current.total === 1 ? "1 mensaje" : `${batch.current.total} mensajes`} · Orden original</strong><ol>{batch.current.pending.map(source => <li key={source.id}>{source.media && <span><ImageIcon size={18} aria-hidden="true"/> Imagen{source.body ? " con descripción" : ""}</span>}{source.body && <p>{source.body}</p>}</li>)}</ol>{onSelectMore && !batch.current.employeeId && <button type="button" onClick={() => {restoreTrigger.current = false; onSelectMore(batch.current.pending);}}>Seleccionar varios mensajes</button>}</div>
         <form onSubmit={submit} aria-busy={sending}>
             <label className="messaging_forward_search"><span>Buscar destinatario de IT</span><span><Search size={18} aria-hidden="true"/><input ref={search} type="search" value={query} disabled={sending || !!batch.current.employeeId} onChange={event => setQuery(event.target.value)} placeholder="Nombre del empleado"/></span></label>
             <fieldset className="messaging_forward_people" disabled={sending || !!batch.current.employeeId}><legend>Selecciona un destinatario</legend>{matches.map(row => <label key={row.employee_id} className="messaging_forward_person"><input type="radio" name="forward_recipient" value={row.employee_id} checked={recipient === row.employee_id} onChange={() => {setRecipient(row.employee_id); setError("");}}/><span className="messaging_avatar" aria-hidden="true"><AvatarImage url={row.avatar_url} initials={initials(row.name)}/></span><span>{row.name}</span></label>)}{!matches.length && <p>No hay destinatarios de IT con este nombre.</p>}</fieldset>

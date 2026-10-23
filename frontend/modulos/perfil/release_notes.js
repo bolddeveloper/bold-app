@@ -1,6 +1,17 @@
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
+    id: "2026-10-22-phone-images-pilot", date: "2026-10-22", category: "Piloto IT", icon: "update",
+    title: "Prepara imágenes desde tu teléfono",
+    summary: "Vincula tu móvil con un QR temporal y lleva sus imágenes al borrador de Chat o Slack.",
+    sections: [{title: "Del teléfono al borrador", items: [
+        "Desde Chat, un canal o un hilo, abre Añadir desde el teléfono y genera un QR. Comprueba el código en ambos dispositivos antes de aprobar.",
+        "Toma fotografías o selecciona imágenes PNG, JPEG o WebP. Recíbelas en el ordenador para revisarlas y editarlas antes de pulsar Enviar.",
+        "El vínculo caduca, solo admite un teléfono y no permite leer conversaciones ni enviar mensajes por su cuenta.",
+        "Al pasar del reenvío individual a la selección múltiple, el foco se mantiene en la barra de selección.",
+        "Esta función continúa en pruebas para IT. El teléfono necesita acceder a la misma dirección de BOLD; los enlaces locales no funcionan desde otro dispositivo.",
+    ]}],
+}, {
     id: "2026-10-21-slack-discovery-invitations-polish", date: "2026-10-21", category: "Piloto IT", icon: "update",
     title: "Canales más fáciles de encontrar y compartir",
     summary: "Búsqueda mientras escribes, colores de canal y selectores de personas con más contexto.",

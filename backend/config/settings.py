@@ -284,6 +284,7 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "cleanup-phone-transfers": {"task": "boldApp.mensajeria.phone_views.cleanup_phone_transfers", "schedule": 60.0},
     "recover-sheet-sync": {"task": "boldApp.hojas.tasks.recover_pending", "schedule": 15.0},
     "send-calendar-reminders": {
         "task": "boldApp.calendario.tasks.send_calendar_reminders",

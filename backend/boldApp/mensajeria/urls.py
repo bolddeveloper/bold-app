@@ -3,8 +3,16 @@ from django.urls import path
 from .views import ConversationDetailView, ConversationListView, MessageDetailView, MessageListView, MessageMediaView, ReceiptView, PreferencesView, UnreadSummaryView
 from .channel_views import DepartmentListView, ChannelListView, ChannelDetailView, ChannelMessageListView, ChannelMessageDetailView, ChannelReadView, ChannelTaskSearchView, ChannelMediaView, ChannelFollowView, ChannelUnreadView
 from .channel_access_views import ChannelAccessView, ChannelManagementView, ChannelPeopleView
+from .phone_views import PhoneCreateView, PhoneDetailView, PhoneApproveView, PhoneDownloadView, PhoneClaimView, PhoneUploadView, PhoneSealView
 
 urlpatterns = [
+    path("phone-transfers/", PhoneCreateView.as_view()),
+    path("phone-transfers/<uuid:identity>/", PhoneDetailView.as_view()),
+    path("phone-transfers/<uuid:identity>/approve/", PhoneApproveView.as_view()),
+    path("phone-transfers/<uuid:identity>/seal/", PhoneSealView.as_view()),
+    path("phone-transfers/<uuid:identity>/images/<uuid:image_id>/", PhoneDownloadView.as_view()),
+    path("phone-transfers/<uuid:identity>/claim/", PhoneClaimView.as_view()),
+    path("phone-transfers/<uuid:identity>/mobile/", PhoneUploadView.as_view()),
     path("departments/", DepartmentListView.as_view(), name="slack-departments"),
     path("channels/", ChannelListView.as_view(), name="slack-channels"),
     path("channels/unread/", ChannelUnreadView.as_view(), name="slack-unread"),

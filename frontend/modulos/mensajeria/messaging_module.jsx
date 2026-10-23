@@ -12,6 +12,8 @@ import "./messaging.css";
 import {MediaDraft, MessageMedia, VoiceRecorder} from "./message_media.jsx";
 import {mediaPreview} from "./media_helpers.js";
 import ImageQueue from "./image_queue.jsx";
+import {Smartphone} from "lucide-react";
+const PhoneTransfer = lazy(() => import("./phone_transfer.jsx"));
 import {appendImages, canReviseFailedImage, captionQueuedImage, replaceQueuedImage} from "./image_queue_model.js";
 import {canForward, createMessageForwarder, MAX_FORWARD_MESSAGES, toggleForwardSelection} from "./message_forwarding.js";
 const ChatImageEditor = lazy(() => import("./image_editor.jsx"));
@@ -31,6 +33,7 @@ export function DeliveryMark({message}) {
 }
 
 export default function MessagingModule() {
+    const [phoneTarget, setPhoneTarget] = useState(null);
     const core = useCore(), shell = useShell();
     const actorId = core.employee?.id || core.account?.employee || core.activeAssignment?.personId;
     const [conversations, setConversations] = useState([]), [listNext, setListNext] = useState(null);
@@ -90,14 +93,14 @@ export default function MessagingModule() {
         queueStore.current = next; setImageQueues(next); return rows;
     }
     function chooseImages(files) {
-        if (!files?.length || busy.current || recording || loading || edit || imageEditing || !conversation?.peer.available) return;
+        if (!files?.length || busy.current || recording || loading || edit || imageEditing || !conversation?.peer.available) return false;
         const id = conversation.id;
         if (mediaDrafts[id]) {setError("Envía o quita primero la nota de voz antes de añadir imágenes."); return;}
         try {
             const current = queueStore.current[id] || [], rows = appendImages(current, files);
             if (!current.length && drafts[id]) {rows[0] = {...rows[0], caption: drafts[id]}; setDrafts(value => ({...value, [id]: ""}));}
             updateQueue(id, () => rows); setSelectedImages(value => ({...value, [id]: rows[current.length].id}));
-            setError(""); setEmojiOpen(false);
+            setError(""); setEmojiOpen(false); return true;
         } catch (err) {setError(err.message);}
     }
     function removeImage(item) {
@@ -381,7 +384,7 @@ export default function MessagingModule() {
                     {emojiOpen && <div className="messaging_emojis" role="group" aria-label="Insertar emoji">{[["😀", "Sonrisa"], ["👍", "Pulgar arriba"], ["❤️", "Corazón"], ["🎉", "Celebración"], ["👀", "Ojos"], ["✅", "Listo"], ["🙏", "Gracias"], ["🚀", "Cohete"]].map(([emoji, name]) => <button type="button" key={emoji} aria-label={name} onClick={() => {changeComposer(((edit ? edit.body : draft) + emoji).slice(0,5000)); setEmojiOpen(false); (edit ? editField : composer).current?.focus();}}>{emoji}</button>)}</div>}
                     <div className="messaging_composer_actions"><button type="button" aria-label="Insertar emoji" aria-expanded={emojiOpen} disabled={sending || recording || !peer.available || !edit && !!selectedImage?.attempted} onClick={() => setEmojiOpen(value => !value)}><Smile size={20} aria-hidden="true"/></button>
                     <input className="messaging_sr" type="file" accept="image/jpeg,image/png,image/webp" multiple ref={imageInput} tabIndex={-1} aria-label="Seleccionar imagen para Chat" disabled={sending || loading || !!edit || recording} onChange={event => {chooseImages(event.target.files); event.target.value = "";}}/>
-                    {!edit && <><button type="button" aria-label="Adjuntar imagen" disabled={sending || loading || recording || !peer.available} onClick={() => imageInput.current?.click()}><ImagePlus size={20} aria-hidden="true"/></button><VoiceRecorder key={conversation.id} disabled={sending || loading || !!mediaDrafts[conversation.id] || !!queuedImages.length || !peer.available} onRecording={setRecording} onError={setError} onReady={file => setMediaDrafts(current => ({...current, [conversation.id]: file}))}/></>}
+                    {!edit && <><button type="button" aria-label="Adjuntar imagen" disabled={sending || loading || recording || !peer.available} onClick={() => imageInput.current?.click()}><ImagePlus size={20} aria-hidden="true"/></button><button type="button" className="phone_transfer_launch" aria-label="Añadir desde el teléfono" title="Añadir desde el teléfono" disabled={sending || loading || recording || !peer.available || !!mediaDrafts[conversation.id] || queuedImages.length >= 10} onClick={() => setPhoneTarget(conversation.id)}><Smartphone size={20} aria-hidden="true"/></button><VoiceRecorder key={conversation.id} disabled={sending || loading || !!mediaDrafts[conversation.id] || !!queuedImages.length || !peer.available} onRecording={setRecording} onError={setError} onReady={file => setMediaDrafts(current => ({...current, [conversation.id]: file}))}/></>}
                     <button type="button" aria-label="Configurar mensajería" title="Configurar Enter" disabled={recording || sending} onClick={() => shell.open_profile(false, "messaging")}><Settings2 size={18} aria-hidden="true"/></button><small id="messaging_input_hint">{(edit ? edit.body : draft).length.toLocaleString("es")}/5.000 · {enterBehavior === "newline" ? "Enter: salto · Ctrl/⌘+Enter: enviar" : enterBehavior === "send" ? "Enter envía · Mayús+Enter: salto" : "Cargando preferencia de Enter…"}</small><button type="submit" className="messaging_send" aria-label={sending ? "Guardando mensaje" : edit ? "Guardar mensaje" : queuedImages.length ? `Enviar ${queuedImages.length} imágenes` : "Enviar mensaje"} disabled={sending || loading || recording || !peer.available || !!imageEditing || editExpired || (!(edit ? edit.body : draft).trim() && !(edit?.media || !edit && (mediaDrafts[conversation.id] || queuedImages.length)))}>{sending ? <LoaderCircle size={17} className="messaging_spin" aria-hidden="true"/> : <Send size={17} aria-hidden="true"/>}<span className="messaging_send_label">{sending ? "Enviando…" : edit ? "Guardar" : queuedImages.length ? `Enviar ${queuedImages.length}` : "Enviar"}</span></button></div>
                 </form>
             </> : <div className="messaging_empty"><MessageCircle size={44} aria-hidden="true"/><h2>{loading ? "Abriendo conversación…" : "Un espacio para conversar"}</h2><p>Elige un compañero para iniciar un chat privado.</p><button type="button" aria-label="Actualizar conversaciones" disabled={listLoading} onClick={() => loadList()}><RefreshCw size={17} aria-hidden="true"/> Actualizar</button>{error && <div className="messaging_error" role="alert">{error}</div>}</div>}
@@ -393,5 +396,6 @@ export default function MessagingModule() {
             if (activeId.current === result.message.conversation_id) {scrollBottom.current = true; animateNew([result.message]); setMessages(current => merge(current, [result.message]));}
             setConversations(current => [{id: result.conversation.id, peer: result.conversation.peer, updated_at: result.message.created_at, preview: mediaPreview(result.message)}, ...current.filter(row => row.id !== result.conversation.id)].sort((a,b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
         }}/></Suspense>}
+        {phoneTarget === conversation?.id && conversation?.peer.available && <Suspense fallback={<p role="status">Abriendo transferencia…</p>}><PhoneTransfer key={conversation.id} target={{conversation_id: conversation.id, max_images:10-queuedImages.length}} onFiles={chooseImages} onClose={() => setPhoneTarget(null)}/></Suspense>}
     </section>;
 }

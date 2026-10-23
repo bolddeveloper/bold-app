@@ -878,6 +878,83 @@ Verificación final de esta ampliación (21 de octubre):
 
 ## Apertura posterior al piloto
 
+### Puente de imágenes por QR — preparado localmente el 22 de octubre
+
+No implica commit, despliegue, apertura fuera de IT ni aceptación de cámara física.
+Requiere la migración `0014_phonetransfer_phoneimage` y el worker con su tarea
+de limpieza de transferencias caducadas, programada cada minuto.
+
+- Chat, canales e hilos ofrecen «Añadir desde el teléfono». El ordenador genera
+  un QR localmente, sin transmitir su contenido a un servicio generador externo.
+  El enlace lleva el secreto en el fragmento, no en la ruta ni los parámetros.
+  La pantalla móvil lo retira del historial y no monta la aplicación interna.
+- Un solo vínculo por cuenta, ligado a su sesión, asignación y destino. Dura
+  hasta diez minutos o hasta que expire la sesión. Otro QR sustituye al anterior.
+  El teléfono solicita vinculación y muestra un código; el ordenador debe aprobar
+  ese mismo código. Otro teléfono no puede apropiarse de un vínculo ya solicitado.
+- El móvil no tiene acceso al historial, directorio, descargas, Drive o envíos.
+  Cada operación comprueba de nuevo sesión, credenciales, piloto, asignación y
+  permiso de escritura. Archivar un canal o retirar el acceso invalida la capacidad.
+- Hasta diez imágenes, reducidas al espacio libre del borrador; originales de
+  hasta 10 MB, PNG/JPEG/WebP. El servidor comprueba el contenido real, elimina
+  metadatos y normaliza a WebP. Cada resultado admite 2 MB; total máximo 20 MB.
+  HEIC, SVG, audio y archivos genéricos no forman parte de este componente.
+- Las copias temporales viven en tablas privadas, no en Drive. La limpieza las
+  elimina al cancelar, sustituir o caducar el vínculo. Borrar registros no equivale
+  a borrado físico inmediato de discos o de copias de seguridad preexistentes.
+- «Añadir al borrador y finalizar» sella el vínculo antes de descargar el lote:
+  una subida tardía no se mezcla con un lote ya importado. Los reintentos conservan
+  el UUID de cada imagen; importarla no crea un mensaje ni una notificación.
+  La cola existente permite revisar, recortar y dibujar antes del envío normal.
+  Solo «Enviar» utiliza el almacenamiento privado de Drive ya configurado.
+- La pantalla del ordenador consulta únicamente el manifiesto cada cinco segundos
+  mientras el diálogo está visible, hasta caducar. El móvil consulta solo mientras
+  espera aprobación. No existe sondeo permanente ni descarga repetida de imágenes.
+  Un fallo detiene la consulta automática; se conserva la selección para reintentar
+  una subida o puede cerrarse y generarse otro QR. No hay reintentos infinitos.
+- Un QR de localhost no sirve desde un teléfono real. Las pruebas físicas requieren
+  un origen HTTPS de pruebas accesible desde ambos dispositivos; no sustituir el
+  origen por un dominio de producción que todavía no tenga esta versión.
+
+Verificación: pruebas aisladas de aprobación, propiedad, reintento, sustitución,
+caducidad/limpieza, revocación, piloto, cupo y canal privado. La prueba de integración
+recorre teléfono → píxeles normalizados → envío explícito → Drive simulado → lectura
+autorizada por otra identidad; no certifica el proveedor real. Contratos DOM de ambas
+pantallas y regresiones de los compositores Chat/Slack. El selector automatizado del
+navegador produjo archivos vacíos; se mantuvo su rechazo y se utilizó una imagen
+sintética creada dentro del navegador para verificar el recorrido HTTP real local.
+No equivale a aceptación de galería/cámara de Android o iOS.
+
+Aceptación local del recorrido real HTTP: QR generado en Slack, segunda pestaña
+aislada con código coincidente, aprobación, imagen sintética, importación al
+borrador sin mensaje automático, envío explícito y lectura por la segunda cuenta
+ficticia. Drive fue simulado, no el proveedor de Google. Se comprobaron 375 px,
+modo claro/oscuro y 812 × 375, sin desbordamiento; el control medido tiene 46 px.
+También se verificó otro QR en la misma pestaña sin montar Core ni conservar el
+vínculo anterior. Se corrigió el restablecimiento de foco del diálogo de reenvío
+cuando el foco se transfiere a selección múltiple, manteniendo la aserción original.
+
+Backend: 139 pruebas ejecutadas, 133 aprobadas y seis de concurrencia PostgreSQL
+omitidas por usar SQLite. Las diez nuevas de QR pasaron. No presentar esto como
+validación concurrente sobre PostgreSQL ni como prueba de cámara física.
+
+### Flujo propuesto después del QR: páginas y notas (todavía no implementado)
+
+1. Abrir un canal y su pestaña «Páginas»; crear una página vacía con título e icono.
+2. Escribir bloques básicos: párrafos, títulos, listas, listas de comprobación y
+   enlaces a tareas. Diferenciar guardando, guardado y error sin descartar borradores.
+3. Publicar un enlace a la página en el canal. Abrirla exige conservar acceso al
+   canal; compartir su enlace no concede acceso a terceros ni a clientes.
+4. Empezar con guardado por revisión y detección explícita de conflictos, no con
+   sobrescritura silenciosa. Historial recuperable y archivo en lugar de borrado
+   irreversible. Aplicar permisos configurables de lectura, edición y gestión.
+5. Incorporar plantillas después de validar el editor y la estructura de páginas.
+6. Añadir coedición real en una entrega posterior, con presencia, cursores y mezcla
+   de cambios. Un indicador de presencia no sustituye la resolución de concurrencia.
+
+La profundidad de subpáginas, los bloques admitidos y los permisos finales deben
+acordarse antes de implementar páginas; este flujo no anuncia funciones publicadas.
+
 No cambiar `MESSAGING_PILOT_ENABLED` a `false` sin autorización de lanzamiento.
 Ese cambio abre el módulo a otras unidades, no concede lectura a administradores:
 cada conversación sigue siendo privada para sus dos participantes.

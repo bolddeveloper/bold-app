@@ -22,7 +22,7 @@ export function pwa_release() {
 export default define_config({
     cacheDir: ".vite-local",
     resolve: {
-        dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]
+        dedupe: ["react", "react-dom", "lucide-react", "sweetalert2", "qrcode"]
     },
     optimizeDeps: {
         // Discover the lazy spreadsheet and its plugins before serving cached dependency URLs.

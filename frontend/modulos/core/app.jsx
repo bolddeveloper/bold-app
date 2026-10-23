@@ -12,6 +12,9 @@ import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
 
 import {lazy, Suspense, useEffect, useState} from "react";
+import {takePhoneEntry, watchPhoneEntry} from "../mensajeria/phone_transfer_api.js";
+const initialPhoneEntry = takePhoneEntry();
+const PhoneUploadPage = lazy(() => import("../mensajeria/phone_upload_page.jsx"));
 import {sheetsCache} from "../hojas/sheets_cache.js";
 const MessagingModule = lazy(() => import("../mensajeria/messaging_module.jsx"));
 const ChannelModule = lazy(() => import("../mensajeria/channel_module.jsx"));
@@ -75,5 +78,10 @@ function ApplicationWorkspace() {
 }
 
 export default function App() {
+    const [phoneEntry, setPhoneEntry] = useState(initialPhoneEntry);
+    useEffect(() => watchPhoneEntry(setPhoneEntry), []);
+    if (phoneEntry) return phoneEntry.link
+        ? <Suspense fallback={<p role="status">Abriendo transferencia…</p>}><PhoneUploadPage key={phoneEntry.link.id} link={phoneEntry.link}/></Suspense>
+        : <main><h1>Vínculo de transferencia no válido</h1><p>Genera un nuevo QR desde Chat o Slack en el ordenador.</p></main>;
     return <CoreProvider loginTitle="Bold" mockIdentity={mockIdentity}><ApplicationWorkspace /></CoreProvider>;
 }

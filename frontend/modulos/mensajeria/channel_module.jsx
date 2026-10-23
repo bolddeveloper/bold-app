@@ -9,6 +9,8 @@ import {useChannelReader} from "./use_channel_reader.js";
 import {dayLabel, enterSends, initials, linkParts} from "./messaging_models.js";
 import {MediaDraft, MessageMedia, VoiceRecorder} from "./message_media.jsx";
 import ImageQueue from "./image_queue.jsx";
+import {Smartphone} from "lucide-react";
+const PhoneTransfer = lazy(() => import("./phone_transfer.jsx"));
 import {appendImages, canReviseFailedImage, captionQueuedImage, replaceQueuedImage} from "./image_queue_model.js";
 import {lockChannelMedia, unlockRejectedChannelMedia} from "./channel_outbox.js";
 import "./messaging.css";
@@ -66,6 +68,7 @@ function ChannelEditor({channel, departments, canCreateIndependent, onClose, onS
 }
 
 export default function ChannelModule() {
+    const [phoneTarget, setPhoneTarget] = useState(null);
     const core = useCore(), shell = useShell();
     const allowed = core.activeAssignment?.chat_enabled === true && !core.securityUncertain;
     const [departments, setDepartments] = useState([]), [channels, setChannels] = useState([]), [channelNext, setChannelNext] = useState(null);
@@ -102,7 +105,7 @@ export default function ChannelModule() {
             let next=appendImages(attachments,files);
             if (next.length===attachments.length) return;
             if (!attachments.length) {next=captionQueuedImage(next,next[0].id,drafts[key] || "");setDrafts(current=>({...current,[key]:""}));}
-            setAttachments(key,next);setActiveImage(next[attachments.length].id);setError("");field.current?.focus();
+            setAttachments(key,next);setActiveImage(next[attachments.length].id);setError("");field.current?.focus();return true;
         } catch(err) {setError(err.message);}
     }
     function readyAudio(file) {
@@ -369,7 +372,7 @@ export default function ChannelModule() {
                     <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden aria-label="Seleccionar imágenes para el canal" disabled={composerLocked || !!edit || pendingMedia} onChange={event=>{addImages(event.target.files);event.target.value="";}}/>
                     <footer><div className="slack_composer_tools">{!edit && <>
                         <button type="button" aria-label="Adjuntar imágenes al canal" disabled={composerLocked || loading || pendingMedia || attachments.some(item=>!item.file.type.startsWith("image/"))} onClick={()=>fileInput.current?.click()}><ImagePlus size={20} aria-hidden="true"/></button>
-                        <VoiceRecorder key={key} disabled={composerLocked || loading || !!attachments.length} onReady={readyAudio} onError={setError} onRecording={setRecording}/>
+                        <button type="button" className="phone_transfer_launch" aria-label="Añadir desde el teléfono" title="Añadir desde el teléfono" disabled={composerLocked || loading || pendingMedia || images.length >= 10 || attachments.some(item=>!item.file.type.startsWith("image/"))} onClick={()=>setPhoneTarget(key)}><Smartphone size={20} aria-hidden="true"/></button><VoiceRecorder key={key} disabled={composerLocked || loading || !!attachments.length} onReady={readyAudio} onError={setError} onRecording={setRecording}/>
                         <button type="button" aria-label="Compartir tarea" disabled={composerLocked || loading || pendingMedia} onClick={()=>setTaskPicker(true)}><CheckCheck size={18} aria-hidden="true"/><span className="slack_tool_label">Compartir tarea</span></button>
                     </>}</div><small id="slack_input_help">{fixedAttempt || pendingMedia ? "Envío sin confirmar: reintentar conserva el archivo y su identificador." : "Enter envía · Mayús+Enter: salto"}</small><button type="submit" className="slack_primary" disabled={sending || recording || loading || !selected.can_send || !(draft.trim() || draftTask || (!edit && attachments.length) || edit?.media) || edit?.conflict}><Send size={18} aria-hidden="true"/>{sending ? "Enviando…" : fixedAttempt || pendingMedia ? "Reintentar" : edit ? "Guardar" : attachments.length>1 ? `Enviar ${attachments.length}` : "Enviar"}</button></footer>
                 </form>
@@ -379,5 +382,6 @@ export default function ChannelModule() {
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}
         {taskPicker && selected && <ChannelTaskPicker channelId={selected.id} onClose={()=>setTaskPicker(false)} onSelect={task=>{setTaskDrafts(current=>({...current,[key]:task}));setTaskPicker(false);field.current?.focus();}}/>}
         {imageEditor && <Suspense fallback={<div role="status" className="slack_editor_scrim">Abriendo editor…</div>}><ImageEditor file={imageEditor.file} onCancel={()=>setImageEditor(null)} onSave={file=>{if(key!==state.current.key || !mounted.current)return;try{setAttachments(key,replaceQueuedImage(attachments,imageEditor.id,file));setImageEditor(null);field.current?.focus();}catch(err){setError(err.message);}}}/></Suspense>}
+        {phoneTarget === key && selected?.can_send && <Suspense fallback={<p role="status">Abriendo transferencia…</p>}><PhoneTransfer key={key} target={{channel_id:selected.id, parent_id:parent?.id || null,max_images:10-images.length}} onFiles={addImages} onClose={()=>setPhoneTarget(null)}/></Suspense>}
     </section>;
 }

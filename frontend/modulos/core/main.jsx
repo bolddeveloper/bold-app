@@ -15,6 +15,7 @@ import "./shared/universal_responsive.css";
 // Module styles are loaded by the entry point, including during local hot reload.
 import "../docs/development_notice.css";
 import "../perfil/shortcut_preferences.css";
+import "../mensajeria/phone_transfer.css";
 
 
 // Mounts the React application into the document root.

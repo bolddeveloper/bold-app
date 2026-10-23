@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-22",
+  "branch": "feature/chat-directo",
+  "base_commit": "649752f8",
+  "delivery": "uncommitted local implementation",
+  "production_changed": false,
+  "pilot_boundary_changed": false,
+  "migration": "0014_phonetransfer_phoneimage",
+  "migration_applied_to_isolated_test_databases": true,
+  "migration_applied_to_production": false,
+  "backend": {"executed": 139, "passed": 133, "skipped_postgresql_concurrency": 6, "failed": 0, "new_phone_tests_passed": 10},
+  "frontend_general": {"executed": 394, "passed": 393, "skipped": 1, "failed": 0},
+  "targeted_frontend_architecture_notes_messaging": {"passed": 63, "failed": 0},
+  "dom_contracts": ["messaging including original multiple-forward focus assertion", "channels", "phone pairing, approval, seal, import and explicit upload"],
+  "build": "passed after final UI edits; existing large-chunk warnings remain",
+  "migration_drift": false,
+  "real_http_browser_acceptance": {
+    "identities": "two fictitious employee accounts plus a restricted phone surface",
+    "drive": "simulated; no real Google credentials or files used",
+    "flow": ["generate QR", "phone claim", "matching code", "desktop approval", "synthetic image upload", "import to draft without posting", "explicit send", "authorized recipient image load"],
+    "automation_file_picker": "returned empty files; validation was retained, synthetic pixels supplied through browser development tooling",
+    "mobile_viewport": {"width": 375, "document_width": 375, "card_width": 343, "measured_button_height": 46},
+    "landscape_viewport": {"width": 812, "height": 375, "document_width": 812},
+    "themes": ["light", "dark"],
+    "same_document_qr_navigation": "passed; no internal application navigation mounted",
+    "physical_camera_or_gallery": "not verified",
+    "real_google_drive_provider": "not verified"
+  },
+  "temporary_browser_tabs_and_servers": "closed after validation",
+  "next_component": "Channel pages and notes: proposed flow recorded in CHAT_PILOTO_IT.md, not implemented"
+}
