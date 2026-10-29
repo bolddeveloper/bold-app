@@ -134,6 +134,11 @@
 .messaging_mine .messaging_bubble:not(:has(.messaging_media)) {border-radius: 18px 18px 8px 18px;}
 .messaging_bubble:not(:has(.messaging_media)) > header {grid-column: 1 / -1; min-height: 20px;}
 .messaging_bubble:not(:has(.messaging_media)) > .messaging_text {min-width: 0; margin: 0; line-height: 1.5;}
+.messaging_bubble:not(:has(.messaging_media)) > .messaging_text {grid-column:1;grid-row:2;}
+.messaging_bubble:not(:has(.messaging_media)) > footer {grid-column:2;grid-row:2;}
+.messaging_bubble > .message_reactions {grid-column:1 / -1;}
+.messaging_bubble:not(:has(.messaging_media)) > .message_reactions {grid-row:3;}
+.messaging_mine .messaging_bubble .message_reactions button:hover:not(:disabled) {background:var(--bold_surface_soft);color:var(--bold_text);border-color:var(--bold_red_dark);}
 .messaging_bubble:not(:has(.messaging_media)) > footer {align-self: end; padding-bottom: 2px; line-height: 1.4; white-space: nowrap;}
 .messaging_mine {flex-direction: row-reverse;}
 .messaging_mine .messaging_bubble {--chat_ink: var(--chat_sent_ink); --chat_meta: var(--chat_sent_meta); --chat_link: var(--chat_sent_link); --chat_read: var(--chat_sent_read); --chat_wave: var(--chat_sent_wave); border-radius: 22px 22px 10px 22px; background: var(--chat_sent);}
@@ -182,6 +187,12 @@
 @keyframes messaging_arrive {from {opacity: .1; transform: translateY(8px);} to {opacity: 1; transform: translateY(0);}}
 .messaging_arriving {animation: messaging_arrive 180ms cubic-bezier(.2,.7,.2,1) both;}
 .messaging_media {min-width: 0; max-width: 100%; margin: 6px 0; display: grid; gap: 6px;}
+.messaging_document {display:grid;gap:8px;min-width:0;padding:12px;border:1px solid var(--bold_line);border-radius:12px;background:var(--bold_surface_soft);color:var(--bold_text);}
+.messaging_document :is(strong,small,p) {overflow-wrap:anywhere;}
+.messaging_document .attachment_download button {min-height:44px;display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:8px 12px;border:1px solid var(--bold_line);border-radius:10px;background:var(--bold_surface);color:var(--bold_text);font:inherit;cursor:pointer;}
+.messaging_document button:disabled {opacity:.6;cursor:wait;}
+.messaging_document button:focus-visible {outline:2px solid currentColor;outline-offset:3px;}
+.messaging_document .attachment_download p {font-size:13px;line-height:1.4;}
 .messaging_media img {display: block; max-width: 100%; width: auto; height: auto; max-height: 320px; object-fit: contain; border-radius: 14px;}
 .messaging_module .messaging_image_open {display: block; padding: 0; border: 0; min-height: 44px; overflow: hidden; border-radius: 14px; background: transparent; cursor: zoom-in;}
 .messaging_image_open img {margin: auto;}
@@ -268,15 +279,17 @@
 .messaging_forward_search {display: grid; gap: 8px; margin-top: 16px; font-size: 14px;}
 .messaging_forward_search > span:last-child {display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bold_surface_soft); border: 1px solid var(--bold_line); border-radius: 14px;}
 .messaging_forward_search input {width: 100%; min-width: 0; min-height: 44px; color: inherit; background: transparent; border: 0; font: inherit; font-size: 16px;}
+.messaging_forward_search > span:last-child:focus-within {outline: 2px solid var(--bold_red); outline-offset: 2px;}
+.messaging_forward_search input:focus-visible {outline: none;}
 .messaging_forward_people {max-height: min(32dvh,280px); overflow-y: auto; margin: 16px 0; padding: 4px; border: 0; overscroll-behavior: contain;}
 .messaging_forward_people legend {font-size: 13px; padding-bottom: 8px;}
 .messaging_forward_person {display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px; border-radius: 14px; cursor: pointer; overflow-wrap: anywhere;}
 .messaging_forward_person:hover, .messaging_forward_person:has(:checked) {background: var(--bold_surface_soft);}
 .messaging_forward_person input {accent-color: var(--bold_red_dark); flex-shrink: 0;}
 .messaging_forward_person > span:last-child {min-width: 0;}
-.messaging_forward_dialog form > footer {display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px;}
-.messaging_forward_dialog form > footer > span {min-width: 0; overflow-wrap: anywhere; font-size: 13px;}
-.messaging_forward_dialog button {flex-shrink: 0;}
+.messaging_forward_dialog form > footer {display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 8px;}
+.messaging_forward_dialog form > footer > span {flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; font-size: 13px;}
+.messaging_forward_dialog button {flex-shrink: 0; min-height: 44px;}
 .messaging_forward_dialog button:hover:not(:disabled), .messaging_forward_person:active {filter: brightness(.96);}
 .messaging_forward_dialog .messaging_primary:hover:not(:disabled) {background: var(--bold_red);}
 .messaging_image_viewer {box-sizing: border-box; width: min(1100px,calc(100vw - 24px)); height: min(820px,calc(100dvh - 24px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--bold_line); border-radius: 24px; background: var(--bold_surface); color: var(--bold_text); overflow: hidden; box-shadow: 0 20px 80px #0006;}
@@ -373,3 +386,12 @@
     .messaging_composer.messaging_preparing_images {display: flex;}
 }
 @media (prefers-reduced-motion: reduce) {.messaging_module {transition: none;} .messaging_spin, .messaging_arriving {animation: none;}}
+.messaging_upload_status {display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;min-width:0;padding:.5rem .75rem;}
+.messaging_upload_status p {flex:1 1 14rem;margin:0;overflow-wrap:anywhere;}
+.messaging_upload_status button {min-height:44px;flex:0 0 auto;}
+/* Recovery notices + an attachment can exceed a small viewport. Keep every
+   composer control reachable instead of clipping it at the module boundary. */
+@media (max-width:767px), (max-height:550px) {
+    .messaging_conversation {overflow-y:auto;overscroll-behavior:contain;}
+    .messaging_conversation > .messaging_hint {margin:4px 12px;flex-shrink:0;}
+}

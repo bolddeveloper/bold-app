@@ -24,7 +24,7 @@ class PageTemplateTests(TestCase):
 
     def test_builtin_and_channel_templates_create_independent_pages_with_fresh_blocks(self):
         listed=self.client.get(self.templates)
-        self.assertEqual(len(listed.data["builtins"]),3)
+        self.assertEqual({row['id'] for row in listed.data['builtins']},{'builtin-meeting','builtin-brief','builtin-weekly','builtin-process','builtin-delivery','builtin-handoff'})
         source=self.create()
         for identity in ("builtin-meeting",source["id"]):
             result=self.client.post(self.templates+identity+"/pages/",{"client_id":str(uuid.uuid4())},format="json")
@@ -32,6 +32,17 @@ class PageTemplateTests(TestCase):
             self.assertNotEqual(result.data["id"],self.page["id"])
             self.assertNotIn(self.page["blocks"][0]["id"],[row["id"] for row in result.data["blocks"]])
         self.assertEqual(ChannelPage.objects.count(),3)
+
+    def test_process_starters_are_immutable_independent_copies_with_idempotent_creation(self):
+        for identity in ('builtin-process','builtin-delivery','builtin-handoff'):
+            detail=self.templates+identity+'/'
+            source=self.client.get(detail);self.assertEqual(source.status_code,200,source.data)
+            self.assertFalse(source.data['can_update']);self.assertFalse(source.data['can_manage'])
+            token={'client_id':str(uuid.uuid4())};first=self.client.post(detail+'pages/',token,format='json')
+            self.assertEqual(first.status_code,201,first.data);self.assertEqual(self.client.post(detail+'pages/',token,format='json').data['id'],first.data['id'])
+            self.assertEqual(self.client.patch(detail,{'version':1,'name':'No alterar el catálogo'},format='json').status_code,404)
+            self.assertFalse({row['id'] for row in source.data['blocks']} & {row['id'] for row in first.data['blocks']})
+            self.assertEqual(self.client.get(detail).data,source.data)
 
     def test_capture_and_instantiation_retry_are_idempotent_even_if_template_changes(self):
         row=self.create()

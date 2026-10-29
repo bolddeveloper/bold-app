@@ -16,3 +16,5 @@ frontend/modulos/core/.vite-local/
 **/node_modules/
 **/.vite/
 **/.vite-local/
+**/__pycache__/
+*.py[cod]

@@ -61,3 +61,31 @@ test("page API bounds identifiers and preserves pagination context and revision 
     assert.throws(()=>api.get("../x",pageId));assert.throws(()=>api.revision(channel,pageId,0));
     await api.save(channel,pageId,{version:1});assert.equal(calls.at(-1)[1].timeoutMs,15000);assert.equal(calls.at(-1)[1].method,"PUT");
 });
+test('page mention lookup bounds the query and both nested identities',async()=>{
+    const calls=[],api=createPageApi({request:async(...args)=>{calls.push(args);return {};}});
+    await api.mentionPeople(channel,pageId,' Persona & correo ',{signal:'current'});
+    assert.equal(calls[0][0],`/api/v2/messaging/channels/${channel}/pages/${pageId}/mention-people/?q=Persona+%26+correo`);
+    assert.equal(calls[0][1].signal,'current');
+    assert.throws(()=>api.mentionPeople('../outside',pageId,'persona'));
+    assert.throws(()=>api.mentionPeople(channel,'../outside','persona'));
+    assert.throws(()=>api.mentionPeople(channel,pageId,'x'));
+    assert.throws(()=>api.mentionPeople(channel,pageId,'x'.repeat(81)));
+});
+
+test('page hierarchy preserves parent, archive and search cursor scope',async()=>{
+    const calls=[],api=createPageApi({request:async(...args)=>{calls.push(args);return {};}});
+    const root=`/api/v2/messaging/channels/${channel}/pages/`;
+    await api.branch(channel,null,true,`${root}?parent=root&archived=true&cursor=next`);
+    assert.equal(calls.at(-1)[0],root+'?parent=root&archived=true&cursor=next');
+    assert.throws(()=>api.branch(channel,pageId,true,`${root}?parent=root&archived=true&cursor=next`));
+    assert.throws(()=>api.branch(channel,null,false,`${root}?parent=root&archived=true&cursor=next`));
+    assert.throws(()=>api.branch(channel,'../other',false));
+    await api.parents(channel,pageId,'Equipo',`${root}${pageId}/parent-options/?q=Equipo&cursor=next`);
+    assert.match(calls.at(-1)[0],/parent-options\/\?q=Equipo&cursor=next$/);
+    assert.throws(()=>api.parents(channel,pageId,'Otro',`${root}${pageId}/parent-options/?q=Equipo&cursor=next`));
+    assert.throws(()=>api.parents(channel,pageId,'x'.repeat(81)));
+    const move={version:2,parent_id:null,client_id:'same'};
+    await api.move(channel,pageId,move,{signal:'active'});
+    assert.equal(calls.at(-1)[1].method,'PUT');assert.equal(calls.at(-1)[1].body,move);assert.equal(calls.at(-1)[1].signal,'active');
+    assert.match(calls.at(-1)[0],/\/structure\/$/);
+});

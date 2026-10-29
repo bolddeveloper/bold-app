@@ -5,6 +5,7 @@ import uuid
 from pycrdt import Array, Doc, Map, Text
 from rest_framework.exceptions import ValidationError
 from .page_content import ICONS, validate_blocks
+from .page_formatting import read_text, seed_formats
 
 MAX_UPDATE_BYTES = 262144
 MAX_STATE_BYTES = 4 * 1024 * 1024
@@ -37,10 +38,12 @@ def seed_document(page):
         doc["meta"]["icon"] = page.icon
         for block in page.blocks:
             # No task_id, task title or authorized projection can enter Yjs state.
-            values = {key: value for key, value in block.items() if key not in {"id", "task_id", "task"}}
+            values = {key: value for key, value in block.items() if key not in {"id", "task_id", "task", "page_id", "page", "formats"}}
             if "text" in values:
                 values["text"] = Text(values["text"])
             doc["blocks"][block["id"]] = Map(values)
+            if block.get('formats'):
+                seed_formats(doc['blocks'][block['id']]['text'],block['text'],block['formats'])
             doc["order"].append(block["id"])
     return doc
 
@@ -73,7 +76,8 @@ def document_delta(doc, state):
 def document_content(doc, page, assignment, request, references=None):
     if set(doc) != {"title", "meta", "blocks", "order"} or set(doc["meta"]) != {"icon"}:
         raise ValidationError("La estructura del documento no es válida.")
-    title, icon = str(doc["title"]), doc["meta"].get("icon")
+    title, _ = read_text(doc['title'],plain=True)
+    icon = doc["meta"].get("icon")
     if len(title) > 160 or icon not in ICONS:
         raise ValidationError("El título admite 160 caracteres y un icono del catálogo.")
     blocks, order = doc["blocks"], doc["order"].to_py()
@@ -81,7 +85,7 @@ def document_content(doc, page, assignment, request, references=None):
         raise ValidationError("La página admite hasta 200 bloques.")
     refs = references or {}
     if not isinstance(refs, dict) or len(refs) > 200:
-        raise ValidationError("Referencias a tareas no válidas.")
+        raise ValidationError("Referencias protegidas no válidas.")
     # Concurrent moves can put a block ID twice in the shared order. Taking its
     # first occurrence is deterministic on every replica and never duplicates it.
     identities = list(dict.fromkeys(order + sorted(set(blocks) - set(order))))
@@ -102,15 +106,21 @@ def document_content(doc, page, assignment, request, references=None):
         # Preserve strict REST validation while accepting integral CRDT levels.
         if type(row.get("level")) is float and row["level"] in (1.0, 2.0, 3.0):
             row["level"] = int(row["level"])
-        if set(row) - {"type", "text", "checked", "level"}:
+        if set(row) - {"type", "text", "checked", "level", "language"}:
             raise ValidationError("El estado compartido contiene campos no admitidos.")
         if "text" in row and not isinstance(shared["text"], Text):
             raise ValidationError("El texto debe conservar su tipo colaborativo.")
+        if 'text' in row:
+            text,formats=read_text(shared['text'],plain=row.get('type') in ('code','page'))
+            row['text']=text
+            if formats:row['formats']=formats
         row["id"] = identity
         if row.get("type") == "task" and identity in refs:
             row["task_id"] = refs[identity]
+        if row.get('type')=='page' and identity in refs:
+            row['page_id']=refs[identity]
         values.append(row)
-    if set(refs) - {row["id"] for row in values if row["type"] == "task"}:
+    if set(refs) - {row["id"] for row in values if row["type"] in ("task", "page")}:
         raise ValidationError("Las referencias no pertenecen a los bloques de esta página.")
     normalized = validate_blocks(values, assignment, request, page.blocks)
     state = doc.get_update()

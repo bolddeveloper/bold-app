@@ -1,0 +1,20 @@
+.messaging_mention {font-weight:700;background:color-mix(in srgb,var(--bold_red) 13%,var(--bold_surface));color:inherit;border-radius:6px;padding:1px 3px;overflow-wrap:anywhere;}
+.messaging_mine .messaging_mention {background:color-mix(in srgb,currentColor 12%,transparent);}
+.messaging_module:has(>.slack_mention_scrim) {position:relative;}
+.slack_mention_scrim {position:absolute;inset:0;display:grid;place-items:center;padding:20px;background:rgb(0 0 0 / 55%);z-index:4;}
+.slack_mention_picker {--slack_muted:color-mix(in srgb,var(--bold_text) 76%,var(--bold_surface));box-sizing:border-box;max-height:100%;overflow-y:auto;width:min(100%,500px);padding:24px;background:var(--bold_surface);color:var(--bold_text);border:1px solid var(--bold_line);border-radius:20px;box-shadow:0 20px 70px rgb(0 0 0 / 25%);}
+.slack_mention_picker header {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
+.slack_mention_picker h2 {margin:0;font-size:19px;}
+.slack_mention_picker>p {font-size:13px;line-height:1.5;color:var(--slack_muted);margin:0;}
+.slack_mention_picker :is(button,input) {font:inherit;color:inherit;min-height:44px;border:1px solid var(--bold_line);border-radius:12px;background:var(--bold_surface);padding:8px 12px;}
+.slack_mention_picker button {display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;}
+.slack_mention_picker button:disabled {opacity:.55;cursor:not-allowed;}
+.slack_mention_picker button:hover:not(:disabled) {background:var(--bold_surface_soft);}
+.slack_mention_picker :is(input,button):focus-visible {outline:2px solid var(--bold_red_dark);outline-offset:3px;}
+.slack_mention_picker .slack_task_search {display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:18px 0;}
+.slack_mention_picker .slack_task_search label {display:grid;gap:6px;font-size:13px;font-weight:600;flex:1 1 180px;min-width:0;}
+.slack_mention_picker input {box-sizing:border-box;width:100%;min-width:0;}
+.slack_mention_picker .slack_task_results {list-style:none;padding:0;margin:12px 0;display:grid;gap:8px;}
+.slack_mention_picker .slack_task_results button {width:100%;text-align:left;justify-content:flex-start;}
+.slack_mention_picker .slack_task_results span {display:grid;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;}
+.slack_mention_picker small {color:var(--slack_muted);}

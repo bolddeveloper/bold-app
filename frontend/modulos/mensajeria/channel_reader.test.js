@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createChannelReader} from "./channel_reader.js";
+import {createChannelReader,visibleChannelBounds} from "./channel_reader.js";
 import {mergeChannelDetails} from "./channel_api.js";
+
+test('read visibility intersects the device viewport and every clipping scroll ancestor',()=>{
+    const outer={getBoundingClientRect:()=>({top:100,bottom:400}),parentElement:null};
+    const inner={getBoundingClientRect:()=>({top:80,bottom:600}),parentElement:outer};
+    const host={getBoundingClientRect:()=>({top:50,bottom:700}),parentElement:inner};
+    const style=node=>({overflowY:node===inner ? 'auto':'hidden'});
+    assert.deepEqual(visibleChannelBounds(host,{height:375,style}),{top:100,bottom:375});
+    outer.getBoundingClientRect=()=>({top:-200,bottom:-10});
+    const clipped=visibleChannelBounds(host,{height:375,style});assert.ok(clipped.bottom<=clipped.top,'an offscreen root cannot acknowledge its children');
+    assert.deepEqual(visibleChannelBounds(host,{height:375,style:()=>({overflowY:'visible'})}),{top:50,bottom:375});
+});
 
 test("observed channel reads coalesce monotonically without acknowledging another view",async()=>{
     let release,calls=[],seen=[];

@@ -1,3 +1,4 @@
+import {newestReactions} from './reaction_model.js';
 export const initials = name => (name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 export const normalizeQuery = text => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
 
@@ -29,6 +30,7 @@ export function mergeMessages(current, incoming) {
         // erase a confirmed delivery/read state or an already-edited body.
         newer.delivered_at = old.delivered_at || row.delivered_at || null;
         newer.read_at = old.read_at || row.read_at || null;
+        if(old.reactions || row.reactions)newer.reactions = newestReactions(old.reactions,row.reactions);
         rows.set(row.id, newer);
     }
     return [...rows.values()].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id));
@@ -62,15 +64,16 @@ export function dayLabel(date, now = new Date()) {
 export function messageError(error) {
     const detail = error?.fields?.detail;
     if (error?.status === 409) return typeof detail === "string" ? `${detail} Conservamos tu texto y los adjuntos.` : "El mensaje cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a editar o enviar.";
-    if (error?.status === 429) return "Has realizado varias acciones seguidas. Conservamos tu texto; espera un momento antes de reintentar.";
+    if (error?.status === 429) return typeof detail === "string" && detail.length <= 400 ? `${detail} Conservamos tu texto y los adjuntos.` : "Has realizado varias acciones seguidas. Conservamos tu texto; espera un momento antes de reintentar.";
     if (error?.status === 404) return "Esta conversación no está disponible para tu cuenta.";
+    if (error?.status === 507) return typeof detail === "string" && detail.length <= 400 ? detail : "Se alcanzó la capacidad configurada de archivos. No descartes tu borrador; solicita revisar el almacenamiento antes de iniciar otro envío.";
     if (error?.status >= 500 || error?.status === 0) return "No se pudo confirmar la operación. Conservamos tu texto. Actualiza para comprobar si se guardó antes de reintentar.";
     if (typeof detail === "string") return detail;
     if (error?.status === 400) {
         const fields = error.fields;
         const messages = Array.isArray(fields) ? fields : [fields?.detail, fields?.file, fields?.body, fields?.non_field_errors].flat();
         const safe = messages.find(value => typeof value === "string" && value.length <= 400);
-        return safe || "Escribe hasta 5.000 caracteres o adjunta una imagen o nota de voz de hasta 10 MB. El destinatario debe tener una cuenta activa.";
+        return safe || "Escribe hasta 5.000 caracteres o adjunta un archivo permitido de hasta 10 MB (TXT/CSV: 2 MB). El destinatario debe tener una cuenta activa.";
     }
     return "No se pudo completar la acción. Conservamos tu texto; puedes volver a intentarlo.";
 }

@@ -25,10 +25,14 @@ def person_data(employee):
 
 def message_data(message, actor_id, now):
     from .media import media_data
+    from .personal_data import saved_data
+    from .mentions import message_mentions
+    from .reactions import reaction_data
     return {"id": str(message.pk), "conversation_id": str(message.conversation_id),
             "author_id": str(message.author_id), "client_id": str(message.client_id),
-            "body": message.body, "created_at": message.created_at,
+            "body": message.body, "mentions": message_mentions(message, "direct"), "reactions":reaction_data(message, "direct", actor_id), "created_at": message.created_at,
             "edited_at": message.edited_at, "version": message.version,
             "editable_until": message.editable_until,
             "can_edit": str(message.author_id) == str(actor_id) and now < message.editable_until,
-            "delivered_at": message.delivered_at, "read_at": message.read_at, "media": media_data(message)}
+            "delivered_at": message.delivered_at, "read_at": message.read_at, "media": media_data(message),
+            **saved_data(message, "direct", actor_id)}

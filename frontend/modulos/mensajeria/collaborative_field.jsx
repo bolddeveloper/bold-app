@@ -7,7 +7,7 @@ export default function CollaborativeField({as="textarea",field,peers=[],editorR
     const points=[...new Set([0,value.length,...ranges.flatMap(peer=>[peer.range.start,peer.range.end].map(index=>Math.min(value.length,Math.max(0,index))))])].sort((a,b)=>a-b);
     const Control=as;
     const cursor=index=>ranges.filter(peer=>peer.range.end===index).map(peer=><span key={peer.connection} className="slack_collab_caret" style={{"--peer-color":peerColor(peer.person.employee_id)}} title={peer.person.name}><span>{peer.person.name.split(" ")[0]}</span></span>);
-    return <div className={`slack_collab_field ${as==="input" ? "is_title":""}`}><Control {...props} ref={input} data-page-field={field} onChange={onChange}
+    return <div className={`slack_collab_field ${as==='input' ? 'is_single_line':''} ${as==="input" && field==='title' ? "is_title":""}`}><Control {...props} ref={input} data-page-field={field} onChange={onChange}
         onSelect={event=>editorRef.current?.select?.(field,event.currentTarget.selectionStart,event.currentTarget.selectionEnd)}
         onCompositionStart={()=>editorRef.current?.beginComposition?.(field)} onCompositionEnd={event=>editorRef.current?.endComposition?.(field,event.currentTarget.value)}
         onScroll={event=>{if(mirror.current)mirror.current.style.transform=`translate(${-event.currentTarget.scrollLeft}px,${-event.currentTarget.scrollTop}px)`;}}/>

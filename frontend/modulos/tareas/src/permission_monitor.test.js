@@ -29,6 +29,20 @@ function harness(options = {}) {
 }
 const query = { assignmentId: "mine", permissionCode: "tasks.task.read", unitId: "unit" };
 
+test('first revision with an in-flight decision invalidates it without treating cold start as revocation',async()=>{
+    let release;
+    const cache=createPermissionCache({authorize:()=>new Promise(resolve=>{release=resolve;})});
+    const pending=cache.can(query),events=[];
+    const h=harness({cache,onInvalidate:detail=>events.push(detail)});
+    await flush();
+    assert.equal(events.length,1);
+    assert.equal(events[0].authorizationChanged,false,'initial baseline must preserve encrypted drafts');
+    release({allowed:true,policy_revision:1});assert.equal(await pending,false,'old in-flight allowance remains invalidated');
+    h.control({revision:2,state:'changed',force:true});
+    assert.equal(events.at(-1).authorizationChanged,true,'actual policy changes still purge drafts');
+    h.monitor.dispose();
+});
+
 test("authenticated control cuts the stable-hour revision budget from 720 to 60", async () => {
     const h = harness(); await flush(); h.control();
     for (let i = 0; i < 120; i++) { await h.advance(30000); h.control(); }
@@ -64,9 +78,19 @@ test("lost/half-open control blocks cached capabilities until verification succe
     assert.equal(h.monitor.snapshot().intervalMs, 5000);
     assert.equal(await h.cache.can(query), false);
     assert.equal(h.events[0].uncertain, true);
+    assert.equal(h.events[0].authorizationChanged,false);
     resolve({ revision: 1, state: "one" }); await flush();
     assert.equal(h.monitor.snapshot().uncertain, false);
     assert.equal(h.events.at(-1).uncertain, false);
+    assert.equal(h.events.at(-1).authorizationChanged,false,"reconnecting with unchanged policy is not a revocation");
+    h.monitor.dispose();
+});
+
+test("actual policy changes are distinguished from transport-only recovery",async()=>{
+    const h=harness();await flush();h.control();h.monitor.disconnected();
+    assert.equal(h.events.at(-1).authorizationChanged,false);
+    h.control({revision:2,state:"changed",force:true});
+    assert.equal(h.events.at(-1).authorizationChanged,true);
     h.monitor.dispose();
 });
 test("temporal deadline is enforced locally even if the expiry event is delayed", async () => {

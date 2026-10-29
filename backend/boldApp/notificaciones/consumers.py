@@ -269,6 +269,18 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             self.security_task.cancel()
         await self.close(code=4401)
 
+    async def messaging_reminder_changed(self, event):
+        if self.closing or not await chat_assignment_is_allowed(self.assignment_id):
+            return
+        if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
+            await self.close(code=4403)
+            return
+        from boldApp.mensajeria.reading_reminders import reading_event
+        envelope = await database_sync_to_async(reading_event)(self.assignment_id, self.session_id, event)
+        if envelope and await notification_identity_is_active(self.session_id, self.assignment_id) and await chat_assignment_is_allowed(self.assignment_id):
+            await self.send_json(envelope)
+
     async def messaging_changed(self, event):
         if self.closing:
             return
@@ -281,6 +293,15 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         from boldApp.mensajeria.events import private_event
         envelope = await database_sync_to_async(private_event)(self.employee_id, event)
         if envelope:
+            await self.send_json(envelope)
+
+    async def messaging_upload_changed(self,event):
+        if self.closing or not await chat_assignment_is_allowed(self.assignment_id):return
+        if not await notification_identity_is_active(self.session_id,self.assignment_id):
+            self.closing=True;await self.close(code=4403);return
+        from boldApp.mensajeria.upload_events import upload_event
+        envelope=await database_sync_to_async(upload_event)(self.assignment_id,self.session_id,event)
+        if envelope and await notification_identity_is_active(self.session_id,self.assignment_id) and await chat_assignment_is_allowed(self.assignment_id):
             await self.send_json(envelope)
 
     async def slack_changed(self, event):

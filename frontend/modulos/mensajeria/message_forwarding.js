@@ -24,17 +24,19 @@ export function createForwardBatch(sources) {
 }
 
 // This is a serial, resumable batch, not an all-or-nothing server transaction.
-export async function forwardMessageBatch(batch, employeeId, forward, {signal, onConfirmed, onProgress} = {}) {
+export async function forwardMessageBatch(batch, employeeId, forward, {signal, onConfirmed, onProgress, checkpoint=async()=>{}} = {}) {
     if (batch.employeeId && batch.employeeId !== employeeId) throw new Error("El destinatario no puede cambiar durante un reintento del lote.");
     if (batch.running) return batch.running;
     signal?.throwIfAborted(); batch.employeeId = employeeId;
     batch.running = (async () => {
+        await checkpoint(); signal?.throwIfAborted();
         while (batch.pending.length) {
             signal?.throwIfAborted();
-            onProgress?.({current:batch.confirmed + 1, total:batch.total});
+            onProgress?.({current:batch.confirmed + (batch.discarded || 0) + 1, total:batch.total});
             const source = batch.pending[0];
             const result = await forward(source, employeeId, {signal});
             batch.pending.shift(); batch.confirmed++;
+            await checkpoint();
             if (!signal?.aborted) onConfirmed?.(result, source);
         }
         return {confirmed:batch.confirmed, total:batch.total};
@@ -42,17 +44,17 @@ export async function forwardMessageBatch(batch, employeeId, forward, {signal, o
     try {return await batch.running;} finally {batch.running = null;}
 }
 
-// Session-local retries. Do not expose a Drive id, source chat link or author to
-// the destination. The server authorizes both media downloads and new sends.
-export function createMessageForwarder(api, makeId = () => crypto.randomUUID()) {
-    const pending = new Map(), destinations = new Map();
+// By default session-local; durable reviews supply their private attempt map
+// and mandatory checkpoint. Never export a Drive ID, source chat link or author.
+export function createMessageForwarder(api, makeId = () => crypto.randomUUID(), {pending=new Map(),checkpoint=async()=>{},revalidate=false}={}) {
+    const destinations = new Map();
     return async function forward(source, employeeId, {signal} = {}) {
         if (!canForward(source)) throw new Error("Solo se pueden reenviar mensajes de texto e imágenes.");
         const key = `${source.conversation_id}:${source.id}:${source.version}:${employeeId}`;
         let attempt = pending.get(key);
         if (!attempt) {
             if (pending.size >= 20) throw new Error("Confirma los reenvíos pendientes antes de iniciar más.");
-            attempt = {id: makeId(), body: source.body || "", source: {...source, media: source.media && {...source.media}}};
+            attempt = {id: makeId(), body: source.body || "", source: snapshot(source)};
             pending.set(key, attempt);
         }
         if (attempt.running) return attempt.running;
@@ -67,6 +69,19 @@ export function createMessageForwarder(api, makeId = () => crypto.randomUUID()) 
                 signal?.throwIfAborted(); destinations.set(employeeId, conversation);
             }
             signal?.throwIfAborted();
+            if(attempt.destinationId && attempt.destinationId!==conversation.id)throw Error("El destino del reenvío no coincide. Conservamos el intento para revisarlo.");
+            attempt.destinationId=conversation.id;
+            if(revalidate){
+                const current=await api.message(attempt.source.conversation_id,attempt.source.id,{signal});
+                signal?.throwIfAborted();
+                if(!current?.message || current.message.id!==attempt.source.id)throw Error("No se pudo verificar el mensaje de origen.");
+                if(!attempt.writeStarted && current.message.version!==attempt.source.version)throw Error("El mensaje de origen cambió. Descarta esta revisión y selecciona su versión actual.");
+                if(attempt.writeStarted){
+                    const published=await api.resolveIntent(conversation.id,attempt.id,{signal});
+                    signal?.throwIfAborted();
+                    if(published?.message){pending.delete(key);return {...published,conversation};}
+                }
+            }
             if (attempt.source.media && !attempt.file) {
                 const blob = await api.media(attempt.source.conversation_id, attempt.source.id, {signal});
                 signal?.throwIfAborted();
@@ -77,6 +92,9 @@ export function createMessageForwarder(api, makeId = () => crypto.randomUUID()) 
             }
             signal?.throwIfAborted();
             attempt.writeStarted = true;
+            // Durable callers must protect the immutable nonce AND actual file
+            // bytes before any message/upload request can reach the server.
+            await checkpoint();signal?.throwIfAborted();
             const result = attempt.file
                 ? await api.sendMedia(conversation.id, attempt.body, attempt.id, attempt.file, {signal})
                 : await api.send(conversation.id, attempt.body, attempt.id, {signal});

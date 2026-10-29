@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import os from 'node:os';
+import {JSDOM} from 'jsdom';
+import {createServer} from 'vite';
+const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost:5192',pretendToBeVisual:true});
+globalThis.BroadcastChannel=undefined;
+for(const key of ['window','document','navigator','HTMLElement','HTMLInputElement','HTMLTextAreaElement','Event','KeyboardEvent','CustomEvent'])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
+const server=await createServer({configFile:false,plugins:[{name:'format-fixture',enforce:'pre',transform(_,id){if(id.replaceAll('\\','/').endsWith('/core/core_provider.jsx'))return 'export const useCore=()=>({account:{id:"synthetic"},activeAssignment:{id:"it",chat_enabled:true},authorizationRevision:1});';}}],resolve:{dedupe:['react','react-dom','lucide-react']},esbuild:{jsx:'automatic',jsxImportSource:'react'},cacheDir:path.join(os.tmpdir(),'bold-page-formats-ui'),optimizeDeps:{noDiscovery:true,include:[],entries:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
+const {default:React}=await import('react'),{createRoot}=await import('react-dom/client');
+const load=file=>server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll('\\','/')}`);
+const {pageApi}=await load('../mensajeria/page_api.js'),{default:Pages}=await load('../mensajeria/channel_pages.jsx'),{protectPrivateWork}=await load('./shared/private_work.js');
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,root=createRoot(document.getElementById('root'));
+let page={id:id(2),title:'Guía',icon:'note',version:1,can_edit:true,can_manage:true,updated_at:'2026-10-29T12:00:00Z',updated_by:'Ficticio',blocks:[{id:id(3),type:'paragraph',text:'Acuerdo de prueba'}]},denied=0;
+Object.assign(pageApi,{branch:async()=>({results:[page],next:null,can_create:true}),structure:async()=>({ancestors:[],parent_id:null,structure_version:1}),get:async()=>structuredClone(page),save:async(_,__,values)=>{page={...page,...values,version:page.version+1};return structuredClone(page);}});
+const pause=()=>new Promise(resolve=>setTimeout(resolve,25)),waitFor=async predicate=>{const end=Date.now()+5000;while(!predicate() && Date.now()<end)await pause();assert.ok(predicate(),'expected page formatting UI state');};
+const button=text=>[...document.querySelectorAll('button')].find(node=>node.textContent===text),aria=text=>document.querySelector(`[aria-label="${text}"]`);
+const input=(node,value)=>{Object.getOwnPropertyDescriptor(node.tagName==='TEXTAREA' ? HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));};
+try{
+    root.render(React.createElement(Pages,{channel:{id:id(1),can_send:true},onDirty(){},onDenied(){denied++;},onTask(){},onShared(){}}));
+    await waitFor(()=>document.querySelector('.slack_page_list nav button'));document.querySelector('.slack_page_list nav button').click();await waitFor(()=>aria('Texto 1'));
+    const text=aria('Texto 1');text.focus();text.setSelectionRange(0,7);document.querySelector('.slack_page_format_controls summary').click();await pause();aria('Negrita').click();await waitFor(()=>document.querySelector('.slack_page_formatted_preview strong'));
+    assert.equal(document.querySelector('.slack_page_formatted_preview strong').textContent,'Acuerdo');assert.equal(text.value,'Acuerdo de prueba','no Markdown source markers');
+    aria('Cursiva').click();await waitFor(()=>document.querySelector('.slack_page_formatted_preview em'));assert.equal(document.querySelector('.slack_page_formatted_preview em').textContent,'Acuerdo');
+    aria('Tachado').click();await waitFor(()=>document.querySelector('.slack_page_formatted_preview s'));assert.equal(document.querySelector('.slack_page_formatted_preview s').textContent,'Acuerdo');
+    aria('Código en línea').click();await waitFor(()=>document.querySelector('.slack_page_formatted_preview code'));assert.equal(document.querySelector('.slack_page_formatted_preview code').textContent,'Acuerdo');
+    text.setSelectionRange(8,10);aria('Enlace externo con alias').click();await waitFor(()=>document.querySelector('.slack_page_external_link'));
+    const url=document.querySelector('input[type=url]'),alias=document.querySelector('.slack_page_external_link input:not([type=url])');
+    input(url,'javascript:alert(1)');document.querySelector('.slack_page_external_link form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>document.querySelector('.slack_page_external_link [role=alert]'));assert.equal(text.value,'Acuerdo de prueba');
+    input(url,'https://bold.gt/proceso');input(alias,'procedimiento');await pause();assert.equal(await protectPrivateWork(),false,'unapplied alias changes must warn before PWA reload');button('Aplicar enlace').click();await waitFor(()=>!document.querySelector('.slack_page_external_link'));
+    await waitFor(()=>text.value==='Acuerdo procedimiento prueba' && document.activeElement===text);assert.equal(text.selectionStart,8);assert.equal(text.selectionEnd,21);
+    button('Vista previa').click();await waitFor(()=>document.querySelector('.slack_page_read a'));const link=document.querySelector('.slack_page_read a');assert.equal(link.textContent,'procedimiento');assert.equal(link.href,'https://bold.gt/proceso');assert.equal(link.rel,'noopener noreferrer');assert.equal(document.querySelector('.slack_page_read strong').textContent,'Acuerdo');
+    button('Editar').click();await waitFor(()=>aria('Texto 1'));button('Código').click();await waitFor(()=>aria('Código 2'));input(aria('Código 2'),'<img src=x onerror=alert(1)> https://bold.gt @person@bold.gt');const language=document.querySelector('.slack_page_code_language select');language.value='html';language.dispatchEvent(new Event('change',{bubbles:true}));
+    await waitFor(()=>document.querySelector('.slack_page_save').textContent==='Guardado');button('Vista previa').click();await waitFor(()=>document.querySelector('.slack_page_code'));
+    assert.equal(document.querySelector('.slack_page_code img'),null);assert.equal(document.querySelector('.slack_page_code a'),null);assert.match(document.querySelector('.slack_page_code').textContent,/HTML/);assert.match(document.querySelector('.slack_page_code code').textContent,/<img/);
+    page.can_edit=false;window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{channel_id:id(1),kind:'page.title_changed'}}}));await waitFor(()=>document.body.textContent.includes('Tienes acceso de solo lectura'));assert.equal(document.querySelector('.slack_page_format_controls'),null);assert.equal(denied,0);
+    console.log('Page formatting UI passed: selected text controls, no source markup, unsafe link refusal, alias insertion/focus, PWA warning, literal code/language and read-only permissions.');
+}finally{root.unmount();await server.close();dom.window.close();}

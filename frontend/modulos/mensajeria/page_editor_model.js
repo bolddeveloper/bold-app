@@ -1,5 +1,5 @@
 const copy=value=>JSON.parse(JSON.stringify(value));
-export const documentContent=page=>({title:page.title,icon:page.icon,blocks:(page.blocks || []).map(({task,...row})=>row)});
+export const documentContent=page=>({title:page.title,icon:page.icon,blocks:(page.blocks || []).map(({task,page:linkedPage,...row})=>row)});
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
 // One request in flight, immutable retry receipts and explicit revision conflicts.

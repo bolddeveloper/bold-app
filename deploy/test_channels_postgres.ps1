@@ -1,22 +1,28 @@
 <#
 Local-only PostgreSQL validation. No service installation, cloud or production
 credentials. Obtain portable binaries from the official EDB page linked by
-postgresql.org. ValidationRoot must be an exclusive direct child of Temp.
+postgresql.org. ValidationRoot must be an exclusive direct child of Temp or
+LOCALAPPDATA/BOLDApp/validation (persistent Google acceptance only).
 Generated test credentials stay in an ACL-restricted file outside the repo.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$ValidationRoot,
     [ValidateRange(1024,65535)][int]$Port = 55432,
-    [ValidateSet('Test','PrepareStaging','RunStaging')][string]$Action = 'Test'
+    [ValidateSet('Test','PrepareStaging','RunStaging')][string]$Action = 'Test',
+    [string[]]$TestLabels = @('boldApp.mensajeria','boldApp.notificaciones.tests.test_notifications','boldApp.core.tests.test_authorization','boldApp.tareas.tests.test_task_collaboration')
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+$allowedParents = @($tempRoot)
+if ($env:LOCALAPPDATA -and [IO.Path]::IsPathFullyQualified($env:LOCALAPPDATA)) {
+    $allowedParents += [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'BOLDApp\validation')).TrimEnd('\')
+}
 $validationPath = (Resolve-Path -LiteralPath $ValidationRoot).Path.TrimEnd('\')
-if ((Split-Path -Parent $validationPath) -ne $tempRoot -or
+if ((Split-Path -Parent $validationPath) -notin $allowedParents -or
     (Split-Path -Leaf $validationPath) -notmatch '^bold-channel-postgres-[a-f0-9]{32}$') {
-    throw 'ValidationRoot must be an exclusive bold-channel-postgres-<uuid> directory directly under Temp.'
+    throw 'ValidationRoot must be an exclusive bold-channel-postgres-<uuid> directory directly under Temp or LOCALAPPDATA/BOLDApp/validation.'
 }
 $pgBin = Join-Path $validationPath 'pgsql\bin'
 $pgData = Join-Path $validationPath 'data'
@@ -53,10 +59,15 @@ if (([IO.File]::ReadAllText((Join-Path $pgData 'PG_VERSION'))).Trim() -ne '18') 
     throw 'Validation requires PostgreSQL major version 18, matching compose.oracle.yaml.'
 }
 $previousPgPassword = $env:PGPASSWORD
+$previousPgEncoding = $env:PGCLIENTENCODING
 $previousTestUrl = $env:BOLD_TEST_DATABASE_URL
 $previousStagingDir = $env:BOLD_CHANNEL_STAGING_DIR
 $started = $false
 try {
+    # Portable Windows distributions may omit legacy code-page conversion DLLs.
+    # The isolated database and the test output are UTF-8; do not infer WIN1252
+    # from the interactive console or change the developer's permanent settings.
+    $env:PGCLIENTENCODING = 'UTF8'
     & (Join-Path $pgBin 'pg_ctl.exe') -D $pgData -l (Join-Path $validationPath 'postgres.log') -w -t 25 -o "-h 127.0.0.1 -p $Port -c max_connections=30 -c shared_buffers=32MB" start
     Assert-NativeSuccess 'pg_ctl start'
     $started = $true
@@ -94,7 +105,7 @@ try {
                 Assert-NativeSuccess 'isolated staging server'
             }
         } else {
-            & $python manage.py test boldApp.mensajeria boldApp.notificaciones.tests.test_notifications boldApp.core.tests.test_authorization boldApp.tareas.tests.test_task_collaboration --settings=config.settings_test_postgres --noinput 2>&1 |
+            & $python manage.py test @TestLabels --settings=config.settings_test_postgres --noinput --verbosity=2 2>&1 |
                 ForEach-Object {
                     # Keep test evidence without printing synthetic seeded credentials.
                     if ($_ -notmatch '(?i)(password|contrase|clave temporal|@bold\.gt|correo:)') { Write-Output $_ }
@@ -104,6 +115,7 @@ try {
     } finally {Pop-Location}
 } finally {
     $env:PGPASSWORD = $previousPgPassword
+    $env:PGCLIENTENCODING = $previousPgEncoding
     $env:BOLD_TEST_DATABASE_URL = $previousTestUrl
     $env:BOLD_CHANNEL_STAGING_DIR = $previousStagingDir
     if ($started) {

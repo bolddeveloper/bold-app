@@ -40,4 +40,4 @@ def boundary_allows(assignment, permission, target_unit, resource_id, context):
         (channel["visibility"] == "department" and channel["unit_id"] == assignment.position.unit_id)))
     if not readable:
         return False
-    return permission.code in {"slack.channel.read", "slack.page.read", "slack.template.read"} or access != "read"
+    return permission.code in {"slack.channel.read", "slack.page.read", "slack.template.read", "slack.page_comment.read", "slack.automation.read"} or access != "read"

@@ -4,23 +4,31 @@ import json
 import uuid
 from rest_framework.exceptions import ValidationError
 from .channel_tasks import TaskReferences
+from .page_formatting import TEXT_TYPES, LANGUAGES, validate_formats
 
 ICONS = ("note", "book", "checklist", "idea")
-TYPES = ("paragraph", "heading", "bullet", "check", "task")
+TYPES = ("paragraph", "heading", "bullet", "check", "task", "page", "code")
 
 
 def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    try:return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    except (TypeError,ValueError,UnicodeError):raise ValidationError('El contenido no es JSON Unicode válido.')
+
+
+def content_size(value):
+    try:return len(json.dumps(value,ensure_ascii=False).encode('utf-8'))
+    except (TypeError,ValueError,UnicodeError):raise ValidationError('El contenido no es JSON Unicode válido.')
 
 
 def validate_blocks(blocks, assignment, request, previous=()):
-    if not isinstance(blocks, list) or len(blocks) > 200 or len(json.dumps(blocks, ensure_ascii=False).encode()) > 100_000:
+    if not isinstance(blocks, list) or len(blocks) > 200 or content_size(blocks) > 100_000:
         raise ValidationError("La página admite hasta 200 bloques y 100 KB de contenido.")
     old = {row["id"]: row for row in previous}
     seen, result = set(), []
     refs = TaskReferences(assignment, request)
+    page_refs = None
     for row in blocks:
-        if not isinstance(row, dict) or set(row) - {"id", "type", "text", "checked", "level", "task_id"}:
+        if not isinstance(row, dict) or set(row) - {"id", "type", "text", "checked", "level", "task_id", "page_id", "formats", "language"}:
             raise ValidationError("Bloque no válido.")
         try:
             identity = str(uuid.UUID(str(row.get("id", ""))))
@@ -30,6 +38,8 @@ def validate_blocks(blocks, assignment, request, previous=()):
         if identity in seen or kind not in TYPES:
             raise ValidationError("Los bloques deben tener identificadores únicos y un tipo admitido.")
         seen.add(identity)
+        if 'formats' in row and kind not in TEXT_TYPES or 'language' in row and kind!='code':
+            raise ValidationError('El formato o lenguaje no corresponde al tipo de bloque.')
         block = {"id": identity, "type": kind}
         if kind == "task":
             task_id = row.get("task_id")
@@ -44,11 +54,36 @@ def validate_blocks(blocks, assignment, request, previous=()):
                     raise ValidationError("Referencia a tarea no válida.")
                 refs.require(uuid.UUID(task_id))
             block["task_id"] = task_id
+        elif kind == 'page':
+            page_id=row.get('page_id')
+            if old.get(identity,{}).get('type')=='page' and (page_id is None or str(page_id)==old[identity]['page_id']):
+                page_id=old[identity]['page_id']
+            else:
+                try:
+                    page_id=str(uuid.UUID(str(page_id)))
+                except (ValueError,TypeError,AttributeError):
+                    raise ValidationError('Referencia a página no válida.')
+                if page_refs is None:
+                    from .channel_access import ChannelPolicy
+                    from .page_links import PageReferences
+                    page_refs=PageReferences(ChannelPolicy(assignment,request))
+                page_refs.require(page_id)
+            alias=row.get('text','')
+            if not isinstance(alias,str) or len(alias)>160:
+                raise ValidationError('El nombre opcional del enlace admite 160 caracteres.')
+            block.update(page_id=page_id,text=alias)
         else:
             text = row.get("text", "")
             if not isinstance(text, str) or len(text) > 4000:
                 raise ValidationError("Cada bloque admite hasta 4000 caracteres.")
             block["text"] = text
+            if kind in TEXT_TYPES:
+                formats=validate_formats(text,row.get('formats',[]))
+                if formats:block['formats']=formats
+            if kind=='code':
+                language=row.get('language','text')
+                if language not in LANGUAGES:raise ValidationError('Selecciona un lenguaje del catálogo.')
+                block['language']=language
             if kind == "heading":
                 level = row.get("level", 2)
                 if type(level) is not int or level not in (1, 2, 3):
@@ -60,16 +95,24 @@ def validate_blocks(blocks, assignment, request, previous=()):
                     raise ValidationError("Estado de casilla no válido.")
                 block["checked"] = checked
         result.append(block)
-    if len(json.dumps(result, ensure_ascii=False).encode()) > 100_000:
+    if content_size(result) > 100_000:
         raise ValidationError("La página supera los 100 KB de contenido.")
     return result
 
 
 def project_blocks(blocks, policy):
+    from .page_links import PageReferences
     refs = TaskReferences(policy.assignment, policy.request)
     refs.prime(uuid.UUID(row["task_id"]) for row in blocks if row["type"] == "task")
+    page_refs=PageReferences(policy)
+    page_refs.prime(row['page_id'] for row in blocks if row['type']=='page')
     result = []
     for row in blocks:
+        if row['type']=='page':
+            page=page_refs.data(row['page_id'])
+            result.append({'id':row['id'],'type':'page','text':row.get('text',''),'page':page,
+                           **({'page_id':row['page_id']} if page.get('available') else {})})
+            continue
         if row["type"] != "task":
             result.append(row)
             continue

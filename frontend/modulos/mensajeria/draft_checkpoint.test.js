@@ -1,0 +1,33 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createDraftCheckpoint} from "./draft_checkpoint.js";
+const wait=()=>new Promise(resolve=>setTimeout(resolve,0));
+function fixture(existing=null){let value=null,stored=existing,closed=false,status;const handle={recover:async()=>stored && {payload:stored},save:async next=>{stored=structuredClone(next);},clear:async()=>{stored=null;},close:()=>closed=true};const checkpoint=createDraftCheckpoint({open:async()=>handle,snapshot:()=>value,onStatus:next=>status=next});return {checkpoint,handle,set:next=>value=next,get stored(){return stored;},get status(){return status;},get closed(){return closed;}};}
+test("opening a clean editor cannot overwrite an unread recovery",async()=>{const f=fixture({text:"recover me"});await wait();assert.equal(f.status,"recoverable");await f.checkpoint.changed();assert.deepEqual(f.stored,{text:"recover me"});assert.equal(await f.checkpoint.decide(()=>false),false);assert.deepEqual(f.stored,{text:"recover me"});f.checkpoint.close();});
+test("recovery requires a successful explicit decision; discard clears it",async()=>{const f=fixture({text:"restored"});await wait();assert.equal(await f.checkpoint.decide(value=>{f.set(value);return true;}),true);assert.deepEqual(f.stored,{text:"restored"});f.set(null);await f.checkpoint.changed();assert.equal(f.stored,null);f.checkpoint.close();const discarded=fixture({text:"discard"});await wait();await discarded.checkpoint.decide(null);assert.equal(discarded.stored,null);discarded.checkpoint.close();});
+test("flush waits for protection, reports failures and retries",async()=>{const f=fixture();await wait();f.set({text:"pending"});f.handle.save=async()=>{throw Error("quota");};await f.checkpoint.changed();assert.equal(await f.checkpoint.flush(),false);assert.equal(f.status,"error");f.handle.save=async()=>{};await f.checkpoint.retry();assert.equal(await f.checkpoint.flush(),true);f.checkpoint.close();await wait();assert.equal(f.closed,true);});
+test("closing during ACL lookup closes late handles without restoring data",async()=>{let resolve,closed=false,recovered=0;const checkpoint=createDraftCheckpoint({open:()=>new Promise(done=>resolve=done),snapshot:()=>null,onRecovery:()=>recovered++});checkpoint.close();resolve({close:()=>closed=true,recover:async()=>{throw Error("must not read");}});await wait();assert.equal(closed,true);assert.equal(recovered,0);});
+test("a failed storage read must be retried before any clean state can overwrite recovery",async()=>{let fail=true,saves=0,recovered;const handle={close:()=>{},recover:async()=>{if(fail)throw Error("disk");return {payload:{text:"intact"}};},save:async()=>saves++,clear:async()=>saves++};const checkpoint=createDraftCheckpoint({open:async()=>handle,snapshot:()=>null,onRecovery:value=>recovered=value});await wait();await checkpoint.changed();assert.equal(saves,0);fail=false;await checkpoint.retry();assert.equal(recovered.payload.text,"intact");assert.equal(saves,0);checkpoint.close();});
+test("remote sync during asynchronous decryption cannot clear an unread ciphertext",async()=>{let finish,writes=0,recovered;const handle={close:()=>{},recover:()=>new Promise(resolve=>finish=resolve),save:async()=>writes++,clear:async()=>writes++};const checkpoint=createDraftCheckpoint({open:async()=>handle,snapshot:()=>null,onRecovery:value=>recovered=value});await wait();await checkpoint.changed();assert.equal(writes,0);finish({payload:{text:"conserved"}});await wait();assert.equal(recovered.payload.text,"conserved");assert.equal(writes,0);checkpoint.close();});
+test("a suspended encryption handle cannot report a protected draft",async()=>{let snapshot=null;const checkpoint=createDraftCheckpoint({open:async()=>({recover:async()=>null,clear:async()=>{},save:async()=>false,isActive:()=>false,close:()=>{}}),snapshot:()=>snapshot});await wait();snapshot={text:"private"};await checkpoint.changed();assert.equal(await checkpoint.flush(),false);checkpoint.close();});
+test("an unchanged failing draft never retries just because its error caused another render",async()=>{let count=0,snapshot=null;const checkpoint=createDraftCheckpoint({open:async()=>({recover:async()=>null,clear:async()=>{},save:async()=>{count++;throw Error("quota");},close:()=>{}}),snapshot:()=>snapshot});await wait();snapshot={text:"same"};await checkpoint.changed();await checkpoint.changed();assert.equal(count,1);await checkpoint.retry();assert.equal(count,2);checkpoint.close();});
+test('exit protection is current only after the exact text and file writes settle',async()=>{
+    let value=null,files=[],finish,active=true;
+    const checkpoint=createDraftCheckpoint({open:async()=>({recover:async()=>null,clear:async()=>{},save:()=>new Promise(resolve=>finish=resolve),isActive:()=>active,close:()=>{}}),snapshot:()=>value,attachments:()=>files});
+    assert.equal(checkpoint.isProtected(),false);await wait();assert.equal(checkpoint.isProtected(),true);
+    value={text:'new'};assert.equal(checkpoint.isProtected(),false,'must detect input before changed effect');
+    const pending=checkpoint.changed();assert.equal(checkpoint.isProtected(),false);finish(true);await pending;assert.equal(checkpoint.isProtected(),true);
+    files=[new File(['a'],'image.png',{type:'image/png'})];assert.equal(checkpoint.isProtected(),false);
+    const attachment=checkpoint.changed();finish(true);await attachment;assert.equal(checkpoint.isProtected(),true);
+    files=[new File(['b'],'image.png',{type:'image/png'})];assert.equal(checkpoint.isProtected(),false,'same filename is not same bytes');
+    const replaced=checkpoint.changed();finish(true);await replaced;assert.equal(checkpoint.isProtected(),true);
+    active=false;assert.equal(checkpoint.isProtected(),false);active=true;checkpoint.close();assert.equal(checkpoint.isProtected(),false);
+});
+test('an older write and a failed newer write never authorize leaving the current draft',async()=>{
+    let value=null;const completions=[];
+    const checkpoint=createDraftCheckpoint({open:async()=>({recover:async()=>null,clear:async()=>{},save:()=>new Promise((resolve,reject)=>completions.push({resolve,reject})),close:()=>{}}),snapshot:()=>value});
+    await wait();value={text:'one'};const first=checkpoint.changed();value={text:'two'};const second=checkpoint.changed();
+    completions[0].resolve(true);await first;assert.equal(checkpoint.isProtected(),false);
+    completions[1].reject(Error('quota'));await second;assert.equal(checkpoint.isProtected(),false);
+    const retry=checkpoint.retry();completions[2].resolve(true);await retry;assert.equal(checkpoint.isProtected(),true);checkpoint.close();
+});

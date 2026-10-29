@@ -3,7 +3,7 @@ import uuid
 from unittest.mock import patch
 
 from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
@@ -97,22 +97,38 @@ class IndependentChannelTests(TestCase):
         self.assertNotIn(channel["id"], [row["id"] for row in self.client.get(self.root).data["results"]])
         self.assertIn(channel["id"], [row["id"] for row in self.client.get(self.root + "?archived=true").data["results"]])
 
-    @patch("boldApp.mensajeria.channel_media.google")
-    @patch("boldApp.mensajeria.channel_media.storage_user")
-    @patch("boldApp.mensajeria.channel_media.drive_folder")
-    def test_drive_uses_the_independent_group_without_a_fictitious_department(self, folder, storage, google):
+    def test_stale_client_cannot_revive_direct_upload_in_an_independent_channel(self):
         channel = self.create().data
-        ImageStorageRoot.objects.create(user=self.alice.employee.user_account, subject="synthetic", client_id="synthetic",
-            google_email="synthetic@bold.gt", folder_id="private_root", folder_name="BOLD APP", active=True)
-        folder.return_value = "private_channel_folder"
-        storage.return_value = object()
-        google.side_effect = [{"files": []}, {"id": "private_remote_file"}]
         image = io.BytesIO()
         Image.new("RGB", (20, 20), "red").save(image, "PNG")
-        response = self.client.post(self.root + channel["id"] + "/messages/", {"body": "", "client_id": str(uuid.uuid4()),
-            "file": SimpleUploadedFile("test.png", image.getvalue(), content_type="image/png")}, format="multipart")
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(folder.call_args.args[1][1], ("independent", "Canales independientes"))
-        self.assertEqual(ChannelMedia.objects.count(), 1)
-        self.assertEqual(ChannelMessage.objects.filter(channel_id=channel["id"]).count(), 1)
-        self.assertNotIn("private_remote_file", str(response.data))
+        with patch('boldApp.mensajeria.upload_provider.google',side_effect=AssertionError('legacy route must not contact Google')):
+            response = self.client.post(self.root + channel["id"] + "/messages/", {"body": "", "client_id": str(uuid.uuid4()),
+                "file": SimpleUploadedFile("test.png", image.getvalue(), content_type="image/png")}, format="multipart")
+        self.assertEqual(response.status_code,409,response.data)
+        self.assertEqual(ChannelMedia.objects.count(),0)
+        self.assertEqual(ChannelMessage.objects.filter(channel_id=channel['id']).count(),0)
+
+
+from . import test_upload_outbox as upload_base
+
+
+@override_settings(MESSAGING_PILOT_ENABLED=False,AUTH_MFA_REQUIRED=False,CELERY_TASK_ALWAYS_EAGER=True,
+    AUTH_ENCRYPTION_KEY='synthetic-upload-outbox-tests-only')
+class IndependentUploadTests(TransactionTestCase):
+    root=upload_base.UploadOutboxTests.root
+    setUp=upload_base.UploadOutboxTests.setUp
+    identity=upload_base.UploadOutboxTests.identity
+    as_person=upload_base.UploadOutboxTests.as_person
+    open=upload_base.UploadOutboxTests.open
+    queue=upload_base.UploadOutboxTests.queue
+
+    def test_worker_uses_independent_group_without_a_fictitious_department(self):
+        from .upload_outbox import perform
+        channel=DepartmentChannel.objects.create(unit=None,creator=self.alice,name='Independiente')
+        base=f'/api/v2/messaging/channels/{channel.pk}/';value=self.queue(url=base+'uploads/')
+        self.assertEqual(value.status_code,202,value.data);self.assertTrue(perform(value.data['id']))
+        message=self.client.post(base+'messages/',{'body':'Original','client_id':value.data['client_id'],'upload_id':value.data['id']},format='json')
+        self.assertEqual(message.status_code,201,message.data)
+        names=[row['metadata']['name'] for row in self.drive.files.values()]
+        self.assertIn('Canales independientes',names);self.assertFalse(any('Departamento' in name for name in names))
+        self.assertEqual(ChannelMedia.objects.count(),1)

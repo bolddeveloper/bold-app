@@ -284,6 +284,8 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "run-channel-automations": {"task": "boldApp.mensajeria.automation_tasks.run_channel_automations", "schedule": 60.0},
+    "recover-media-uploads": {"task": "boldApp.mensajeria.upload_tasks.drain_media_uploads", "schedule": 60.0},
     "cleanup-phone-transfers": {"task": "boldApp.mensajeria.phone_views.cleanup_phone_transfers", "schedule": 60.0},
     "recover-sheet-sync": {"task": "boldApp.hojas.tasks.recover_pending", "schedule": 15.0},
     "send-calendar-reminders": {
@@ -313,6 +315,27 @@ SHEETS_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get(
 # after the separately approved public launch.
 MESSAGING_PILOT_ENABLED = os.environ.get("MESSAGING_PILOT_ENABLED", "true").lower() in {"true", "1"}
 MESSAGING_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("MESSAGING_PILOT_UNIT_IDS", "").split(",") if value.strip())
+
+# Internal logical budgets, not a measurement/guarantee of Google/Oracle bills.
+# Invalid/zero limits fail startup instead of silently disabling protection.
+def _messaging_limit(name, default):
+    from django.core.exceptions import ImproperlyConfigured
+    raw = os.environ.get(name, str(default))
+    if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
+        raise ImproperlyConfigured(f'{name} debe ser un entero positivo.')
+    return int(raw)
+
+MESSAGING_UPLOAD_ACCOUNT_BYTES = _messaging_limit('MESSAGING_UPLOAD_ACCOUNT_BYTES', 32 * 1024 * 1024)
+MESSAGING_UPLOAD_QUEUE_BYTES = _messaging_limit('MESSAGING_UPLOAD_QUEUE_BYTES', 128 * 1024 * 1024)
+MESSAGING_STORAGE_ACCOUNT_BYTES = _messaging_limit('MESSAGING_STORAGE_ACCOUNT_BYTES', 256 * 1024 * 1024)
+MESSAGING_STORAGE_TOTAL_BYTES = _messaging_limit('MESSAGING_STORAGE_TOTAL_BYTES', 2 * 1024 * 1024 * 1024)
+MESSAGING_UPLOAD_ACCOUNT_MAX_RECORDS = _messaging_limit('MESSAGING_UPLOAD_ACCOUNT_MAX_RECORDS', 20000)
+MESSAGING_UPLOAD_MAX_RECORDS = _messaging_limit('MESSAGING_UPLOAD_MAX_RECORDS', 100000)
+MESSAGING_AUTOMATIONS_ENABLED = os.environ.get('MESSAGING_AUTOMATIONS_ENABLED', 'false').lower() in {'true', '1'}
+MESSAGING_AUTOMATION_ACCOUNT_RULES = _messaging_limit('MESSAGING_AUTOMATION_ACCOUNT_RULES', 20)
+MESSAGING_AUTOMATION_MAX_RULES = _messaging_limit('MESSAGING_AUTOMATION_MAX_RULES', 200)
+MESSAGING_AUTOMATION_ACCOUNT_RECORDS = _messaging_limit('MESSAGING_AUTOMATION_ACCOUNT_RECORDS', 10000)
+MESSAGING_AUTOMATION_MAX_RECORDS = _messaging_limit('MESSAGING_AUTOMATION_MAX_RECORDS', 100000)
 
 # Presence has its own namespace; do not change authentication/throttling caches.
 CACHES = {

@@ -17,7 +17,10 @@ from .presenters import available, message_data, people, person_data
 from .events import publish_change
 from .unread import summaries
 from .notifications import notify_message, mark_notices_read
-from .media import prepare, store, BoundedUpload, MAX_BYTES
+from .media import BoundedUpload, MAX_BYTES
+from .personal_data import prime_saved
+from .reactions import prime_reactions
+from .mentions import prime_direct_mentions, sync_direct_mentions
 
 
 class Conflict(APIException):
@@ -110,7 +113,7 @@ class ConversationListView(PrivateChatView):
         actor_id = self.actor()
         return paginator.get_paginated_response([{
             "id": str(row.pk), "peer": person_data(directory[row.second_employee_id if row.first_employee_id == actor_id else row.first_employee_id]),
-            "updated_at": row.updated_at, "preview": (row.last_body or ("Nota de voz" if row.last_media == "audio" else "Imagen" if row.last_media else ""))[:160],
+            "updated_at": row.updated_at, "preview": (row.last_body or ({"audio":"Nota de voz", "image":"Imagen", "document":"Documento"}.get(row.last_media, "")))[:160],
         } for row in page])
 
     def post(self, request):
@@ -135,7 +138,8 @@ class ConversationDetailView(PrivateChatView):
 
 class UnreadSummaryView(PrivateChatView):
     def get(self, request):
-        return Response({"conversations": summaries(self.conversations(), self.actor())})
+        from .reading_reminders import reading_snapshot
+        return Response({"conversations": summaries(self.conversations(), self.actor()), "reading":reading_snapshot(self)})
 
 
 class MessageListView(PrivateChatView):
@@ -149,6 +153,9 @@ class MessageListView(PrivateChatView):
         conversation = self.conversation(conversation_id)
         paginator = MessagePagination()
         page = paginator.paginate_queryset(conversation.messages.select_related("media"), request)
+        prime_saved(page, "direct", self.actor())
+        prime_reactions(page, "direct", self.actor())
+        prime_direct_mentions(page)
         now = timezone.now()
         response = paginator.get_paginated_response([message_data(row, self.actor(), now) for row in page])
         response.data["server_now"] = now
@@ -167,7 +174,19 @@ class MessageListView(PrivateChatView):
         if not available(get_object_or_404(people(), pk=peer_id)):
             raise PermissionDenied("Este empleado ya no puede recibir mensajes. Puedes consultar el historial.")
         values = serializer.validated_data
-        prepared = prepare(values["file"]) if values.get("file") else None
+        # A forwarding review can retire an uncertain text nonce as well as an
+        # attachment. Discard/publication hold this same conversation lock, so
+        # a delayed request cannot revive an explicitly stopped intent.
+        from .upload_outbox import identity as upload_identity
+        from .models import MediaUpload
+        if MediaUpload.objects.filter(pk=upload_identity('chat',conversation.pk,request.user.pk,values['client_id']),
+                state__in=('cancelled','expired')).exists():
+            raise Conflict('Este intento se descartó. Revisa el borrador antes de iniciar otro envío.')
+        prepared = None
+        staged = None
+        if values['upload_id']:
+            from .upload_outbox import prepared_upload
+            staged,prepared=prepared_upload(request,'chat',conversation,values['client_id'],values['upload_id'])
         message, created = DirectMessage.objects.get_or_create(
             conversation=conversation, author_id=actor_id, client_id=values["client_id"], defaults={"body": values["body"]}
         )
@@ -178,8 +197,10 @@ class MessageListView(PrivateChatView):
             if bool(media) != bool(prepared) or media and media.digest != prepared["digest"]:
                 raise Conflict("Este envío ya existe con otro archivo. No se ha duplicado el mensaje.")
         if created:
+            sync_direct_mentions(message)
             if prepared:
-                store(message, prepared)
+                from .upload_outbox import attach
+                attach(staged,message)
             conversation.updated_at = message.created_at
             conversation.activity_version += 1
             conversation.save(update_fields=["updated_at", "activity_version"])
@@ -190,6 +211,13 @@ class MessageListView(PrivateChatView):
 
 
 class MessageDetailView(PrivateChatView):
+    def get(self,request,conversation_id,message_id):
+        conversation=self.conversation(conversation_id)
+        message=get_object_or_404(conversation.messages.select_related('media'),pk=message_id)
+        prime_saved([message],'direct',self.actor());prime_reactions([message],'direct',self.actor())
+        prime_direct_mentions([message]);now=timezone.now()
+        return Response({'message':message_data(message,self.actor(),now),'server_now':now})
+
     @transaction.atomic
     def patch(self, request, conversation_id, message_id):
         conversation = self.conversation(conversation_id)
@@ -210,6 +238,8 @@ class MessageDetailView(PrivateChatView):
             message.version += 1
             message.edited_at = now
             message.save(update_fields=["body", "version", "edited_at"])
+            sync_direct_mentions(message)
+            prime_direct_mentions([message])
             publish_change(conversation, "message.updated", [message.pk])
         return Response({"message": message_data(message, self.actor(), now), "server_now": now})
 

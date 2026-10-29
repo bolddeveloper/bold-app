@@ -65,6 +65,7 @@ class ChannelMessage(UUIDPrimaryKeyModel):
     payload_digest = models.CharField(max_length=64)
     sequence = models.PositiveBigIntegerField()
     body = models.TextField(max_length=5000)
+    automation_kind = models.CharField(max_length=20, blank=True, default='')
     # An immutable reference, not a grant or a copy of confidential task data.
     # Retain the UUID after task deletion so history can show an unavailable card.
     task_id = models.UUIDField(null=True, blank=True)
@@ -104,10 +105,11 @@ class ChannelMedia(UUIDPrimaryKeyModel):
     message = models.OneToOneField(ChannelMessage, on_delete=models.CASCADE, related_name="media")
     root = models.ForeignKey("boldApp_workspace.ImageStorageRoot", on_delete=models.PROTECT)
     drive_id = models.CharField(max_length=200)
-    kind = models.CharField(max_length=10, choices=[("image", "Imagen"), ("audio", "Nota de voz")])
+    kind = models.CharField(max_length=10, choices=[("image", "Imagen"), ("audio", "Nota de voz"), ("document", "Documento")])
     mime_type = models.CharField(max_length=100)
     size_bytes = models.PositiveIntegerField()
     digest = models.CharField(max_length=64)
+    filename = models.CharField(max_length=180, blank=True, default="")
     width = models.PositiveIntegerField(null=True)
     height = models.PositiveIntegerField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -139,3 +141,17 @@ class ChannelThreadReadState(models.Model):
     class Meta:
         db_table = "messaging_channel_thread_reads"
         constraints = [models.UniqueConstraint(fields=["parent", "employee"], name="unique_channel_thread_reader")]
+
+
+class ChannelThreadSubscription(models.Model):
+    # Explicit opt-in only. Posting/replying/reading never enrolls an employee.
+    parent = models.ForeignKey(ChannelMessage, on_delete=models.CASCADE, related_name="thread_subscriptions")
+    employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.CASCADE)
+    following = models.BooleanField(default=False)
+    revision = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "messaging_thread_subscriptions"
+        constraints = [models.UniqueConstraint(fields=["parent", "employee"], name="unique_thread_subscription")]
+        indexes = [models.Index(fields=["employee", "parent"], condition=models.Q(following=True), name="slack_followed_threads")]

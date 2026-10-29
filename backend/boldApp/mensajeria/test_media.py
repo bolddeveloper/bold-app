@@ -11,6 +11,7 @@ from boldApp.workspace.models import ImageStorageRoot
 from .models import DirectMessage, MessageMedia
 from . import tests as chat_tests
 from .media import prepare, MAX_BYTES
+from .test_staged_fixtures import staged_message, fake_attach
 
 
 @override_settings(MESSAGING_PILOT_ENABLED=False)
@@ -27,17 +28,15 @@ class ChatMediaTests(TestCase):
         return SimpleUploadedFile("captura.png", output.getvalue(), content_type="image/png")
 
     def upload(self, conversation, client_id=None, file=None, body="", client=None):
-        return (client or self.client).post(f"{self.root}{conversation}/messages/", {
-            "body": body, "client_id": str(client_id or uuid.uuid4()), "file": file or self.picture()}, format="multipart")
+        return staged_message(self,client or self.client,f'{self.root}{conversation}/',client_id or uuid.uuid4(),file or self.picture(),body)
 
     def drive(self):
         return ImageStorageRoot.objects.create(user=self.alice.employee.user_account,
             subject="fixture", client_id="fixture", google_email="fixture@bold.gt",
             folder_id="corporate_fixture_root", folder_name="BOLD APP", active=True)
 
-    def fake_store(self, message, prepared):
-        root = ImageStorageRoot.objects.filter(active=True).first() or self.drive()
-        return MessageMedia.objects.create(message=message, root=root, drive_id="private_fixture_file", **{key: value for key, value in prepared.items() if key != "content"})
+    def fake_store(self, row, message):
+        return fake_attach(self,row,message)
 
     def test_image_is_decoded_normalized_bounded_and_metadata_is_not_forwarded(self):
         result = prepare(self.picture())
@@ -51,7 +50,7 @@ class ChatMediaTests(TestCase):
         huge = self.picture(); huge.size = MAX_BYTES + 1
         with self.assertRaises(ValidationError): prepare(huge)
 
-    @patch("boldApp.mensajeria.views.store")
+    @patch("boldApp.mensajeria.upload_outbox.attach")
     def test_media_only_send_retry_privacy_and_text_edit(self, store):
         store.side_effect = self.fake_store
         conversation = self.open(); token = uuid.uuid4()
@@ -72,7 +71,7 @@ class ChatMediaTests(TestCase):
         self.assertEqual(self.as_person(self.bob).patch(f"{self.root}{conversation}/messages/{message}/", {"body":"Otra", "version":2}, format="json").status_code, 403)
         self.assertEqual(self.client.get(self.root).data["results"][0]["preview"], "Descripción")
 
-    @patch("boldApp.mensajeria.views.store")
+    @patch("boldApp.mensajeria.upload_outbox.attach")
     def test_audio_formats_preview_and_private_download(self, store):
         store.side_effect = self.fake_store
         conversation = self.open()
@@ -95,26 +94,34 @@ class ChatMediaTests(TestCase):
             self.assertEqual(self.client.get(path).status_code, 400)
 
     def test_drive_failure_rolls_back_message_and_no_root_is_actionable(self):
+        self.auto_storage=False
         conversation = self.open()
         response = self.upload(conversation)
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("Drive", str(response.data))
         self.assertEqual(DirectMessage.objects.count(), 0)
-        with patch("boldApp.mensajeria.views.store", side_effect=ValidationError("Drive temporalmente no disponible")):
+        self.drive()
+        with patch("boldApp.mensajeria.upload_outbox.attach", side_effect=ValidationError("Drive temporalmente no disponible")):
             self.assertEqual(self.upload(conversation).status_code, 400)
         self.assertEqual(DirectMessage.objects.count(), 0)
 
-    def test_drive_upload_reuses_remote_marker_and_never_makes_public_permission(self):
-        self.drive(); conversation = self.open()
-        with patch("boldApp.mensajeria.media.storage_user", return_value=self.alice.employee.user_account), patch("boldApp.mensajeria.media.drive_folder", return_value="private_folder") as folder, patch("boldApp.mensajeria.media.google", return_value={"files": [{"id": "recovered_remote_file"}]}) as remote:
-            result = self.upload(conversation)
-            self.assertEqual(result.status_code, 201, result.data)
-            self.assertEqual(remote.call_count, 1)
-            self.assertEqual(remote.call_args.args[1], "GET")
-            self.assertIn("bold_chat_media", remote.call_args.kwargs["params"]["q"])
-            self.assertEqual(folder.call_args.args[1][0], ("chat", "Chat"))
+    def test_publication_consumes_ready_media_without_provider_calls(self):
+        conversation = self.open()
+        with patch('boldApp.mensajeria.upload_provider.google',side_effect=AssertionError('publication cannot call Google')):
+            result=self.upload(conversation)
+        self.assertEqual(result.status_code,201,result.data)
+        from .models import MediaUpload
+        self.assertEqual(MediaUpload.objects.get().state,'attached')
 
-    @patch("boldApp.mensajeria.views.store")
+    def test_invalid_mentions_preserve_the_private_ready_file_without_publishing(self):
+        from .models import MediaUpload,SearchDocument
+        body=' '.join(f'@person{i}@bold.gt' for i in range(21))
+        result=self.upload(self.open(),body=body)
+        self.assertEqual(result.status_code,400,result.data)
+        self.assertFalse(DirectMessage.objects.exists());self.assertFalse(MessageMedia.objects.exists())
+        self.assertFalse(SearchDocument.objects.exists());self.assertEqual(MediaUpload.objects.get().state,'ready')
+
+    @patch("boldApp.mensajeria.upload_outbox.attach")
     def test_pilot_and_membership_reject_upload_before_drive(self, store):
         conversation = self.open()
         with override_settings(MESSAGING_PILOT_ENABLED=True, MESSAGING_PILOT_UNIT_IDS=[]):
@@ -123,7 +130,7 @@ class ChatMediaTests(TestCase):
         store.assert_not_called()
 
     @override_settings(AUTH_MFA_REQUIRED=False)
-    @patch("boldApp.mensajeria.views.store")
+    @patch("boldApp.mensajeria.upload_outbox.attach")
     def test_real_cookie_multipart_csrf_and_stream_limit(self, store):
         from datetime import timedelta
         from django.conf import settings

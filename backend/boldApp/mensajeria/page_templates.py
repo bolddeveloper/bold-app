@@ -12,6 +12,7 @@ from .page_models import ChannelPage, PageTemplate
 from .page_views import PageView, PageListPagination, page_data, record
 from .serializers import StrictInputSerializer
 from .views import Conflict
+from .page_mentions import sync_page_mentions
 
 
 def starter(identity, name, description, headings):
@@ -27,6 +28,26 @@ BUILTINS = {row["id"]: row for row in [
     starter("builtin-meeting", "Notas de reunión", "Agenda, acuerdos y próximos pasos.", [("Agenda", "heading"), ("", "bullet"), ("Acuerdos", "heading"), ("", "paragraph"), ("Próximos pasos", "heading"), ("", "check")]),
     starter("builtin-brief", "Brief de proyecto", "Objetivos, alcance y entregables del equipo.", [("Objetivo", "heading"), ("", "paragraph"), ("Alcance", "heading"), ("", "bullet"), ("Entregables", "heading"), ("", "check")]),
     starter("builtin-weekly", "Seguimiento semanal", "Avances, bloqueos y prioridades de la semana.", [("Avances", "heading"), ("", "bullet"), ("Bloqueos", "heading"), ("", "paragraph"), ("Siguiente semana", "heading"), ("", "check")]),
+    starter('builtin-process','Guía de proceso','Base para documentar propósito, responsables, pasos y evidencias; requiere revisión del equipo.',[
+        ('Propósito y alcance','heading'),('Describe el resultado esperado y cuándo se aplica este proceso. Esta base no sustituye una política aprobada.','paragraph'),
+        ('Responsables y frecuencia','heading'),('Indica quién ejecuta, quién revisa, quién sustituye y cuándo se realiza.','paragraph'),
+        ('Entradas y requisitos','heading'),('Documentos, accesos e información necesarios antes de empezar.','bullet'),
+        ('Pasos del proceso','heading'),('Describe un paso y su resultado verificable. Añade los bloques que necesites.','check'),
+        ('Criterios de aceptación y evidencias','heading'),('Explica cómo se verifica el resultado y dónde queda la evidencia.','paragraph'),
+        ('Excepciones y revisión','heading'),('Define qué hacer ante un bloqueo y quién revisa o actualiza este documento.','paragraph')]),
+    starter('builtin-delivery','Entrega y revisión','Lista reutilizable de entregables, criterios y evidencias; no crea tareas ni asignaciones.',[
+        ('Objetivo y entregables','heading'),('Indica el proyecto, la entrega y los enlaces a las tareas existentes.','paragraph'),
+        ('Criterios acordados','heading'),('Explica qué debe cumplirse para considerar la entrega aceptada.','bullet'),
+        ('Validación interna','heading'),('Verificar alcance, calidad y material antes de compartir.','check'),
+        ('Revisión y decisiones','heading'),('Documenta observaciones, quién las valida y el siguiente paso. Compartir esta página no invita a un cliente externo.','paragraph'),
+        ('Evidencia y cierre','heading'),('Registrar la evidencia y actualizar las tareas del proyecto mediante sus enlaces.','check')]),
+    starter('builtin-handoff','Traspaso de trabajo','Contexto para relevos de personas o equipos, sin copiar automáticamente datos privados.',[
+        ('Contexto y objetivos','heading'),('Resume la marca o proyecto, prioridades y contexto necesario para el relevo.','paragraph'),
+        ('Personas y responsabilidades','heading'),('Identifica la persona saliente, quien recibe y los contactos pertinentes.','paragraph'),
+        ('Pendientes y bloqueos','heading'),('Enlaza las tareas existentes y explica su estado; no crees otra lista paralela de estados.','bullet'),
+        ('Recursos y accesos','heading'),('Añade enlaces autorizados a documentos y recursos. No escribas contraseñas ni secretos.','paragraph'),
+        ('Comprobación del relevo','heading'),('Confirmar que quien recibe entiende el contexto y dispone de acceso a los recursos necesarios.','check'),
+        ('Acuerdos y seguimiento','heading'),('Documenta dudas, decisiones y la próxima revisión del traspaso.','paragraph')]),
 ]}
 
 
@@ -193,6 +214,7 @@ class TemplatePageView(TemplateDetailView):
             block["id"] = str(uuid.uuid4())
         page = ChannelPage.objects.create(channel=channel, creator_id=self.actor(), updated_by_id=self.actor(), client_id=token,
             creation_digest=receipt, title=title, icon=icon, blocks=blocks)
+        sync_page_mentions(page, self.policy(), notify=False)
         record(page, self.actor(), token, receipt)
         publish_channel(channel, "page.changed")
         return Response(page_data(page, channel, self.policy()), status=201)

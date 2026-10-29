@@ -29,6 +29,26 @@ function room(){
 function client(server,name){let state;const editor=createCollaborativePage({page:fixture,connect:()=>server.connect(name),onChange:value=>state=value,delay:100000});return {editor,get state(){return state;}};}
 const ready=(...clients)=>waitFor(()=>clients.every(client=>client.state.status==="saved"));
 
+test('verified page mentions converge without stale ACK rollback or serialization into Yjs',async()=>{
+    const doc=new Y.Doc();writeSharedPage(doc,fixture);let socket,model;
+    const mention={employee_id:'synthetic-person',token:'@person@bold.gt',name:'Identidad verificada'};
+    const editor=createCollaborativePage({page:fixture,delay:100000,onChange:value=>model=value,connect:async()=>socket={readyState:1,send(){},close(){this.readyState=3;}}});
+    const deliver=packet=>socket.onmessage({data:JSON.stringify(packet)});
+    try{
+        await waitFor(()=>socket?.onmessage);
+        deliver({type:'sync',epoch:'epoch',update:toBase64(Y.encodeStateAsUpdate(doc)),state:toBase64(Y.encodeStateVector(doc)),page:{...fixture,version:5,mentions:[]}});
+        editor.edit({...model.draft,blocks:[{...model.draft.blocks[0],text:'Texto propio @person@bold.gt'}]});
+        deliver({type:'update',epoch:'epoch',version:7,mentions:[mention]});assert.deepEqual(model.base.mentions,[mention]);
+        deliver({type:'ack',epoch:'epoch',version:6,client_id:'old',state:toBase64(Y.encodeStateVector(doc)),mentions:[]});
+        assert.deepEqual(model.base.mentions,[mention],'an old acknowledgement cannot erase newer verified references');
+        assert.match(model.draft.blocks[0].text,/Texto propio/);
+        const recovery=editor.recoverySnapshot(),replica=new Y.Doc();Y.applyUpdate(replica,fromBase64(recovery.update));
+        assert.equal(JSON.stringify(replica.toJSON()).includes(mention.name),false,'server identity metadata stays out of shared state');replica.destroy();
+        deliver({type:'sync_delta',epoch:'epoch',version:8,state:toBase64(Y.encodeStateVector(doc)),mentions:[]});assert.deepEqual(model.base.mentions,[]);
+        assert.match(model.draft.blocks[0].text,/Texto propio/);
+    }finally{editor.dispose();doc.destroy();}
+});
+
 test("coediting merges simultaneous changes in the same text without document replacement",async()=>{
     const server=room(),alice=client(server,"Alice"),bob=client(server,"Bob");
     try{await waitFor(()=>alice.state.status==="saved" && bob.state.status==="saved");server.hold();alice.editor.edit({...alice.state.draft,title:"🚀 Guía"});bob.editor.edit({...bob.state.draft,title:"β Guía"});alice.editor.flush();bob.editor.flush();server.release();await waitFor(()=>!alice.state.dirty && !bob.state.dirty);assert.match(alice.state.draft.title,/🚀/);assert.match(alice.state.draft.title,/β/);assert.equal(alice.state.draft.title,bob.state.draft.title);assert.equal(alice.state.base.title,alice.state.draft.title);assert.equal(bob.state.base.title,bob.state.draft.title);assert.equal(alice.state.dirty,false);assert.equal(bob.state.dirty,false);}finally{alice.editor.dispose();bob.editor.dispose();server.dispose();}
@@ -54,7 +74,66 @@ test("shared task blocks never serialize protected task identifiers",()=>{
     assert.equal(JSON.stringify(doc.toJSON()).includes(taskId),false);assert.equal(refs.get(blockId),taskId);doc.destroy();
     assert.deepEqual(textSplice("A🚀B","AβB"),{start:1,remove:2,insert:"β"});
 });
+
+test('message origins refresh as personal metadata without entering the shared document',async()=>{
+    const server=room(),alice=client(server,'Alice');
+    const source='00000000-0000-4000-8000-000000000987';
+    try{
+        await ready(alice);
+        const original=structuredClone(alice.state.draft);
+        alice.editor.remote({...fixture,message_origins:[{id:source,block_ids:[blockId],target:{kind:'chat',message_id:source}}]});
+        assert.equal(alice.state.base.message_origins[0].id,source);
+        assert.deepEqual(alice.state.draft,original);assert.equal(JSON.stringify(server.content()).includes(source),false);
+        alice.editor.remote({...fixture,message_origins:[]});
+        assert.deepEqual(alice.state.base.message_origins,[]);assert.equal(alice.state.dirty,false);
+    }finally{alice.editor.dispose();server.dispose();}
+});
 test("a remotely deleted block keeps the other author's unfinished text recoverable",async()=>{
     const server=room(),alice=client(server,"Alice"),bob=client(server,"Bob");
     try{await ready(alice,bob);alice.editor.edit({...alice.state.draft,blocks:[{...alice.state.draft.blocks[0],text:"Mi texto aún no confirmado"}]});bob.editor.edit({...bob.state.draft,blocks:[]});bob.editor.flush();await waitFor(()=>alice.state.recoveredBlocks.length===1);assert.equal(alice.state.draft.blocks.length,0);assert.equal(alice.state.recoveredBlocks[0].text,"Mi texto aún no confirmado");alice.editor.recoverBlocks();alice.editor.flush();await waitFor(()=>!alice.state.dirty);assert.equal(server.content().blocks[0].text,"Mi texto aún no confirmado");assert.notEqual(server.content().blocks[0].id,blockId);}finally{alice.editor.dispose();bob.editor.dispose();server.dispose();}
+});
+
+test("undo and redo affect only the author's operations, retaining concurrent remote text",async()=>{
+    const server=room(),alice=client(server,"Alice"),bob=client(server,"Bob");
+    try{await ready(alice,bob);assert.equal(alice.state.canUndo,false);server.hold();alice.editor.edit({...alice.state.draft,title:"A Guía"});bob.editor.edit({...bob.state.draft,title:"B Guía"});alice.editor.flush();bob.editor.flush();server.release();await waitFor(()=>!alice.state.dirty && !bob.state.dirty);assert.match(alice.state.draft.title,/A /);assert.match(alice.state.draft.title,/B /);alice.editor.undo();assert.doesNotMatch(alice.state.draft.title,/A /);assert.match(alice.state.draft.title,/B /);assert.equal(alice.state.canRedo,true);alice.editor.flush();await ready(alice,bob);assert.equal(bob.state.draft.title,"B Guía");alice.editor.redo();alice.editor.flush();await ready(alice,bob);assert.match(bob.state.draft.title,/A /);assert.match(bob.state.draft.title,/B /);}finally{alice.editor.dispose();bob.editor.dispose();server.dispose();}
+});
+
+test("remote-only changes are not undoable and epoch restoration clears personal history",async()=>{
+    const server=room(),alice=client(server,"Alice"),bob=client(server,"Bob");
+    try{await ready(alice,bob);bob.editor.edit({...bob.state.draft,title:"De Bob"});bob.editor.flush();await waitFor(()=>alice.state.draft.title==="De Bob" && !bob.state.dirty);assert.equal(alice.state.canUndo,false);alice.editor.undo();assert.equal(alice.state.draft.title,"De Bob");alice.editor.edit({...alice.state.draft,title:"De Alice"});assert.equal(alice.state.canUndo,true);server.reset("Restaurada");await waitFor(()=>!!alice.state.conflict);assert.equal(alice.state.canUndo,false);alice.editor.resolve(false);assert.equal(alice.state.canUndo,false);assert.equal(alice.state.canRedo,false);alice.editor.undo();assert.equal(alice.state.draft.title,"Restaurada");}finally{alice.editor.dispose();bob.editor.dispose();server.dispose();}
+});
+
+test("structural operations undo separately and IME guards undo until composition finishes",async()=>{
+    const server=room(),alice=client(server,"Alice");
+    try{await ready(alice);alice.editor.edit({...alice.state.draft,title:"Mi título"});alice.editor.edit({...alice.state.draft,blocks:[]});alice.editor.undo();assert.equal(alice.state.draft.title,"Mi título");assert.equal(alice.state.draft.blocks[0].text,"Texto inicial");alice.editor.beginComposition("title");assert.equal(alice.state.canUndo,false);alice.editor.undo();assert.equal(alice.state.draft.title,"Mi título");alice.editor.endComposition("title","Mi título 漢字");alice.editor.undo();assert.equal(alice.state.draft.title,"Mi título");alice.editor.undo();assert.equal(alice.state.draft.title,"Guía");}finally{alice.editor.dispose();server.dispose();}
+});
+
+test("undo after a lost acknowledgement retries the exact pending operation before saving the inverse",async()=>{
+    const server=room(),alice=client(server,"Alice");
+    try{await ready(alice);server.drop(true);alice.editor.edit({...alice.state.draft,title:"Temporal"});alice.editor.flush();alice.editor.undo();assert.equal(alice.state.draft.title,"Guía");server.disconnect();server.drop(false);alice.editor.retry();await waitFor(()=>!alice.state.pending && alice.state.status!=="connecting");alice.editor.flush();await ready(alice);assert.equal(server.content().title,"Guía");}finally{alice.editor.dispose();server.dispose();}
+});
+
+test("reloaded CRDT draft merges with later server text rather than replacing it",async()=>{
+    const server=room(),alice=client(server,"Alice"),bob=client(server,"Bob");let reopened;
+    try{await ready(alice,bob);alice.editor.edit({...alice.state.draft,title:"A Guía"});const snapshot=alice.editor.recoverySnapshot();alice.editor.dispose();bob.editor.edit({...bob.state.draft,title:"B Guía"});bob.editor.flush();await ready(bob);reopened=client(server,"Alice");await ready(reopened);assert.equal(reopened.editor.recoverSnapshot(snapshot),true);assert.match(reopened.state.draft.title,/A /);assert.match(reopened.state.draft.title,/B /);reopened.editor.flush();await ready(reopened,bob);assert.equal(reopened.state.draft.title,bob.state.draft.title);}finally{alice.editor.dispose();bob.editor.dispose();reopened?.editor.dispose();server.dispose();}
+});
+
+test("recovery after reload preserves a lost ACK and later unsent changes",async()=>{
+    const server=room(),alice=client(server,"Alice");let reopened;
+    try{await ready(alice);server.drop(true);alice.editor.edit({...alice.state.draft,title:"Confirmado sin ACK"});alice.editor.flush();alice.editor.edit({...alice.state.draft,title:"Confirmado sin ACK y borrador"});const snapshot=alice.editor.recoverySnapshot();alice.editor.dispose();server.drop(false);reopened=client(server,"Alice");await ready(reopened);reopened.editor.recoverSnapshot(snapshot);await waitFor(()=>!reopened.state.pending);reopened.editor.flush();await ready(reopened);assert.equal(server.content().title,"Confirmado sin ACK y borrador");}finally{alice.editor.dispose();reopened?.editor.dispose();server.dispose();}
+});
+
+test("old-epoch recovery requires a choice and unfinished IME survives reload",async()=>{
+    const server=room(),alice=client(server,"Alice");let reopened;
+    try{await ready(alice);alice.editor.beginComposition("title");alice.editor.edit({...alice.state.draft,title:"Guía 漢字"});const snapshot=alice.editor.recoverySnapshot();alice.editor.dispose();server.reset("Restaurada");reopened=client(server,"Alice");await ready(reopened);reopened.editor.recoverSnapshot(snapshot);assert.equal(reopened.state.status,"conflict");assert.equal(reopened.state.draft.title,"Guía 漢字");assert.equal(server.content().title,"Restaurada");reopened.editor.resolve(false);assert.equal(reopened.state.draft.title,"Restaurada");}finally{alice.editor.dispose();reopened?.editor.dispose();server.dispose();}
+});
+
+test("read-only refresh blocks undo, redo and recovery without generating writes",async()=>{
+    const server=room(),alice=client(server,"Alice");
+    try{await ready(alice);alice.editor.edit({...alice.state.draft,title:"Propio"});const snapshot=alice.editor.recoverySnapshot();alice.editor.remote({...alice.state.base,can_edit:false});assert.equal(alice.state.canUndo,false);assert.equal(alice.state.canRedo,false);alice.editor.undo();alice.editor.redo();alice.editor.flush();assert.equal(alice.state.draft.title,"Propio");assert.equal(alice.editor.recoverSnapshot(snapshot),false);assert.equal(server.operations(),0);}finally{alice.editor.dispose();server.dispose();}
+});
+
+test("undo restores a removed task reference without putting protected identifiers in shared data",async()=>{
+    const server=room(),alice=client(server,"Alice"),taskId="00000000-0000-4000-8000-000000000099";
+    try{await ready(alice);alice.editor.edit({...alice.state.draft,blocks:[...alice.state.draft.blocks,{id:"task-block",type:"task",task_id:taskId}]});alice.editor.edit({...alice.state.draft,blocks:alice.state.draft.blocks.filter(row=>row.type!=="task")});alice.editor.undo();assert.equal(alice.state.draft.blocks.find(row=>row.type==="task").task_id,taskId);const doc=new Y.Doc();Y.applyUpdate(doc,fromBase64(alice.editor.recoverySnapshot().update));assert.equal(JSON.stringify(doc.toJSON()).includes(taskId),false);doc.destroy();}finally{alice.editor.dispose();server.dispose();}
 });

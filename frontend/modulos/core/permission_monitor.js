@@ -19,7 +19,7 @@ export function createPermissionMonitor({ assignmentId, cache, fetchRevision,
 
     function invalidate(reason, pending = false) {
         cache.invalidate();
-        onInvalidate({ reason, uncertain: pending });
+        onInvalidate({ reason, uncertain: pending, authorizationChanged: true });
     }
     function lose(reason) {
         leaseUntil = 0; boundaryAt = Infinity; epoch++;
@@ -27,10 +27,11 @@ export function createPermissionMonitor({ assignmentId, cache, fetchRevision,
             diagnostics.record("permission-control", "uncertain");
             lastAttempt = -Infinity;
             uncertain = true; cache.setUncertain(true);
-            onInvalidate({ reason, uncertain: true });
+            onInvalidate({ reason, uncertain: true, authorizationChanged: false });
         }
     }
     function apply(result, reason) {
+        const hadRevision = cache.getRevision() !== null;
         const changed = cache.setRevision(result.revision);
         const temporal = state !== null && result.state !== undefined && state !== result.state;
         const contextChanged = context !== null && result.context !== undefined && context !== result.context;
@@ -38,9 +39,12 @@ export function createPermissionMonitor({ assignmentId, cache, fetchRevision,
         if (result.state !== undefined) state = result.state;
         const recovered = uncertain;
         uncertain = false; cache.setUncertain(false);
-        if (contextChanged) { cache.invalidate(); onInvalidate({ reason, uncertain: true, contextChanged: true }); }
+        if (contextChanged) { cache.invalidate(); onInvalidate({ reason, uncertain: true, contextChanged: true, authorizationChanged: true }); }
         else if (result.force || temporal) invalidate(reason);
-        else if (changed || recovered) onInvalidate({ reason, uncertain: false });
+        // Establishing the first baseline can invalidate in-flight decisions,
+        // but is not evidence of a policy change. Suspend keys and reauthorize
+        // drafts; do not erase durable ciphertext on every cold start.
+        else if (changed || recovered) onInvalidate({ reason, uncertain: false, authorizationChanged: changed && hadRevision });
     }
     async function refresh({ force = false } = {}) {
         if (disposed || inFlight || !online() || now() < retryAt) return;

@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-29",
+  "plan": "docs/SLACK_MEJORAS_FUNCIONALES.md",
+  "branch": "feature/chat-directo",
+  "base_commit": "1df792ff",
+  "scope": "seven functional web improvements, local acceptance, not deployment or visual rework",
+  "audit_status": "accepted_functional_web_local",
+  "user_decisions": {
+    "local_linux_container_validation_deferred": true,
+    "device_specific_testing_deferred_to_user": true,
+    "distributed_server_readiness_not_claimed": true,
+    "new_commit_push_production_migration_or_deployment_authorized": false
+  },
+  "requirements": [
+    {
+      "phase": 1,
+      "name": "Borradores seguros y control de edición",
+      "verified_contracts": ["encrypted text and file recovery after fresh access grant", "account, assignment and resource separation", "expiry, credential rotation and revocation", "explicit recovery without automatic sending", "CRDT recovery merges rather than overwrites", "own undo/redo preserves remote operations and IME", "PWA activation waits for protected work or explicit decision"],
+      "implementation": ["frontend/modulos/mensajeria/draft_vault.js", "frontend/modulos/mensajeria/use_composer_drafts.js", "frontend/modulos/mensajeria/page_collab_model.js", "backend/boldApp/mensajeria/draft_grants.py", "frontend/modulos/core/pwa_updates.js"],
+      "evidence": ["backend/boldApp/mensajeria/test_draft_grants.py", "frontend/modulos/mensajeria/draft_vault.test.js", "frontend/modulos/mensajeria/page_collab_model.test.js", "frontend/modulos/core/tests/composer_recovery_ui.mjs", "frontend/modulos/core/tests/page_recovery_ui.mjs", "frontend/modulos/core/pwa_updates.test.js"],
+      "native_evidence": "plan phase 1 and October 29 PWA reload record; automation review reload in acceptance-automation-ui-20261029.json"
+    },
+    {
+      "phase": 2,
+      "name": "Búsqueda real del historial",
+      "verified_contracts": ["full message, page and file metadata history", "person, channel, dates and kind filters", "stable signed cursor and exact context opening", "access checked before snippets, counts, cursor pages and context", "transactional index maintenance and PostgreSQL indexes"],
+      "implementation": ["backend/boldApp/mensajeria/search_views.py", "backend/boldApp/mensajeria/search_index.py", "frontend/modulos/mensajeria/history_search.jsx"],
+      "evidence": ["backend/boldApp/mensajeria/test_history_search.py", "frontend/modulos/core/tests/history_search_ui.mjs"]
+    },
+    {
+      "phase": 3,
+      "name": "Menciones y seguimiento personal",
+      "verified_contracts": ["verified mentions in Slack, direct chat and pages do not grant access", "unfollowed channel mentions honor personal notification preference", "explicit personal thread following without duplicate channel notices", "persistent personal saved references", "personal unread marker does not undo actual delivery or read receipts", "shared emoji reaction counts with own-only removal", "reuse existing notifications and socket without conversation polling"],
+      "implementation": ["backend/boldApp/mensajeria/mentions.py", "backend/boldApp/mensajeria/reading_reminders.py", "frontend/modulos/mensajeria/message_reactions.jsx", "frontend/modulos/perfil/notification_preferences.jsx"],
+      "evidence": ["backend/boldApp/mensajeria/test_mentions.py", "backend/boldApp/mensajeria/test_direct_mentions.py", "backend/boldApp/mensajeria/test_page_mentions.py", "backend/boldApp/mensajeria/test_thread_following.py", "backend/boldApp/mensajeria/test_saved_items.py", "backend/boldApp/mensajeria/test_reading_reminders.py", "backend/boldApp/mensajeria/test_reactions.py", "frontend/modulos/core/tests/mentions_ui.mjs", "frontend/modulos/core/tests/saved_items_ui.mjs"]
+    },
+    {
+      "phase": 4,
+      "name": "De conversación a tareas y acuerdos",
+      "verified_contracts": ["normal Tasks project, section, assignee, date and pipeline", "permission-filtered links in both directions", "ordered selected messages become an independent agreement page", "explicit consent, immutable retry and no duplicate task/page", "no automatic sharing of private DM history or source access"],
+      "implementation": ["backend/boldApp/mensajeria/task_conversions.py", "backend/boldApp/mensajeria/agreements.py", "frontend/modulos/mensajeria/message_tasks.jsx", "frontend/modulos/mensajeria/message_agreements.jsx"],
+      "evidence": ["backend/boldApp/mensajeria/test_task_conversions.py", "backend/boldApp/mensajeria/test_task_conversion_concurrency.py", "backend/boldApp/mensajeria/test_agreements.py", "backend/boldApp/mensajeria/test_agreement_concurrency.py", "frontend/modulos/core/tests/task_conversion_ui.mjs", "frontend/modulos/core/tests/agreements_ui.mjs"]
+    },
+    {
+      "phase": 5,
+      "name": "Conocimiento estructurado",
+      "verified_contracts": ["same-channel subpages, breadcrumbs and deliberate moves", "cycle and cross-channel rejection, independent structure version", "internal page links, explicit aliases and access-filtered backlinks", "block comments, replies, resolve/reopen and strict own authorship", "safe inline formatting, literal code and official process templates", "no second advanced Tasks/Sheets database system"],
+      "implementation": ["backend/boldApp/mensajeria/page_structure.py", "backend/boldApp/mensajeria/page_discussions.py", "backend/boldApp/mensajeria/page_formatting.py", "backend/boldApp/mensajeria/page_templates.py", "frontend/modulos/mensajeria/channel_pages.jsx"],
+      "evidence": ["backend/boldApp/mensajeria/test_page_structure.py", "backend/boldApp/mensajeria/test_page_links.py", "backend/boldApp/mensajeria/test_page_discussions.py", "backend/boldApp/mensajeria/test_page_formatting.py", "backend/boldApp/mensajeria/test_templates.py", "frontend/modulos/core/tests/page_hierarchy_ui.mjs", "frontend/modulos/core/tests/page_links_ui.mjs", "frontend/modulos/core/tests/page_discussions_ui.mjs", "frontend/modulos/core/tests/page_formats_ui.mjs"]
+    },
+    {
+      "phase": 6,
+      "name": "Biblioteca de archivos y subidas recuperables",
+      "verified_contracts": ["full scoped image, audio, document and link history with authenticated downloads", "explicit bounded PDF, UTF-8 TXT/CSV and Office container formats", "aggregate temporary, managed and metadata budgets including QR", "private encrypted durable upload reservation, worker lease and recovery", "idempotent upload/publication, explicit discard and orphan reconciliation", "composer and mixed forwarding review retain exact bytes and nonces", "no public Google permissions"],
+      "implementation": ["backend/boldApp/mensajeria/resource_views.py", "backend/boldApp/mensajeria/document_uploads.py", "backend/boldApp/mensajeria/upload_outbox.py", "backend/boldApp/mensajeria/upload_capacity.py", "backend/boldApp/mensajeria/upload_cleanup.py", "frontend/modulos/mensajeria/staged_media.js", "frontend/modulos/mensajeria/forward_review.js"],
+      "evidence": ["backend/boldApp/mensajeria/test_resource_library.py", "backend/boldApp/mensajeria/test_document_media.py", "backend/boldApp/mensajeria/test_upload_outbox.py", "backend/boldApp/mensajeria/test_upload_capacity.py", "backend/boldApp/mensajeria/test_upload_concurrency.py", "backend/boldApp/mensajeria/test_upload_discard.py", "frontend/modulos/core/tests/resource_library_ui.mjs", "frontend/modulos/core/tests/document_media_ui.mjs", "frontend/modulos/core/tests/composer_recovery_ui.mjs", "docs/acceptance-staged-drive-20261029.json"],
+      "real_google_existing_files_rechecked_this_turn": 10,
+      "real_google_recheck_uploaded_new_files": false
+    },
+    {
+      "phase": 7,
+      "name": "Automatizaciones acotadas",
+      "verified_contracts": ["task state, reminder and pinned-template periodic page only", "private own-account/assignment rule configuration", "create paused, explicit activation and versioned edits", "current identity, pilot, channel and source authority before every execution", "durable idempotent effect and result, bounded retry and missed-interval skipping", "pause, audit, quotas and no history purge", "usable forms, selectors and logs, encrypted recovery without replay", "no arbitrary workflows, task writes, loops, voice calls or AI substitution"],
+      "implementation": ["backend/boldApp/mensajeria/automations.py", "backend/boldApp/mensajeria/automation_views.py", "frontend/modulos/mensajeria/channel_automations.jsx"],
+      "evidence": ["backend/boldApp/mensajeria/test_automations.py", "backend/boldApp/mensajeria/test_automation_concurrency.py", "frontend/modulos/core/tests/automations_ui.mjs", "docs/acceptance-channel-automations-20261029.json", "docs/acceptance-automation-ui-20261029.json"],
+      "native_two_accounts_and_real_clock_watch_worker_accepted": true
+    }
+  ],
+  "cross_cutting": {
+    "it_pilot_and_private_participant_boundaries": "backend/boldApp/mensajeria/test_pilot.py and test_channel_privacy.py",
+    "published_release_note_ids_preserved": "frontend/modulos/perfil/release_notes.test.js",
+    "notes_prepared_not_published": "2026-10-29-functional-web-review-pilot",
+    "graphify_rebuild_or_hooks_created": false,
+    "visual_rework_performed": false,
+    "production_changed": false
+  },
+  "current_verification": {
+    "messaging_node_tests_passed": 187,
+    "pwa_tests_passed": 14,
+    "notification_sync_tests_passed": 21,
+    "general_frontend_passed": 395,
+    "general_frontend_initially_skipped": 1,
+    "skipped_domparser_test_reexecuted_with_dom_environment": "3 passed, zero skipped; initial ad-hoc harness closed too early, corrected without app changes",
+    "dom_suites_passed": ["messaging", "composer and forwarding recovery", "pages", "page recovery", "hierarchy", "links", "page discussions", "page formatting", "history", "saved items", "resource library", "documents", "channels", "mentions", "automations", "message task conversion", "message agreements"],
+    "postgresql_version": "18.6",
+    "postgresql_test_profile": "config.settings_test_postgres",
+    "postgresql_tests_passed": 494,
+    "postgresql_tests_failed": 0,
+    "postgresql_tests_skipped": 0,
+    "postgresql_seconds": 882.927,
+    "postgresql_scope": ["boldApp.mensajeria", "boldApp.notificaciones.tests.test_notifications", "boldApp.core.tests.test_authorization", "boldApp.tareas.tests.test_task_collaboration"],
+    "deployment_source_contract_tests_passed": 5,
+    "actual_compose_render": "unavailable: Docker missing; no containers started",
+    "django_check_passed": true,
+    "model_migration_dry_run_passed": true,
+    "frontend_build_passed": true,
+    "frontend_build_seconds": 66,
+    "known_large_bundle_warning_remains": true
+  },
+  "deferred_not_verified": ["distributed Redis/Celery/Beat integration", "real physical microphone or camera capture", "Apple and other device-specific acceptance", "installed PWA on physical phone", "production capacity or provider bill guarantee"],
+  "deployment_ready": false,
+  "functional_web_goal_achieved": true,
+  "commit_push_or_deployment_performed": false
+}

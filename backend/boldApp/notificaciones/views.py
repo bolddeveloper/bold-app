@@ -58,11 +58,15 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         from boldApp.mensajeria.events import _conversations
         visible_chats = _conversations(self.request.assignment.employee_id).values_list("pk", flat=True) if assignment_can_chat(self.request.assignment) else []
         from boldApp.mensajeria.channel_access import ChannelPolicy
-        from boldApp.mensajeria.models import DepartmentChannel
+        from boldApp.mensajeria.models import DepartmentChannel, ChannelPage
         channel_ids = base.filter(module="slack", resource_type="slack_channel").values_list("resource_id", flat=True)
         policy = ChannelPolicy(self.request.assignment, self.request)
         visible_channels = [channel.pk for channel in DepartmentChannel.objects.select_related("unit").filter(pk__in=channel_ids)
             if policy.allows("slack.channel.read", channel.unit, channel.pk)]
+        page_ids = base.filter(module='slack', resource_type='slack_page').values_list('resource_id', flat=True)
+        from boldApp.mensajeria.page_mentions import PAGE_READ_CODES
+        visible_pages = [page.pk for page in ChannelPage.objects.select_related('channel__unit').filter(pk__in=page_ids)
+            if all(policy.allows(code, page.channel.unit, page.channel_id) for code in PAGE_READ_CODES)]
         return base.select_related(
             "actor_assignment__employee", "recipient_assignment", "task", "project"
         ).filter(
@@ -74,7 +78,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         ).filter(
             ~Q(module="messaging") | Q(resource_type="direct_conversation", resource_id__in=visible_chats),
         ).filter(
-            ~Q(module="slack") | Q(resource_type="slack_channel", resource_id__in=visible_channels),
+            ~Q(module="slack") | Q(resource_type="slack_channel", resource_id__in=visible_channels) | Q(resource_type='slack_page', resource_id__in=visible_pages),
         ).order_by("-created_at", "pk")
 
     @action(detail=False, methods=["post"], url_path="clear")

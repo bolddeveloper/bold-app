@@ -47,6 +47,7 @@ export function createMessagingSession({employeeId, acknowledge, emit = () => {}
         }
     }
     function receive(envelope) {
+        if(!stopped && envelope?.event_version===2 && envelope.event_type==='messaging.reactions.updated'){emit(envelope);return;}
         if (stopped || envelope?.event_version !== 2 || !["messaging.message.created", "messaging.message.updated", "messaging.receipt.updated", "messaging.sync"].includes(envelope.event_type)) return;
         emit(envelope);
         for (const message of (envelope.payload?.messages || []).slice(0, 100)) {

@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-29",
+  "scope": "backend component only; local synthetic databases; no deployment",
+  "migration": "0032_channel_automations",
+  "migration_applied_to_test_databases": true,
+  "migration_applied_to_persistent_google_staging": false,
+  "default_feature_enabled": false,
+  "postgresql": {
+    "version": "18.6",
+    "profile": "config.settings_test_postgres",
+    "passed": 30,
+    "skipped": 0,
+    "test_seconds": 47.969,
+    "functional_contracts": 25,
+    "concurrent_contracts": [
+      "two workers publish one due occurrence",
+      "two workers publish one status run",
+      "pause and publication have one serialized outcome",
+      "two creators cannot exceed account rule budget",
+      "concurrent stale status saves capture one transition"
+    ],
+    "temporary_test_server_stopped": true
+  },
+  "other_verification": {
+    "earlier_sqlite_automation_channel_template_tests_passed": 46,
+    "core_authorization_task_collaboration_tests_passed": 14,
+    "release_note_tests_passed": 5,
+    "django_check_passed": true,
+    "no_unrecorded_model_changes": true,
+    "diff_whitespace_check_passed": true,
+    "frontend_build_passed": true,
+    "frontend_build_seconds": 89,
+    "large_chunk_warning_remains": true
+  },
+  "verified_behaviors": [
+    "three strict rule kinds; initially paused; explicit activation consent",
+    "own account and exact assignment only; no owner bypass for other rules or private channels",
+    "current permissions, credentials, pilot and source rechecked for each action",
+    "MFA presence is not converted into permanent unattended authority",
+    "status changes are queued transactionally without source-title snapshots or task writes",
+    "one-off and fixed-UTC recurring reminders; missed intervals do not flood the channel",
+    "independent recurring page from a pinned same-channel template version",
+    "effects and receipts commit or roll back together",
+    "bounded retry preserves occurrence; late failures cannot undo newer success",
+    "full quota allows existing reservations to finish and an idempotent manual stop",
+    "current task projections redact revoked references in run history",
+    "configurable record/rule budgets; no history deletion to make room",
+    "status fanout counts capacity once per batch and reserves only remaining slots"
+  ],
+  "controlled_failures_injected": true,
+  "timestamps_injected_for_schedule_tests": true,
+  "permission_resolver_mocked": false,
+  "interface_controls_implemented": false,
+  "native_browser_acceptance_of_rules": false,
+  "real_clock_scheduler_acceptance": false,
+  "distributed_celery_beat_acceptance": false,
+  "commit_or_push_performed": false,
+  "oracle_or_cloudflare_deployed": false,
+  "phase_7_complete": false
+}

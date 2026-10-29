@@ -2,7 +2,7 @@
 export function installMessagingFixture(target = globalThis) {
     const actor = "11111111-1111-4111-8111-111111111111", peerId = "22222222-2222-4222-8222-222222222222";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-    const now = new Date(), calls = [], mediaBlobs = new Map();
+    const now = new Date(), calls = [], mediaBlobs = new Map(),stops=new Set();
     const yesterday = new Date(now); yesterday.setDate(yesterday.getDate()-1); yesterday.setHours(12,0,0,0);
     const me = {employee_id: actor, name: "Persona de prueba", avatar_url: null, available: true, departments: ["Equipo demo"]};
     const peer = {employee_id: peerId, name: "Compañera de demostración con nombre extenso", avatar_url: null, available: true, departments: ["Diseño", "Equipo demo"]};
@@ -24,21 +24,26 @@ export function installMessagingFixture(target = globalThis) {
     };
     target.__messagingShell = {chat_target: {employee_id: peerId}, set_active_module:module=>calls.push(`module:${module}`), open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
     target.__messagingApi = {
+        mentionPeople:async(_id,query,options)=>{calls.push('mention-search');fixture.mentionSignal=options.signal;if(fixture.mentionDelay)return fixture.mentionDelay;return {results:query.toLowerCase().includes('peer') ? [{...peer,email:'fixture.peer@bold.gt',token:'@fixture.peer@bold.gt'}]:[],refine:false};},
         preferences: async () => ({enter_behavior:fixture.enterBehavior}),
         savePreferences: async value => {fixture.enterBehavior=value; return {enter_behavior:value};},
         list: async () => {calls.push("list"); return {results: [{id: conversationId, peer, updated_at: now.toISOString(), preview: "De acuerdo. Lo reviso y te comento 👍"}], next: null};},
         open: async employee => {calls.push("open"); return fixture.forwardDestination?.peer.employee_id === employee ? fixture.forwardDestination : conversation;},
         detail: async id => {calls.push("detail"); return id===fixture.forwardDestination.id ? fixture.forwardDestination : conversation;},
         messages: async id => {calls.push("messages"); return {results: rows.filter(row=>row.conversation_id===id).reverse(), next: null, server_now: new Date().toISOString()};},
+        message:async(id,message)=>{const row=rows.find(row=>row.conversation_id===id && row.id===message);if(!row)throw Object.assign(Error('Synthetic missing'),{status:404});return {message:row};},
+        resolveIntent:async(id,nonce)=>{const row=rows.find(row=>row.conversation_id===id && row.client_id===nonce);return row ? {message:row}:null;},
+        discardMedia:async(id,nonce)=>{const row=rows.find(row=>row.conversation_id===id && row.client_id===nonce);if(row)return {outcome:'published',message:row};stops.add(nonce);return {outcome:'cancelled'};},
         send: async (id, body, clientId) => {
             calls.push("send");
             if (fixture.sendDelay) await fixture.sendDelay;
+            if(stops.has(clientId))throw Object.assign(Error('Synthetic stopped'),{status:409});
             if (fixture.failSend) {const error = new Error("Synthetic failure"); error.status = 500; throw error;}
             const duplicate = rows.find(row=>row.client_id===clientId);
             if (duplicate) {if (duplicate.body!==body) {const error=new Error("Synthetic idempotency conflict"); error.status=409; throw error;} return {message:duplicate,server_now:new Date().toISOString()};}
             const sent = new Date();
-            const row = {id: clientId, client_id: clientId, conversation_id: id, author_id: actor, body, created_at: sent.toISOString(), editable_until: new Date(+sent + 600000).toISOString(), version: 1, can_edit: true};
-            rows.push(row); return {message: row, server_now: sent.toISOString()};
+            const row = {id: clientId, client_id: clientId, conversation_id: id, author_id: actor, body, mentions:body.includes('@fixture.peer@bold.gt') ? [{employee_id:peerId,token:'@fixture.peer@bold.gt',name:peer.name}]:[],created_at: sent.toISOString(), editable_until: new Date(+sent + 600000).toISOString(), version: 1, can_edit: true};
+            rows.push(row);if(fixture.loseTextResponse)throw Error('Synthetic text response lost after commit');return {message: row, server_now: sent.toISOString()};
         },
         edit: async (id, messageId, body, version) => {
             calls.push("edit");
@@ -52,7 +57,7 @@ export function installMessagingFixture(target = globalThis) {
             const attempt = fixture.mediaSends.length;
             if (attempt===fixture.failMediaAt) {const error=new Error("Synthetic media failure"); error.status=fixture.failMediaStatus; throw error;}
             const result = await target.__messagingApi.send(id,body,clientId);
-            result.message.media = {id:clientId,kind:file.type.startsWith("image/") ? "image" : "audio",mime_type:file.type,size_bytes:file.size,width:200,height:120};
+            result.message.media = {id:clientId,kind:file.type.startsWith("image/") ? "image" : file.type.startsWith('audio/') ? "audio":'document',mime_type:file.type,size_bytes:file.size,width:200,height:120,filename:file.name};
             mediaBlobs.set(result.message.id,file);
             if (attempt===fixture.loseMediaResponseAt) throw new Error("Synthetic response lost after commit");
             return result;

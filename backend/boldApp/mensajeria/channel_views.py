@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
@@ -16,15 +17,18 @@ from boldApp.core.models import OrganizationalUnit, Permission
 from .channel_access import ChannelPolicy
 from .channel_events import publish_channel
 from .channel_tasks import TaskReferences
-from .channel_media import store_channel_media
 from .channel_unread import channel_states, thread_counts, unread_messages
-from .channel_notifications import notify_channel_message, mark_channel_notices_read
-from .media import BoundedUpload, MAX_BYTES, media_data, prepare, private_media_response
+from .channel_notifications import notify_channel_message, mark_channel_notices_read, mark_unfollowed_notices_read
+from .media import BoundedUpload, MAX_BYTES, media_data, private_media_response
 from .models import DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
-from .serializers import StrictInputSerializer, EditMessageSerializer
+from .serializers import StrictInputSerializer, StagedMessageInput, EditMessageSerializer
 from .views import PrivateChatView, Conflict
 from .channel_search import channel_matches
 from .page_content import page_card, prime_page_cards
+from .personal_data import prime_saved, saved_data
+from .thread_following import prime_thread_states, message_thread_state, thread_states
+from .mentions import prime_channel_mentions, channel_mentions, sync_channel_mentions
+from .reactions import prime_reactions, reaction_data
 
 
 class CreateChannel(StrictInputSerializer):
@@ -49,18 +53,18 @@ class UpdateChannel(StrictInputSerializer):
         return data
 
 
-class SendChannelMessage(StrictInputSerializer):
+class SendChannelMessage(StagedMessageInput):
     client_id = serializers.UUIDField()
     body = serializers.CharField(max_length=5000, allow_blank=True)
     parent_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     task_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     page_id = serializers.UUIDField(required=False, allow_null=True, default=None)
-    file = serializers.FileField(required=False, max_length=200)
+    upload_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def validate(self, data):
-        if data["page_id"] and (data["task_id"] or data.get("file")):
+        if data["page_id"] and (data["task_id"] or data['upload_id']):
             raise serializers.ValidationError("Comparte la página por separado de las tareas y archivos.")
-        if not data["body"] and data["task_id"] is None and data["page_id"] is None and not data.get("file"):
+        if not data["body"] and data["task_id"] is None and data["page_id"] is None and not data['upload_id']:
             raise serializers.ValidationError("Escribe un mensaje, selecciona una tarea o adjunta una imagen o nota de voz.")
         return data
 
@@ -106,6 +110,8 @@ def channel_data(channel, policy):
             "can_manage": policy.allows("slack.channel.manage", channel.unit, channel.pk),
             "can_manage_access": policy.allows("slack.channel.access", channel.unit, channel.pk),
             "can_send": not channel.archived_at and policy.allows("slack.message.create", channel.unit, channel.pk),
+            "can_read_automations": settings.MESSAGING_AUTOMATIONS_ENABLED and policy.allows('slack.automation.read', channel.unit, channel.pk),
+            "can_manage_automations": settings.MESSAGING_AUTOMATIONS_ENABLED and policy.allows('slack.automation.manage', channel.unit, channel.pk),
             **policy.channel_states[str(channel.pk)]}
 
 
@@ -113,8 +119,10 @@ def channel_message_data(message, actor_id, policy):
     account = getattr(message.author, "user_account", None)
     if message.task_id and not hasattr(policy, "task_references"):
         policy.task_references = TaskReferences(policy.assignment, policy.request)
-    return {"id": str(message.pk), "channel_id": str(message.channel_id), "client_id": str(message.client_id),
-            "sequence": message.sequence, "body": message.body, "parent_id": str(message.parent_id) if message.parent_id else None,
+    return {**saved_data(message, "channel_message", actor_id), **message_thread_state(message, actor_id, policy),
+            "id": str(message.pk), "channel_id": str(message.channel_id), "client_id": str(message.client_id),
+            "sequence": message.sequence, "body": message.body, "automation_kind":message.automation_kind,
+            "mentions": channel_mentions(message), "reactions":reaction_data(message, "channel_message", actor_id), "parent_id": str(message.parent_id) if message.parent_id else None,
             "task": policy.task_references.data(message.task_id) if message.task_id else None,
             "page": page_card(message.page_id, message.channel, policy) if message.page_id else None,
             "media": media_data(message),
@@ -124,7 +132,7 @@ def channel_message_data(message, actor_id, policy):
             "created_at": message.created_at, "edited_at": message.edited_at, "version": message.version,
             "editable_until": message.editable_until, "reply_count": getattr(message, "reply_count", 0),
             "unread_reply_count": getattr(policy, "thread_counts", {}).get(str(message.pk), 0),
-            "can_edit": not message.channel.archived_at and message.author_id == actor_id and timezone.now() < message.editable_until
+            "can_edit": not message.automation_kind and not message.channel.archived_at and message.author_id == actor_id and timezone.now() < message.editable_until
                         and policy.allows("slack.message.update", message.channel.unit, message.channel_id)}
 
 
@@ -276,6 +284,10 @@ class ChannelMessageListView(SlackView):
             rows = rows.filter(parent__isnull=True)
         pages = ChannelMessagePages()
         page = pages.paginate_queryset(rows, request)
+        prime_saved(page, "channel_message", self.actor())
+        prime_reactions(page, "channel_message", self.actor())
+        prime_thread_states(page, self.actor(), self.policy())
+        prime_channel_mentions(page)
         self.policy().thread_counts = thread_counts([row.pk for row in page], self.actor()) if not parent_id else {}
         if any(row.page_id for row in page):
             prime_page_cards((row.page_id for row in page), channel, self.policy())
@@ -285,6 +297,8 @@ class ChannelMessageListView(SlackView):
         response = pages.get_paginated_response([channel_message_data(row, self.actor(), self.policy()) for row in page])
         response.data["channel"] = channel_data(channel, self.policy())
         response.data["server_now"] = timezone.now()
+        if parent_id:
+            response.data["thread"] = thread_states([parent_id], self.actor())[str(parent_id)]
         return response
 
     @transaction.atomic
@@ -297,7 +311,11 @@ class ChannelMessageListView(SlackView):
         form = SendChannelMessage(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
-        prepared = prepare(values["file"]) if values.get("file") else None
+        prepared = None
+        staged = None
+        if values['upload_id']:
+            from .upload_outbox import prepared_upload
+            staged,prepared=prepared_upload(request,'channel',channel,values['client_id'],values['upload_id'])
         parent = get_object_or_404(channel.messages, pk=values["parent_id"], parent__isnull=True) if values["parent_id"] else None
         payload = {"body": values["body"], "parent": str(parent.pk) if parent else None}
         if values["task_id"] is not None:
@@ -323,8 +341,10 @@ class ChannelMessageListView(SlackView):
         message = ChannelMessage.objects.create(channel=channel, author_id=self.actor(), author_assignment=request.assignment,
             department_name=department["name"], department_color=department["color"], sequence=channel.activity_version,
             body=values["body"], task_id=values["task_id"], page_id=values["page_id"], parent=parent, client_id=values["client_id"], payload_digest=digest)
+        sync_channel_mentions(message, self.policy())
         if prepared:
-            store_channel_media(message, prepared)
+            from .upload_outbox import attach
+            attach(staged,message)
         channel.updated_at = message.created_at
         channel.save(update_fields=["activity_version", "updated_at"])
         notify_channel_message(message, request.assignment)
@@ -347,6 +367,8 @@ class ChannelMessageDetailView(SlackView):
         self.policy().require("slack.message.update", channel.unit, channel.pk)
         message = get_object_or_404(channel.messages.select_related("author__user_account", "channel__unit", "media"), pk=message_id)
         from rest_framework.exceptions import PermissionDenied
+        if message.automation_kind:
+            raise PermissionDenied('Los mensajes automáticos conservan el resultado registrado. Pausa o revisa su regla antes de futuras ejecuciones.')
         if message.author_id != self.actor() or timezone.now() >= message.editable_until:
             raise PermissionDenied("Solo puedes editar tus propios mensajes durante los primeros diez minutos.")
         form = EditMessageSerializer(data=request.data)
@@ -356,10 +378,14 @@ class ChannelMessageDetailView(SlackView):
         if form.validated_data["version"] != message.version:
             raise Conflict()
         if form.validated_data["body"] != message.body:
+            previous_mentions = {row["employee_id"] for row in channel_mentions(message)}
             message.body = form.validated_data["body"]
             message.version += 1
             message.edited_at = timezone.now()
             message.save(update_fields=["body", "version", "edited_at"])
+            targets = sync_channel_mentions(message, self.policy())
+            prime_channel_mentions([message])
+            notify_channel_message(message, request.assignment, mentioned_only={value for value in targets if str(value) not in previous_mentions})
             publish_channel(channel, "message.updated")
         return Response({"message": channel_message_data(message, self.actor(), self.policy())})
 
@@ -398,7 +424,7 @@ class ChannelFollowView(SlackView):
             subscription.revision += 1
             subscription.save(update_fields=["following", "revision", "updated_at"])
             if not subscription.following:
-                mark_channel_notices_read(channel.pk, self.actor())
+                mark_unfollowed_notices_read(channel.pk, self.actor())
             publish_channel(channel, "state.changed", self.actor())
         return Response(channel_data(channel, self.policy()))
 

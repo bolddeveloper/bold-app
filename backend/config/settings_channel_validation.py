@@ -10,6 +10,7 @@ if _root.parent != Path(tempfile.gettempdir()).resolve() or not _root.name.start
     raise ImproperlyConfigured("Start with python -m boldApp.mensajeria.channel_validation; isolated temp directory required")
 DATABASES = {"default": {**DATABASES["default"], "NAME": _root / "validation.sqlite3"}}  # noqa: F405
 SECRET_KEY = "isolated-local-channel-validation-not-a-deployment-secret"
+AUTH_ENCRYPTION_KEY = 'synthetic-local-media-outbox:' + str(_root)
 AUTH_MFA_REQUIRED = False  # Fictitious accounts only; production is unchanged.
 SEED_DEMO_ACCOUNTS = False
 SEED_PRIVILEGED_DEMO_ACCOUNTS = False

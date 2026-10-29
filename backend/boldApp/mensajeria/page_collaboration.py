@@ -18,6 +18,9 @@ from .page_content import digest, project_blocks
 from .page_crdt import decode, encode, load_document, seed_document, document_content, apply_update, document_delta
 from .page_views import page_data, record
 from .models import DepartmentChannel
+from .page_mentions import page_mentions, sync_page_mentions, page_mention_locations
+from .mentions import mention_tokens
+from .search_text import page_text
 
 
 def page_group(identity):
@@ -91,7 +94,7 @@ def synchronize(session_id, assignment_id, page_id, payload):
     delta = document_delta(doc, decode(payload.get("state"), 16384))
     return {"type": "sync_delta", "epoch": str(room.epoch), "update": encode(delta), "state": encode(doc.get_state()),
             "version": page.version, "can_edit": not page.archived_at and not channel.archived_at and policy.allows("slack.page.update", channel.unit, channel.pk),
-            "tasks": project_blocks([r for r in page.blocks if r["type"] == "task"], policy)}
+            "tasks": project_blocks([r for r in page.blocks if r["type"] in ("task", "page")], policy), "mentions": page_mentions(page)}
 
 
 @transaction.atomic
@@ -118,20 +121,24 @@ def commit_update(session_id, assignment_id, page_id, payload, connection_id):
         title, icon, blocks, encoded = document_content(doc, page, policy.assignment, request, payload.get("references"))
         changed = before != doc.get_state() or (title, icon, blocks) != (page.title, page.icon, page.blocks)
         if changed:
+            before_tokens = mention_tokens(page_text(page,include_code=False))
+            previous_mentions = page_mention_locations(page)
             # Periodic immutable checkpoints, not a full page per keystroke.
             latest = page.revisions.order_by("-version").only("version", "created_at").first()
             if latest and latest.version < page.version and timezone.now() - latest.created_at >= timedelta(seconds=30):
                 record(page, page.updated_by_id, uuid.uuid4(), digest({"checkpoint": page.version}))
             title_changed = title != page.title
-            refs_changed = [(r["id"], r.get("task_id")) for r in blocks if r["type"] == "task"] != [(r["id"], r.get("task_id")) for r in page.blocks if r["type"] == "task"]
+            refs_changed = [(r["id"],r["type"],r.get("task_id"),r.get('page_id')) for r in blocks if r["type"] in ("task","page")] != [(r["id"],r["type"],r.get("task_id"),r.get('page_id')) for r in page.blocks if r["type"] in ("task","page")]
             page.title, page.icon, page.blocks = title, icon, blocks
             page.version += 1
             page.updated_by_id = policy.assignment.employee_id
             page.save()
+            sync_page_mentions(page, policy, previous=previous_mentions)
+            mentions_changed = before_tokens != mention_tokens(page_text(page,include_code=False)) or page._mention_bindings_changed
             room.state = encoded
             room.save()
             broadcast(page.pk, {"type": "page.update", "page_id": str(page.pk), "epoch": str(epoch), "update": encode(update),
-                "version": page.version, "connection": connection_id, "references_changed": refs_changed})
+                "version": page.version, "connection": connection_id, "references_changed": refs_changed, "mentions_changed": mentions_changed})
             if title_changed:
                 publish_channel(channel, "page.title_changed")
         PageUpdateReceipt.objects.create(page=page, epoch=epoch, actor_id=policy.assignment.employee_id, client_id=token,
@@ -139,7 +146,7 @@ def commit_update(session_id, assignment_id, page_id, payload, connection_id):
     delta = document_delta(doc, state)
     return {"type": "ack", "client_id": str(token), "epoch": str(epoch), "version": page.version,
             "update": encode(delta), "state": encode(doc.get_state()), "updated_by": page.updated_by.full_name,
-            "updated_at": page.updated_at.isoformat(), "tasks": project_blocks([r for r in page.blocks if r["type"] == "task"], policy)}
+            "updated_at": page.updated_at.isoformat(), "tasks": project_blocks([r for r in page.blocks if r["type"] in ("task", "page")], policy), "mentions": page_mentions(page)}
 
 
 def authorized_event(session_id, assignment_id, page_id, event):
@@ -150,5 +157,7 @@ def authorized_event(session_id, assignment_id, page_id, event):
     if str(room.epoch) != event["epoch"]:
         return {"type": "reset_required"}
     if event.get("references_changed"):
-        result["tasks"] = project_blocks([r for r in page.blocks if r["type"] == "task"], policy)
+        result["tasks"] = project_blocks([r for r in page.blocks if r["type"] in ("task", "page")], policy)
+    if event.get('mentions_changed'):
+        result['mentions'] = page_mentions(page)
     return result

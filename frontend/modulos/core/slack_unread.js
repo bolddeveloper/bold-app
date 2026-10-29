@@ -25,7 +25,7 @@ export function createSlackUnread({fetchSummary,onChange=()=>{},now=Date.now,vis
         return running;
     }
     return {
-        receive(event) {if(closed || event?.event_version!==2 || event.event_type!=="slack.changed" || event.payload?.kind?.startsWith("page.")) return Promise.resolve();dirty=true;return run();},
+        receive(event) {if(closed || event?.event_version!==2 || event.event_type!=="slack.changed" || event.payload?.kind?.startsWith("page.") || event.payload?.kind==='reactions.updated') return Promise.resolve();dirty=true;return run();},
         invalidate() {if(closed)return Promise.resolve();dirty=true;return run();},
         recover() {if(closed || running || !dirty && now()-last<15_000) return running || Promise.resolve();dirty=true;return run();},
         dispose() {closed=true;controller.abort();},

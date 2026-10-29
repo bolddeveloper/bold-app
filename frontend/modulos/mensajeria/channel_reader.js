@@ -1,5 +1,16 @@
 // A monotone, per-view acknowledgement queue, never a timer or another
 // participant's read receipt. Uncertain requests retry idempotently on activity.
+export function visibleChannelBounds(host,{height=globalThis.window?.innerHeight || Infinity,style=node=>globalThis.window.getComputedStyle(node)}={}) {
+    const box=host.getBoundingClientRect(),bounds={top:Math.max(0,box.top),bottom:Math.min(height,box.bottom)};
+    for(let node=host.parentElement;node;node=node.parentElement){
+        const css=style(node);
+        if(/^(auto|scroll|hidden|clip)$/.test(css.overflowY || css.overflow)){
+            const clip=node.getBoundingClientRect();bounds.top=Math.max(bounds.top,clip.top);bounds.bottom=Math.min(bounds.bottom,clip.bottom);
+        }
+    }
+    return bounds;
+}
+
 export function createChannelReader({mark,onRead=()=>{},onError=()=>{},now=Date.now}) {
     let wanted=null,last=0,running=null,closed=false,retryAt=0;
     const controller=new AbortController();

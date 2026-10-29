@@ -5,15 +5,17 @@ import vm from "node:vm";
 import {watch_pwa_updates} from "./pwa_updates.js";
 import {pwa_release} from "./vite.config.js";
 
-function setup(controller = {}) {
+function setup(controller = {},reloadHook=null) {
     const registration = Object.assign(new EventTarget(), {updates: 0, update: async () => {registration.updates++;}});
     const container = Object.assign(new EventTarget(), {controller});
     const page = Object.assign(new EventTarget(), {visibilityState: "visible"});
     let clock = 0, connected = true, offer, reloads = 0, interval;
-    const host = Object.assign(new EventTarget(), {setInterval: (fn, ms) => {assert.equal(ms, 1800000); interval = fn; return 1;}, clearInterval: () => {interval = null;}});
+    const timers=new Map();let nextTimer=0;
+    const host = Object.assign(new EventTarget(), {setTimeout:(callback,ms)=>{const id=++nextTimer;timers.set(id,{callback,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval: (fn, ms) => {assert.equal(ms, 1800000); interval = fn; return 1;}, clearInterval: () => {interval = null;}});
     const dispose = watch_pwa_updates(registration, {container, page, host, now: () => clock, online: () => connected,
-        notify: fn => {offer = fn;}, reload: () => {reloads++;}});
+        notify: fn => {offer = fn;}, reload: () => {reloads++;reloadHook?.();}});
     return {registration, container, page, host, dispose, tick: async minutes => {clock += minutes * 60000; await interval();},
+        fire:ms=>{for(const [id,timer] of [...timers])if(timer.ms===ms){timers.delete(id);timer.callback();}},timers,
         offline: () => {connected = false;}, get offer() {return offer;}, get reloads() {return reloads;}};
 }
 
@@ -49,6 +51,23 @@ test("first installation never requests a reload", () => {
     const s = setup(null); s.container.controller = {};
     s.container.dispatchEvent(new Event("controllerchange")); assert.equal(s.offer, undefined);
     s.container.dispatchEvent(new Event("controllerchange")); assert.equal(typeof s.offer, "function"); s.dispose();
+});
+test('a cancelled browser reload restores retry controls without reloading automatically',()=>{
+    const s=setup(),reasons=[];s.container.dispatchEvent(new Event('controllerchange'));
+    assert.equal(s.offer({onRetry:reason=>reasons.push(reason)}),true);assert.equal(s.reloads,1);
+    assert.equal(s.offer(),false,'concurrent clicks cannot reload twice');
+    s.fire(2000);assert.deepEqual(reasons,['reload_not_completed']);assert.equal(s.reloads,1);
+    s.offer();assert.equal(s.reloads,2,'only another explicit click retries');s.dispose();assert.equal(s.timers.size,0);
+});
+test('activation timeout and thrown reload reset state without loops; actual pagehide retires timers',async()=>{
+    const s=setup();await Promise.resolve();let messages=0;const reasons=[];
+    s.registration.waiting={postMessage:()=>messages++};await s.tick(11);
+    s.offer({onRetry:reason=>reasons.push(reason)});assert.equal(messages,1);s.fire(15000);
+    assert.equal(s.reloads,0);assert.deepEqual(reasons,['activation_timeout']);assert.equal(messages,1);
+    s.offer();s.container.dispatchEvent(new Event('controllerchange'));assert.equal(s.reloads,1);
+    s.host.dispatchEvent(new Event('pagehide'));s.fire(2000);assert.deepEqual(reasons,['activation_timeout']);s.dispose();
+    const failed=setup({},()=>{throw Error('Navigation rejected');});failed.container.dispatchEvent(new Event('controllerchange'));
+    const errors=[];failed.offer({onRetry:reason=>errors.push(reason)});assert.deepEqual(errors,['reload_not_completed']);assert.equal(failed.timers.size,0);failed.dispose();
 });
 
 test("each changed bundle produces a new SW release and precaches hashed assets", () => {

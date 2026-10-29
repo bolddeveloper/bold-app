@@ -1,0 +1,41 @@
+.history_search_scrim {position:absolute;inset:0;z-index:6;display:grid;place-items:center;padding:16px;background:rgb(0 0 0 / 55%);color:var(--bold_text);}
+.history_search_dialog {display:flex;flex-direction:column;gap:16px;width:min(100%,850px);max-height:100%;min-width:0;overflow:auto;padding:24px;border:1px solid var(--bold_line);border-radius:20px;background:var(--bold_surface);box-shadow:0 20px 60px rgb(0 0 0 / 24%);overscroll-behavior:contain;}
+.history_search_dialog * {box-sizing:border-box;}
+.history_search_dialog>header,.history_search_context article>header {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.history_search_dialog>header {position:sticky;top:0;z-index:2;background:var(--bold_surface);padding:12px 0;border-bottom:1px solid var(--bold_line);display:grid;grid-template-columns:minmax(0,1fr) auto;}
+.history_search_heading {display:flex;align-items:center;gap:12px;min-width:0;}
+.history_search_page_open {grid-column:1 / -1;justify-self:start;}
+.history_search_dialog>header h2 {flex:1;min-width:0;}
+.history_search_dialog :is(h2,h3,p) {margin:0;}
+.history_search_dialog h2 {font-size:20px;}
+.history_search_dialog :is(button,input,select) {font:inherit;color:inherit;min-width:0;}
+.history_search_dialog button {display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;min-height:44px;border:1px solid var(--bold_line);border-radius:12px;background:var(--bold_surface_soft);cursor:pointer;}
+.history_search_dialog button:hover:not(:disabled) {background:color-mix(in srgb,var(--bold_red) 9%,var(--bold_surface));}
+.history_search_dialog button:disabled {opacity:.55;cursor:not-allowed;}
+.history_search_dialog :is(button,input,select,a,article):focus-visible {outline:2px solid var(--bold_red_dark);outline-offset:3px;}
+.history_search_dialog form {display:grid;gap:12px;}
+.history_search_dialog label {display:grid;gap:6px;font-size:14px;font-weight:600;}
+.history_search_dialog :is(input:not([type=checkbox]),select) {width:100%;min-height:44px;border:1px solid var(--bold_line);border-radius:12px;padding:10px 12px;background:var(--bold_surface);}
+.history_search_dialog .history_search_check {display:flex;align-items:center;gap:8px;min-height:36px;}
+.history_search_check input {width:18px;height:18px;accent-color:var(--bold_red_dark);}
+.history_search_filters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.history_search_dialog p,.history_search_dialog small {font-size:14px;line-height:1.5;overflow-wrap:anywhere;}
+.history_search_content {display:grid;gap:12px;min-width:0;}
+.history_search_results,.history_search_context {list-style:none;display:grid;gap:12px;margin:0;padding:4px;min-width:0;}
+.history_search_results li,.history_search_context li {min-width:0;}
+.history_search_results button {width:100%;text-align:left;justify-content:flex-start;padding:14px;}
+.history_search_results button>span {display:grid;gap:8px;min-width:0;}
+.history_search_results :is(strong,small),.history_search_excerpt {overflow-wrap:anywhere;white-space:pre-wrap;}
+.history_search_content nav {display:flex;flex-wrap:wrap;gap:12px;}
+.history_search_context article {display:grid;gap:10px;padding:14px;border:1px solid var(--bold_line);border-radius:14px;background:var(--bold_surface_soft);min-width:0;scroll-margin-block:140px 20px;}
+.history_search_context article.history_search_anchor {border:2px solid var(--bold_red_dark);}
+.history_search_context time {font-size:13px;}
+.history_search_text {white-space:pre-wrap;overflow-wrap:anywhere;}
+.history_search_text a {color:inherit;text-decoration:underline;text-underline-offset:3px;}
+.history_search_dialog .messaging_media {max-width:min(100%,420px);}
+.history_search_error {padding:12px;border-left:3px solid var(--bold_red_dark);background:var(--bold_surface_soft);}
+/* Defer the non-blocking update notice while this modal is active: it otherwise
+   covers the last result/pagination control, especially on touch screens. The
+   notice stays in the DOM and becomes available again when search closes. */
+html:has(.history_search_dialog[aria-modal=true]) #bold-pwa-update {visibility:hidden;pointer-events:none;}
+@media(max-width:640px) {.history_search_scrim {padding:8px;}.history_search_dialog {padding:16px;gap:12px;}.history_search_filters {grid-template-columns:minmax(0,1fr);}.history_search_dialog :is(input,select) {font-size:16px;}}

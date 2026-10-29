@@ -32,3 +32,11 @@ export function canReviseFailedImage(error) {
     // Network errors, conflicts and server errors remain immutable on retry.
     return [400, 413, 415, 422].includes(error?.status);
 }
+
+export function renewRejectedMedia(item,error,makeId=()=>crypto.randomUUID()){
+    if(!canReviseFailedImage(error))return item;
+    // Staging may already contain the old bytes even though publication was
+    // definitively rejected. Editing those bytes must not reuse its nonce.
+    const {attempt,...draft}=item;
+    return {...draft,id:makeId(),attempted:false};
+}

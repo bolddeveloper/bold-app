@@ -1,10 +1,12 @@
 import {lazy, Suspense, useEffect, useRef, useState} from "react";
-import {ImageIcon, LoaderCircle, Mic, Pause, Play, Square, Trash2} from "lucide-react";
+import {FileText, ImageIcon, LoaderCircle, Mic, Pause, Play, Square, Trash2} from "lucide-react";
 import {messagingApi} from "./messaging_api.js";
 import {AUDIO_RATES, MAX_CHAT_FILE, audioTime, recordingMime, waveformPeaks} from "./media_helpers.js";
 import {AvatarImage} from "../core/shared/avatar_image.jsx";
 import {initials} from "./messaging_models.js";
 const ImageViewer = lazy(() => import("./image_viewer.jsx"));
+import AttachmentDownload from './attachment_download.jsx';
+import {DOCUMENT_DOWNLOAD_WARNING} from './document_files.js';
 
 export function VoiceRecorder({disabled, onReady, onError, onRecording}) {
     const [state, setState] = useState("idle"), [seconds, setSeconds] = useState(0);
@@ -123,7 +125,7 @@ export function MessageMedia({message, author, fetchMedia = messagingApi.media})
     }, [message.id]);
     const media = message.media;
     return <div className={`messaging_media messaging_media_${media.kind}`} ref={host}>
-        {media.kind === "audio" ? <AudioPlayer loadSource={load} author={author}/> : url ? <button type="button" className="messaging_image_open" aria-label="Ver imagen completa" onClick={() => setViewing(true)}><img src={url} width={media.width} height={media.height} alt="Imagen compartida en el chat" onLoad={event => event.currentTarget.dispatchEvent(new CustomEvent("bold:chat-media-loaded", {bubbles: true}))}/></button> : <button type="button" className="messaging_media_load" disabled={busy} onClick={load}>{busy ? <LoaderCircle size={20} className="messaging_spin" aria-hidden="true"/> : <ImageIcon size={22} aria-hidden="true"/>}{busy ? "Cargando…" : "Cargar imagen"}</button>}
+        {media.kind==='document' ? <div className="messaging_document"><FileText size={24} aria-hidden="true"/><strong>{media.filename || 'Documento'}</strong><small>{Math.ceil(media.size_bytes/1024)} KB · Sin vista previa</small><small>{DOCUMENT_DOWNLOAD_WARNING}</small><AttachmentDownload media={media} label="Descargar documento" fetchBlob={options=>fetchMedia(message.conversation_id || message.channel_id,message.id,options)}/></div>:media.kind === "audio" ? <AudioPlayer loadSource={load} author={author}/> : url ? <button type="button" className="messaging_image_open" aria-label="Ver imagen completa" onClick={() => setViewing(true)}><img src={url} width={media.width} height={media.height} alt="Imagen compartida en el chat" onLoad={event => event.currentTarget.dispatchEvent(new CustomEvent("bold:chat-media-loaded", {bubbles: true}))}/></button> : <button type="button" className="messaging_media_load" disabled={busy} onClick={load}>{busy ? <LoaderCircle size={20} className="messaging_spin" aria-hidden="true"/> : <ImageIcon size={22} aria-hidden="true"/>}{busy ? "Cargando…" : "Cargar imagen"}</button>}
         {error && <p role="alert">{error}</p>}
         {viewing && <Suspense fallback={<p role="status">Abriendo imagen…</p>}><ImageViewer src={url} author={author?.name} createdAt={message.created_at} filename={`bold-imagen-${media.id}.${media.mime_type.split("/")[1]}`} onClose={() => setViewing(false)}/></Suspense>}
     </div>;
@@ -131,6 +133,7 @@ export function MessageMedia({message, author, fetchMedia = messagingApi.media})
 
 export function MediaDraft({file, onRemove, onEdit, disabled}) {
     const [url, setUrl] = useState(null);
-    useEffect(() => {const value = URL.createObjectURL(file); setUrl(value); return () => URL.revokeObjectURL(value);}, [file]);
-    return <div className="messaging_media_draft">{file.type.startsWith("image/") ? <><img src={url || undefined} alt="Imagen preparada para enviar"/><button type="button" disabled={disabled} onClick={onEdit}>Editar imagen</button></> : url && <AudioPlayer key={url} src={url} file={file} label="Escuchar nota antes de enviar"/>}<button type="button" disabled={disabled} aria-label="Quitar adjunto" onClick={onRemove}><Trash2 size={18} aria-hidden="true"/></button><small>Aún no enviado · {(file.size / 1024).toFixed(0)} KB</small></div>;
+    const document=!file.type.startsWith('image/') && !file.type.startsWith('audio/');
+    useEffect(() => {if(document){setUrl(null);return;}const value = URL.createObjectURL(file); setUrl(value); return () => URL.revokeObjectURL(value);}, [file]);
+    return <div className="messaging_media_draft">{document ? <div className="messaging_document"><FileText size={24} aria-hidden="true"/><strong>{file.name}</strong><small>Documento original · Sin vista previa</small></div>:file.type.startsWith("image/") ? <><img src={url || undefined} alt="Imagen preparada para enviar"/><button type="button" disabled={disabled} onClick={onEdit}>Editar imagen</button></> : url && <AudioPlayer key={url} src={url} file={file} label="Escuchar nota antes de enviar"/>}<button type="button" disabled={disabled} aria-label="Quitar adjunto" onClick={onRemove}><Trash2 size={18} aria-hidden="true"/></button><small>Aún no enviado · {Math.ceil(file.size / 1024)} KB</small></div>;
 }

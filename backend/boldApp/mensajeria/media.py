@@ -8,6 +8,7 @@ import io
 import json
 import uuid
 import warnings
+import unicodedata
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from django.core.files.uploadhandler import FileUploadHandler
@@ -16,11 +17,12 @@ from boldApp.workspace.models import ImageStorageRoot
 from boldApp.workspace.image_storage import drive_folder, storage_user
 from boldApp.workspace.service import google, file_id
 from .models import MessageMedia
+from .document_uploads import DOCUMENT_MIMES, prepare_document
 
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 24_000_000
 EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp",
-              "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a"}
+              "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", **{mime: extension for extension, mime in DOCUMENT_MIMES.items()}}
 
 
 class BoundedUpload(FileUploadHandler):
@@ -34,7 +36,7 @@ class BoundedUpload(FileUploadHandler):
         super().new_file(*args, **kwargs)
         self.files_seen += 1
         if self.files_seen > 1:
-            raise ValidationError("Envía una imagen o una nota de voz por mensaje.")
+            raise ValidationError("Envía un archivo por mensaje: imagen, nota de voz o documento.")
 
     def receive_data_chunk(self, raw_data, start):
         self.total += len(raw_data)
@@ -77,14 +79,21 @@ def prepare(upload):
         except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
             raise ValidationError("La imagen no es válida o supera los 24 megapíxeles.") from exc
         kind = "image"
-    else:
+    elif mime.startswith("audio/"):
         signatures = {"audio/webm": content.startswith(b"\x1aE\xdf\xa3") and b"webm" in content[:4096],
                       "audio/ogg": content.startswith(b"OggS") and b"OpusHead" in content[:4096],
                       "audio/mp4": len(content) > 12 and content[4:8] == b"ftyp"}
         if not signatures.get(mime):
             raise ValidationError("La nota de voz debe ser WebM, Ogg/Opus o M4A válida.")
         kind = "audio"
-    return {"content": content, "mime_type": mime, "kind": kind, "width": width, "height": height,
+    else:
+        mime = prepare_document(upload.name, mime, content)
+        kind = "document"
+    # Display/search metadata only. Never retain the sender's local path or use
+    # this name as a filesystem path, Drive destination or response header.
+    filename = str(upload.name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    filename = "".join(char for char in filename if not unicodedata.category(char).startswith("C"))[:180]
+    return {"content": content, "mime_type": mime, "kind": kind, "width": width, "height": height, "filename": filename,
             "digest": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)}
 
 
@@ -116,7 +125,7 @@ def media_data(message):
     if media is None:
         return None
     return {"id": str(media.pk), "kind": media.kind, "mime_type": media.mime_type,
-            "size_bytes": media.size_bytes, "width": media.width, "height": media.height}
+            "size_bytes": media.size_bytes, "width": media.width, "height": media.height, "filename": media.filename}
 
 
 def private_media_response(media):
@@ -131,7 +140,8 @@ def private_media_response(media):
     if len(content) != media.size_bytes or hashlib.sha256(content).hexdigest() != media.digest:
         raise ValidationError("El archivo de Drive cambió fuera de BOLD. No se puede mostrar esta versión.")
     response = HttpResponse(content, content_type=media.mime_type)
-    response["Content-Disposition"] = f'inline; filename="bold-{media.kind}-{media.pk}.{EXTENSIONS[media.mime_type]}"'
+    disposition = "attachment" if media.kind == "document" else "inline"
+    response["Content-Disposition"] = f'{disposition}; filename="bold-{media.kind}-{media.pk}.{EXTENSIONS[media.mime_type]}"'
     response["X-Content-Type-Options"] = "nosniff"
     response["Content-Security-Policy"] = "default-src 'none'; sandbox"
     return response

@@ -89,7 +89,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             for (const event of ["bold:messaging-reconnect", "focus", "online"]) window.removeEventListener(event, recover);
             document.removeEventListener("visibilitychange", recover);
         };
-    }, [chatAllowed, state.activeAssignment?.id]);
+    }, [chatAllowed, state.activeAssignment?.id, state.authorizationRevision]);
     if (!permissionCache.current) {
         permissionCache.current = createPermissionCache({
             onRevisionChange: revision => window.dispatchEvent(new CustomEvent("bold:permissions-revision", { detail: { revision } })),
@@ -305,7 +305,13 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onNotification: envelope => reconcile("notification-event", envelope.event_type === "notification.created"),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
-            onMessaging: envelope => chat.receive(envelope),
+            onMessaging: envelope => {
+                if(envelope.event_type==='messaging.upload.changed'){
+                    if(mounted && !getCoreState().securityUncertain)window.dispatchEvent(new CustomEvent('bold:upload-event',{detail:envelope}));
+                }else if(envelope.event_type==='messaging.reminder.changed'){
+                    if(mounted && !getCoreState().securityUncertain)window.dispatchEvent(new CustomEvent('bold:messaging-event',{detail:envelope}));
+                }else chat.receive(envelope);
+            },
             onSlack: envelope => {if (mounted && !getCoreState().securityUncertain) window.dispatchEvent(new CustomEvent("bold:slack-event", {detail:envelope}));},
             onControl: envelope => {
                 if (!mounted) return;

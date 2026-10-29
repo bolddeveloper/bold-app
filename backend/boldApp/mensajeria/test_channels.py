@@ -198,8 +198,9 @@ class DepartmentChannelTests(TestCase):
         self.assertEqual(self.client.post(self.root + other + "/messages/", {"body": "No", "client_id": str(uuid.uuid4()), "parent_id": parent["id"]}, format="json").status_code, 404)
 
     def test_spoofed_identity_unknown_fields_invalid_parent_and_empty_body_rejected(self):
-        for extra in ({"author_id": str(self.bob.employee_id)}, {"department_name": "Falso"}, {"sequence": 999}, {"file": "fake"}):
+        for extra in ({"author_id": str(self.bob.employee_id)}, {"department_name": "Falso"}, {"sequence": 999}):
             self.assertEqual(self.send(**extra).status_code, 400)
+        self.assertEqual(self.send(file='fake').status_code,409,'direct file publication is explicitly retired')
         self.assertEqual(self.send("   ").status_code, 400)
         self.assertEqual(self.client.get(self.url + "messages/?parent=invalid").status_code, 400)
         self.assertEqual(self.client.get(self.root + "?unit=invalid").status_code, 400)

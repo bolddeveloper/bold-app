@@ -4,9 +4,19 @@ from django.db import models
 from django.conf import settings
 
 from boldApp.core.models.mixins import UUIDPrimaryKeyModel
-from .channel_models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState  # noqa: F401
+from .channel_models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState, ChannelThreadSubscription  # noqa: F401
 from .phone_models import PhoneTransfer, PhoneImage  # noqa: F401
-from .page_models import ChannelPage, PageRevision, PageTemplate, PageCollaboration, PageUpdateReceipt  # noqa: F401
+from .page_models import ChannelPage, PageRevision, PageTemplate, PageCollaboration, PageUpdateReceipt, PageStructureReceipt, PageLink  # noqa: F401
+from .page_discussion_models import PageDiscussion, PageDiscussionComment, PageDiscussionReceipt  # noqa: F401
+from .search_models import SearchDocument  # noqa: F401
+from .personal_models import SavedItem  # noqa: F401
+from .mention_models import ResourceMention  # noqa: F401
+from .reading_models import ReadingReminder, ReadingReminderClock  # noqa: F401
+from .reaction_models import MessageReaction, ReactionActorState  # noqa: F401
+from .task_conversion_models import MessageTaskConversion  # noqa: F401
+from .agreement_models import MessageAgreement, AgreementSource  # noqa: F401
+from .upload_models import MediaUpload, MediaUploadQuota, MediaUploadFolder  # noqa: F401
+from .automation_models import ChannelAutomation, AutomationRun, AutomationAudit, AutomationBudget  # noqa: F401
 
 
 class DirectConversation(UUIDPrimaryKeyModel):
@@ -71,10 +81,11 @@ class MessageMedia(UUIDPrimaryKeyModel):
     message = models.OneToOneField(DirectMessage, on_delete=models.CASCADE, related_name="media")
     root = models.ForeignKey("boldApp_workspace.ImageStorageRoot", on_delete=models.PROTECT)
     drive_id = models.CharField(max_length=200)
-    kind = models.CharField(max_length=10, choices=[("image", "Imagen"), ("audio", "Nota de voz")])
+    kind = models.CharField(max_length=10, choices=[("image", "Imagen"), ("audio", "Nota de voz"), ("document", "Documento")])
     mime_type = models.CharField(max_length=100)
     size_bytes = models.PositiveIntegerField()
     digest = models.CharField(max_length=64)
+    filename = models.CharField(max_length=180, blank=True, default="")
     width = models.PositiveIntegerField(null=True)
     height = models.PositiveIntegerField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)

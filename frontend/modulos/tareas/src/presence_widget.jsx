@@ -5,6 +5,7 @@ import {Filter, X} from "lucide-react";
 import {createPortal} from "react-dom";
 import {useDialog} from "../../core/shared/use_dialog.js";
 import {useCore} from "../../core/core_provider.jsx";
+import {hasChatAttention} from '../../core/reading_attention.js';
 import {useShell} from "../../core/app_shell.jsx";
 import {groupPresence, presenceLabel} from "../../core/shared/presence.js";
 import "../../core/shared/presence.css";
@@ -47,7 +48,7 @@ export default function PresenceWidget({heading}) {
                 <h3>{group.name}<span>— {group.people.length}</span></h3>
                 <div role="list">{group.people.map(row => <div className="home_presence_person" data-chat={Boolean(canChat(row))} key={row.employee_id} role="listitem" onClick={event => {if (canChat(row) && !event.target.closest("button,a")) shell.open_direct_chat(row);}}>
                     <button type="button" className="home_presence_avatar home_presence_chat" aria-label={`Ver perfil de ${row.name}`} title={`Ver información de ${row.name}`} onClick={() => setProfile(row)}><AvatarImage url={row.avatar_url} initials={row.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()} /><span className={`bold_presence_dot bold_presence_${row.status}`} aria-hidden="true"/></button>
-                    {canChat(row) ? <button type="button" className="home_presence_identity home_presence_open_chat" aria-label={`Abrir chat con ${row.name}${core.messaging?.unread?.byEmployee?.[row.employee_id] ? ", mensajes sin leer" : ""}`} onClick={() => shell.open_direct_chat(row)}><strong title={row.name}>{row.name}{core.messaging?.unread?.byEmployee?.[row.employee_id] > 0 && <span className="chat_unread_dot" aria-hidden="true"/>}</strong><span className="home_presence_status" title={presenceLabel(row)}>{presenceLabel(row)}</span>{row.description && <span className="home_presence_description">{row.description}</span>}</button> : <div className="home_presence_identity"><strong title={row.name}>{row.name}</strong><span className="home_presence_status" title={presenceLabel(row)}>{presenceLabel(row)}</span>{row.description && <TaskText className="home_presence_description" value={row.description}/>}</div>}
+                    {canChat(row) ? <button type="button" className="home_presence_identity home_presence_open_chat" aria-label={`Abrir chat con ${row.name}${hasChatAttention(core.messaging?.unread,null,row.employee_id) ? ", lectura pendiente" : ""}`} onClick={() => shell.open_direct_chat(row)}><strong title={row.name}>{row.name}{hasChatAttention(core.messaging?.unread,null,row.employee_id) && <span className="chat_unread_dot" aria-hidden="true"/>}</strong><span className="home_presence_status" title={presenceLabel(row)}>{presenceLabel(row)}</span>{row.description && <span className="home_presence_description">{row.description}</span>}</button> : <div className="home_presence_identity"><strong title={row.name}>{row.name}</strong><span className="home_presence_status" title={presenceLabel(row)}>{presenceLabel(row)}</span>{row.description && <TaskText className="home_presence_description" value={row.description}/>}</div>}
                 </div>)}</div>
                 {!group.people.length && <p className="home_presence_hint">Sin personas asignadas.</p>}
             </section>)}

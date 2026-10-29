@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -17,14 +17,19 @@ from .models import PhoneTransfer, PhoneImage, DirectMessage, DepartmentChannel,
 from .phone_views import cleanup_phone_transfers
 
 
-@override_settings(MESSAGING_PILOT_ENABLED=False)
-class PhoneTransferTests(TestCase):
+@override_settings(MESSAGING_PILOT_ENABLED=False,AUTH_MFA_REQUIRED=False,CELERY_TASK_ALWAYS_EAGER=True,
+    AUTH_ENCRYPTION_KEY='synthetic-phone-staging-tests-only')
+class PhoneTransferTests(TransactionTestCase):
     identity = chat_tests.DirectChatTests.identity
     as_person = chat_tests.DirectChatTests.as_person
     open = chat_tests.DirectChatTests.open
     root = chat_tests.DirectChatTests.root
 
     def setUp(self):
+        from boldApp.core.models import Permission
+        for resource,action in (('channel','read'),('message','create')):
+            Permission.objects.get_or_create(code=f'slack.{resource}.{action}',defaults={
+                'module_code':'slack','resource':resource,'action':action,'risk_level':'low'})
         chat_tests.DirectChatTests.setUp(self)
         self.session = AuthSession.objects.create(user_account=self.alice.employee.user_account,
             token_hash=secrets.token_hex(32), credentials_version=self.alice.employee.user_account.credentials_version,
@@ -165,15 +170,20 @@ class PhoneTransferTests(TestCase):
         ImageStorageRoot.objects.create(user=self.alice.employee.user_account, subject="fixture", client_id="fixture",
             google_email="fixture@bold.gt",folder_id="fixture_root",folder_name="BOLD APP",active=True)
         drive=LocalDrive()
-        with patch("boldApp.mensajeria.media.storage_user",return_value=self.alice.employee.user_account), \
-                patch("boldApp.mensajeria.media.drive_folder",return_value="fixture_root"), \
-                patch("boldApp.mensajeria.media.google",side_effect=drive.google):
-            result=self.client.post(self.root+self.conversation+"/messages/", {"body":"Desde teléfono", "client_id":str(uuid.uuid4()),
-                "file":SimpleUploadedFile("phone.webp",pixels,content_type="image/webp")},format="multipart")
+        from .upload_outbox import perform
+        nonce=str(uuid.uuid4());base=self.root+self.conversation+'/'
+        with patch("boldApp.mensajeria.upload_provider.storage_user",return_value=self.alice.employee.user_account), \
+                patch("boldApp.mensajeria.upload_provider.google",side_effect=drive.google):
+            queued=self.client.post(base+'uploads/',{'client_id':nonce,'file':SimpleUploadedFile('phone.webp',pixels,content_type='image/webp')},format='multipart')
+            self.assertEqual(queued.status_code,202,queued.data)
+            self.assertFalse(drive.files,'preparing does not synchronously upload or publish')
+            self.assertTrue(perform(queued.data['id']))
+            self.assertEqual(DirectMessage.objects.count(),0)
+            result=self.client.post(base+'messages/',{'body':'Desde teléfono','client_id':nonce,'upload_id':queued.data['id']},format='json')
         self.assertEqual(result.status_code,201,result.data)
         self.assertEqual(MessageMedia.objects.count(),1)
-        self.assertEqual(len(drive.files),1)
-        remote=next(iter(drive.files.values()))
+        self.assertEqual(sum(bool(row['content']) for row in drive.files.values()),1)
+        remote=next(row for row in drive.files.values() if row['content'])
         self.assertNotIn("permissions",remote["metadata"])
         message_id=result.data["message"]["id"]
         with patch("boldApp.workspace.image_storage.storage_user",return_value=self.alice.employee.user_account), \

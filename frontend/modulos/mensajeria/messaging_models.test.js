@@ -86,8 +86,22 @@ test("API deriva autores del servidor y usa rutas anidadas verificadas", async (
 test("errores comprensibles y sin volcar datos técnicos del servidor", () => {
     assert.match(messageError({status: 409}), /Conservamos tu texto/);
     assert.match(messageError({status: 429}), /espera/);
+    assert.match(messageError({status:429,fields:{detail:"La cola temporal está llena."}}), /cola temporal está llena/);
     assert.doesNotMatch(messageError({status: 500, message: "SECRET TRACE"}), /SECRET/);
+    assert.match(messageError({status:507}), /capacidad configurada/);
+    assert.equal(messageError({status:507,fields:{detail:"Se alcanzó el límite de archivos."}}), "Se alcanzó el límite de archivos.");
+    assert.doesNotMatch(messageError({status:507,fields:{detail:"x".repeat(401)}}), /x{401}/);
     assert.equal(messageError({status: 403, fields: {detail: "Solo puedes editar tus propios mensajes."}}), "Solo puedes editar tus propios mensajes.");
     assert.match(messageError({status:400,fields:["Configura el destino de Drive en Administración → Conectores."]}), /Drive/);
     assert.match(messageError({status:409,fields:{detail:"Vuelve a conectar tu cuenta de Google."}}), /Google/);
+});
+
+test("buscador de menciones de Chat usa conversación verificada y consulta acotada", async()=>{
+    const calls=[],api=createMessagingApi({request:async(...args)=>{calls.push(args);return {};}});
+    await api.mentionPeople(conversation,' Persona & correo ',{signal:'current'});
+    assert.equal(calls[0][0],`/api/v2/messaging/conversations/${conversation}/mention-people/?q=Persona+%26+correo`);
+    assert.equal(calls[0][1].signal,'current');
+    assert.throws(()=>api.mentionPeople('../../outside','Persona'));
+    assert.throws(()=>api.mentionPeople(conversation,'x'));
+    assert.throws(()=>api.mentionPeople(conversation,'x'.repeat(81)));
 });

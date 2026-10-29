@@ -13,7 +13,8 @@ export const notificationEvents = [
     ["comment.created", "Comentarios nuevos"], ["comment.mentioned", "Menciones en comentarios"],
     ["calendar.meeting_reminder", "Recordatorios de reuniones: 30 minutos, 5 minutos y al inicio"],
     ["messaging.message_created", "Mensajes privados de Chat"],
-    ["slack.message_created", "Mensajes de canales seguidos de Slack"],
+    ["slack.message_created", "Mensajes de canales e hilos seguidos de Slack"],
+    ["slack.mentioned", "Menciones de Slack, también en canales no seguidos"],
 ];
 
 export default function NotificationPreferences() {

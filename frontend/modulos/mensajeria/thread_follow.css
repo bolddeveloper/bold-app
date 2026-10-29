@@ -1,0 +1,12 @@
+.slack_thread_follow {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.slack_thread_follow>button {display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;}
+.slack_thread_follow>small {flex:1;min-width:min(100%,180px);overflow-wrap:anywhere;line-height:1.4;}
+@media (max-width:640px), (max-height:500px) and (max-width:1023px) {
+    /* Long root context and an expanded composer must not squeeze the history
+       to zero or clip Send. Keep a readable history and let the view scroll. */
+    .slack_main:has(.slack_thread_context) {overflow-y:auto;overscroll-behavior:contain;}
+    .slack_thread_context {flex-shrink:0;}
+    .slack_main:has(.slack_thread_context)>.slack_messages {flex:1 0 160px;min-height:160px;overscroll-behavior-y:auto;}
+    .slack_composer footer,.slack_composer_tools {gap:6px;}
+    .slack_composer .slack_primary {font-size:14px;padding-inline:8px;}
+}

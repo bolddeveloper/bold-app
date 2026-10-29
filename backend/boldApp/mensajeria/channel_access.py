@@ -7,10 +7,10 @@ from .access import assignment_can_chat
 
 
 class ChannelPolicy:
-    def __init__(self, assignment, request=None):
+    def __init__(self, assignment, request=None, *, permissions=None):
         self.assignment = assignment
         self.request = request
-        self.permissions = {row.code: row for row in Permission.objects.filter(module_code="slack", is_active=True)}
+        self.permissions = permissions if permissions is not None else {row.code: row for row in Permission.objects.filter(module_code="slack", is_active=True)}
         self.contexts = {}
         self.resources = {}
 

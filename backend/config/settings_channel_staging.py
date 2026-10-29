@@ -28,7 +28,11 @@ try:
         and _database.path == "/bold_validation" and not _database.query and not _database.fragment)
 except ValueError:
     _valid_database = False
-if (_root.parent != Path(tempfile.gettempdir()).resolve()
+_allowed_parents = {Path(tempfile.gettempdir()).resolve()}
+_local_data = os.environ.get('LOCALAPPDATA', '')
+if _local_data and Path(_local_data).is_absolute():
+    _allowed_parents.add((Path(_local_data) / 'BOLDApp' / 'validation').resolve())
+if (_root.parent not in _allowed_parents
         or not re.fullmatch(r"bold-channel-postgres-[a-f0-9]{32}", _root.name)
         or not _root.is_dir() or not _valid_database):
     raise ImproperlyConfigured("Use the isolated PostgreSQL staging preparation script, not a production database.")

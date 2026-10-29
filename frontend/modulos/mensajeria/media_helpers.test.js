@@ -22,16 +22,22 @@ test("voice time and waveform handle silence, missing duration and short buffers
     assert.deepEqual(waveformPeaks(new Float32Array([0,.5,0,1]), 4), [.12,.5,.12,1]);
     assert.equal(waveformPeaks(new Float32Array()).length,32);
 });
-test("media uses authenticated multipart and nested, validated private download routes", async () => {
-    const calls = [], api = createMessagingApi({request:async (...args)=>calls.push(args)});
+test("media stages via authenticated multipart and publishes JSON before private downloads", async () => {
+    const calls = [], api = createMessagingApi({request:async (path,options)=>{
+        calls.push([path,options]);
+        if(path.includes('/uploads/?'))return {results:[]};
+        if(path.endsWith('/uploads/'))return {id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',client_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',state:'ready'};
+        return {};
+    }});
     const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     await api.sendMedia(id,"",id,new File(["audio"],"voice.webm",{type:"audio/webm"}));
-    assert.ok(calls[0][1].body instanceof FormData);
-    assert.equal(calls[0][1].body.get("client_id"), id);
-    assert.equal(calls[0][1].body.get("file").type, "audio/webm");
+    assert.ok(calls[1][1].body instanceof FormData);
+    assert.equal(calls[1][1].body.get("client_id"), id);
+    assert.equal(calls[1][1].body.get("file").type, "audio/webm");
+    assert.deepEqual(calls[2][1].body,{client_id:id,body:'',upload_id:id});
     await api.media(id,id);
-    assert.equal(calls[1][1].responseType,"blob");
-    assert.match(calls[1][0], /messages\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\/media\/$/);
+    assert.equal(calls[3][1].responseType,"blob");
+    assert.match(calls[3][0], /messages\/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\/media\/$/);
     assert.throws(()=>api.media(id,"../../admin"));
 });
 test("dark shadows do not derive from white text; motion and mobile preserve reduced-motion and touch sizing", () => {

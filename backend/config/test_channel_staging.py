@@ -97,6 +97,19 @@ print(json.dumps({
     def test_unknown_directory_is_rejected(self):
         self.reject(BOLD_CHANNEL_STAGING_DIR=self.directory.name)
 
+    def test_persistent_private_profile_has_an_exact_parent_and_same_database_guards(self):
+        with tempfile.TemporaryDirectory() as local_data:
+            base=Path(local_data)/'BOLDApp'/'validation'
+            root=base/('bold-channel-postgres-'+uuid.uuid4().hex)
+            root.mkdir(parents=True)
+            (root/'staging-secret.txt').write_text('A'*64+':'+'B'*64,encoding='utf-8')
+            env=dict(self.env,LOCALAPPDATA=local_data,BOLD_CHANNEL_STAGING_DIR=str(root))
+            self.assertEqual(self.load(env).returncode,0)
+            wrong=dict(env,BOLD_TEST_DATABASE_URL=env['BOLD_TEST_DATABASE_URL'].replace('/bold_validation','/production'))
+            self.assertNotEqual(self.load(wrong).returncode,0)
+            wrong=dict(env,LOCALAPPDATA=str(Path(local_data)/'different-user'))
+            self.assertNotEqual(self.load(wrong).returncode,0)
+
     def test_missing_or_malformed_secret_is_rejected(self):
         self.secret.unlink()
         self.reject()

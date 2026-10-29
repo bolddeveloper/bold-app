@@ -6,6 +6,8 @@ from boldApp.core.models.mixins import UUIDPrimaryKeyModel
 
 class ChannelPage(UUIDPrimaryKeyModel):
     channel = models.ForeignKey("boldApp_mensajeria.DepartmentChannel", on_delete=models.PROTECT, related_name="pages")
+    parent = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="children")
+    structure_version = models.PositiveIntegerField(default=1)
     creator = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, related_name="channel_pages")
     updated_by = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, related_name="updated_channel_pages")
     client_id = models.UUIDField()
@@ -22,6 +24,30 @@ class ChannelPage(UUIDPrimaryKeyModel):
         db_table = "messaging_channel_pages"
         constraints = [models.UniqueConstraint(fields=["channel", "creator", "client_id"], name="slack_page_create_retry")]
         indexes = [models.Index(fields=["channel", "-created_at", "-id"], name="slack_page_list")]
+
+
+class PageStructureReceipt(UUIDPrimaryKeyModel):
+    page = models.ForeignKey(ChannelPage, on_delete=models.CASCADE, related_name="structure_receipts")
+    actor = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT)
+    client_id = models.UUIDField()
+    digest = models.CharField(max_length=64)
+    version = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "messaging_page_structure_receipts"
+        constraints = [models.UniqueConstraint(fields=["page", "actor", "client_id"], name="slack_page_structure_retry")]
+
+
+class PageLink(UUIDPrimaryKeyModel):
+    source = models.ForeignKey(ChannelPage, on_delete=models.CASCADE, related_name="outbound_links")
+    target = models.ForeignKey(ChannelPage, on_delete=models.PROTECT, related_name="inbound_links")
+    block_id = models.UUIDField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "messaging_page_links"
+        constraints = [models.UniqueConstraint(fields=["source", "block_id"], name="slack_page_link_block")]
 
 
 class PageRevision(UUIDPrimaryKeyModel):

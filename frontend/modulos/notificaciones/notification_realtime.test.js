@@ -68,6 +68,8 @@ test("Slack hints use the same session socket without entering private messaging
     await new Promise(resolve=>setImmediate(resolve));
     socket.listeners.message({data:JSON.stringify({event_version:2,event_type:"slack.changed",payload:{channel_id:"one"}})});
     assert.equal(opened,1); assert.equal(slack.length,1); assert.deepEqual(messages,[]); assert.deepEqual(notifications,[]);
+    socket.listeners.message({data:JSON.stringify({event_version:2,event_type:'messaging.reminder.changed',payload:{reading:{version:2,items:[]}}})});
+    assert.equal(messages.length,1);assert.equal(messages[0].event_type,'messaging.reminder.changed');assert.deepEqual(notifications,[],'a personal reminder is not a new bell notification');
     realtime.disconnect();
     socket.listeners.message({data:JSON.stringify({event_version:2,event_type:"slack.changed"})});
     assert.equal(slack.length,1);

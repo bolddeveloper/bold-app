@@ -1,0 +1,51 @@
+// Real React controls, synthetic identities/APIs. No browser/Drive credentials.
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import os from 'node:os';
+import {JSDOM} from 'jsdom';
+import {createServer} from 'vite';
+const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost:5192',pretendToBeVisual:true});
+globalThis.BroadcastChannel=undefined;
+for(const name of ['window','document','navigator','HTMLElement','HTMLInputElement','Element','MutationObserver','CustomEvent','Event'])Object.defineProperty(globalThis,name,{value:dom.window[name],configurable:true});
+const server=await createServer({configFile:false,resolve:{dedupe:['react','react-dom','lucide-react']},esbuild:{jsx:'automatic',jsxImportSource:'react'},cacheDir:path.join(os.tmpdir(),'bold-mentions-ui'),optimizeDeps:{noDiscovery:true,include:[],entries:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
+const {default:React}=await import('react'),{createRoot}=await import('react-dom/client');
+const load=file=>server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll('\\','/')}`);
+const {channelApi}=await load('../mensajeria/channel_api.js'),{default:Picker}=await load('../mensajeria/mention_picker.jsx'),{default:Text}=await load('../mensajeria/mention_text.jsx');
+const {messagingApi}=await load('../mensajeria/messaging_api.js');
+const {pageApi}=await load('../mensajeria/page_api.js');
+const person={employee_id:'00000000-0000-4000-8000-000000000002',name:'Persona <script>inocua</script>',email:'person@bold.gt',token:'@person@bold.gt'};
+let calls=0,fail=true,closed=0,denied=0,selected=[],release,signal;
+let directCalls=0,directTarget=null;
+let pageCalls=0,pageTarget=null;
+pageApi.mentionPeople=async(channel,page,query,options)=>{pageCalls++;pageTarget={channel,page};signal=options.signal;return {results:[person],refine:false};};
+messagingApi.mentionPeople=async(id,query,options)=>{directCalls++;directTarget=id;signal=options.signal;return {results:[person],refine:false};};
+channelApi.mentionPeople=async(_,query,options)=>{calls++;signal=options.signal;if(release)return new Promise(resolve=>{release=resolve;});if(fail)throw {status:503};return {results:[person],refine:false};};
+const root=createRoot(document.getElementById('root')),settle=()=>new Promise(resolve=>setTimeout(resolve,35));
+async function waitFor(check){const deadline=Date.now()+5000;while(!check() && Date.now()<deadline)await settle();assert.ok(check(),'expected mention UI state');}
+const mount=(key,conversationId,pageId)=>root.render(React.createElement(Picker,{key,...(conversationId ? {conversationId}:{channelId:'00000000-0000-4000-8000-000000000001',pageId}),onClose:()=>closed++,onDenied:()=>denied++,onSelect:person=>selected.push(person)}));
+const input=value=>{const node=document.querySelector('input');Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));};
+const submit=()=>document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+try{
+    mount('first');await waitFor(()=>document.querySelector('input'));input('Persona');await settle();assert.equal(calls,0,'typing and idle do not query');
+    submit();await waitFor(()=>document.querySelector('[role="alert"]'));assert.match(document.querySelector('[role="alert"]').textContent,/buscar personas/);
+    fail=false;submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
+    assert.equal(document.querySelector('script'),null);assert.match(document.querySelector('.slack_task_results').textContent,/<script>/);
+    document.querySelector('.slack_task_results button').click();assert.equal(selected[0].token,person.token);
+    release=true;submit();await waitFor(()=>typeof release==='function');const oldSignal=signal;
+    mount('next-identity');await waitFor(()=>document.querySelector('input')?.value==='');assert.equal(oldSignal.aborted,true);
+    release({results:[person],refine:false});await settle();assert.equal(document.querySelectorAll('.slack_task_results button').length,0,'late old identity results stay gone');
+    document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(closed,1);
+    const channelCalls=calls,conversationId='00000000-0000-4000-8000-000000000004';
+    mount('direct',conversationId);await waitFor(()=>document.querySelector('[role="dialog"]')?.textContent.includes('Solo los dos participantes'));
+    assert.match(document.querySelector('[role="dialog"]').textContent,/Solo los dos participantes/);
+    input('Persona');await settle();assert.equal(directCalls,0);submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
+    assert.equal(directTarget,conversationId);assert.equal(calls,channelCalls,'Chat never queries the channel/global directory endpoint');
+    const pageId='00000000-0000-4000-8000-000000000005';mount('page',null,pageId);
+    await waitFor(()=>document.querySelector('[role="dialog"]')?.textContent.includes('Solo personas con acceso a esta página'));
+    input('Persona');await settle();assert.equal(pageCalls,0);submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
+    assert.deepEqual(pageTarget,{channel:'00000000-0000-4000-8000-000000000001',page:pageId});assert.equal(calls,channelCalls);
+    root.render(React.createElement('p',null,React.createElement(Text,{text:'Hola @person@bold.gt https://example.com',mentions:[person]})));await waitFor(()=>document.querySelector('.messaging_mention'));
+    assert.equal(document.querySelector('script'),null);assert.equal(document.querySelector('.messaging_mention').textContent,'@'+person.name);
+    assert.equal(document.querySelector('a').rel,'noopener noreferrer');assert.equal(denied,0);
+    console.log('Mention UI passed: explicit search, retry, literal-safe names, abort/identity isolation, Escape and verified rendering.');
+}finally{root.unmount();await server.close();dom.window.close();}

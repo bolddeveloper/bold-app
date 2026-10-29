@@ -390,6 +390,13 @@ class TaskStatusViewSet(AssignmentScopedViewSetMixin, viewsets.ModelViewSet):
 
 
 class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets.ModelViewSet):
+    @action(detail=True, methods=["get"], url_path="message-origins")
+    def message_origins(self, request, pk=None):
+        from boldApp.mensajeria.task_conversions import task_origins
+        response = Response({"results":task_origins(request, self.get_object())})
+        response["Cache-Control"] = "private, no-store"
+        return response
+
     @action(detail=True, methods=["get"], url_path="voice-note")
     def voice_note(self, request, pk=None):
         return audio_response(self.get_object().voice_notes, request.query_params.get("note"))

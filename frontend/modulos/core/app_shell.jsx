@@ -63,7 +63,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const set_workspace_busy = value => {workspace_busy.current = value;};
     const set_active_module = async value => {
         if (!isShellModuleAllowed(value, navigation)) return false;
-        if(active_module==="slack" && value!=="slack" && slack_dirty.current && !await confirmBold("¿Salir de Slack y descartar el borrador de la página sin guardar?"))return false;
+        if(active_module==="slack" && value!=="slack" && slack_dirty.current && !await confirmBold("¿Salir de Slack sin confirmar el guardado de la revisión? Comprueba que el borrador esté protegido antes de continuar. Salir no elimina ni pausa operaciones que el servidor haya recibido."))return false;
         if (active_module === "profile" && value !== "profile" && profile_dirty.current && !await confirmBold("¿Salir del perfil y descartar los cambios sin guardar?")) return false;
         if (active_module === "docs" && value !== "docs" && workspace_busy.current) return;
         if (active_module === "docs" && value !== "docs" && workspace_dirty.current && !await confirmBold("¿Salir de Docs y descartar los cambios sin guardar?")) return;
@@ -154,7 +154,8 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     const [membersOpen, setMembersOpen] = useState(false);
     useDialog(membersOpen, ".team_members_panel", () => setMembersOpen(false));
     useEffect(() => setMembersOpen(false), [core.activeAssignment?.id, shell.chat_target]);
-    const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews, unreadChats: core.messaging?.unread?.total > 0 };
+    const reading=core.messaging?.unread?.reading?.items || [],markedChats=reading.filter(row=>row.target.kind==='chat').length,markedSlack=reading.filter(row=>row.target.kind==='channel').length;
+    const membersActions = { membersOpen, toggleMembers: () => setMembersOpen(value => !value), unreadNews, unreadChats: core.messaging?.unread?.total > 0 || markedChats>0 };
     const [bellPulse, setBellPulse] = useState(0);
     const [bellReminder, setBellReminder] = useState(false);
     const hasUnreadNotifications = topBarProps.notifications.some(item => !item.is_read);
@@ -196,8 +197,8 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
             </aside>
         </div>
         <div id="bold-overlay-root" />
-        <span className="chat_unread_status" role="status" aria-atomic="true">{membersActions.unreadChats ? `${core.messaging.unread.total} mensajes de Chat sin leer` : ""}</span>
-        <span className="chat_unread_status" role="status" aria-atomic="true">{core.slack?.unread?.total>0 ? `${core.slack.unread.total} ${core.slack.unread.total===1 ? "mensaje" : "mensajes"} de Slack sin leer` : ""}</span>
+        <span className="chat_unread_status" role="status" aria-atomic="true">{[core.messaging?.unread?.total>0 ? `${core.messaging.unread.total} ${core.messaging.unread.total===1 ? 'mensaje':'mensajes'} de Chat sin leer`:'',markedChats ? `${markedChats} ${markedChats===1 ? 'conversación de Chat marcada como no leída':'conversaciones de Chat marcadas como no leídas'}`: ''].filter(Boolean).join('. ')}</span>
+        <span className="chat_unread_status" role="status" aria-atomic="true">{[core.slack?.unread?.total>0 ? `${core.slack.unread.total} ${core.slack.unread.total===1 ? "mensaje" : "mensajes"} de Slack sin leer`:'',markedSlack ? `${markedSlack} ${markedSlack===1 ? 'marca personal':'marcas personales'} de no leído en Slack`: ''].filter(Boolean).join('. ')}</span>
         {profileAnchor && <ProfileQuickMenu anchor={profileAnchor} close={() => setProfileAnchor(null)} openProfile={shell.open_profile} changeDepartment={async id => {if (!await shell.can_change_department()) return false; core.setActiveAssignment(id); return true;}}/>}
         {overlays}
     </div>;

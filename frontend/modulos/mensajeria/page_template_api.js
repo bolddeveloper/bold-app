@@ -1,7 +1,7 @@
 import {http} from "../core/http_client.js";
 import {channelPage} from "./channel_api.js";
 const id=value=>{if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || ""))throw Error("Identificador no válido.");return value;};
-const templateId=value=>/^builtin-(meeting|brief|weekly)$/.test(value || "") ? value:id(value);
+const templateId=value=>/^builtin-(meeting|brief|weekly|process|delivery|handoff)$/.test(value || "") ? value:id(value);
 export function createTemplateApi(client=http){
     const collection=channel=>`/api/v2/messaging/channels/${id(channel)}/templates/`,detail=(channel,template)=>collection(channel)+templateId(template)+"/";
     return {

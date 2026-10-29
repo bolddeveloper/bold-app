@@ -10,6 +10,8 @@ const replacements = [
     ["/core/app_shell.jsx", "export const useShell = () => globalThis.__messagingShell;"],
     ["/core/http_client.js", "export const is_using_real_backend = () => true; export const http = {request: async () => {throw Error('No network in fixture');}};"],
     ["/mensajeria/messaging_api.js", "export const messagingApi = globalThis.__messagingApi;"],
+    ["/mensajeria/draft_service.js", "export const draftService={purge:async()=>{},open:async()=>({recover:async()=>null,save:async()=>true,clear:async()=>true,isActive:()=>true,close:()=>{}})};"],
+    ["/core/shared/bold_dialog.js", "export const confirmBold=async()=>globalThis.__messagingConfirm !== false; export const promptBold=async()=>null;"],
     ["/tareas/src/task_text_editor.jsx", "export const TaskText = ({value}) => value;"],
 ];
 const server = await createServer({configFile: false, plugins: [{name: "isolated-messaging", enforce: "pre", transform(_, id) {
@@ -45,6 +47,8 @@ if (process.argv.includes("--serve")) {
     const {default: React} = await import("react"), {createRoot} = await import("react-dom/client");
     const {default: Messaging} = await server.ssrLoadModule(`/@fs/${path.resolve("../mensajeria/messaging_module.jsx").replaceAll("\\", "/")}`);
     const {default: Preferences} = await server.ssrLoadModule(`/@fs/${path.resolve("../perfil/messaging_preferences.jsx").replaceAll("\\", "/")}`);
+    const {resourceApi}=await server.ssrLoadModule(`/@fs/${path.resolve('../mensajeria/resource_api.js').replaceAll('\\','/')}`);
+    resourceApi.list=async()=>({results:[],next_cursor:null,first_cursor:'first',snapshot_at:new Date().toISOString()});
     let root = createRoot(document.getElementById("root")); const settle = () => new Promise(resolve => setTimeout(resolve, 60));
     const waitFor = async predicate => {
         const deadline = Date.now() + 5000;
@@ -53,9 +57,28 @@ if (process.argv.includes("--serve")) {
     };
     const input = text => {const field = document.querySelector("textarea"); Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value").set.call(field, text); field.dispatchEvent(new Event("input", {bubbles: true}));};
     const submit = () => document.querySelector("form").dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+    async function addPeerMention(){
+        const field=document.querySelector('textarea');field.setSelectionRange(field.value.length,field.value.length);
+        document.querySelector('[aria-label="Mencionar a una persona"]').click();await waitFor(()=>document.querySelector('.slack_mention_picker input'));
+        const lookup=document.querySelector('.slack_mention_picker input');
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(lookup,'peer');lookup.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+        document.querySelector('.slack_mention_picker form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+        await waitFor(()=>document.querySelector('.slack_task_results button'));document.querySelector('.slack_task_results button').click();
+        await waitFor(()=>!document.querySelector('.slack_mention_picker') && document.activeElement===document.querySelector('textarea'));
+        return document.querySelector('textarea').value;
+    }
     try {
         root.render(React.createElement(Messaging)); await waitFor(() => document.querySelectorAll(".messaging_message").length === 2);
         console.log("Messaging DOM: conversation rendered; checking interactions…");
+        document.querySelector('.messaging_peer').click();await settle();
+        [...document.querySelectorAll('button')].find(node=>node.textContent==='Archivos y enlaces').click();await waitFor(()=>document.querySelector('.resource_library'));
+        assert.ok(document.querySelector('.messaging_conversation').hasAttribute('inert'));
+        let libraryDeliveries=0;const originalDelivery=globalThis.__messagingCore.messaging.markDelivered;
+        globalThis.__messagingCore.messaging.markDelivered=()=>libraryDeliveries++;root.render(React.createElement(Messaging));await settle();
+        assert.equal(libraryDeliveries,0,'a library must suspend background conversation delivery/read observers');
+        document.querySelector('[aria-label="Cerrar biblioteca"]').click();await waitFor(()=>!document.querySelector('.resource_library'));await settle();
+        assert.ok(libraryDeliveries>0,'normal conversation delivery resumes on return');
+        globalThis.__messagingCore.messaging.markDelivered=originalDelivery;root.render(React.createElement(Messaging));await settle();document.querySelector('.messaging_peer').click();await settle();
         document.querySelector('[aria-label="Ir a Slack"]').click();await settle();assert.ok(fixture.calls.includes('module:slack'));
         assert.equal(document.querySelectorAll(".messaging_message").length, 2);
         assert.equal(document.querySelector('#messaging_input').rows,1,"composer starts with one compact row");
@@ -75,8 +98,27 @@ if (process.argv.includes("--serve")) {
         assert.match(document.querySelector(".messaging_peer").textContent, /En línea/);
         assert.ok(document.querySelector('[aria-label="Adjuntar imagen"]'));
         assert.ok(document.querySelector('[aria-label="Grabar nota de voz"]'));
+        const mentionSearches=fixture.calls.filter(call=>call==='mention-search').length;
+        input('Mención: ');await settle();
+        const mentionCaret=document.querySelector('textarea').value.length;
+        document.querySelector('textarea').setSelectionRange(mentionCaret,mentionCaret);
+        document.querySelector('[aria-label="Mencionar a una persona"]').click();
+        await waitFor(()=>document.querySelector('.slack_mention_picker input'));
+        assert.ok(document.querySelector('.messaging_conversation').hasAttribute('inert'));
+        const mentionField=document.querySelector('.slack_mention_picker input');
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(mentionField,'peer');mentionField.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+        assert.equal(fixture.calls.filter(call=>call==='mention-search').length,mentionSearches,'typing never queries the directory');
+        const sendsBeforeMention=fixture.calls.filter(call=>call==='send').length;
+        document.querySelector('.slack_mention_picker form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+        await waitFor(()=>document.querySelector('.slack_task_results button'));
+        document.querySelector('.slack_task_results button').click();await waitFor(()=>!document.querySelector('.slack_mention_picker'));
+        await waitFor(()=>document.activeElement===document.querySelector('textarea'));
+        assert.equal(document.querySelector('textarea').value,'Mención: @fixture.peer@bold.gt ');
+        assert.equal(fixture.calls.filter(call=>call==='send').length,sendsBeforeMention,'selection does not send');
+        assert.equal(document.querySelector('.messaging_conversation').hasAttribute('inert'),false);
+        input('');await settle();
         const reads = fixture.calls.length; await settle(); assert.equal(fixture.calls.length, reads, "no polling while idle");
-        input("Prueba de envío"); await settle();
+        input("Prueba de envío @fixture.peer@bold.gt"); await settle();
         let release; fixture.sendDelay = new Promise(resolve => {release = resolve;});
         submit(); submit(); await settle();
         assert.equal(fixture.calls.filter(call => call === "send").length, 1);
@@ -84,13 +126,16 @@ if (process.argv.includes("--serve")) {
         release(); await settle();
         assert.equal(document.querySelector("textarea").value, "");
         assert.equal(document.querySelectorAll(".messaging_message").length, 3);
+        assert.equal(document.querySelector('.messaging_mine .messaging_mention').textContent,'@'+fixture.peer.name);
         assert.ok(document.querySelector('.messaging_arriving'), "new sends animate but loaded history does not");
         fixture.sendDelay = null; fixture.failSend = true;
         input("No perder este borrador"); await settle(); submit(); await settle();
         assert.equal(document.querySelector("textarea").value, "No perder este borrador");
         assert.match(document.querySelector('[role="alert"]').textContent, /Conservamos tu texto/);
         fixture.failSend = false;
-        document.querySelector('[aria-label="Editar mi mensaje"]').click(); await settle(); input("Texto corregido"); await settle(); submit(); await settle();
+        document.querySelector('[aria-label="Editar mi mensaje"]').click(); await settle(); input("Texto corregido"); await settle();
+        assert.equal(await addPeerMention(),'Texto corregido @fixture.peer@bold.gt ');
+        submit(); await settle();
         assert.match(document.querySelector(".messaging_mine .messaging_text").textContent, /Texto corregido/);
         assert.match(document.querySelector(".messaging_mine footer").textContent, /editado/);
         assert.equal(document.querySelectorAll(".messaging_message").length, 3);
@@ -263,6 +308,7 @@ if (process.argv.includes("--serve")) {
         const dropped = new Event("drop",{bubbles:true,cancelable:true}); Object.defineProperty(dropped,"dataTransfer",{value:{files:[three],types:["Files"]}});
         document.querySelector('form').dispatchEvent(dropped); await settle(); assert.equal(document.querySelectorAll('.messaging_queue_thumb').length,3);
         input("Tercera descripción"); await settle();
+        assert.equal(await addPeerMention(),'Tercera descripción @fixture.peer@bold.gt ');
         const beforeSend=fixture.mediaSends.length, beforeRows=fixture.getRows().length;
         fixture.loseMediaResponseAt=beforeSend+2;
         let releaseBatch; fixture.sendDelay=new Promise(resolve=>{releaseBatch=resolve;});
@@ -282,7 +328,7 @@ if (process.argv.includes("--serve")) {
         assert.equal(fixture.mediaSends[beforeSend+2].clientId,pending.clientId,"retry keeps the unconfirmed image id");
         assert.equal(fixture.mediaSends[beforeSend+2].file,pending.file); assert.equal(fixture.mediaSends[beforeSend+2].body,pending.body);
         assert.equal(fixture.getRows().length,beforeRows+3,"lost replies never duplicate committed images");
-        assert.deepEqual(fixture.getRows().slice(-3).map(row=>row.body),["Descripción inicial","Segunda descripción","Tercera descripción"]);
+        assert.deepEqual(fixture.getRows().slice(-3).map(row=>row.body),["Descripción inicial","Segunda descripción","Tercera descripción @fixture.peer@bold.gt"]);
         assert.equal(document.querySelector('textarea').value,"");
         pickImages([one]); await settle(); input("Conservar al cancelar"); await settle();
         document.querySelector('[aria-label="Quitar todas las imágenes"]').click(); await settle();
@@ -344,6 +390,20 @@ if (process.argv.includes("--serve")) {
         assert.equal(fixture.mediaSends.at(-1).clientId,lostImage.clientId); assert.equal(fixture.mediaSends.at(-1).file,lostImage.file);
         assert.equal(fixture.mediaSends.at(-1).id,fixture.forwardDestination.id);
         assert.equal(fixture.getRows().at(-1).author_id,fixture.actor);
+        console.log('Messaging DOM: checking safe forward discard…');
+        const beforeDiscardRows=fixture.getRows().length,discardMedia=globalThis.__messagingApi.discardMedia;
+        fixture.failMediaAt=fixture.mediaSends.length+1;fixture.failMediaStatus=500;
+        document.querySelector('[aria-label="Reenviar imagen"]').click();await waitFor(()=>document.querySelector('dialog input[type="radio"]'));document.querySelector('dialog input[type="radio"]').click();await settle();
+        document.querySelector('dialog form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>document.querySelector('dialog [role="alert"]'));
+        const forwardDiscardNonce=fixture.mediaSends.at(-1).clientId;let discardRequests=0;
+        globalThis.__messagingApi.discardMedia=async()=>{discardRequests++;throw Error('Synthetic unknown discard');};
+        globalThis.__messagingConfirm=false;[...document.querySelectorAll('dialog button')].find(node=>node.textContent==='Descartar pendientes').click();await settle();
+        assert.equal(discardRequests,0);assert.ok(document.querySelector('dialog'));
+        globalThis.__messagingConfirm=true;[...document.querySelectorAll('dialog button')].find(node=>node.textContent==='Descartar pendientes').click();await waitFor(()=>document.querySelector('dialog [role="alert"]')?.textContent.includes('descarte'));
+        assert.equal(discardRequests,1);assert.equal(fixture.mediaSends.at(-1).clientId,forwardDiscardNonce);
+        globalThis.__messagingApi.discardMedia=discardMedia;fixture.failMediaAt=null;
+        [...document.querySelectorAll('dialog button')].find(node=>node.textContent==='Descartar pendientes').click();await waitFor(()=>!document.querySelector('dialog'));
+        assert.equal(fixture.getRows().length,beforeDiscardRows);assert.ok(![...document.querySelectorAll('button')].some(node=>node.textContent==='Revisar reenvío pendiente'));
         root.unmount(); await settle();
         console.log("Messaging DOM: checking mixed multi-message forwarding…");
         root=createRoot(document.getElementById("root")); root.render(React.createElement(Messaging));
@@ -357,6 +417,7 @@ if (process.argv.includes("--serve")) {
         [...document.querySelectorAll('dialog button')].find(button=>button.textContent==="Seleccionar varios mensajes").click(); await settle();
         assert.ok(!document.querySelector('dialog')); assert.ok(document.querySelector('.messaging_selecting'));
         assert.ok(textRow.querySelector('input[type="checkbox"]').checked,"single forward can seed multi-select without sending anything");
+        await waitFor(()=>document.activeElement===document.querySelector('.messaging_selection_bar'));
         assert.ok(document.activeElement===document.querySelector('.messaging_selection_bar'));
         // Click out of chronological order; the destination must follow history.
         imageRow.querySelector('input[type="checkbox"]').click(); ownRow.querySelector('input[type="checkbox"]').click(); await settle();
@@ -403,6 +464,90 @@ if (process.argv.includes("--serve")) {
         [...document.querySelectorAll('.messaging_chat_row')].find(row=>row.textContent.includes(destinationPerson.name)).click();
         await waitFor(()=>document.querySelector('.messaging_peer')?.textContent.includes(destinationPerson.name));
         assert.ok(!document.querySelector('.messaging_selection_bar'),"selection never carries across conversations");
+        await waitFor(()=>{const trigger=document.querySelector('[aria-label="Adjuntar documento"]');return trigger && !trigger.disabled;});
+        const documentField=document.querySelector('[aria-label="Seleccionar documento para Chat"]');
+        const documentFile=new File(['synthetic PDF bytes'],'plan.pdf',{type:'application/pdf'});
+        Object.defineProperty(documentField,'files',{configurable:true,value:[documentFile]});documentField.dispatchEvent(new Event('change',{bubbles:true}));
+        await waitFor(()=>document.querySelector('.messaging_media_draft .messaging_document'));
+        assert.match(document.querySelector('.messaging_media_draft').textContent,/plan.pdf/);
+        assert.equal(document.querySelector('.messaging_media_draft audio'),null,'a document must not be played as audio');
+        const beforeDocument=fixture.mediaSends.length;submit();await waitFor(()=>fixture.mediaSends.length===beforeDocument+1 && !document.querySelector('.messaging_media_draft'));
+        assert.equal(fixture.mediaSends.at(-1).file,documentFile);assert.ok(document.querySelector('.messaging_media_document'));
+        assert.ok([...document.querySelectorAll('button')].some(node=>node.textContent==='Descargar documento'));
+        // A paused upload is an immutable attempt, not a new editable draft.
+        const originalSendMedia=globalThis.__messagingApi.sendMedia;
+        let pausedAttempt;
+        globalThis.__messagingApi.sendMedia=async(id,body,clientId,file,options)=>{
+            pausedAttempt={id,body,clientId,file};
+            options.onStage({state:'queued',filename:file.name});
+            return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Paused','AbortError')),{once:true}));
+        };
+        input('Texto original del adjunto pendiente');await settle();
+        const pausedFile=new File(['synthetic original'],'pendiente.txt',{type:'text/plain'});
+        Object.defineProperty(documentField,'files',{configurable:true,value:[pausedFile]});documentField.dispatchEvent(new Event('change',{bubbles:true}));
+        await waitFor(()=>document.querySelector('.messaging_media_draft'));submit();
+        await waitFor(()=>document.querySelector('.messaging_upload_status button'));
+        assert.match(document.querySelector('.messaging_upload_status').textContent,/Esperando turno/);
+        document.querySelector('.messaging_upload_status button').click();
+        await waitFor(()=>!document.querySelector('.messaging_upload_status[aria-label="Estado del adjunto"]') && !document.querySelector('[type="submit"]').disabled);
+        assert.equal(document.querySelector('#messaging_input').value,pausedAttempt.body);
+        assert.ok(document.querySelector('#messaging_input').disabled);
+        assert.ok(document.querySelector('[aria-label="Insertar emoji"]').disabled);
+        assert.ok(document.querySelector('[aria-label="Adjuntar imagen"]').disabled);
+        assert.match(document.body.textContent,/Espera detenida/);
+        globalThis.__messagingApi.sendMedia=originalSendMedia;submit();
+        await waitFor(()=>!document.querySelector('.messaging_media_draft'));
+        assert.equal(fixture.mediaSends.at(-1).clientId,pausedAttempt.clientId);
+        assert.equal(fixture.mediaSends.at(-1).body,pausedAttempt.body);
+        assert.equal(fixture.mediaSends.at(-1).file,pausedFile);
+        // Discard is separate from pause: confirmation, failure retention, then
+        // a fresh editable intent only after an authoritative cancelled result.
+        input('Archivo que podremos revisar de nuevo');await settle();
+        Object.defineProperty(documentField,'files',{configurable:true,value:[pausedFile]});documentField.dispatchEvent(new Event('change',{bubbles:true}));
+        await waitFor(()=>document.querySelector('.messaging_media_draft'));
+        fixture.failMediaAt=fixture.mediaSends.length+1;fixture.failMediaStatus=500;submit();
+        await waitFor(()=>document.querySelector('[aria-label="Preparación sin confirmar"] button')?.disabled===false);
+        const abandoned=fixture.mediaSends.at(-1);let discardCalls=0;
+        globalThis.__messagingApi.discardMedia=async(_id,nonce)=>{discardCalls++;assert.equal(nonce,abandoned.clientId);throw Object.assign(Error('Synthetic discard lost'),{status:500});};
+        globalThis.__messagingConfirm=false;document.querySelector('[aria-label="Preparación sin confirmar"] button').click();await settle();
+        assert.equal(discardCalls,0,'cancelling the confirmation must not touch the server');
+        globalThis.__messagingConfirm=true;document.querySelector('[aria-label="Preparación sin confirmar"] button').click();
+        await waitFor(()=>discardCalls===1 && !document.querySelector('[aria-label="Preparación sin confirmar"] button').disabled);
+        assert.ok(document.querySelector('#messaging_input').disabled);assert.ok(document.querySelector('.messaging_media_draft'));
+        globalThis.__messagingApi.discardMedia=async()=>({outcome:'cancelled'});
+        document.querySelector('[aria-label="Preparación sin confirmar"] button').click();
+        await waitFor(()=>!document.querySelector('[aria-label="Preparación sin confirmar"]') && !document.querySelector('#messaging_input').disabled);
+        assert.equal(document.querySelector('#messaging_input').value,abandoned.body);assert.ok(document.querySelector('.messaging_media_draft'));
+        fixture.failMediaAt=null;submit();await waitFor(()=>!document.querySelector('.messaging_media_draft'));
+        assert.notEqual(fixture.mediaSends.at(-1).clientId,abandoned.clientId,'only a confirmed discard creates a new intent');
+        assert.equal(fixture.mediaSends.at(-1).file,pausedFile);
+        // A lost publication response must recover the edited current message,
+        // not erase the message or resend the old caption.
+        input('Publicado pero sin respuesta');await settle();
+        Object.defineProperty(documentField,'files',{configurable:true,value:[pausedFile]});documentField.dispatchEvent(new Event('change',{bubbles:true}));
+        await waitFor(()=>document.querySelector('.messaging_media_draft'));
+        fixture.loseMediaResponseAt=fixture.mediaSends.length+1;submit();
+        await waitFor(()=>document.querySelector('[aria-label="Preparación sin confirmar"] button')?.disabled===false);
+        const committedAttempt=fixture.mediaSends.at(-1),committedRow=fixture.getRows().find(row=>row.client_id===committedAttempt.clientId),count=fixture.mediaSends.length;
+        committedRow.body='Texto editado en otra sesión';committedRow.version++;
+        globalThis.__messagingApi.discardMedia=async()=>({outcome:'published',message:{...committedRow},server_now:new Date().toISOString()});
+        document.querySelector('[aria-label="Preparación sin confirmar"] button').click();
+        await waitFor(()=>!document.querySelector('.messaging_media_draft') && document.body.textContent.includes('Texto editado en otra sesión'));
+        assert.equal(fixture.mediaSends.length,count,'discard cannot become another send');fixture.loseMediaResponseAt=null;
+        let releaseMention;fixture.mentionDelay=new Promise(resolve=>{releaseMention=resolve;});
+        await waitFor(()=>document.querySelector('[aria-label="Mencionar a una persona"]')?.disabled===false);
+        document.querySelector('[aria-label="Mencionar a una persona"]').click();await waitFor(()=>document.querySelector('.slack_mention_picker input'));
+        const lateField=document.querySelector('.slack_mention_picker input');
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(lateField,'peer');lateField.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+        const lookups=fixture.calls.filter(call=>call==='mention-search').length;
+        document.querySelector('.slack_mention_picker form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+        await waitFor(()=>fixture.calls.filter(call=>call==='mention-search').length===lookups+1);
+        globalThis.__messagingCore.authorizationRevision=99;root.render(React.createElement(Messaging));
+        await waitFor(()=>!document.querySelector('.slack_mention_picker') && !document.querySelector('.messaging_peer'));
+        assert.equal(fixture.mentionSignal.aborted,true,'security revision aborts a mention lookup');
+        releaseMention({results:[{employee_id:fixture.peer.employee_id,name:fixture.peer.name,email:'fixture.peer@bold.gt',token:'@fixture.peer@bold.gt'}],refine:false});await settle();
+        assert.equal(document.querySelector('.slack_task_results'),null,'late mention rows never restore private data');
+        fixture.mentionDelay=null;
         root.unmount(); await settle();
         console.log("Messaging UI passed: private entry, links, edits, media, image queue, single/mixed multi-forward, chronological order, selection/focus/cancel, draft preservation, partial failures and idempotent retry after reopening.");
     } finally {await server.close(); dom.window.close();}

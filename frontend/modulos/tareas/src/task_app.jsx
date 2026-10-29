@@ -104,6 +104,7 @@ import { TaskText, TaskTextEditor, TextEditorField } from "./task_text_editor.js
 import { plainRichText, appendRichImages } from "./rich_text.js";
 import { PagedAttachments } from "./paged_attachments.jsx";
 import { pagedAttachmentsEnabled, notifyAttachmentViews, createTaskEditLoader } from "./services/task_attachments.js";
+import {TaskMessageOrigins} from '../../mensajeria/message_tasks.jsx';
 import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./services/paged_comments.js";
 
 
@@ -1854,6 +1855,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
             </div>
 
             {show_comments && <TaskPipelineState key={selected_task.id} taskId={selected_task.id} projectId={selected_task.project_id}/>}
+            {show_comments && <TaskMessageOrigins key={'origin:'+selected_task.id} taskId={selected_task.id}/>}
 
             {selected_task.description ? (
                 <div className="detail_description_block">
@@ -4523,6 +4525,11 @@ function TaskAppContent({ externalModules = {} }) {
     function remember_task_section(projectId, sectionId) {
         set_last_task_sections(current => { const next = {...current, [projectId || "personal"]: sectionId}; try { localStorage.setItem(last_section_key, JSON.stringify(next)); } catch { /* Conserva la preferencia durante la sesión. */ } return next; });
     }
+    use_effect(()=>{
+        const used=event=>{const value=event.detail;if(value?.assignmentId===session.activeAssignment?.id && /^[0-9a-f-]{36}$/i.test(value.projectId || '') &&
+            (value.sectionId==='unsectioned' || /^[0-9a-f-]{36}$/i.test(value.sectionId || '')))remember_task_section(value.projectId,value.sectionId);};
+        window.addEventListener('bold:task-section-used',used);return()=>window.removeEventListener('bold:task-section-used',used);
+    },[last_section_key]);
     const unsectioned_order_key = `bold_unsectioned_order:${session.activeAssignment?.id || "demo"}`;
     const [unsectioned_order_by_project, set_unsectioned_order_by_project] = use_state(() => {
         try { return JSON.parse(localStorage.getItem(unsectioned_order_key)) || {}; } catch { return {}; }
@@ -5756,7 +5763,7 @@ function TaskAppContent({ externalModules = {} }) {
         else set_notifications(current => current.map(item => item.id === notification_item.id ? { ...item, is_read: true } : item));
         const route = notification_item.route || {};
         if (route.module === "slack" && route.channel_id) {
-            open_channel({channel_id:route.channel_id,parent_id:route.parent_id || null});
+            open_channel({channel_id:route.channel_id,parent_id:route.parent_id || null,...(route.page_id ? {page_id:route.page_id,block_id:route.block_id}: {})});
             return;
         }
         if (route.module === "messaging" && route.employee_id) {

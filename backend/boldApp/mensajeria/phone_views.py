@@ -25,7 +25,7 @@ from .access import assignment_can_chat
 from .channel_access import ChannelPolicy
 from .channel_views import SlackView
 from .media import BoundedUpload, prepare
-from .models import PhoneImage, PhoneTransfer
+from .models import PhoneImage, PhoneTransfer, MediaUploadQuota
 from .presenters import people
 from .views import Conflict
 
@@ -124,6 +124,12 @@ class PhoneCreateView(PhoneOwnerView):
                     parent = get_object_or_404(channel.messages, pk=uuid.UUID(str(data["parent_id"])), parent__isnull=True)
         except (ValueError, TypeError, AttributeError):
             raise ValidationError("Selecciona una conversación o un canal válido.")
+        # Match staged reservations: container -> global quota -> account ->
+        # transfer. Never wait for quota while holding a transfer/account lock.
+        container = conversation or channel
+        type(container).objects.select_for_update().get(pk=container.pk)
+        MediaUploadQuota.objects.get_or_create(pk=1)
+        MediaUploadQuota.objects.select_for_update().get(pk=1)
         # Serialize replacement: exactly one live capability per account.
         UserAccount.objects.select_for_update().get(pk=request.user.pk)
         PhoneTransfer.objects.filter(Q(account=request.user) | Q(expires_at__lte=timezone.now())).delete()
@@ -203,10 +209,13 @@ class PhonePublicView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         return response
 
-    def capability(self, request, identity, field):
+    def capability(self, request, identity, field, *, lock=True):
         header = request.headers.get("Authorization", "")
         token = secret(header[7:] if header.startswith("Bearer ") else "")
-        row = live(get_object_or_404(rows().select_for_update(of=("self",)), pk=identity))
+        query = rows()
+        if lock:
+            query = query.select_for_update(of=("self",))
+        row = live(get_object_or_404(query, pk=identity))
         if not secrets.compare_digest(getattr(row, field), digest(token)):
             raise PermissionDenied("El vínculo no es válido.")
         return row
@@ -243,7 +252,9 @@ class PhoneUploadView(PhonePublicView):
 
     @transaction.atomic
     def post(self, request, identity):
-        row = self.capability(request, identity, "device_hash")
+        # Authenticate before touching a container lock, then revalidate the
+        # capability/approval after the reservation locks (replacement may win).
+        row = self.capability(request, identity, "device_hash", lock=False)
         if not row.approved:
             raise PermissionDenied("Primero aprueba la vinculación en el ordenador.")
         if row.sealed:
@@ -258,6 +269,15 @@ class PhoneUploadView(PhonePublicView):
         prepared = prepare(upload)
         if prepared["size_bytes"] > MAX_NORMALIZED:
             raise ValidationError("La imagen preparada supera 2 MB. Reduce su tamaño.")
+        container = row.conversation or row.channel
+        type(container).objects.select_for_update().get(pk=container.pk)
+        MediaUploadQuota.objects.get_or_create(pk=1)
+        MediaUploadQuota.objects.select_for_update().get(pk=1)
+        row = self.capability(request, identity, "device_hash")
+        if not row.approved:
+            raise PermissionDenied("Primero aprueba la vinculación en el ordenador.")
+        if row.sealed:
+            raise Conflict("El ordenador está recibiendo las imágenes. Genera otro QR para añadir más.")
         existing = row.images.filter(client_id=client_id).first()
         if existing:
             if existing.digest != prepared["digest"]:
@@ -266,6 +286,8 @@ class PhoneUploadView(PhonePublicView):
         sizes = list(row.images.values_list("size_bytes", flat=True))
         if len(sizes) >= row.max_images or sum(sizes) + prepared["size_bytes"] > MAX_TOTAL:
             raise ValidationError(f"Esta cola admite {row.max_images} imágenes del teléfono y hasta 20 MB preparados.")
+        from .upload_capacity import check_temporary_capacity
+        check_temporary_capacity(row.account, prepared['size_bytes'])
         image = PhoneImage.objects.create(transfer=row, client_id=client_id,
             content=prepared["content"], digest=prepared["digest"], size_bytes=prepared["size_bytes"])
         return Response({"id": str(image.pk)}, status=201)

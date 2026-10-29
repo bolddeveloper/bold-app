@@ -10,6 +10,7 @@ import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
 import BrandsModule from "../marcas/brands_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
+import {hasChatAttention,hasSlackAttention} from './reading_attention.js';
 
 import {lazy, Suspense, useEffect, useState} from "react";
 import {takePhoneEntry, watchPhoneEntry} from "../mensajeria/phone_transfer_api.js";
@@ -52,8 +53,8 @@ function ApplicationWorkspace() {
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
         ...baseNavigation,
-        ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: core.messaging?.unread?.total > 0}] : []),
-        ...(canChat ? [{id: "slack", label: "Slack", icon: "slack", group: "work", unread:core.slack?.unread?.total>0}] : []),
+        ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: hasChatAttention(core.messaging?.unread)}] : []),
+        ...(canChat ? [{id: "slack", label: "Slack", icon: "slack", group: "work", unread:hasSlackAttention(core.slack?.unread,core.messaging?.unread)}] : []),
         ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),

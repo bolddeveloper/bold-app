@@ -1,6 +1,6 @@
 import {useEffect,useLayoutEffect,useRef} from "react";
 import {channelApi} from "./channel_api.js";
-import {createChannelReader} from "./channel_reader.js";
+import {createChannelReader,visibleChannelBounds} from "./channel_reader.js";
 
 export function useChannelReader({channelId,parentId,messages,viewport,enabled,onRead,onError}) {
     const reader=useRef(null),callbacks=useRef({onRead,onError});callbacks.current={onRead,onError};
@@ -15,7 +15,8 @@ export function useChannelReader({channelId,parentId,messages,viewport,enabled,o
         const check=()=>{
             if(document.hidden || !document.hasFocus()) return;
             if(document.querySelector('dialog[open]') || [...document.querySelectorAll('[aria-modal="true"]')].some(node=>node.getClientRects().length>0)) return;
-            const bounds=host.getBoundingClientRect();let latest=null;
+            const bounds=visibleChannelBounds(host);let latest=null;
+            if(bounds.bottom<=bounds.top)return;
             for(const node of host.querySelectorAll("[data-slack-message]")) {
                 const box=node.getBoundingClientRect(),message=byId.get(node.dataset.slackMessage);
                 if(message && box.height>0 && box.bottom>bounds.top && box.top<bounds.bottom && (!latest || message.sequence>latest.sequence)) latest=message;
@@ -24,8 +25,13 @@ export function useChannelReader({channelId,parentId,messages,viewport,enabled,o
         };
         const observer=new IntersectionObserver(check,{root:host,threshold:[0,.5,1]});
         host.querySelectorAll("[data-slack-message]").forEach(node=>observer.observe(node));
+        let frame=null;
+        const scrolled=()=>{if(frame===null)frame=window.requestAnimationFrame(()=>{frame=null;check();});};
+        // The explicit observer root can itself be clipped by the short-screen
+        // fallback. Its ancestors scrolling must not count an invisible reply.
+        document.addEventListener("scroll",scrolled,true);
         window.addEventListener("focus",check);document.addEventListener("visibilitychange",check);document.addEventListener("focusin",check);check();
-        return ()=>{observer.disconnect();window.removeEventListener("focus",check);document.removeEventListener("visibilitychange",check);document.removeEventListener("focusin",check);};
+        return ()=>{observer.disconnect();document.removeEventListener("scroll",scrolled,true);if(frame!==null)window.cancelAnimationFrame(frame);window.removeEventListener("focus",check);document.removeEventListener("visibilitychange",check);document.removeEventListener("focusin",check);};
     },[channelId,parentId,enabled,messages]);
     return ()=>reader.current?.observe(messages.at(-1));
 }

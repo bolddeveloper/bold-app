@@ -9,6 +9,9 @@ from boldApp.core.events import build_event_envelope
 from .models import DirectConversation, DirectMessage
 from .presenters import message_data, people, person_data
 from .unread import summaries
+from .personal_data import prime_saved
+from .mentions import prime_direct_mentions
+from .reactions import prime_reactions, reaction_data
 
 log = logging.getLogger(__name__)
 
@@ -43,11 +46,19 @@ def private_event(employee_id, event):
     rows = list(conversation.messages.select_related("media").filter(pk__in=event["message_ids"][:100]))
     if not rows:
         return None
+    if event["kind"] == "reactions.updated":
+        prime_reactions(rows, "direct", employee_id)
+        return build_event_envelope("messaging.reactions.updated", "direct_conversation", conversation.pk,
+            {"conversation_id":str(conversation.pk), "reactions":[
+                {"id":str(row.pk), "reactions":reaction_data(row, "direct", employee_id)} for row in rows]})
+    prime_saved(rows, "direct", employee_id)
     now = timezone.now()
     if event["kind"] == "receipt.updated":
         payload = {"conversation_id": str(conversation.pk), "receipts": [
             {"id": str(row.pk), "delivered_at": row.delivered_at, "read_at": row.read_at} for row in rows]}
     else:
+        prime_reactions(rows, "direct", employee_id)
+        prime_direct_mentions(rows)
         peer_id = conversation.second_employee_id if str(conversation.first_employee_id) == str(employee_id) else conversation.first_employee_id
         peer = people().get(pk=peer_id)
         payload = {"conversation_id": str(conversation.pk), "peer": person_data(peer), "updated_at": conversation.updated_at,
@@ -64,6 +75,9 @@ def pending_event(employee_id):
                 .exclude(author_id=employee_id).order_by("-created_at", "-id")[:100])
     if not rows:
         return None
+    prime_saved(rows, "direct", employee_id)
+    prime_reactions(rows, "direct", employee_id)
+    prime_direct_mentions(rows)
     now = timezone.now()
     return build_event_envelope("messaging.sync", "employee", employee_id,
                                 {"messages": [message_data(row, employee_id, now) for row in reversed(rows)]})

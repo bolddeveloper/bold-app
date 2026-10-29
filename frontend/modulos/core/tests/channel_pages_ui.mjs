@@ -8,7 +8,11 @@ const dom=new JSDOM('<div id="root"></div>',{url:"http://localhost:5192",pretend
 globalThis.BroadcastChannel=undefined;
 for(const key of ["window","document","navigator","HTMLElement","HTMLTextAreaElement","HTMLInputElement","Element","MutationObserver","CustomEvent","Event","location"])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
 let confirm=true;
-const server=await createServer({configFile:false,plugins:[{name:"pages-isolated-dialog",enforce:"pre",transform(_,id){if(id.replaceAll("\\","/").endsWith("/core/shared/bold_dialog.js"))return "export const confirmBold=async()=>globalThis.__pageConfirm;";}}],resolve:{dedupe:["react","react-dom","lucide-react"]},esbuild:{jsx:"automatic",jsxImportSource:"react"},cacheDir:path.join(os.tmpdir(),"bold-pages-ui"),optimizeDeps:{noDiscovery:true,include:[],entries:[]},server:{middlewareMode:true,hmr:false},appType:"custom"});
+const server=await createServer({configFile:false,plugins:[{name:"pages-isolated-dialog",enforce:"pre",transform(_,id){
+    const file=id.replaceAll("\\","/");
+    if(file.endsWith("/core/shared/bold_dialog.js"))return "export const confirmBold=async()=>globalThis.__pageConfirm;";
+    if(file.endsWith("/core/core_provider.jsx"))return 'export const useCore=()=>({account:{id:"synthetic"},activeAssignment:{id:"it",chat_enabled:true},authorizationRevision:1});';
+}}],resolve:{dedupe:["react","react-dom","lucide-react"]},esbuild:{jsx:"automatic",jsxImportSource:"react"},cacheDir:path.join(os.tmpdir(),"bold-pages-ui"),optimizeDeps:{noDiscovery:true,include:[],entries:[]},server:{middlewareMode:true,hmr:false},appType:"custom"});
 const {default:React}=await import("react"),{createRoot}=await import("react-dom/client");
 const load=file=>server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll("\\","/")}`);
 const {pageApi}=await load("../mensajeria/page_api.js"),{channelApi}=await load("../mensajeria/channel_api.js");
@@ -16,14 +20,18 @@ const channelId="00000000-0000-4000-8000-000000000001",pageId="00000000-0000-400
 const blockId="00000000-0000-4000-8000-000000000003";
 let page={id:pageId,title:"Guía del equipo",icon:"note",blocks:[{id:blockId,type:"paragraph",text:"Guía https://example.com <script>seguro</script>"}],version:1,can_edit:true,can_manage:true,updated_at:new Date().toISOString(),updated_by:"Cuenta ficticia"};
 let history=[structuredClone(page)],fail=false,conflict=false,denied=false,saves=0,shares=0,dirty=false,purge=0,reads=0;
+const mentionPerson={employee_id:'00000000-0000-4000-8000-000000000004',token:'@person@bold.gt',email:'person@bold.gt',name:'Persona <script>inocua</script>'};
+let mentionSearches=0,mentionFailure=true;
 Object.assign(pageApi,{
-    list:async()=>{reads++;if(denied)throw {status:403};return {results:[page],next:null,can_create:true};},
+    mentionPeople:async(channel,id,query)=>{mentionSearches++;assert.equal(channel,channelId);assert.equal(id,pageId);assert.equal(query,'Persona');if(mentionFailure)throw {status:503};return {results:[mentionPerson],refine:false};},
+    branch:async()=>{reads++;if(denied)throw {status:403};return {results:[page],next:null,can_create:true};},
+    structure:async()=>({ancestors:[],parent_id:null,structure_version:1}),
     get:async()=>{reads++;if(denied)throw {status:403};return structuredClone(page);},
     create:async(_,values)=>{page={...page,...values,version:1};return page;},
     save:async(_,__,values)=>{
         saves++;if(fail)throw {status:0};
         if(conflict){conflict=false;page={...page,title:"Cambio de mi colega",version:page.version+1};throw {status:409,fields:{current:structuredClone(page)}};}
-        assert.equal(values.version,page.version);page={...page,...values,version:page.version+1};history.push(structuredClone(page));return structuredClone(page);
+        assert.equal(values.version,page.version);page={...page,...values,mentions:values.blocks.some(row=>row.text?.includes(mentionPerson.token)) ? [mentionPerson]:[],version:page.version+1};history.push(structuredClone(page));return structuredClone(page);
     },
     history:async()=>({results:history.map(row=>({version:row.version,title:row.title,actor:"Cuenta ficticia",created_at:row.updated_at})).reverse(),next:null}),
     revision:async(_,__,version)=>history.find(row=>row.version===version),
@@ -43,8 +51,20 @@ try{
     render();await waitFor(()=>document.querySelector(".slack_page_list nav button"));
     document.querySelector(".slack_page_list nav button").click();await waitFor(title);
     assert.equal(title().value,"Guía del equipo");
+    const originalBlock=document.querySelector('textarea'),before=originalBlock.value;
+    originalBlock.setSelectionRange(before.length,before.length);document.querySelector('[aria-label="Mencionar en bloque 1"]').click();await waitFor(()=>document.querySelector('.slack_mention_picker input'));
+    assert.ok(document.querySelector('.slack_page_workspace').hasAttribute('inert'));
+    const lookup=document.querySelector('.slack_mention_picker input');input(lookup,'Persona');await settle();assert.equal(mentionSearches,0);
+    document.querySelector('.slack_mention_picker form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>document.querySelector('.slack_mention_picker [role="alert"]'));
+    assert.equal(document.querySelector('textarea').value,before);mentionFailure=false;
+    document.querySelector('.slack_mention_picker form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>document.querySelector('.slack_task_results button'));
+    document.querySelector('.slack_task_results button').click();await waitFor(()=>document.activeElement===originalBlock && !document.querySelector('.slack_mention_picker'));
+    assert.equal(originalBlock.value,before+' '+mentionPerson.token+' ');await waitFor(()=>!dirty);
+    assert.equal(document.querySelector('.slack_page_workspace').hasAttribute('inert'),false);
     button("Vista previa").click();await settle();assert.equal(document.querySelector(".slack_page_read script"),null);assert.equal(document.querySelector(".slack_page_read a").rel,"noopener noreferrer");
-    button("Editar").click();await settle();input(title(),"Notas del proyecto");await settle();assert.equal(dirty,true);await waitFor(()=>document.querySelector(".slack_page_save").textContent==="Guardado");assert.equal(dirty,false);assert.equal(saves,1);
+    assert.equal(document.querySelector('.slack_page_read .messaging_mention').textContent,'@'+mentionPerson.name);
+    const beforeTitleSaves=saves;
+    button("Editar").click();await settle();input(title(),"Notas del proyecto");await settle();assert.equal(dirty,true);await waitFor(()=>document.querySelector(".slack_page_save").textContent==="Guardado");assert.equal(dirty,false);assert.equal(saves,beforeTitleSaves+1);
     button("Casilla").click();await settle();assert.equal(document.querySelectorAll(".slack_page_block").length,2);await waitFor(()=>!dirty);
     fail=true;input(title(),"Sin conexión");await waitFor(()=>button("Reintentar guardado"));assert.equal(title().value,"Sin conexión");assert.equal(dirty,true);
     globalThis.__pageConfirm=false;document.querySelector('[aria-label="Crear página"]').click();await settle();assert.equal(title().value,"Sin conexión","cancel navigation preserves local draft");

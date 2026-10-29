@@ -28,4 +28,4 @@ export function cropRect(width, height, crop) {
     return [width * x / 100, height * y / 100, width * Math.max(10, Math.min(100 - x, Number(crop.w) || 100)) / 100,
         height * Math.max(10, Math.min(100 - y, Number(crop.h) || 100)) / 100];
 }
-export function mediaPreview(row) {return row?.body || (row?.media?.kind === "audio" ? "Nota de voz" : row?.media ? "Imagen" : "");}
+export function mediaPreview(row) {return row?.body || (row?.media?.kind === "audio" ? "Nota de voz" : row?.media?.kind==='document' ? row.media.filename || 'Documento':row?.media ? "Imagen" : "");}
