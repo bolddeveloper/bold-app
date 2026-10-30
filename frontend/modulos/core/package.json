@@ -19,6 +19,7 @@
         "test:pages-ui": "node tests/channel_pages_ui.mjs && node tests/page_recovery_ui.mjs && node tests/page_hierarchy_ui.mjs && node tests/page_links_ui.mjs && node tests/page_discussions_ui.mjs && node tests/page_formats_ui.mjs",
         "test:history-ui": "node tests/history_search_ui.mjs && node tests/saved_items_ui.mjs && node tests/resource_library_ui.mjs && node tests/document_media_ui.mjs",
         "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",
+        "test:pilot-news-ui": "node tests/pilot_news_ui.mjs",
         "test:comment-editor-ui": "node tests/comment_editor_ui.mjs",
         "test:worker": "node --test worker/*.test.js",
         "check:sync-capacity": "node tools/check_sync_capacity.mjs",

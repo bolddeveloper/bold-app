@@ -2,13 +2,14 @@ import {useEffect, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {ArrowRight, Bell, ChevronLeft, ChevronRight, Keyboard, Layers, Newspaper, UserRound, X} from "lucide-react";
 import {useDialog} from "../core/shared/use_dialog.js";
-import {releaseNotes} from "./release_notes.js";
+import {getReleaseNotes} from "./release_notes.js";
+import {useCore} from "../core/core_provider.jsx";
 import "./news.css";
 
 const icons = {keyboard: Keyboard, bell: Bell, profile: UserRound, update: Layers};
 const dateLabel = date => new Date(`${date}T12:00:00`).toLocaleDateString("es", {day: "numeric", month: "long", year: "numeric"});
 
-function NoteViewer({index, select, close}) {
+function NoteViewer({index, select, close, releaseNotes}) {
     const note = releaseNotes[index], body = useRef(null), Icon = icons[note.icon] || Newspaper;
     useDialog(true, ".bold_news_dialog", close);
     useEffect(() => {body.current.scrollTop = 0;}, [note.id]);
@@ -21,7 +22,7 @@ function NoteViewer({index, select, close}) {
     </div>, document.body);
 }
 
-export default function NewsPreferences() {
+function NewsContent({releaseNotes}) {
     const [selected, setSelected] = useState(null);
     return <section className="bold_news"><div inert={selected !== null ? true : undefined}>
         <header className="bold_news_heading"><div><h2>Novedades de BOLD</h2><p>Funciones nuevas, mejoras y correcciones de la demo.</p></div><span className="bold_news_badge">Notas de parche</span></header>
@@ -31,5 +32,10 @@ export default function NewsPreferences() {
                 <span className={`bold_news_thumbnail is_${note.icon}`} aria-hidden="true"><span>BOLD</span><Icon size={52}/></span><span className="bold_news_card_text"><span className="bold_news_category">{note.category}</span><strong>{note.title}</strong><span>{note.summary}</span><span className="bold_news_read">Leer notas de parche<ArrowRight size={16}/></span></span>
             </button>;
         })}</div></section>)}
-    </div>{selected !== null && <NoteViewer index={selected} select={setSelected} close={() => setSelected(null)}/>}</section>;
+    </div>{selected !== null && <NoteViewer releaseNotes={releaseNotes} index={selected} select={setSelected} close={() => setSelected(null)}/>}</section>;
+}
+
+export default function NewsPreferences() {
+    const {activeAssignment} = useCore();
+    return <NewsContent key={`${activeAssignment?.id || "none"}:${activeAssignment?.chat_enabled === true}`} releaseNotes={getReleaseNotes(activeAssignment)}/>;
 }

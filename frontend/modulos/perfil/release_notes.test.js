@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {pendingPilotReleaseNotes,releaseNotes} from "./release_notes.js";
+import {pendingPilotReleaseNotes,releaseNotes,itPilotReleaseNotes,getReleaseNotes} from "./release_notes.js";
+
+test("las siete novedades del 30 de octubre solo se ofrecen a la asignación piloto habilitada",()=>{
+    assert.equal(itPilotReleaseNotes.length,7);
+    for(const assignment of [undefined,null,{}, {chat_enabled:false},{chat_enabled:"true"},{unit_name:"IT"},{account_is_superuser:true}]){
+        assert.deepEqual(getReleaseNotes(assignment),releaseNotes);
+    }
+    const notes=getReleaseNotes({id:"it",chat_enabled:true});
+    assert.deepEqual(notes,[...itPilotReleaseNotes,...releaseNotes]);
+    assert.equal(new Set(notes.map(note=>note.id)).size,notes.length);
+    for(const note of itPilotReleaseNotes){
+        assert.equal(note.date,"2026-10-30");assert.equal(note.category,"Piloto IT");
+        assert.ok(note.title && note.summary && note.sections.length>=3);
+        assert.ok(note.sections.some(section=>section.title==="Qué probar"));
+        for(const section of note.sections)assert.ok(section.title && section.items.every(item=>typeof item==="string" && item.trim()));
+        assert.equal(releaseNotes.some(row=>row.id===note.id),false);
+    }
+});
 
 test("las notas preparadas del piloto conservan el formato sin publicarse",()=>{
     assert.ok(pendingPilotReleaseNotes.length>0);
@@ -19,7 +36,7 @@ test("el chat piloto no se anuncia como lanzamiento público", () => {
 test("las notas conservan campos completos, identificadores únicos y fechas válidas", () => {
     assert.ok(releaseNotes.length > 0);
     assert.equal(new Set(releaseNotes.map(note => note.id)).size, releaseNotes.length);
-    for (const note of releaseNotes) {
+    for (const note of [...itPilotReleaseNotes,...releaseNotes]) {
         for (const key of ["id", "date", "category", "icon", "title", "summary"]) {
             assert.equal(typeof note[key], "string", `${note.id}: ${key}`);
             assert.ok(note[key].trim(), `${note.id}: ${key} vacío`);
