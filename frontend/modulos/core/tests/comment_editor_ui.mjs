@@ -6,7 +6,7 @@ import {JSDOM} from "jsdom";
 import {createServer} from "vite";
 const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
 for (const key of ["window", "document", "navigator", "Node", "DOMParser", "FileReader", "File", "HTMLElement", "MutationObserver", "Element", "HTMLInputElement", "Event", "MouseEvent"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
-const React = await import("react"), {createRoot} = await import("react-dom/client");
+const React = await import("react"), {act} = React, {createRoot} = await import("react-dom/client");
 const server = await createServer({configFile: false, plugins: [{name: "isolated-comments", enforce: "pre", transform(_, id) {
     const file = id.replaceAll("\\", "/");
     if (file.endsWith("/tareas/src/voice_notes.jsx")) return "export const VoiceNotes = () => null;";
@@ -30,10 +30,11 @@ try {
     const {TaskTextEditor} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/task_text_editor.jsx").replaceAll("\\", "/")}`);
     const render = disabled => root.render(React.createElement(TaskTextEditor, {value, label: "Comentario", onChange: next => {value = next;}, disabled,
         onFiles: async event => {received.push([...event.target.files]); await new Promise(resolve => {release = resolve;});}}));
-    render(false); await settle();
+    await act(async () => render(false));
     const editor = document.querySelector('[role="textbox"]'); editor.focus();
     const range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); window.getSelection().addRange(range);
     transferEvent("paste", {files: [], getData: () => "https://example.com/demo"}, editor); await settle();
+    assert.ok(editor.querySelector("a"), `Pasted link was not recognized: ${editor.innerHTML}`);
     assert.equal(editor.querySelector("a").getAttribute("href"), "https://example.com/demo");
     const image = new File(["image"], "sample.png", {type: "image/png"});
     transferEvent("paste", {files: [image]}, editor);
@@ -52,7 +53,7 @@ try {
     }
     [...document.querySelectorAll("button")].find(button => button.textContent === "Insertar").click(); await settle();
     assert.ok([...editor.querySelectorAll("a")].some(a => a.textContent === "Guía" && a.getAttribute("href") === "https://example.com/long"));
-    render(true); await settle(); transferEvent("paste", {files: [image]}, editor); await settle(); assert.equal(received.length, 2);
+    await act(async () => render(true)); transferEvent("paste", {files: [image]}, editor); await settle(); assert.equal(received.length, 2);
     const {CommentItem, TaskActionsContext} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/comment_item.jsx").replaceAll("\\", "/")}`);
     let allowed = true;
     const renderComment = () => root.render(React.createElement(TaskActionsContext.Provider, {value: {canManageComment: () => allowed}},

@@ -5,6 +5,7 @@ import {moduleCache, moduleScope} from "../core/module_cache.js";
 import {BackgroundSyncNotice} from "../core/shared/background_sync_notice.jsx";
 import {http} from "../core/http_client.js";
 import {notificationSounds, playNotificationSound, stopNotificationSound} from "../core/notification_sound.js";
+import {backgroundPush, backgroundPushScope} from "../core/background_push.js";
 const endpoint = "/api/v2/auth/notification-settings/";
 export const notificationEvents = [
     ["task.assigned", "Tareas asignadas a mí"], ["task.collaborator_added", "Me agregan como colaborador de una tarea"],
@@ -19,7 +20,22 @@ export const notificationEvents = [
 
 export default function NotificationPreferences() {
     const core = useCore();
+    const pushScope = backgroundPushScope(core);
+    const [pushActive, setPushActive] = useState(() => backgroundPush.active(pushScope));
+    useEffect(() => {
+        const update = () => setPushActive(backgroundPush.active(pushScope));
+        window.addEventListener("bold:background-push-changed", update); update();
+        return () => window.removeEventListener("bold:background-push-changed", update);
+    }, [core.account?.id, core.activeAssignment?.id]);
     const [permission, setPermission] = useState(globalThis.Notification?.permission || "unsupported");
+    const [pushAvailable, setPushAvailable] = useState(false);
+    useEffect(() => {
+        let active = true;
+        http.request("/api/v2/notifications/push/config/").then(config => {
+            if (active) setPushAvailable(config.enabled === true && !!config.public_key);
+        }).catch(() => {if (active) setPushAvailable(false);});
+        return () => {active = false;};
+    }, [core.account?.id, core.activeAssignment?.id]);
     const cacheScope = moduleScope(core);
     const [settings, setSettings] = useState(() => moduleCache.read(cacheScope, "notification-settings")), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
     const [refreshing, setRefreshing] = useState(false), settingsRef = useRef(settings); settingsRef.current = settings;
@@ -52,9 +68,24 @@ export default function NotificationPreferences() {
         if (!globalThis.Notification) return;
         try {
             const result = await Notification.requestPermission(); setPermission(result);
-            if (result === "granted") {setSettings(value => ({...value, desktop_enabled: true})); setNotice("Permiso concedido. Guarda las preferencias para activar las notificaciones de Windows.");}
+            if (result === "granted") {setSettings(value => ({...value, desktop_enabled: true})); setNotice("Permiso concedido. Guarda las preferencias para activar los avisos del sistema.");}
             else setNotice("El permiso no fue concedido. Puedes cambiarlo desde los permisos de este sitio en tu navegador.");
         } catch {setError("El navegador no permite solicitar notificaciones aquí.");}
+    }
+    async function configureBackground(enable) {
+        setBusy(true); setError("");
+        try {
+            if (enable) {
+                if (!await backgroundPush.enable(pushScope)) throw new Error("Este navegador no permite Web Push. En iPhone o iPad utiliza BOLD desde la pantalla de inicio.");
+                if (!alive.current) return;
+                setSettings(value => ({...value, desktop_enabled: true}));
+                setNotice("Dispositivo conectado. Guarda las preferencias para recibir avisos también con BOLD cerrado mientras la sesión siga vigente.");
+            } else {
+                await backgroundPush.disable(pushScope);
+                if (alive.current) setNotice("Notificaciones con BOLD cerrado desactivadas en este dispositivo.");
+            }
+        } catch (problem) {if (alive.current) setError(problem.message);}
+        finally {if (alive.current) setBusy(false);}
     }
     async function clearNotifications() {
         setBusy(true); setError("");
@@ -69,6 +100,21 @@ export default function NotificationPreferences() {
         <fieldset disabled={busy}><legend>Sonido</legend>{[...notificationSounds,["custom","Personalizado"]].map(([id,label]) => <label className="bold_notification_choice" key={id}><input type="radio" name="notification-sound" value={id} checked={settings.sound === id} disabled={id === "custom" && !settings.custom_audio} onChange={() => setSettings({...settings, sound: id})}/>{label}</label>)}</fieldset>
         <label>Volumen: {settings.volume}%<input type="range" min="0" max="100" value={settings.volume} disabled={busy} onChange={event => setSettings({...settings, volume: Number(event.target.value)})}/></label>
         <input ref={file} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" hidden onChange={choose}/><div className="bold_profile_buttons"><button type="button" disabled={busy} onClick={() => file.current.click()}><Upload size={16}/>Subir sonido</button><button type="button" disabled={busy} onClick={preview}><Play size={16}/>Escuchar</button>{settings.custom_audio && <button type="button" disabled={busy} onClick={() => setSettings({...settings, custom_audio: "", custom_name: "", sound: settings.sound === "custom" ? "samsung" : settings.sound})}>Eliminar personalizado</button>}</div>
-        <small>{settings.custom_name || "MP3, WAV u OGG; máximo 500 KB y 15 segundos."}</small><p>El navegador permite sonidos después de interactuar con BOLD.</p><fieldset disabled={busy}><legend>Notificaciones de Windows</legend><p>Se muestran mientras BOLD está abierto en el navegador.</p><p>Permiso: {({granted: "Permitido", denied: "Bloqueado", default: "Pendiente", unsupported: "No disponible en este navegador"})[permission]}</p>{permission === "granted" ? <label className="bold_notification_toggle"><input type="checkbox" checked={settings.desktop_enabled} onChange={event => setSettings({...settings, desktop_enabled: event.target.checked})}/>Mostrar notificaciones en Windows</label> : <button type="button" disabled={permission !== "default"} onClick={requestDesktop}>Permitir notificaciones de Windows</button>}{permission === "denied" && <small>Habilítalas en los permisos de este sitio y vuelve a abrir este apartado.</small>}</fieldset><button type="button" disabled={busy} onClick={clearNotifications}>Limpiar notificaciones</button><small>Limpia los avisos del departamento activo; no borra tareas ni eventos.</small><button className="bold_profile_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Guardar preferencias"}</button>
+        <small>{settings.custom_name || "MP3, WAV u OGG; máximo 500 KB y 15 segundos."}</small><p>El navegador permite sonidos después de interactuar con BOLD.</p>
+        <fieldset disabled={busy}><legend>Avisos del sistema y segundo plano</legend>
+            <p>Recibe avisos mientras trabajas en otras ventanas. {pushAvailable ? "Para recibirlos con BOLD cerrado, activa este dispositivo." : "Mantén BOLD abierto, aunque esté minimizado."}</p>
+            <p>Permiso: {({granted: "Permitido", denied: "Bloqueado", default: "Pendiente", unsupported: "No disponible en este navegador"})[permission]}</p>
+            {permission === "granted" ? <>
+                <label className="bold_notification_toggle"><input type="checkbox" checked={settings.desktop_enabled} onChange={event => setSettings({...settings, desktop_enabled: event.target.checked})}/>Mostrar notificaciones del sistema</label>
+                {(pushAvailable || pushActive) && <>
+                    <p>{pushActive ? settings.desktop_enabled ? "Este dispositivo está conectado para recibir avisos con BOLD cerrado." : "Dispositivo preparado: activa los avisos del sistema y guarda las preferencias." : "Los avisos con BOLD cerrado están desactivados en este dispositivo."}</p>
+                    <button type="button" onClick={() => configureBackground(!pushActive)}>{pushActive ? "Desactivar en este dispositivo" : "Activar con BOLD cerrado"}</button>
+                </>}
+            </> : <button type="button" disabled={permission !== "default"} onClick={requestDesktop}>Permitir notificaciones del sistema</button>}
+            {permission === "denied" && <small>Habilítalas en los permisos de este sitio y vuelve a abrir este apartado.</small>}
+            <p>Los avisos externos muestran información general para proteger tu privacidad. Se detienen al cerrar sesión o cuando esta vence. En iPhone y iPad se necesita instalar BOLD en la pantalla de inicio.</p>
+            <small>En segundo plano se usa el sonido del sistema, sujeto a sus permisos, silencio y modo de concentración. El sonido personalizado y su volumen se aplican dentro de BOLD.</small>
+        </fieldset>
+        <button type="button" disabled={busy} onClick={clearNotifications}>Limpiar notificaciones</button><small>Limpia los avisos del departamento activo; no borra tareas ni eventos.</small><button className="bold_profile_primary" disabled={busy} type="submit">{busy ? "Guardando…" : "Guardar preferencias"}</button>
     </form>}</section>;
 }

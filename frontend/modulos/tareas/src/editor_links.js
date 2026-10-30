@@ -38,8 +38,16 @@ export function linkifyElement(root) {
     }
 }
 
-export function linkifyEditor(root) {
+export function linkifyEditor(root, {wholeDocument = false} = {}) {
     const selection = root.ownerDocument.defaultView.getSelection();
+    // Ordinary typing only changes the caret's block. Avoid rebuilding every
+    // automatic link in a long document (and invalidating unrelated DOM/undo).
+    // Ranges across blocks or outside the editor keep the full-document path.
+    if (!wholeDocument && selection?.rangeCount && selection.isCollapsed && root.contains(selection.anchorNode)) {
+        const element = selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
+        const block = element?.closest("p, div, li, blockquote, td, th, h2, h3");
+        if (block && root.contains(block)) root = block;
+    }
     const offsets = selection?.rangeCount && root.contains(selection.anchorNode) && root.contains(selection.focusNode)
         ? [selection.anchorNode, selection.focusNode].map((node, i) => { const range = root.ownerDocument.createRange(); range.selectNodeContents(root); range.setEnd(node, i ? selection.focusOffset : selection.anchorOffset); return range.toString().length; }) : null;
     linkifyElement(root);

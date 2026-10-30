@@ -51,11 +51,13 @@ class CookieSessionAuthentication(BaseAuthentication):
         reason = check.process_view(request, None, (), {})
         if reason:
             raise exceptions.PermissionDenied(f"CSRF: {reason}")
-        session.last_used_at = now
-        session.last_ip = request_ip(request)
-        if settings.AUTH_SESSION_IDLE_SECONDS:
-            session.idle_expires_at = min(session.expires_at, now + __import__("datetime").timedelta(seconds=settings.AUTH_SESSION_IDLE_SECONDS))
-        session.save(update_fields=["last_used_at", "last_ip", "idle_expires_at"])
+        # A background delivery is not user activity and must not keep a login alive.
+        if path != "/api/v2/notifications/push/resolve/":
+            session.last_used_at = now
+            session.last_ip = request_ip(request)
+            if settings.AUTH_SESSION_IDLE_SECONDS:
+                session.idle_expires_at = min(session.expires_at, now + __import__("datetime").timedelta(seconds=settings.AUTH_SESSION_IDLE_SECONDS))
+            session.save(update_fields=["last_used_at", "last_ip", "idle_expires_at"])
         return user, session
 
     def authenticate_header(self, request):

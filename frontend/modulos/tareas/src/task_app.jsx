@@ -3,7 +3,7 @@ import {useAnchoredPopover} from "../../core/shared/use_anchored_popover.js";
 import {BackgroundSyncNotice} from "../../core/shared/background_sync_notice.jsx";
 import {personIdentity, uniquePeople, removePersonAssignments} from "../../core/shared/people.js";
 import {moduleCache, moduleScope} from "../../core/module_cache.js";
-import {readTaskNavigation, readTaskFilters, writeTaskFilters, normalizeTaskFilters, readCollapsedSections, writeCollapsedSections} from "./task_navigation.js";
+import {readTaskNavigation, readTaskFilters, writeTaskFilters, normalizeTaskFilters, readCollapsedSections, writeCollapsedSections, taskViewKey, readTaskView} from "./task_navigation.js";
 import {usePersonalBoard} from "./personal_board.jsx";
 import TeamPanel, {TeamSharingContext, SharingEye, useTeamSharing} from "./team.jsx";
 import {workspaceSharing, sharedWorkspaceFolders} from "./services/workspace_sharing.js";
@@ -14,6 +14,10 @@ import {normalizeSearchText} from "../../core/global_search.js";
 import {NoticeLayer, floatToast} from "../../core/shared/notice_layer.jsx";
 import { getReleaseNotes } from "../../perfil/release_notes.js";
 import { AvatarImage } from "../../core/shared/avatar_image.jsx";
+import { OwnerNotice } from "../../core/shared/owner_notice.jsx";
+import { TaskCreatedAt } from "./task_created_at.jsx";
+import {TaskCreationDraft} from "./task_creation_draft.jsx";
+import {completeTaskCreationDraft} from "./task_drafts.js";
 import { clampDrawerWidth, drawerMinWidth, drawerMaxWidth } from "./drawer_size.js";
 import PresenceWidget from "./presence_widget.jsx";
 import SectionDragHandle from "./section_drag_handle.jsx";
@@ -1201,7 +1205,7 @@ function render_inbox_module(props) {
                                                         {activity.actor ? <AvatarImage url={activity.actor.avatar_url} initials={activity.actor.initials} /> : render_icon(activity_icon, 17)}
                                                     </span>
                                                     <span className="inbox_activity_text">
-                                                        <strong>{inbox_view === "compact" ? activity.body : activity.title}</strong>
+                                                        <strong>{inbox_view === "compact" ? activity.body : activity.title}<OwnerNotice notification={activity}/></strong>
                                                         <span>{inbox_view === "compact" ? activity.title : `${activity.actor?.name || "Sistema"} · ${inbox_type_labels[activity.type] || "Actividad"} · ${activity.body}`}</span>
                                                     </span>
                                                     <time>{activity.time_label}</time>
@@ -1814,6 +1818,7 @@ function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_
             </div>
 
             <div className="detail_meta_grid">
+                <TaskCreatedAt value={selected_task.created_at}/>
                 {is_using_real_backend() && <><span className="meta_label">Responsable</span><span className="meta_value">{get_member(selected_task.assignee_id)?.name || "Sin responsable"}</span></>}
 
                 <span className="meta_label">{is_using_real_backend() ? "Seguidores" : "Colaboradores"}</span>
@@ -2070,6 +2075,11 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
     if (real) { board_columns = projectSectionOptions(data, edit_draft.project_id); status_options = data.statuses.filter(item => !item.unitId || item.unitId === edit_draft.unitId).map(item => item.label); }
     const [show_datepicker, set_show_datepicker] = use_state(false);
     const [audio_busy, set_audio_busy] = use_state(false);
+    const [description, set_description] = use_state(edit_draft.description || "");
+    const description_editor = use_ref(null);
+    use_effect(() => { set_description(edit_draft.description || ""); }, [edit_draft.id, edit_draft.description]);
+    const latest_description = () => description_editor.current?.flush() ?? description;
+    const close_editor = () => { handle_edit_field_change("description", latest_description()); on_cancel(); };
     const subtasks = Array.isArray(edit_draft.subtasks) ? edit_draft.subtasks : [];
     const done_count = subtasks.filter((s) => s.completed).length;
 
@@ -2078,7 +2088,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
         : (edit_draft.assignee_id ? [edit_draft.assignee_id] : []);
 
     return (
-        <TaskDrawer class_name="bold_modal_window" label="Editar tarea" on_close={on_cancel} {...drawer}>
+        <TaskDrawer class_name="bold_modal_window" label="Editar tarea" on_close={close_editor} {...drawer}>
                 <div className="bold_modal_header">
                     <div>
                         <p className="modal_eyebrow">EDITAR TAREA</p>
@@ -2086,12 +2096,12 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                             {edit_draft.title || "Tarea sin nombre"}
                         </h2>
                     </div>
-                    <button type="button" className="modal_close_btn" data-drawer-close onClick={on_cancel} aria-label="Cerrar modal">
+                    <button type="button" className="modal_close_btn" data-drawer-close onClick={close_editor} aria-label="Cerrar modal">
                         {render_icon(x_icon, 20)}
                     </button>
                 </div>
 
-                <form className="bold_modal_body" onSubmit={event => { if (audio_busy) event.preventDefault(); else on_save(event); }}>
+                <form className="bold_modal_body" onSubmit={event => { if (audio_busy) event.preventDefault(); else on_save(event, {description: latest_description()}); }}>
                     <div className="modal_scroll_fields">
                     {/* Nombre */}
                     <div className="bold_field_group">
@@ -2165,7 +2175,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                     {/* Descripción */}
                     <div className="bold_field_group">
                         <label className="bold_field_label">Descripción</label>
-                        <TaskTextEditor value={edit_draft.description || ""} onChange={value => handle_edit_field_change("description", value)} notes={edit_draft.voice_notes || []} onNotesChange={value => handle_edit_field_change("voice_notes", value)} resourceId={edit_draft.id} onBusyChange={set_audio_busy} disabled={pending} />
+                        <TaskTextEditor value={description} onChange={set_description} changeDelay={160} draftRef={description_editor} notes={edit_draft.voice_notes || []} onNotesChange={value => handle_edit_field_change("voice_notes", value)} resourceId={edit_draft.id} onBusyChange={set_audio_busy} disabled={pending} />
                     </div>
 
                     <PipelineFields key={edit_draft.project_id || "personal"} taskId={edit_draft.id} projectId={edit_draft.project_id} value={{pipeline:edit_draft.pipeline,pipeline_stage:edit_draft.pipeline_stage}} onChange={value=>{handle_edit_field_change("pipeline",value.pipeline);handle_edit_field_change("pipeline_stage",value.pipeline_stage);}} disabled={pending}/>
@@ -2229,7 +2239,7 @@ function EditTaskModal({ board_columns, drawer, edit_attachments, edit_draft, ha
                     </>}
                     </div>
                     <footer className="bold_modal_footer">
-                        <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
+                        <button type="button" className="secondary_button" data-drawer-close onClick={close_editor}>Cancelar</button>
                         <button type="submit" className="primary_button" disabled={pending || audio_busy || (real && !edit_draft.status)}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Guardando…</> : "Guardar cambios"}</button>
                     </footer>
                 </form>
@@ -2249,9 +2259,13 @@ function read_task_creation_draft(storage_key) {
 }
 
 // "Nueva Tarea" creation modal (Image 4 of design reference).
-function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, draft_storage_key, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
+function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, draft_storage_key, draft_state, drawer, on_cancel, on_create, projects = project_items, selected_project_id = project_items[0]?.id || "", status_options, data, activeUnit, currentAssignmentId, pending }) {
     const real = is_using_real_backend();
-    const initial_draft = use_ref(read_task_creation_draft(draft_storage_key)).current;
+    const [initial_draft] = use_state(() => draft_state?.initial || read_task_creation_draft(draft_storage_key));
+    const draft_id = use_ref(initial_draft._draft_id || crypto.randomUUID()), submitted = use_ref(false);
+    const submitting = use_ref(false);
+    const [saving_draft, set_saving_draft] = use_state(false), [creation_error, set_creation_error] = use_state("");
+    const description_editor = use_ref(null), description_latest = use_ref(initial_draft.description || "");
     const today = use_ref(new Date()).current;
     const [unitId, set_unitId] = use_state(initial_draft.unitId || activeUnit || "");
     const [assignee_id, set_assignee_id] = use_state(initial_draft.assignee_id || "");
@@ -2275,10 +2289,14 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
     const [recurrence, set_recurrence] = use_state(initial_draft.recurrence || {});
     const [audio_busy, set_audio_busy] = use_state(false);
     const [subtasks, set_subtasks] = use_state(Array.isArray(initial_draft.subtasks) ? initial_draft.subtasks : []);
-    const [attachments, set_attachments] = use_state([]);
+    const [attachments, set_attachments] = use_state(Array.isArray(initial_draft.attachments) ? initial_draft.attachments : []);
     const [show_datepicker, set_show_datepicker] = use_state(false);
     const project_initialized = use_ref(false);
     const unit_initialized = use_ref(false);
+    const snapshot = () => ({_draft_id: draft_id.current, _submitted: submitted.current, unitId, assignee_id, title, project_id, section,
+        collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status,
+        description: description_editor.current?.flush() ?? description_latest.current, voice_notes, recurrence, subtasks, attachments, pipeline_choice});
+    if (draft_state?.read) draft_state.read.current = snapshot;
 
     if (real) {
         board_columns = project_id ? projectSectionOptions(data, project_id) : personal_columns || board_columns;
@@ -2303,14 +2321,17 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
     }, [unitId]);
     use_effect(() => {
         if (!draft_storage_key) return;
+        const value = snapshot();
+        if (draft_state) {draft_state.capture(value); return;}
         try {
-            sessionStorage.setItem(draft_storage_key, JSON.stringify({ unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks, pipeline_choice }));
+            sessionStorage.setItem(draft_storage_key, JSON.stringify(value));
         } catch { /* El formulario sigue funcionando aunque el navegador bloquee el almacenamiento. */ }
-    }, [draft_storage_key, unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks, pipeline_choice]);
+    }, [draft_storage_key, draft_state?.capture, unitId, assignee_id, title, project_id, section, collaborator_ids, creator_collaboration_touched, due_day, due_month, due_year, priority, status, description, voice_notes, recurrence, subtasks, attachments, pipeline_choice]);
     async function handle_submit(e) {
         e.preventDefault();
-        if (pending || audio_busy) return;
+        if (pending || audio_busy || submitting.current) return;
         if (!title.trim()) return;
+        const form_snapshot = snapshot();
         const resolved_section = board_columns.some(row => row.id === section) ? section : preferredSection(board_columns, last_sections[project_id || "personal"]);
         const col = board_columns.find((c) => c.id === resolved_section);
         const new_task = {
@@ -2331,14 +2352,20 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
             priority,
             status: real ? status : col?.status || status,
             completed: resolved_section === "completed",
-            description: description.trim(),
+            description: form_snapshot.description.trim(),
             voice_notes, recurrence,
             subtasks: subtasks.filter((s) => s.title.trim()).map((s) => ({ ...s, completed: false })),
             attachments,
             attachment_name: attachments.length ? attachments[attachments.length - 1].name : null,
             tags: []
         };
-        const created = await on_create(new_task);
+        const protect_draft = draft_state ? async value => {submitted.current = value._submitted === true; return draft_state.flush(value);} : undefined;
+        submitting.current = true; set_saving_draft(true); set_creation_error("");
+        let created;
+        try {created = await on_create(new_task, form_snapshot, protect_draft);}
+        catch (error) {created = false; set_creation_error(error.message || "No se pudo preparar la tarea. Conserva el borrador e inténtalo de nuevo.");}
+        finally {submitting.current = false; set_saving_draft(false);}
+        if (created === false) {submitted.current = false; draft_state?.capture(snapshot());}
         if (created !== false && created !== "queued" && draft_storage_key) {
             try { sessionStorage.removeItem(draft_storage_key); } catch { /* Ya no es necesario conservar el borrador. */ }
         }
@@ -2420,7 +2447,7 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
 
                     <div className="bold_field_group">
                         <label className="bold_field_label">Descripción</label>
-                        <TaskTextEditor value={description} onChange={set_description} notes={voice_notes} onNotesChange={set_voice_notes} onBusyChange={set_audio_busy} disabled={pending} />
+                        <TaskTextEditor value={description} onChange={value => {description_latest.current = value; set_description(value);}} changeDelay={160} draftRef={description_editor} notes={voice_notes} onNotesChange={set_voice_notes} onBusyChange={set_audio_busy} disabled={pending} />
                     </div>
 
                     <RecurrenceFields value={recurrence} onChange={set_recurrence} disabled={pending} />
@@ -2457,10 +2484,12 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
                     </button>
 
                     <AttachmentLinks attachments={attachments} onChange={set_attachments} />
+                    {draft_state?.notice}
+                    {creation_error && <p role="alert">{creation_error}</p>}
                     </div>
                     <footer className="bold_modal_footer">
                         <button type="button" className="secondary_button" data-drawer-close onClick={on_cancel}>Cancelar</button>
-                        <button type="submit" className="primary_button" disabled={pending || audio_busy || !title.trim() || (real && (!status || !pipeline_choice?.pipeline || pipeline_choice.project !== project_id))}>{pending ? <><span className="task_action_spinner" aria-hidden="true" /> Creando tarea…</> : "Crear tarea"}</button>
+                        <button type="submit" className="primary_button" disabled={pending || saving_draft || audio_busy || !title.trim() || (real && (!status || !pipeline_choice?.pipeline || pipeline_choice.project !== project_id))}>{pending || saving_draft ? <><span className="task_action_spinner" aria-hidden="true" /> Creando tarea…</> : "Crear tarea"}</button>
                     </footer>
                 </form>
         </TaskDrawer>
@@ -4542,7 +4571,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [active_section, set_active_section] = use_state(initial_navigation.section);
     const [selected_project_id, set_selected_project_id] = use_state(() => initial_navigation.projectId || (real ? cached_data.current?.projects?.[0]?.id || "" : "launch_q4"));
     const [task_scope, set_task_scope] = use_state(initial_navigation.scope);
-    const view_storage_key = task_scope === "project" ? `bold_task_view:${selected_project_id}` : `${navigation_key}:${task_scope}:view`;
+    const view_storage_key = taskViewKey(navigation_key, task_scope, task_scope === "project" ? selected_project_id : active_workspace_id);
     const filters_key = `${navigation_key}:${task_scope}:${task_scope === "project" ? selected_project_id : task_scope === "workspace" ? active_workspace_id : "personal"}:filters`;
     const [filters_state, set_filters_state] = use_state(() => ({key: filters_key, filters: readTaskFilters(filters_key)}));
     const active_filters = use_memo(() => filters_state.key === filters_key ? filters_state.filters : readTaskFilters(filters_key), [filters_state, filters_key]);
@@ -4558,14 +4587,24 @@ function TaskAppContent({ externalModules = {} }) {
     use_effect(() => {
         if (loaded_view.current !== view_storage_key) {
             loaded_view.current = view_storage_key;
-            let saved;
-            try { saved = localStorage.getItem(view_storage_key); } catch { /* Optional view preference. */ }
-            set_active_section(saved === "timeline" ? "timeline" : saved === "team" && task_scope === "mine" ? "team" : "tasks");
-            if (["list", "board"].includes(saved)) set_active_view(saved);
+            const saved = readTaskView(view_storage_key, task_scope);
+            set_active_section(saved.section); set_active_view(saved.view);
             return;
         }
         try { localStorage.setItem(view_storage_key, active_section === "tasks" ? active_view : active_section); } catch { /* Navigation works without storage. */ }
     }, [active_section, active_view, view_storage_key, task_scope]);
+    use_effect(() => {
+        const changed = event => {
+            if (event.key === collapsed_sections_key) set_collapsed_sections_state({key: collapsed_sections_key, ids: readCollapsedSections(collapsed_sections_key)});
+            if (event.key === filters_key) set_filters_state({key: filters_key, filters: readTaskFilters(filters_key)});
+        };
+        window.addEventListener("storage", changed);
+        return () => window.removeEventListener("storage", changed);
+    }, [collapsed_sections_key, filters_key]);
+    function restore_task_view(scope, resourceId = "", section) {
+        const key = taskViewKey(navigation_key, scope, resourceId), saved = readTaskView(key, scope);
+        loaded_view.current = key; set_active_view(saved.view); set_active_section(section || saved.section);
+    }
     use_effect(() => {
         try {
             const saved = JSON.stringify({scope: task_scope, projectId: selected_project_id, section: active_section, view: active_view});
@@ -4839,7 +4878,7 @@ function TaskAppContent({ externalModules = {} }) {
         set_selected_project_id(project_id);
         set_task_scope("project");
         set_active_module("tasks");
-        set_active_section("tasks");
+        restore_task_view("project", project_id);
         set_selected_task_id(null);
         set_active_project_menu_id(null);
         set_is_sidebar_open(false);
@@ -5904,9 +5943,6 @@ function TaskAppContent({ externalModules = {} }) {
             set_active_section("timeline");
         } else {
             set_active_module(module_id);
-            if (module_id === "tasks") {
-                set_active_section("tasks");
-            }
         }
         set_is_sidebar_open(false);
         set_selected_task_id(null);
@@ -5915,23 +5951,21 @@ function TaskAppContent({ externalModules = {} }) {
 
     function handle_tasks_menu_toggle() {
         set_active_module("tasks");
-        set_active_section("tasks");
         set_selected_task_id(null);
         set_active_modal(null);
         set_is_tasks_menu_open(current => !current);
     }
 
     function handle_my_tasks_select() {
-        loaded_view.current = `${navigation_key}:mine:view`;
+        restore_task_view("mine");
         set_task_scope("mine");
         set_active_module("tasks");
-        set_active_section("tasks");
         set_selected_task_id(null);
         set_is_sidebar_open(false);
     }
 
     function handle_team_select() {
-        loaded_view.current = `${navigation_key}:mine:view`;
+        restore_task_view("mine", "", "team");
         set_task_scope("mine");
         set_active_module("tasks");
         set_active_section("team");
@@ -6404,12 +6438,12 @@ function TaskAppContent({ externalModules = {} }) {
 
 
     // Saves the "Editar tarea" draft, optimistically and through the backend.
-    function handle_save_task_edits(event, task_id) {
+    function handle_save_task_edits(event, task_id, editor_fields = {}) {
         event.preventDefault();
         const title = (edit_draft.title || "").trim();
         if (!title) return set_api_error("El título de la tarea es obligatorio.");
         if (title.length > 220) return set_api_error("El título de la tarea no puede superar 220 caracteres.");
-        const validated_draft = { ...edit_draft, title };
+        const validated_draft = { ...edit_draft, ...editor_fields, title };
         if (real) {
             const original = data.tasks.find(item => String(item.id) === String(task_id));
             if (!original) { set_api_error("La tarea ya no está disponible. Actualiza la vista."); return; }
@@ -6466,22 +6500,25 @@ function TaskAppContent({ externalModules = {} }) {
         const drawer = { width: task_detail_width, on_resize_key_down: handle_detail_resize_key_down, on_resize_start: handle_detail_resize_start };
         // New Master-Plan Crear modal
         if (active_modal === "task") {
-            return (
+            const draftKey = `bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`;
+            const form = draft_state => (
                 <CreateTaskModal
                     data={data} pending={pending} activeUnit={session.activeUnit?.id} currentAssignmentId={session.activeAssignment?.id}
-                    draft_storage_key={`bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`}
+                    draft_storage_key={draftKey} draft_state={draft_state}
                     drawer={drawer}
                     board_columns={board_columns}
                     personal_columns={visibleSections(personal_board.board.sections, personal_board.board.unsectioned_hidden, personal_board.board.unsectioned_index)} last_sections={last_task_sections}
                     on_cancel={() => set_active_modal(null)}
-                    on_create={(new_task) => {
+                    on_create={async (new_task, form_snapshot, protect_draft) => {
                         if (real) {
+                            const creation_generation = mutation_generation.current;
                             new_task = {...new_task, image_creation_scope: task_scope === "mine" ? "personal" : "project"};
                             try { taskPayload(new_task, data.statuses, { create: true, unitId: new_task.unitId }); }
                             catch (error) { set_api_error(error.message); return false; }
                             const draftKey = `bold_task_creation_draft:${session.activeAssignment?.id || "demo"}`;
-                            let snapshot = "";
-                            try { snapshot = sessionStorage.getItem(draftKey) || ""; } catch { /* El formulario sigue funcionando. */ }
+                            const snapshot = JSON.stringify(form_snapshot || new_task);
+                            if (protect_draft) await protect_draft({...form_snapshot, _submitted: true});
+                            if (creation_generation !== mutation_generation.current || !task_activity.current) return false;
                             const preview = previewTaskDraft(new_task, null, data.statuses);
                             const mutation = { kind: "create", id: new_task.id, task: preview };
                             const started = start_task_crud(mutation, async () => {
@@ -6493,7 +6530,10 @@ function TaskAppContent({ externalModules = {} }) {
                                 return dto;
                             }, {
                                 success_title: "Tarea creada",
-                                on_success: () => remember_task_section(new_task.project_id, new_task.section),
+                                on_success: () => {
+                                    remember_task_section(new_task.project_id, new_task.section);
+                                    void completeTaskCreationDraft(session.activeAssignment?.id, form_snapshot?._draft_id);
+                                },
                                 on_failure: error => {
                                     if (!error.partialDraft) set_failed_task_creates(items => [...items, { id: new_task.id, title: new_task.title, snapshot: snapshot || JSON.stringify(new_task) }]);
                                 },
@@ -6525,6 +6565,8 @@ function TaskAppContent({ externalModules = {} }) {
                     status_options={status_options}
                 />
             );
+            return real ? <TaskCreationDraft key={session.activeAssignment?.id} assignmentId={session.activeAssignment?.id} legacyKey={draftKey} onClose={() => set_active_modal(null)}
+                renderNotice={content => <TaskDrawer class_name="bold_modal_window" label="Nueva tarea" on_close={() => set_active_modal(null)} {...drawer}><div className="bold_modal_body">{content}</div></TaskDrawer>}>{form}</TaskCreationDraft> : form();
         }
 
         // New Master-Plan Editar modal
@@ -6543,7 +6585,7 @@ function TaskAppContent({ externalModules = {} }) {
                     handle_remove_edit_subtask={handle_remove_edit_subtask}
                     handle_toggle_edit_subtask={handle_toggle_edit_subtask}
                     on_cancel={() => { set_active_modal(null); if (editing_subtask_parent_id) { set_selected_task_id(editing_subtask_parent_id); set_editing_subtask_parent_id(null); } }}
-                    on_save={(event) => handle_save_task_edits(event, selected_task.id)}
+                    on_save={(event, editor_fields) => handle_save_task_edits(event, selected_task.id, editor_fields)}
                     projects={projects}
                     status_options={status_options}
                 />

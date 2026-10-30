@@ -1,6 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {restoreTaskNavigation, readTaskNavigation, readCollapsedSections, writeCollapsedSections, readTaskFilters, writeTaskFilters} from "./task_navigation.js";
+import {restoreTaskNavigation, readTaskNavigation, readCollapsedSections, writeCollapsedSections, readTaskFilters, writeTaskFilters, taskViewKey, readTaskView} from "./task_navigation.js";
+
+test("project/workspace views belong to the active assignment; Estados and personal board are restored", () => {
+    const values = new Map();
+    globalThis.localStorage = {getItem: key => values.get(key)};
+    try {
+        const mine = taskViewKey("assignment-a", "mine"), project = taskViewKey("assignment-a", "project", "project-a");
+        values.set(mine, "board"); values.set(project, "states");
+        assert.deepEqual(readTaskView(mine), {section: "tasks", view: "board"});
+        assert.deepEqual(readTaskView(project, "project"), {section: "states", view: "list"});
+        assert.deepEqual(readTaskView(taskViewKey("assignment-b", "project", "project-a"), "project"), {section: "tasks", view: "list"});
+        assert.notEqual(taskViewKey("assignment-a", "workspace", "folder-a"), taskViewKey("assignment-a", "workspace", "folder-b"));
+        values.set(project, "team"); assert.equal(readTaskView(project, "project").section, "tasks");
+    } finally {delete globalThis.localStorage;}
+});
 
 test("los filtros sobreviven recargas y no se mezclan entre cargos o proyectos", () => {
     const saved = new Map();

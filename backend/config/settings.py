@@ -243,6 +243,11 @@ PERMISSIONS_AUTHORITY_MAX_SECONDS = int(os.environ.get("PERMISSIONS_AUTHORITY_MA
 SEED_DEMO_ACCOUNTS = os.environ.get("SEED_DEMO_ACCOUNTS", "true" if DEBUG else "false").lower() == "true"
 SEED_PRIVILEGED_DEMO_ACCOUNTS = os.environ.get("SEED_PRIVILEGED_DEMO_ACCOUNTS", "false").lower() == "true"
 AUTH_ENCRYPTION_KEY = os.environ.get("AUTH_ENCRYPTION_KEY", "")
+# Explicit per-device consent is still required. No provider keys enter the client.
+WEB_PUSH_ENABLED = os.environ.get("WEB_PUSH_ENABLED", "false").lower() in {"true", "1"}
+WEB_PUSH_PUBLIC_KEY = os.environ.get("WEB_PUSH_PUBLIC_KEY", "")
+WEB_PUSH_PRIVATE_KEY = os.environ.get("WEB_PUSH_PRIVATE_KEY", "")
+WEB_PUSH_SUBJECT = os.environ.get("WEB_PUSH_SUBJECT", "mailto:soporte@bold.gt")
 TRUST_CLOUDFLARE_CONNECTING_IP = os.environ.get(
     "TRUST_CLOUDFLARE_CONNECTING_IP", "false"
 ).lower() == "true"
@@ -284,6 +289,7 @@ CELERY_TASK_ALWAYS_EAGER = os.environ.get(
 ).lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
+    "recover-web-push": {"task": "boldApp.notificaciones.tasks.drain_web_push", "schedule": 30.0},
     "run-channel-automations": {"task": "boldApp.mensajeria.automation_tasks.run_channel_automations", "schedule": 60.0},
     "recover-media-uploads": {"task": "boldApp.mensajeria.upload_tasks.drain_media_uploads", "schedule": 60.0},
     "cleanup-phone-transfers": {"task": "boldApp.mensajeria.phone_views.cleanup_phone_transfers", "schedule": 60.0},

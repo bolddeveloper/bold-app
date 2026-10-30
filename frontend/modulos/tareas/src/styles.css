@@ -12811,3 +12811,6 @@ button.project_members_row:hover, .project_members_popup header button:hover { b
 .quick_person_identity {min-width:0;overflow-wrap:anywhere}
 .quick_person_identity strong,.quick_person_identity small {display:block;line-height:1.35}
 .quick_person_identity small {font-size:11px;color:var(--bold_muted,#68717e)}
+.task_draft_status {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 0;color:var(--bold_muted,#68717e)}
+.task_draft_status small {flex:1 1 240px}
+.task_draft_status button {background:transparent;border:0;color:var(--bold_text,#343b47);text-decoration:underline;min-height:44px;min-width:44px;padding:6px}

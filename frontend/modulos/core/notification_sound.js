@@ -30,9 +30,14 @@ export async function playNotificationSound(settings = defaultNotificationSettin
     if (audio === current) customTimer = setTimeout(stopNotificationSound, 15000);
 }
 
-export function showDesktopNotification(row, settings) {
+export async function showDesktopNotification(row, settings) {
     if (!settings.desktop_enabled || !globalThis.Notification || Notification.permission !== "granted") return;
-    const notice = new Notification(row.title || "BOLD", {body: row.body || "Tienes una nueva notificación.", tag: `bold-${row.id}`, icon: "/logo-bold.svg", silent: true});
+    const title = row.actor_is_owner === true ? "BOLD · Propietario" : "BOLD";
+    const options = {body: "Tienes actividad pendiente. Abre BOLD para revisarla.", tag: `bold-${row.id}`, icon: "/logo-bold.svg",
+        silent: globalThis.document?.hidden !== true || !settings.enabled || !settings.volume};
+    const registration = await globalThis.navigator?.serviceWorker?.getRegistration("/");
+    if (registration?.active) return registration.showNotification(title, options);
+    const notice = new Notification(title, options);
     notice.onclick = () => {window.focus(); notice.close();};
 }
 

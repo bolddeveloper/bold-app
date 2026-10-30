@@ -1,0 +1,70 @@
+{
+  "objective": "Integrar y desplegar Develop; distinguir avisos del propietario; notificaciones y sonidos en segundo plano; conservar estados y borradores de multitarea; fecha original de creación; investigar y corregir lag de textos largos",
+  "status": "publication_in_progress",
+  "base_commit": "f88d62cf",
+  "integration": {
+    "method": "fast-forward; origin/Develop was an ancestor of feature/chat-directo",
+    "develop_pushed": true,
+    "oracle_branch": "Develop",
+    "oracle_image": "bold-app-backend:develop-f88d62cf",
+    "cloudflare_version": "d2de4840-b14b-4999-8d02-18f236928fa4",
+    "pilot": "IT allowlist preserved",
+    "migration_check": "passed; no additional migrations needed for the branch change",
+    "public_health": {"database": true, "redis": true},
+    "live_worker_ping": "one worker",
+    "server_branch_and_commit_rechecked": true
+  },
+  "requirements": {
+    "owner_notifications": {"status": "implemented_and_locally_tested_not_deployed", "scope": "server-authenticated send-time ownership marker on existing authorized notices in bell and inbox; no company-wide broadcast or pilot bypass", "tests": "four focused tests plus notification suite (41 tests passed); strict boolean component rendering passed; historical notices not relabeled"},
+    "background_notifications_and_sound": {"status": "open_app_background_runtime_verified_locally_not_deployed", "findings": "old delivery used the live page/socket and silent OS notices. Added generic worker system notices with system sound in background. Additional closed-app Web Push is implemented behind an explicit server/device opt-in.", "required": "Open-app background receipt and system sound request verified. OS volume/Focus can suppress audible sound. Additional closed-app provider delivery remains unactivated and unverified, requiring VAPID configuration, migration and a real opted-in subscription; it is not claimed as delivered.", "tests": "Actual isolated Chromium with focus emulation disabled: owner comment via real cookie API/socket shows a generic worker notice; real media playback succeeds in foreground; document.hidden is true before the second comment and a new system notice has silent=false. Web Push backend tests use real encryption with mocked provider HTTP; client/actual worker VM tests also pass."},
+    "multitasking_persistence": {"status": "implemented_and_locally_tested_not_deployed", "scope": "creation drafts and navigation/section/filter preferences, not a promise of universal autosave in every module", "changes": "task creation uses an account/assignment-bound AES-GCM IndexedDB vault and a fresh generic task grant, independent of IT pilot. Includes images/audio/attachments/subtasks/collaborators, explicit discard, 7-day recovery, checkpoint before logout, and review rather than automatic resend of uncertain submissions. Chat/Slack logout now suspends keys without deleting ciphertext.", "tests": "four controller/vault tests, two task grant tests, actual creation form full unmount/recovery/submit/discard fixture, scoped preference tests and existing messaging vault/lifecycle/checkpoint tests passed", "section_finding": "collapsed sections already persisted. Fixed forced view resets, assignment-unscoped project view key, missing Estados restoration and preference storage events across tabs."},
+    "creation_timestamp": {"status": "implemented_and_locally_tested_not_deployed", "required": "original immutable server timestamp always visible in advanced detail, localized date/time; no invented fallback timestamp", "tests": "two unit tests plus rendered time/date/unavailable component; normalizeTask preserves original created_at; server already read-only"},
+    "long_text_performance": {"status": "implemented_and_locally_tested_not_deployed", "finding": "TaskTextEditor.save ran complete DOM linkification and three document parses on every input; EditTaskModal also updated the whole TaskApp per description change", "changes": "single-parse sanitization; caret-block linkification; local edit-form description state; 160ms idle serialization with immediate flush on submit/blur/pagehide/unmount. Creation draft writes coalesce separately.", "tests": "actual 350-block editor/form: no whole-document parse or parent render during typing burst; one parse on immediate save includes last character; caret, unrelated link DOM identity, aliases, multi-paragraph paste, IME and lifecycle flush checked", "limit": "deterministic work-count tests, not a physical Mac/Safari PWA latency measurement. User reports probable Safari-installed PWA, description only; OS/browser versions remain unknown."}
+  },
+  "complete": true,
+  "completion_scope": "Initial Develop integration/deployment completed and rechecked; subsequent five requested fixes implemented and accepted locally. The user now authorized commit and deployment of these fixes and release notes to Oracle/Cloudflare, retaining the IT-only pilot. Publication is being verified separately below. Physical Mac latency and the additional closed-app push provider transport are explicitly not claimed as verified.",
+  "new_fixes_deployed": false,
+  "new_fixes_committed": false,
+  "latest_local_verification": "Current acceptance production build passed (1m02s; existing large-chunk warning); real WebKit full form/restart/logout/create/edit flow passed; WebKit section/view/cross-tab acceptance passed; Chromium real foreground audio and hidden-page system notice passed; six controller tests, actual recovery UI fixture, 26 focused frontend tests and 18 focused Django tests passed. No new deployment performed.",
+  "frontend_build_with_partial_fixes": "passed; existing large-chunk warning",
+  "django_check_and_model_dry_run": "passed; no schema changes from these partial fixes",
+  "draft_release_notes_prepared_but_hidden": 0,
+  "publication": {"status": "prepared_not_deployed", "branch": "Develop", "release_notes": 5, "release_date": "2026-10-30", "chat_slack_pilot": "IT only", "closed_app_push_enabled": false, "closed_app_push_announcement": false, "profile_capability_gate": "Closed-app controls appear only when the server enables/configures that capability; ordinary background alerts remain available."},
+  "new_database_migration": "boldApp_notificaciones.0003_web_push created and applied by isolated SQLite test databases; NOT applied to production",
+  "push_configuration": "disabled by default; Compose and example pass all four WEB_PUSH variables to backend/worker. generate_web_push_keys writes a new private file without overwriting or printing keys; two command tests passed. Production keys have NOT been generated or configured.",
+  "browser_acceptance": {
+    "isolation": "Owned localhost production frontend build, actual cookie API/CSRF, new SQLite database and three synthetic accounts. No production mail, Google credentials, Redis or provider delivery. Browser profiles and private settings live outside the repository; credentials are not included here.",
+    "webkit_full_flow": "350-block description retains text and links across module navigation, reload, full browser restart and real UI logout/relogin; account B cannot recover account A's draft; ciphertext contains no plaintext. Actual task creation/edit preserves final text and original server creation timestamp. No uncaught page errors.",
+    "webkit_navigation": "Section collapse survives reload, other browser tab reflects actual storage events, Estados survives module navigation/reload/logout, board preference survives module navigation/reload. No uncaught page errors.",
+    "chromium_notifications": "Actual owner comment reaches the recipient through API/socket and the worker system notification. Foreground Audio.play fulfills while media is playing. A second comment with document.hidden=true produces a new generic system notice with silent=false. No uncaught page errors. No hardware audibility or external push-provider transport claimed.",
+    "fidelity": "WebKit on Windows is a browser-engine compatibility test, not a physical Mac or installed standalone PWA test. The real production build and service worker were used; installedDisplayMode=false.",
+    "draft_close_followup": "Close waits for the final encrypted write, remains registered with the logout protector until it settles, and is idempotent. Suspended keys require a fresh authorization grant while retaining newer local text. Six controller tests and actual delayed-unmount/recovery form fixture pass.",
+    "test_rates": "The guarded isolated acceptance settings use larger test-only login throttle rates for repeated synthetic logout/login flows. Production throttles are unchanged. The local server was restarted only after that settings change.",
+    "operational_base_recheck": "Oracle, local Develop and origin/Develop still at f88d62cf08f3c8617959e7e5130fa354e988fe28. No new deployment was performed. IT pilot unchanged."
+  },
+  "regression_checkpoint": {
+    "notification_suite": "41 tests passed; injected failure cases printed expected errors; synthetic seed output is not production credentials",
+    "general_frontend": "408 executed, 407 passed, one DOMParser-dependent rich-text test skipped in Node; later added system-notice privacy/background test passed separately",
+    "backend_followup": "66 notification/auth/task-grant tests plus 22 IT pilot, messaging grant and deployment-contract tests passed; two key-generation command tests passed separately",
+    "task_multitasking_followup": "18 focused unit tests and three actual component/form SSR/DOM fixtures passed",
+    "notification_sync_followup": "26 tests including actual worker source in VM passed",
+    "messaging_draft_followup": "19 vault/checkpoint/lifecycle tests passed",
+    "rich_text_dom_followup": "same file with JSDOM: 3 passed, zero skipped",
+    "current_release_notes": "7 passed after adding hidden local notes",
+    "editor_links_and_long_text": "7 passed plus comment editor DOM regression",
+    "owner_and_creation_components": "SSR rendering passed",
+    "source_whitespace": "git diff --check passed"
+  },
+  "continuation_findings": {
+    "task_creation": "Resolved by TaskCreationDraft boundary/controller/vault. Legacy session draft is removed only after encrypted protection; failed-create recovery snapshots still exist in session memory/storage as an additional old fallback. Uncertain send is never silently repeated.",
+    "section_state": "Existing collapse persistence retained; view restoration and cross-tab events corrected. Collaborator-picker expansion is still transient; no claim that all popovers are persistent.",
+    "editor_rendering": "Resolved for description typing: local form state; parent receives exact current description on submit/close; actual fixture asserts zero parent renders during burst and idle serialization.",
+    "existing_encrypted_drafts": "Task-specific grant avoids the Slack pilot gate. Task ciphertext is retained on logout; keys are suspended and cross-tab invalidated. Explicit private-cache clear purges. Messaging logout suspends rather than purges; explicit permission revocation remains conservative.",
+    "background_receiver": "Actual worker handlers and explicit profile controls added. Live open-app fallback uses worker notifications where available and generic private text. Web Push runtime configuration/device opt-in remain pending; no physical Mac/iOS delivery claimed.",
+    "other_editors_audited": "Profile has dirty-state navigation confirmation and beforeunload protection. Calendar event drafts serve Meet allocation and are explicitly cancelled on close/pagehide; Google task quick-create fields are transient. Project-form initialization guards refreshes, but no general cross-session project/comment/edit-task draft recovery was added in this scope.",
+    "tooling_note": "A comment-editor fixture overlapped prebuild's dependency reinstall after package scripts changed and briefly could not resolve lucide-react. Rerun after reinstall completed passed. Package lock unchanged; do not run module-resolution tests concurrently with dependency installation.",
+    "mac_question": "User reports description editing only, in the installed PWA, installed from Safari on Mac. OS/Safari versions and actual device profiling remain unconfirmed; do not claim Mac validation.",
+    "description_typing_followup": "Edit form now holds description state locally, with 160ms bounded idle serialization and synchronous flush on submit/blur/pagehide/unmount. 350-block actual editor/form fixture: zero parses and zero parent renders in a typing burst; immediate submit uses one parse and includes final key. Idle, other-field changes, closing, IME and lifecycle flush checks passed. These are deterministic work-count tests, not physical Safari/PWA latency measurements."
+  },
+  "next_work": "Complete the authorized commit/migration/deployment and verify runtime/IT-only pilot. Keep additional closed-app Web Push disabled until real provider receipt is verified. Repeat the long-description test on the affected Mac/PWA; do not infer a Safari-specific cause from its installation origin."
+}

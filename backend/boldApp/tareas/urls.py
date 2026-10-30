@@ -3,6 +3,7 @@ from django.urls import path
 from .workspace_sharing import WorkspaceSharingView
 from .workspace_library import WorkspaceLibraryView
 from .personal_board import PersonalBoardView
+from .draft_grants import TaskDraftGrantView
 from .team import TeamSelfView, TeamDirectoryView, TeamBoardView, TeamMeetingsView, TeamVoiceView
 from rest_framework.routers import DefaultRouter
 
@@ -43,6 +44,7 @@ router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 
 urlpatterns = [
+    path("task-drafts/grant/", TaskDraftGrantView.as_view()),
     path("workspace-library/", WorkspaceLibraryView.as_view()),
     path("task-pipelines/<uuid:task_id>/", TaskPipelinesView.as_view()),
     path("pipelines/", PipelineView.as_view()),

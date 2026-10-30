@@ -33,6 +33,12 @@ def messaging_defaults():
 
 
 class DeploymentContractTests(SimpleTestCase):
+    def test_web_push_configuration_reaches_both_services_without_enabling_it_by_default(self):
+        compose=(ROOT/'deploy/oracle/compose.oracle.yaml').read_text(encoding='utf-8')
+        shared=compose.split('x-backend-environment: &backend-environment\n',1)[1].split('\nx-backend-security:',1)[0]
+        for name,default in {'WEB_PUSH_ENABLED':'false','WEB_PUSH_PUBLIC_KEY':'','WEB_PUSH_PRIVATE_KEY':'','WEB_PUSH_SUBJECT':'mailto:soporte@bold.gt'}.items():
+            self.assertIn('  '+name+': "${'+name+':-'+default+'}"',shared)
+
     def renderer(self):
         spec=importlib.util.spec_from_file_location('messaging_environment_check',ROOT/'deploy/check_messaging_environment.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module

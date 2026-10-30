@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { AtSign, ArrowUp, Bold, ChevronDown, ImagePlus, Italic, Link, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { ImageGallery } from "./image_gallery.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
@@ -26,8 +26,9 @@ export function TextEditorField({ name, defaultValue = "", value, onChange, maxL
     return <div className="app_text_editor_field"><TaskTextEditor {...props} maxLength={maxLength} value={current} onChange={next => { setDraft(next); onChange?.(next); }} />{name && <input type="hidden" name={name} value={current} />}</div>;
 }
 
-export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true, allowVoiceNotes = true }) {
+export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true, allowVoiceNotes = true, changeDelay = 0, draftRef }) {
     const editor = useRef(null), selection = useRef(null), lastValue = useRef(value), controls = useRef(null), styleMenu = useRef(null);
+    const commitTimer = useRef(null), dirty = useRef(false), commit = useRef(null);
     const [linkOpen, setLinkOpen] = useState(false), [link, setLink] = useState("https://"), [linkError, setLinkError] = useState("");
     const [linkAlias, setLinkAlias] = useState("");
     const imagesInFlight = useRef(false);
@@ -63,9 +64,23 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
     }, []);
     useEffect(() => {
         if (editor.current && (lastValue.current !== value || !editor.current.dataset.ready)) {
+            clearTimeout(commitTimer.current); dirty.current = false;
             editor.current.innerHTML = editorDisplayHTML(value, true); editor.current.dataset.ready = "true"; lastValue.current = value; selection.current = null;
         }
     }, [value]);
+    useLayoutEffect(() => {
+        const handle = {flush: () => commit.current()};
+        if (draftRef) draftRef.current = handle;
+        const onHidden = () => { if (document.visibilityState === "hidden") handle.flush(); };
+        document.addEventListener("visibilitychange", onHidden);
+        window.addEventListener("pagehide", handle.flush);
+        return () => {
+            handle.flush();
+            document.removeEventListener("visibilitychange", onHidden);
+            window.removeEventListener("pagehide", handle.flush);
+            if (draftRef?.current === handle) draftRef.current = null;
+        };
+    }, [draftRef]);
     const remember = () => {
         const current = window.getSelection();
         if (current?.rangeCount && editor.current?.contains(current.anchorNode)) {
@@ -76,12 +91,31 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
             setStyle(textStyles.find(([id]) => id === size)?.[1] || "Texto normal");
         }
     };
-    const save = () => { linkifyEditor(editor.current); const next = saveRichText(editor.current.innerHTML); if (maxLength && editor.current.textContent.length > maxLength) { editor.current.innerHTML = editorDisplayHTML(lastValue.current, true); selection.current = null; setLimitReached(true); return; } setLimitReached(false); lastValue.current = next; onChange(next); remember(); };
+    const flush = () => {
+        clearTimeout(commitTimer.current); commitTimer.current = null;
+        if (dirty.current && editor.current) {
+            const next = saveRichText(editor.current.innerHTML);
+            dirty.current = false; lastValue.current = next; onChange(next);
+        }
+        return lastValue.current;
+    };
+    commit.current = flush;
+    const save = (wholeDocument = false, deferred = false) => {
+        if (maxLength && editor.current.textContent.length > maxLength) {
+            clearTimeout(commitTimer.current); dirty.current = false;
+            editor.current.innerHTML = editorDisplayHTML(lastValue.current, true); selection.current = null; setLimitReached(true); return;
+        }
+        linkifyEditor(editor.current, {wholeDocument}); dirty.current = true; setLimitReached(false); remember();
+        if (deferred && changeDelay > 0) {
+            clearTimeout(commitTimer.current);
+            commitTimer.current = setTimeout(() => commit.current(), Math.min(changeDelay, 250));
+        } else flush();
+    };
     const command = (name, argument) => {
         if (disabled) return;
         editor.current.focus();
         if (selection.current && editor.current.contains(selection.current.commonAncestorContainer)) { const current = window.getSelection(); current.removeAllRanges(); current.addRange(selection.current); }
-        document.execCommand(name, false, argument); save();
+        document.execCommand(name, false, argument); save(true);
     };
     const changeStyle = size => {
         command("fontSize", size);
@@ -125,7 +159,15 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         </div>
         {linkOpen && <div className="task_editor_link"><input type="url" aria-label="Dirección del enlace" value={link} onChange={event => setLink(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setLinkOpen(false); editor.current.focus(); } }} /><input type="text" aria-label="Alias del enlace" placeholder="Alias (opcional)" maxLength={120} value={linkAlias} onChange={event => setLinkAlias(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); insertLink(); } }} /><button type="button" disabled={disabled} onClick={insertLink}>Insertar</button><button type="button" onClick={() => setLinkOpen(false)}>Cancelar</button>{linkError && <small role="alert">{linkError}</small>}</div>}
         <ImageGallery images={images} disabled={disabled || imagesBusy} onRemove={index => {const image = editor.current?.querySelectorAll("img")[index]; if (image) {image.remove(); selection.current = null; save();}}}/>
-        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-controls={mention ? mentionId : undefined} aria-activedescendant={mention && candidates.length ? `${mentionId}-${mentionIndex}` : undefined} aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder} onInput={event => { if (!event.nativeEvent.isComposing) {save(); findMention();} }} onCompositionEnd={() => {save(); findMention();}} onKeyUp={event => {remember(); if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) findMention();}} onMouseUp={() => {remember(); findMention();}} onBlur={event => {remember(); if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) setMention(null);}} onPaste={event => { event.preventDefault(); if (disabled) return; const files = transferredFiles(event.clipboardData); if (files.length) { void insertImages(files); return; } remember(); command("insertText", event.clipboardData.getData("text/plain")); }} onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }} onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
+        <div ref={editor} className="task_editor_content" role="textbox" aria-label={label} aria-multiline="true" aria-controls={mention ? mentionId : undefined} aria-activedescendant={mention && candidates.length ? `${mentionId}-${mentionIndex}` : undefined} aria-disabled={disabled} contentEditable={!disabled} suppressContentEditableWarning spellCheck data-placeholder={placeholder}
+        onInput={event => { if (!event.nativeEvent.isComposing) {save(false, true); findMention();} }}
+        onCompositionEnd={() => {save(); findMention();}}
+        onKeyUp={event => {remember(); if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) findMention();}}
+        onMouseUp={() => {remember(); findMention();}}
+        onBlur={event => {flush(); remember(); if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) setMention(null);}}
+        onPaste={event => { event.preventDefault(); if (disabled) return; const files = transferredFiles(event.clipboardData); if (files.length) { void insertImages(files); return; } remember(); command("insertText", event.clipboardData.getData("text/plain")); }}
+        onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }}
+        onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
             if (event.nativeEvent.isComposing) return;
             if (mention && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
                 event.preventDefault(); event.stopPropagation();
@@ -134,7 +176,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
                 else if (candidates.length) setMentionIndex(index => (index + (event.key === "ArrowUp" ? -1 : 1) + candidates.length) % candidates.length);
                 return;
             }
-            if (event.key === "Enter" && !event.shiftKey && onSubmit) { event.preventDefault(); event.stopPropagation(); if (!submitDisabled && !disabled && !imagesBusy && !event.repeat) onSubmit(); return; }
+            if (event.key === "Enter" && !event.shiftKey && onSubmit) { event.preventDefault(); event.stopPropagation(); if (!submitDisabled && !disabled && !imagesBusy && !event.repeat) {flush(); onSubmit();} return; }
             if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && ["Título", "Subtítulo"].includes(style)) { event.preventDefault(); remember(); command("insertParagraph"); command("fontSize", "3"); }
             if ((event.ctrlKey || event.metaKey) && ["b", "i", "u"].includes(event.key.toLowerCase())) { event.preventDefault(); command(({ b: "bold", i: "italic", u: "underline" })[event.key.toLowerCase()]); }
         }} />

@@ -72,7 +72,7 @@ def create_notification(*, recipient, event_type, title, body="", actor=None, ta
         "title": title[:180],
         "body": body,
         "route": route or {},
-        "metadata": metadata or {},
+        "metadata": {**(metadata or {}), "actor_is_owner": bool(actor and actor.employee.user_account.is_superuser)},
     }
     if dedupe_key:
         notification, created = Notification.objects.get_or_create(
@@ -86,6 +86,8 @@ def create_notification(*, recipient, event_type, title, body="", actor=None, ta
             **defaults,
         ), True
     if created:
+        from .push import queue_notice
+        queue_notice(notification)
         transaction.on_commit(lambda: dispatch_notification(notification), robust=robust_dispatch)
     return notification if created else None
 

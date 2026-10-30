@@ -63,16 +63,33 @@ test("five supplied audio presets replace synthesized tones", () => {
 });
 
 
-test("desktop alerts require saved opt-in and browser permission", () => {
+test("desktop alerts require saved opt-in and browser permission", async () => {
     const original = globalThis.Notification, notices = [];
     try {
         globalThis.Notification = class {static permission = "default"; constructor(title, options) {notices.push({title, options});}};
         const row = {id: "private", title: "BOLD", body: "Nuevo aviso"};
-        showDesktopNotification(row, {desktop_enabled: true}); assert.equal(notices.length, 0);
+        await showDesktopNotification(row, {desktop_enabled: true}); assert.equal(notices.length, 0);
         Notification.permission = "granted";
-        showDesktopNotification(row, {desktop_enabled: false}); assert.equal(notices.length, 0);
-        showDesktopNotification(row, {desktop_enabled: true}); assert.equal(notices.length, 1);
+        await showDesktopNotification(row, {desktop_enabled: false}); assert.equal(notices.length, 0);
+        await showDesktopNotification(row, {desktop_enabled: true}); assert.equal(notices.length, 1);
         assert.equal(notices[0].options.tag, "bold-private");
         assert.equal(notices[0].options.silent, true);
     } finally {if (original) globalThis.Notification = original; else delete globalThis.Notification;}
+});
+
+test("system alerts use the worker on PWA, keep content private, and request OS sound only in background", async () => {
+    const descriptors = Object.fromEntries(["document", "navigator", "Notification"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    const notices = [], document = {hidden: true};
+    Object.defineProperty(globalThis, "document", {value: document, configurable: true});
+    Object.defineProperty(globalThis, "navigator", {value: {serviceWorker: {getRegistration: async () => ({active: {}, showNotification: async (...args) => notices.push(args)})}}, configurable: true});
+    Object.defineProperty(globalThis, "Notification", {value: {permission: "granted"}, configurable: true});
+    try {
+        const row = {id: "private", title: "Private task title", body: "Private comment", actor_is_owner: true};
+        const settings = {desktop_enabled: true, enabled: true, volume: 60};
+        await showDesktopNotification(row, settings);
+        assert.equal(notices[0][0], "BOLD · Propietario"); assert.equal(notices[0][1].silent, false);
+        assert.doesNotMatch(JSON.stringify(notices), /Private task title|Private comment/);
+        document.hidden = false; await showDesktopNotification(row, settings); assert.equal(notices[1][1].silent, true);
+        document.hidden = true; await showDesktopNotification(row, {...settings, enabled: false}); assert.equal(notices[2][1].silent, true);
+    } finally {for (const [key, descriptor] of Object.entries(descriptors)) {if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];}}
 });

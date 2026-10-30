@@ -15,6 +15,9 @@ import {createSlackUnread} from "./slack_unread.js";
 import { createSessionNotifications } from "./session_notifications.js";
 import {createNotificationSync} from "./notification_sync.js";
 import {defaultNotificationSettings, containsNewUnreadNotification, createEntryNotificationSound, playNotificationSound, showDesktopNotification, stopNotificationSound} from "./notification_sound.js";
+import {backgroundPush, backgroundPushScope} from "./background_push.js";
+import {protectPrivateWork} from "./shared/private_work.js";
+import {confirmBold} from "./shared/bold_dialog.js";
 const CoreContext = createContext(null);
 export function useCore() {
     const core = useContext(CoreContext);
@@ -126,6 +129,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         updateCore({ sessionStatus: "anonymous" });
     }, [clearNotifications]);
     const logout = useCallback(async () => {
+        if (!await protectPrivateWork() && !await confirmBold("No se pudo confirmar el guardado de todos los borradores. ¿Cerrar sesión de todas formas?")) return;
         await coreApi.logout().catch(() => {});
         clearLocalSession();
     }, [clearLocalSession]);
@@ -249,6 +253,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         let mounted = true;
         const cacheScope = moduleScope(state);
         const savedNotifications = moduleCache.read(cacheScope, "notifications");
+        const pushScope = backgroundPushScope(state);
+        backgroundPush.sync(pushScope);
         const cachedRows = !state.securityUncertain && Array.isArray(savedNotifications) ? savedNotifications : [];
         setNotificationSnapshot({assignmentId, rows: cachedRows, error: ""});
         const report = error => {
@@ -269,9 +275,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         const store = createSessionNotifications({initialRows: cachedRows, onChange: rows => {
             if (mounted) {
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
-                    playNotificationSound(soundSettings).catch(() => {});
+                    const pushed = backgroundPush.active(pushScope);
+                    if (!document.hidden || !soundSettings.desktop_enabled || globalThis.Notification?.permission !== "granted") playNotificationSound(soundSettings).catch(() => {});
                     const known = new Set(previousRows.map(row => String(row.id)));
-                    for (const row of rows.filter(row => !row.is_read && !known.has(String(row.id))).slice(0,3)) {try {showDesktopNotification(row, soundSettings);} catch { /* Los permisos los administra el navegador. */ }}
+                    if (!pushed) for (const row of rows.filter(row => !row.is_read && !known.has(String(row.id))).slice(0,3)) showDesktopNotification(row, soundSettings).catch(() => {});
                 }
                 previousRows = rows;
                 if (settingsLoaded) entrySound.update(rows, soundSettings);
@@ -331,6 +338,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         reconcile("notification-bootstrap");
         return () => {
             mounted = false; sync.dispose(); realtime.disconnect(); store.dispose(); chat.dispose();
+            backgroundPush.suspend();
             if (messagingController.current === chat) messagingController.current = null;
             soundController.abort(); entrySound.dispose(); stopNotificationSound();
             window.removeEventListener("bold:home-ready", homeEntrance);

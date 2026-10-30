@@ -1,3 +1,37 @@
+// Mejoras generales del 30 de octubre. El piloto de Chat/Slack conserva
+// su catálogo y su autorización independientes.
+export const multitaskingReleaseNotes = [
+    {id:"2026-10-30-owner-notice-origin",date:"2026-10-30",category:"Mejoras",icon:"bell",
+        title:"Un distintivo discreto para los avisos del propietario",
+        summary:"Los nuevos avisos correspondientes a una interacción del propietario incluyen la etiqueta Propietario.",
+        sections:[{title:"Qué cambió",items:["La campana y la bandeja muestran el distintivo junto al aviso, sin animaciones adicionales ni reordenar el historial.","La identificación procede del servidor. Un nombre, cargo o permiso de soporte no concede esta distinción.","Se conservan los destinatarios, permisos y preferencias habituales: no se generan avisos masivos ni se omiten silenciamientos."]},
+            {title:"Qué probar",items:["Recibe una asignación o comentario del propietario y compáralo con un aviso de otro empleado. Comprueba la etiqueta tanto en la campana como en Bandeja."]},
+            {title:"Alcance",items:["Los avisos antiguos no se reclasifican retrospectivamente."]}]},
+    {id:"2026-10-30-task-original-creation-time",date:"2026-10-30",category:"Mejoras",icon:"update",
+        title:"La fecha original de cada tarea, siempre en su detalle",
+        summary:"El detalle de la tarea muestra cuándo se creó, con fecha, hora y zona horaria.",
+        sections:[{title:"Qué se agregó",items:["El dato Creada el aparece de forma permanente entre las propiedades de la tarea, aunque no tenga descripción.","Se utiliza la fecha original guardada por el servidor y la zona horaria del dispositivo; editar una tarea no cambia su creación.","Si falta una fecha válida, se informa de ello sin sustituirla por la fecha de modificación ni la hora actual."]},
+            {title:"Qué probar",items:["Abre el detalle de una tarea, anota su fecha de creación, modifica su título y vuelve a abrirla: la creación debe mantenerse."]}]},
+    {id:"2026-10-30-task-editor-long-text-work",date:"2026-10-30",category:"Correcciones",icon:"update",
+        title:"Menos procesamiento repetido al redactar textos largos",
+        summary:"Se reduce el trabajo del editor sobre párrafos y enlaces que no estás modificando.",
+        sections:[{title:"Qué mejoró",items:["La descripción se edita dentro de su formulario sin recalcular toda la vista principal de tareas por cada letra.","El procesamiento completo se agrupa durante las pausas de escritura y se confirma al guardar o salir del campo, incluyendo las últimas letras.","Al escribir en un párrafo, el reconocimiento de enlaces evita reconstruir los enlaces de todo el documento. Pegar varios párrafos sigue reconociendo todos sus enlaces y conserva los alias."]},
+            {title:"Qué probar",items:["Edita una descripción extensa con varios enlaces, prueba formato y pegado, y comprueba que el cursor conserva su posición."]},
+            {title:"Comprobación",items:["Las pruebas incluyen descripciones de 350 bloques y el motor WebKit. La revisión en la PWA del Mac que reportó lentitud sigue pendiente."]}]},
+    {id:"2026-10-30-background-device-notifications",date:"2026-10-30",category:"Mejoras",icon:"bell",
+        title:"Avisos mientras trabajas en otras ventanas",
+        summary:"Los avisos del sistema pueden sonar mientras BOLD permanece abierto en segundo plano.",
+        sections:[{title:"Qué mejoró",items:["Desde Perfil → Notificaciones concede permiso, activa Mostrar notificaciones del sistema y guarda las preferencias.","Los avisos externos muestran información general para proteger tu privacidad y distinguen las interacciones del propietario.","Dentro de BOLD se conserva el sonido elegido. En segundo plano se solicita el sonido del sistema, sujeto al volumen, silencio y modo de concentración del dispositivo."]},
+            {title:"Qué probar",items:["Guarda las preferencias, cambia a otra aplicación y recibe un comentario o una asignación autorizada. Comprueba el aviso y el sonido del sistema."]},
+            {title:"Alcance",items:["Mantén BOLD abierto, aunque esté minimizado. La entrega con la aplicación completamente cerrada aún no está habilitada en esta versión. Los avisos se detienen al cerrar sesión o cuando esta vence."]}]},
+    {id:"2026-10-30-task-drafts-and-navigation",date:"2026-10-30",category:"Mejoras",icon:"update",
+        title:"Retoma la creación de una tarea sin empezar de nuevo",
+        summary:"La nueva tarea conserva un borrador cifrado por cuenta y las vistas de tareas respetan mejor tus preferencias.",
+        sections:[{title:"Qué cambió",items:["El borrador de nueva tarea conserva descripción, imágenes insertadas, notas de voz, subtareas, colaboradores y adjuntos en este dispositivo durante hasta siete días. Puedes descartarlo desde el propio formulario.","Al cambiar de módulo, recargar o volver a iniciar sesión con la misma cuenta puedes retomar el borrador. No se envía automáticamente; si hubo un intento de envío, se pide comprobar primero si la tarea ya existe.","Las vistas de proyecto se separan por asignación. Volver a Tareas o abrir su menú ya no fuerza un reinicio de la vista; las secciones y filtros sincronizan sus preferencias entre pestañas.","Los borradores cifrados de Chat y Slack conservan su copia al cerrar sesión, retirando las claves de memoria. Recuperarlos exige iniciar sesión de nuevo y mantener permiso sobre la conversación o página."]},
+            {title:"Qué probar",items:["Comienza una tarea con texto y adjuntos, cambia de módulo y regresa a crearla. Repite tras cerrar sesión. Comprueba también el descarte, las secciones contraídas y tu vista de proyecto."]},
+            {title:"Alcance",items:["La copia del borrador se conserva en este dispositivo; no se sincroniza entre equipos. Chat y Slack continúan disponibles únicamente para el piloto de IT."]}]},
+];
+
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
@@ -442,6 +476,7 @@ export function getReleaseNotes(assignment) {
 }
 
 export const releaseNotes = [
+    ...multitaskingReleaseNotes,
     {
         id: "2026-10-19-notification-push-recovery", date: "2026-10-19", category: "Mejoras", icon: "bell",
         title: "Notificaciones en directo con menos consultas de fondo",

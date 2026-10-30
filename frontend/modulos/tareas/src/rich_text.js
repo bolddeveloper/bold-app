@@ -5,6 +5,11 @@ export const inlineTextClasses = { 2: "task_text_quote", 3: "task_text_normal", 
 
 export function cleanHTML(html) {
     const doc = new DOMParser().parseFromString(html, "text/html");
+    cleanDocument(doc);
+    return doc.body.innerHTML;
+}
+
+function cleanDocument(doc) {
     for (let node of [...doc.body.querySelectorAll("*")]) {
         if (node.tagName === "FONT") {
             const span = doc.createElement("span");
@@ -20,7 +25,6 @@ export function cleanHTML(html) {
             if (!safe) node.removeAttribute(attribute.name);
         }
     }
-    return doc.body.innerHTML;
 }
 
 export function editorHTML(value = "") {
@@ -44,10 +48,9 @@ export function editorDisplayHTML(value, editable = false) {
 }
 
 export function saveRichText(html) {
-    const draft = new DOMParser().parseFromString(html, "text/html");
-    for (const image of draft.body.querySelectorAll("img[data-bold-image]")) image.setAttribute("src", image.getAttribute("data-bold-image"));
-    const cleaned = cleanHTML(draft.body.innerHTML);
-    const doc = new DOMParser().parseFromString(cleaned, "text/html");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    for (const image of doc.body.querySelectorAll("img[data-bold-image]")) image.setAttribute("src", image.getAttribute("data-bold-image"));
+    cleanDocument(doc);
     linkifyElement(doc.body);
     return doc.body.textContent.trim() || doc.body.querySelector("img") ? richTextPrefix + doc.body.innerHTML : "";
 }

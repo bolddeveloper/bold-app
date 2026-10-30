@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 
 from boldApp.core.models import PositionAssignment
@@ -62,3 +63,34 @@ class Notification(UUIDPrimaryKeyModel):
 
     def __str__(self):
         return self.title
+
+
+class PushDevice(UUIDPrimaryKeyModel):
+    session = models.ForeignKey("boldApp_autenticacion.AuthSession", on_delete=models.CASCADE, related_name="push_devices")
+    assignment = models.ForeignKey(PositionAssignment, on_delete=models.CASCADE, related_name="push_devices")
+    endpoint_digest = models.CharField(max_length=64, unique=True)
+    subscription_encrypted = models.TextField()
+    binding = models.UUIDField(default=uuid.uuid4)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "notification_push_devices"
+
+
+class PushDelivery(UUIDPrimaryKeyModel):
+    notification = models.ForeignKey(Notification, on_delete=models.CASCADE, related_name="push_deliveries")
+    device = models.ForeignKey(PushDevice, on_delete=models.CASCADE, related_name="deliveries")
+    binding = models.UUIDField()
+    state = models.CharField(max_length=12, default="pending")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField()
+    lease_until = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "notification_push_deliveries"
+        indexes = [models.Index(fields=["state", "next_attempt_at"], name="idx_push_delivery_due")]
+        constraints = [models.UniqueConstraint(fields=["notification", "device", "binding"], name="unique_push_notice_device")]

@@ -1,4 +1,5 @@
 import { AvatarImage } from "./shared/avatar_image.jsx";
+import { OwnerNotice } from "./shared/owner_notice.jsx";
 import "./shared/bold_dialog.css";
 import {useKeyboardShortcuts} from "./use_keyboard_shortcuts.js";
 import {confirmBold} from "./shared/bold_dialog.js";
@@ -336,7 +337,7 @@ function NotificationsPanel(props) {
                                 {actor ? <AvatarImage url={actor.avatar_url} initials={actor.initials} /> : render_icon(notification_icon, 14)}
                             </span>
                             <div className="notification_body">
-                                <p className="notification_title">{notification_item.title}</p>
+                                <p className="notification_title">{notification_item.title}<OwnerNotice notification={notification_item}/></p>
                                 <p className="notification_text">{notification_item.body}</p>
                                 <span className="notification_time">{notification_item.time_label}</span>
                             </div>

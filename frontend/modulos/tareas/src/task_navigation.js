@@ -1,4 +1,14 @@
 // Navigation preferences never grant access to a project or module.
+export function taskViewKey(navigationKey, scope, resourceId = "") {
+    return scope === "mine" ? `${navigationKey}:mine:view` : `${navigationKey}:${scope}:${resourceId}:view`;
+}
+export function readTaskView(key, scope = "mine") {
+    let saved;
+    try {saved = globalThis.localStorage?.getItem(key);} catch { /* Optional preference. */ }
+    return {section: ["timeline", "states", ...(scope === "mine" ? ["team"] : [])].includes(saved) ? saved : "tasks",
+        view: saved === "board" ? "board" : "list"};
+}
+
 export function restoreTaskNavigation(saved, search = "") {
     const project = new URLSearchParams(search).get("project");
     const scope = project ? "project" : ["mine", "project", "workspace"].includes(saved?.scope) ? saved.scope : "mine";

@@ -37,16 +37,20 @@ def build_notification_envelope(notification):
             "module": notification.module,
             "route": notification.route,
             "is_read": notification.is_read,
+            "actor_is_owner": notification.metadata.get("actor_is_owner") is True,
         },
         "source": "bold_notifications",
     }
 
 
 def dispatch_notification(notification):
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
-    async_to_sync(channel_layer.group_send)(
-        f"notifications_assignment_{notification.recipient_assignment_id}",
-        {"type": "notification.created", "envelope": build_notification_envelope(notification)},
-    )
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is not None:
+            async_to_sync(channel_layer.group_send)(
+                f"notifications_assignment_{notification.recipient_assignment_id}",
+                {"type": "notification.created", "envelope": build_notification_envelope(notification)},
+            )
+    finally:
+        from .push import wake_worker
+        wake_worker()

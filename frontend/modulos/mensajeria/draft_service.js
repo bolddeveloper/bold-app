@@ -1,7 +1,7 @@
 import {http} from "../core/http_client.js";
 import {getCoreState,subscribeCore} from "../core/core_store.js";
 import {createDraftVault} from "./draft_vault.js";
-import {permissionDraftAction} from "./draft_lifecycle.js";
+import {permissionDraftAction,cacheDraftAction} from "./draft_lifecycle.js";
 
 const vault=createDraftVault();
 let context="";
@@ -12,7 +12,7 @@ const bus=typeof window!=="undefined" && typeof BroadcastChannel!=="undefined" ?
 bus?.addEventListener("message",event=>{if(event.data==="purge")purge();else if(event.data==="suspend")vault.suspend();});
 function invalidate(clear){vault.suspend();if(clear)purge();bus?.postMessage(clear ? "purge":"suspend");}
 globalThis.addEventListener?.("bold:private-cache-clear",()=>invalidate(true));
-globalThis.addEventListener?.("bold:private-cache-suspend",()=>invalidate(true));
+globalThis.addEventListener?.("bold:private-cache-suspend",()=>invalidate(cacheDraftAction("bold:private-cache-suspend")==="purge"));
 globalThis.addEventListener?.("bold:permissions-revision",event=>invalidate(permissionDraftAction(event.detail)==="purge"));
 subscribeCore(()=>{
     const scope=currentScope(),next=scope ? JSON.stringify(scope):"";

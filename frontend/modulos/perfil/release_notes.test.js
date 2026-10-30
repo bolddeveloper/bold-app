@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {pendingPilotReleaseNotes,releaseNotes,itPilotReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,itPilotReleaseNotes,getReleaseNotes} from "./release_notes.js";
+
+test("las cinco mejoras generales publicadas incluyen qué probar sin abrir el piloto",()=>{
+    assert.equal(multitaskingReleaseNotes.length,5);
+    assert.deepEqual(releaseNotes.slice(0,5),multitaskingReleaseNotes);
+    for(const note of multitaskingReleaseNotes){
+        assert.equal(getReleaseNotes({chat_enabled:false}).some(row=>row.id===note.id),true);
+        assert.equal(note.date,"2026-10-30");
+        assert.ok(note.sections.some(section=>section.title==="Qué probar"));
+        assert.notEqual(note.category,"En revisión");
+    }
+    const background=multitaskingReleaseNotes.find(note=>note.id==="2026-10-30-background-device-notifications");
+    assert.match(background.sections.flatMap(section=>section.items).join(" "),/completamente cerrada aún no está habilitada/);
+});
 
 test("las siete novedades del 30 de octubre solo se ofrecen a la asignación piloto habilitada",()=>{
     assert.equal(itPilotReleaseNotes.length,7);

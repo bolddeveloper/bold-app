@@ -30,12 +30,12 @@ export function unpackDraft(bytes){
     return {payload:metadata.payload,files};
 }
 
-export function indexedDraftStorage(indexedDB=globalThis.indexedDB){
+export function indexedDraftStorage(indexedDB=globalThis.indexedDB,databaseName="bold-private-drafts"){
     let opening;
     function database(){
         if(!indexedDB)throw failure("Este navegador no permite conservar borradores. No cierres la vista sin guardar.");
         return opening ||= new Promise((resolve,reject)=>{
-            const request=indexedDB.open("bold-private-drafts",VERSION);
+            const request=indexedDB.open(databaseName,VERSION);
             request.onupgradeneeded=()=>request.result.createObjectStore("drafts",{keyPath:"id"});
             request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();opening=null;};resolve(db);};
             request.onerror=()=>{opening=null;reject(request.error);};request.onblocked=()=>{opening=null;reject(failure("Cierra otras versiones de BOLD para habilitar los borradores."));};
