@@ -1,6 +1,6 @@
 {
   "objective": "Integrar y desplegar Develop; distinguir avisos del propietario; notificaciones y sonidos en segundo plano; conservar estados y borradores de multitarea; fecha original de creación; investigar y corregir lag de textos largos",
-  "status": "publication_in_progress",
+  "status": "deployed_verified",
   "base_commit": "f88d62cf",
   "integration": {
     "method": "fast-forward; origin/Develop was an ancestor of feature/chat-directo",
@@ -14,6 +14,7 @@
     "live_worker_ping": "one worker",
     "server_branch_and_commit_rechecked": true
   },
+  "requirements_snapshot_phase": "Local acceptance before publication; current runtime delivery is recorded in publication below.",
   "requirements": {
     "owner_notifications": {"status": "implemented_and_locally_tested_not_deployed", "scope": "server-authenticated send-time ownership marker on existing authorized notices in bell and inbox; no company-wide broadcast or pilot bypass", "tests": "four focused tests plus notification suite (41 tests passed); strict boolean component rendering passed; historical notices not relabeled"},
     "background_notifications_and_sound": {"status": "open_app_background_runtime_verified_locally_not_deployed", "findings": "old delivery used the live page/socket and silent OS notices. Added generic worker system notices with system sound in background. Additional closed-app Web Push is implemented behind an explicit server/device opt-in.", "required": "Open-app background receipt and system sound request verified. OS volume/Focus can suppress audible sound. Additional closed-app provider delivery remains unactivated and unverified, requiring VAPID configuration, migration and a real opted-in subscription; it is not claimed as delivered.", "tests": "Actual isolated Chromium with focus emulation disabled: owner comment via real cookie API/socket shows a generic worker notice; real media playback succeeds in foreground; document.hidden is true before the second comment and a new system notice has silent=false. Web Push backend tests use real encryption with mocked provider HTTP; client/actual worker VM tests also pass."},
@@ -22,15 +23,35 @@
     "long_text_performance": {"status": "implemented_and_locally_tested_not_deployed", "finding": "TaskTextEditor.save ran complete DOM linkification and three document parses on every input; EditTaskModal also updated the whole TaskApp per description change", "changes": "single-parse sanitization; caret-block linkification; local edit-form description state; 160ms idle serialization with immediate flush on submit/blur/pagehide/unmount. Creation draft writes coalesce separately.", "tests": "actual 350-block editor/form: no whole-document parse or parent render during typing burst; one parse on immediate save includes last character; caret, unrelated link DOM identity, aliases, multi-paragraph paste, IME and lifecycle flush checked", "limit": "deterministic work-count tests, not a physical Mac/Safari PWA latency measurement. User reports probable Safari-installed PWA, description only; OS/browser versions remain unknown."}
   },
   "complete": true,
-  "completion_scope": "Initial Develop integration/deployment completed and rechecked; subsequent five requested fixes implemented and accepted locally. The user now authorized commit and deployment of these fixes and release notes to Oracle/Cloudflare, retaining the IT-only pilot. Publication is being verified separately below. Physical Mac latency and the additional closed-app push provider transport are explicitly not claimed as verified.",
-  "new_fixes_deployed": false,
-  "new_fixes_committed": false,
-  "latest_local_verification": "Current acceptance production build passed (1m02s; existing large-chunk warning); real WebKit full form/restart/logout/create/edit flow passed; WebKit section/view/cross-tab acceptance passed; Chromium real foreground audio and hidden-page system notice passed; six controller tests, actual recovery UI fixture, 26 focused frontend tests and 18 focused Django tests passed. No new deployment performed.",
+  "completion_scope": "The five requested fixes and their release notes were committed to Develop and deployed to Oracle/Cloudflare with the IT-only pilot retained. Runtime health, source bundle/worker hashes, migration and pilot boundaries were verified. Physical Mac latency and additional closed-app push-provider transport are not claimed as verified.",
+  "new_fixes_deployed": true,
+  "new_fixes_committed": true,
+  "latest_local_verification": "Production build passed in 59.94s with the existing large-chunk warning. General frontend: 411 tests, 410 passed, one DOMParser-dependent skip covered by separate DOM/editor fixtures. Task multitasking: 20 tests and three form/SSR fixtures passed. Notification sync: 26; PWA: 14; Worker proxy: 7; notes: 7; backend notification/task-grant/deployment-contract suite and six pilot tests passed. Model dry-run found no unrecorded migrations. Earlier actual WebKit/Chromium browser acceptance remains recorded below.",
   "frontend_build_with_partial_fixes": "passed; existing large-chunk warning",
   "django_check_and_model_dry_run": "passed; no schema changes from these partial fixes",
   "draft_release_notes_prepared_but_hidden": 0,
-  "publication": {"status": "prepared_not_deployed", "branch": "Develop", "release_notes": 5, "release_date": "2026-10-30", "chat_slack_pilot": "IT only", "closed_app_push_enabled": false, "closed_app_push_announcement": false, "profile_capability_gate": "Closed-app controls appear only when the server enables/configures that capability; ordinary background alerts remain available."},
-  "new_database_migration": "boldApp_notificaciones.0003_web_push created and applied by isolated SQLite test databases; NOT applied to production",
+  "publication": {
+    "status": "deployed_verified",
+    "branch": "Develop",
+    "application_commit": "01922a80b94469a135b51bb6eddcbbdce4fb3d47",
+    "oracle_image": "bold-app-backend:develop-01922a80",
+    "oracle_image_digest": "sha256:48b427309c0adafe835ca42a8b37177dec1dd077607b8edc0100db8024916db6",
+    "cloudflare_version": "946c5b45-7a73-4a6e-b5ed-5bdc17b22a71",
+    "frontend_entry": "/assets/index-DhVplZ1F.js",
+    "pwa_cache": "bold_app_shell_v4_b1c1ec4a652d60e5",
+    "public_bundle_and_worker_match_local_build": true,
+    "public_health": {"database": true, "redis": true},
+    "anonymous_new_endpoints": "task draft grant and push config both return 401 without a session",
+    "database_backup": "Custom PostgreSQL dump created before migration; pg_restore --list succeeded. Private env backup retained. Neither database nor Redis was restarted.",
+    "live_worker": "One Celery node responded; backend healthy",
+    "release_notes": 5,
+    "release_date": "2026-10-30",
+    "chat_slack_pilot": "IT only: six eligible assignments; all 30 assignments outside IT denied by the live access function. Backend and worker both retain the same pilot allowlist.",
+    "closed_app_push_enabled": false,
+    "closed_app_push_announcement": false,
+    "profile_capability_gate": "Closed-app controls appear only when the server enables/configures that capability; ordinary background alerts remain available."
+  },
+  "new_database_migration": "boldApp_notificaciones.0003_web_push applied successfully to Oracle PostgreSQL after backup; migrate --check passed on the deployed backend",
   "push_configuration": "disabled by default; Compose and example pass all four WEB_PUSH variables to backend/worker. generate_web_push_keys writes a new private file without overwriting or printing keys; two command tests passed. Production keys have NOT been generated or configured.",
   "browser_acceptance": {
     "isolation": "Owned localhost production frontend build, actual cookie API/CSRF, new SQLite database and three synthetic accounts. No production mail, Google credentials, Redis or provider delivery. Browser profiles and private settings live outside the repository; credentials are not included here.",
@@ -66,5 +87,5 @@
     "mac_question": "User reports description editing only, in the installed PWA, installed from Safari on Mac. OS/Safari versions and actual device profiling remain unconfirmed; do not claim Mac validation.",
     "description_typing_followup": "Edit form now holds description state locally, with 160ms bounded idle serialization and synchronous flush on submit/blur/pagehide/unmount. 350-block actual editor/form fixture: zero parses and zero parent renders in a typing burst; immediate submit uses one parse and includes final key. Idle, other-field changes, closing, IME and lifecycle flush checks passed. These are deterministic work-count tests, not physical Safari/PWA latency measurements."
   },
-  "next_work": "Complete the authorized commit/migration/deployment and verify runtime/IT-only pilot. Keep additional closed-app Web Push disabled until real provider receipt is verified. Repeat the long-description test on the affected Mac/PWA; do not infer a Safari-specific cause from its installation origin."
+  "next_work": "In the affected Mac PWA accept Actualizar BOLD, then edit a long description with links and save immediately after typing. Compare responsiveness, caret position and final saved text. Keep additional closed-app Web Push disabled until real provider receipt is verified; Chat/Slack remains IT-only."
 }
