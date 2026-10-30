@@ -1,5 +1,38 @@
 # Slack, páginas y Chat: mejoras funcionales ordenadas
 
+## Entrega online autorizada — 30 de octubre de 2026
+
+Las siete fases se desplegaron para la revisión online del equipo de IT, sin
+abrir el piloto a otros departamentos. El registro anterior conserva el alcance
+local de cada comprobación; la autorización de esta entrega sustituye únicamente
+la prohibición previa de desplegar. Evidencia detallada:
+`docs/acceptance-it-functional-rollout-20261030.json`.
+
+- Código de la entrega: `c6d264d5`, rama `feature/chat-directo`, sin merge a Develop.
+- Oracle: respaldo previo conservado, dieciséis migraciones 0017–0032 aplicadas,
+  backend y trabajador recreados. Piloto y lista de IT preservados; automatizaciones
+  habilitadas tras comprobar Redis/Celery/Beat en contenedores separados y aislados.
+- Cloudflare: versión `634f6ba1-dd0c-4107-80e1-6e0cd4ab6994`. JavaScript, CSS y service
+  worker públicos coinciden por SHA-256 con la compilación local; health confirma
+  PostgreSQL y Redis, sesión anónima sin autenticar.
+- Siete tarjetas nuevas del 30 de octubre en Perfil → Novedades, solo para la
+  asignación habilitada por el servidor. Cada tarjeta explica cambios, pruebas y
+  límites. No se publican en bloque los borradores históricos del desarrollo.
+- La prueba distribuida usa identidades ficticias y Drive simulado: subida en
+  otro proceso, descarga por la segunda cuenta, pista por Redis y recordatorio
+  ejecutado una sola vez por Beat con reloj real. Contenedores y red retirados.
+  En producción se observó el despacho y ejecución de las tareas periódicas,
+  sin mensajes sintéticos ni archivos creados. El Drive corporativo se comprobó
+  mediante una consulta de metadatos, no mediante una nueva subida real.
+- Comprobación API de lectura en el servidor: asignación IT con HTTP 200 y otra
+  fuera de IT con HTTP 403, usando APIClient y sin iniciar sesión en navegador.
+  No confundir esto con aceptación nativa de dos sesiones online.
+- UI/UX Pro Max se aplicó al lector existente: lista derivada del cargo activo,
+  sin estado duplicado, y retirada del diálogo al cambiar de asignación o perder
+  el acceso. Se conserva el aspecto. Pruebas DOM, seis pruebas de notas y build
+  aprobados; siguen las comprobaciones físicas de dispositivos y la revisión del
+  equipo antes de considerar una apertura general.
+
 Solicitud vigente: integrar los siete puntos recomendados, en este orden, con
 funciones comprobables. El objetivo completo no se limita a la primera fase.
 Base revisada: `feature/chat-directo`, `1df792ff`. Inicio: 27 de octubre de 2026.

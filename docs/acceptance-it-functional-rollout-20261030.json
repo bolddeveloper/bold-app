@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-30",
+  "status": "deployed_for_it_pilot_online_review",
+  "branch": "feature/chat-directo",
+  "application_commit": "c6d264d5",
+  "functional_backend_source_commit": "1f7b2a7c",
+  "public_url": "https://boldapp.boldapp-93b.workers.dev",
+  "oracle": {
+    "image_tag": "bold-app-backend:slack-c6d264d5",
+    "previous_image_tag": "bold-app-backend:slack-89682955",
+    "database_backup": "boldapp-20261030-c6d264d5.dump",
+    "backup_sha256": "691d4e8cd6997d51f8008c3c1fcd0e199b5c60e625b3af1136697d1be9169747",
+    "backup_archive_listing_verified": true,
+    "backup_restore_exercised_this_delivery": false,
+    "old_backups_preserved": true,
+    "migration_range": "boldApp_mensajeria.0017_history_search through 0032_channel_automations",
+    "migrations_applied": 16,
+    "pending_migrations": false,
+    "django_check": "passed",
+    "backend_health": "healthy",
+    "worker_new_tasks_registered": true,
+    "beat_dispatch_and_worker_success_observed": [
+      "boldApp.mensajeria.upload_tasks.drain_media_uploads",
+      "boldApp.mensajeria.automation_tasks.run_channel_automations"
+    ],
+    "production_synthetic_messages_created": false,
+    "sheets_postgres_redis_and_tunnel_recreated": false
+  },
+  "pilot": {
+    "enabled": true,
+    "allowlist": "unchanged; only Equipo de IT",
+    "automations_enabled": true,
+    "celery_eager": false,
+    "current_it_assignment_api_status": [200, 200],
+    "current_outside_assignment_api_status": [403, 403],
+    "checked_endpoints": ["conversations", "channels"],
+    "production_read_checks": "Django REST APIClient force-authentication; not a browser login or an external authenticated HTTP session",
+    "server_directory_flags": {"it": true, "outside": false},
+    "private_conversations_and_invitations_unchanged": true,
+    "general_release_authorized": false
+  },
+  "cloudflare": {
+    "worker": "boldapp",
+    "version_id": "634f6ba1-dd0c-4107-80e1-6e0cd4ab6994",
+    "previous_version_id": "9322568f-a525-4bb4-93cf-b68086f585e9",
+    "main_javascript": "/assets/index-qohMReJf.js",
+    "main_css": "/assets/index-T_dpcquY.css",
+    "public_assets_match_local_sha256": true,
+    "public_service_worker_matches_local_sha256": true,
+    "health": {"status": "ok", "database": true, "redis": true},
+    "anonymous_authenticated": false
+  },
+  "release_notes": {
+    "count": 7,
+    "date": "2026-10-30",
+    "location": "Perfil > Novedades",
+    "audience": "active assignment with server-provided chat_enabled === true",
+    "general_history_unchanged": true,
+    "draft_notes_not_bulk_published": true,
+    "card_model_and_styles_preserved": true,
+    "topics": ["private drafts and editing", "history search", "mentions and personal attention", "message-to-task and agreements", "structured knowledge pages", "resource library and recoverable uploads", "scoped automations"]
+  },
+  "validation_this_delivery": {
+    "release_notes_node_tests_passed": 6,
+    "pilot_news_dom": "seven cards, reader navigation, assignment switch and same-assignment revocation passed",
+    "messaging_node_tests_passed": 187,
+    "worker_proxy_tests_passed": 7,
+    "pwa_tests_passed": 14,
+    "pilot_and_deployment_django_tests_passed": 11,
+    "header_calendar_dom": "passed",
+    "frontend_build": "passed; existing large-chunk warning",
+    "compose_interpolation_cases_passed_on_oracle": 2,
+    "isolated_distributed_runtime": {
+      "postgres_redis_worker_beat_separate_containers": true,
+      "network": "internal disposable network; no production connections",
+      "eager": false,
+      "worker_upload_and_two_account_download": true,
+      "drive": "Redis-backed synthetic protocol double; not Google",
+      "worker_hint_received_via_redis": true,
+      "beat_real_clock_reminder_published_once": true,
+      "duplicate_jobs_no_duplicate_effect": true,
+      "outside_pilot_owner_denied": true,
+      "temporary_containers_and_network_removed": true
+    },
+    "corporate_drive": "active configured folder metadata fetched successfully; no production file uploaded or permissions changed",
+    "previous_full_regression": "494 PostgreSQL tests passed on 2026-10-29; not rerun in full this delivery"
+  },
+  "not_claimed": ["physical microphone/camera acceptance", "installed mobile PWA acceptance", "native authenticated browser review of this online delivery", "new production Google file upload", "all-department launch", "complete load/capacity or billing guarantee"]
+}
