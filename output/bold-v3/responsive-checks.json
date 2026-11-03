@@ -1,0 +1,330 @@
+[
+  {
+    "headerHeight": 61,
+    "page": 320,
+    "toolbarHeight": 156,
+    "toolbarRight": 304,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 320
+  },
+  {
+    "headerHeight": 61,
+    "page": 375,
+    "toolbarHeight": 108,
+    "toolbarRight": 359,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 375
+  },
+  {
+    "headerHeight": 61,
+    "page": 600,
+    "toolbarHeight": 108,
+    "toolbarRight": 584,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 600
+  },
+  {
+    "headerHeight": 61,
+    "page": 767,
+    "toolbarHeight": 108,
+    "toolbarRight": 751,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 767
+  },
+  {
+    "headerHeight": 61,
+    "page": 768,
+    "toolbarHeight": 60,
+    "toolbarRight": 752,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 768
+  },
+  {
+    "headerHeight": 61,
+    "page": 900,
+    "toolbarHeight": 60,
+    "toolbarRight": 884,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 900
+  },
+  {
+    "headerHeight": 61,
+    "page": 1023,
+    "toolbarHeight": 60,
+    "toolbarRight": 1007,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 1023
+  },
+  {
+    "headerHeight": 0,
+    "page": 1024,
+    "toolbarHeight": 58,
+    "toolbarRight": 1004,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 1024
+  },
+  {
+    "headerHeight": 0,
+    "page": 1280,
+    "toolbarHeight": 52,
+    "toolbarRight": 1256,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 1280
+  },
+  {
+    "headerHeight": 0,
+    "page": 1440,
+    "toolbarHeight": 50,
+    "toolbarRight": 1416,
+    "view": "lista",
+    "visibleNews": 1,
+    "width": 1440
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 288,
+        "scroll": 1188
+      }
+    ],
+    "page": 320,
+    "view": "estados",
+    "width": 320
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 343,
+        "scroll": 1408
+      }
+    ],
+    "page": 375,
+    "view": "estados",
+    "width": 375
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 736,
+        "scroll": 1264
+      }
+    ],
+    "page": 768,
+    "view": "estados",
+    "width": 768
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 868,
+        "scroll": 1264
+      }
+    ],
+    "page": 900,
+    "view": "estados",
+    "width": 900
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 768,
+        "scroll": 1264
+      }
+    ],
+    "page": 1024,
+    "view": "estados",
+    "width": 1024
+  },
+  {
+    "containers": [
+      {
+        "className": "pipeline_board board_view",
+        "client": 1176,
+        "scroll": 1264
+      }
+    ],
+    "page": 1440,
+    "view": "estados",
+    "width": 1440
+  },
+  {
+    "page": 320,
+    "scale": "7",
+    "toolbarRight": 303,
+    "view": "cronograma",
+    "width": 320
+  },
+  {
+    "page": 375,
+    "scale": "7",
+    "toolbarRight": 358,
+    "view": "cronograma",
+    "width": 375
+  },
+  {
+    "page": 768,
+    "scale": "7",
+    "toolbarRight": 751,
+    "view": "cronograma",
+    "width": 768
+  },
+  {
+    "page": 900,
+    "scale": "7",
+    "toolbarRight": 883,
+    "view": "cronograma",
+    "width": 900
+  },
+  {
+    "page": 1024,
+    "scale": "7",
+    "toolbarRight": 1003,
+    "view": "cronograma",
+    "width": 1024
+  },
+  {
+    "page": 320,
+    "scale": "14",
+    "toolbarRight": 303,
+    "view": "cronograma",
+    "width": 320
+  },
+  {
+    "page": 375,
+    "scale": "14",
+    "toolbarRight": 358,
+    "view": "cronograma",
+    "width": 375
+  },
+  {
+    "page": 768,
+    "scale": "14",
+    "toolbarRight": 751,
+    "view": "cronograma",
+    "width": 768
+  },
+  {
+    "page": 900,
+    "scale": "14",
+    "toolbarRight": 883,
+    "view": "cronograma",
+    "width": 900
+  },
+  {
+    "page": 1024,
+    "scale": "14",
+    "toolbarRight": 1003,
+    "view": "cronograma",
+    "width": 1024
+  },
+  {
+    "calendarWidth": 286,
+    "page": 320,
+    "scale": "month",
+    "toolbarRight": 303,
+    "view": "cronograma",
+    "width": 320
+  },
+  {
+    "calendarWidth": 341,
+    "page": 375,
+    "scale": "month",
+    "toolbarRight": 358,
+    "view": "cronograma",
+    "width": 375
+  },
+  {
+    "calendarWidth": 734,
+    "page": 768,
+    "scale": "month",
+    "toolbarRight": 751,
+    "view": "cronograma",
+    "width": 768
+  },
+  {
+    "calendarWidth": 866,
+    "page": 900,
+    "scale": "month",
+    "toolbarRight": 883,
+    "view": "cronograma",
+    "width": 900
+  },
+  {
+    "calendarWidth": 766,
+    "page": 1024,
+    "scale": "month",
+    "toolbarRight": 1003,
+    "view": "cronograma",
+    "width": 1024
+  },
+  {
+    "boardClient": 288,
+    "boardContent": 888,
+    "page": 320,
+    "view": "columnas",
+    "width": 320
+  },
+  {
+    "boardClient": 343,
+    "boardContent": 1053,
+    "page": 375,
+    "view": "columnas",
+    "width": 375
+  },
+  {
+    "boardClient": 382,
+    "boardContent": 1170,
+    "page": 414,
+    "view": "columnas",
+    "width": 414
+  },
+  {
+    "boardClient": 568,
+    "boardContent": 1728,
+    "page": 600,
+    "view": "columnas",
+    "width": 600
+  },
+  {
+    "boardClient": 736,
+    "boardContent": 944,
+    "page": 768,
+    "view": "columnas",
+    "width": 768
+  },
+  {
+    "boardClient": 868,
+    "boardContent": 944,
+    "page": 900,
+    "view": "columnas",
+    "width": 900
+  },
+  {
+    "boardClient": 768,
+    "boardContent": 944,
+    "page": 1024,
+    "view": "columnas",
+    "width": 1024
+  },
+  {
+    "boardClient": 1176,
+    "boardContent": 1176,
+    "page": 1440,
+    "view": "columnas",
+    "width": 1440
+  }
+]

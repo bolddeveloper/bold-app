@@ -425,6 +425,27 @@ export const pendingPilotReleaseNotes = [{
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
     {
+        id: "2026-11-03-compact-profile-settings",
+        date: "2026-11-03",
+        category: "Diseño",
+        icon: "profile",
+        title: "Ajustes de Perfil más fáciles de recorrer",
+        summary: "Un menú lateral más ligero, Novedades por páginas y una guía para cambiar atajos.",
+        sections: [
+            {title: "Encuentra tus ajustes", items: [
+                "Abre Perfil y elige un apartado en la navegación lateral. La opción activa queda marcada y el ajuste ocupa el espacio disponible.",
+                "Conectores muestra el estado de Google junto a los controles de conexión. Disponibilidad y Chat resaltan las opciones seleccionadas.",
+                "En Notificaciones, abre solo el grupo que quieras ajustar. Elige el tono en el selector de Sonido y volumen, pruébalo con Escuchar y guarda tus preferencias.",
+                "Los avisos se actualizan con BOLD abierto en segundo plano. En Notificaciones de Windows puedes enviar un aviso de prueba si el navegador tiene permiso.",
+                "Editar imagen, las confirmaciones, la configuración de verificación en dos pasos y los selectores de fecha y color usan el diseño compacto de BOLD."
+            ]},
+            {title: "Atajos y Novedades", items: [
+                "En Atajos, elige Cambiar, pulsa la combinación y usa Guardar atajos para aplicarla. Si una combinación está reservada o repetida, verás el motivo en la misma fila.",
+                "Novedades muestra hasta seis notas por página. Usa Anterior y Siguiente para recorrer el historial."
+            ]}
+        ]
+    },
+    {
         "id": "2026-11-03-bold-interface-refresh",
         "date": "2026-11-03",
         "category": "Diseño",

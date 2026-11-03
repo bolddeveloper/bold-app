@@ -35,27 +35,26 @@ export function ProfileQuickMenu({anchor, close, openProfile, changeDepartment})
         return () => document.removeEventListener("pointerdown", outside);
     }, [anchor, close]);
     const account = core.account, identity = core.activeAssignment;
-    const dark = document.documentElement.dataset.boldTheme === "dark";
-    return createPortal(<><section ref={panel} className={`bold_profile_popover bold_profile_quick ${dark ? "theme_dark" : ""}`} role="dialog" aria-modal="true" aria-label="Ajustes rápidos del perfil" style={position} onKeyDown={event=>{if(event.key==="Escape" && (departments || availability)){event.preventDefault();event.stopPropagation();if(departments){setDepartments(false);departmentButton.current?.focus();}else{setAvailability(false);presenceButton.current?.focus();}}}}>
-        <header className="bold_profile_quick_header"><span>Tu cuenta</span><button type="button" aria-label="Cerrar perfil" onClick={close}><X size={17}/></button></header>
-        <div className="bold_profile_quick_identity">
+    return createPortal(<><section ref={panel} className="bold_profile_popover bold_profile_quick" role="dialog" aria-modal="true" aria-label="Ajustes rápidos del perfil" style={position} onKeyDown={event=>{if(event.key==="Escape" && (departments || availability)){event.preventDefault();event.stopPropagation();if(departments){setDepartments(false);departmentButton.current?.focus();}else{setAvailability(false);presenceButton.current?.focus();}}}}>
+        <header className="bold_profile_quick_identity">
             <ProfileAvatar url={account?.avatar_url} initials={identity?.initials}/>
             <div><h2>{core.employee?.full_name || identity?.name}</h2><p>{account?.email || identity?.email}</p><small>{identity?.unit_name} · {identity?.job_role_title}</small></div>
-        </div>
+            <button type="button" className="bold_profile_quick_close" aria-label="Cerrar perfil" onClick={close}><X size={16}/></button>
+        </header>
         <div className="bold_profile_quick_actions">
             <button type="button" className="bold_profile_action" onClick={() => {close();openProfile(true);}}><Pencil size={16}/>Editar perfil</button>
             <div>
                 <button type="button" ref={presenceButton} className="bold_profile_action" aria-expanded={availability} onClick={()=>availability ? setAvailability(false):openAvailability()} onKeyDown={event=>{if(event.key==="ArrowRight"){event.preventDefault();openAvailability();window.requestAnimationFrame(()=>panel.current?.querySelector(".bold_profile_submenu button")?.focus());}}}><Clock3 size={16}/>Mi disponibilidad<ChevronRight size={15}/></button>
-                {availability && <PresenceMenu trigger={presenceButton} dark={dark} close={()=>{setAvailability(false);presenceButton.current?.focus();}} configure={()=>{close();openProfile(false,"presence");}}/>}
+                {availability && <PresenceMenu trigger={presenceButton} close={()=>{setAvailability(false);presenceButton.current?.focus();}} configure={()=>{close();openProfile(false,"presence");}}/>}
             </div>
             <button type="button" ref={departmentButton} className="bold_profile_action" aria-expanded={departments} aria-controls={departments ? "bold_profile_departments":undefined} onClick={()=>{setAvailability(false);setDepartments(value=>!value);}} onKeyDown={event=>{if(event.key==="ArrowRight"){event.preventDefault();setAvailability(false);setDepartments(true);window.requestAnimationFrame(()=>departmentPanel.current?.querySelector("button")?.focus());}}}><Building2 size={16}/>Cambiar departamento<ChevronRight size={15}/></button>
             <button type="button" className="bold_profile_action" onClick={()=>{close();openProfile(false,"news");}}><Newspaper size={16}/>Novedades</button>
             <button type="button" className="bold_profile_action bold_profile_logout" onClick={()=>{close();core.logout();}}><LogOut size={16}/>Cerrar sesión</button>
         </div>
-    {departments && <DepartmentMenu panel={departmentPanel} card={panel} trigger={departmentButton} position={position} dark={dark} close={() => {setDepartments(false); departmentButton.current?.focus();}} assignments={core.assignments} currentId={identity?.id} choose={async id => {if (id === identity?.id || await changeDepartment(id)) close();}}/>}</section></>, document.body);
+    {departments && <DepartmentMenu panel={departmentPanel} card={panel} trigger={departmentButton} position={position} close={() => {setDepartments(false); departmentButton.current?.focus();}} assignments={core.assignments} currentId={identity?.id} choose={async id => {if (id === identity?.id || await changeDepartment(id)) close();}}/>}</section></>, document.body);
 }
 
-function DepartmentMenu({panel, card, trigger, position, dark, close, assignments, currentId, choose}) {
+function DepartmentMenu({panel, card, trigger, position, close, assignments, currentId, choose}) {
     const [placement, setPlacement] = useState({left: 12, top: 12});
     useLayoutEffect(() => {
         const place = () => {
@@ -69,7 +68,7 @@ function DepartmentMenu({panel, card, trigger, position, dark, close, assignment
         place(); window.addEventListener("resize", place); window.addEventListener("scroll", place, true); window.visualViewport?.addEventListener("resize", place);
         return () => {window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); window.visualViewport?.removeEventListener("resize", place);};
     }, [position]);
-    return <aside ref={panel} id="bold_profile_departments" className={`bold_profile_departments ${dark ? "theme_dark" : ""}`} aria-label="Cambiar departamento" style={placement} onKeyDown={event => {if (event.key === "Escape") {event.stopPropagation(); close();}}}>
+    return <aside ref={panel} id="bold_profile_departments" className="bold_profile_departments" aria-label="Cambiar departamento" style={placement} onKeyDown={event => {if (event.key === "Escape") {event.stopPropagation(); close();}}}>
         <header><h3>Departamentos</h3><button type="button" aria-label="Cerrar departamentos" onClick={close}><X size={17}/></button></header>
         {assignments.map(row => <button type="button" key={row.id} aria-pressed={row.id === currentId} onClick={() => choose(row.id)}><span><strong>{row.unit_name || row.name}</strong><small>{row.job_role_title || "Departamento"}</small></span>{row.id === currentId && <Check size={17}/>}</button>)}
         {assignments.length === 1 && <p>Solo tienes un departamento asignado.</p>}

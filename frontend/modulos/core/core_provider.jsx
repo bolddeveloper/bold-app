@@ -268,6 +268,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted && !settingsLoaded) {soundSettings = value; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: value}); entrySound.update(previousRows, soundSettings);}}).catch(() => {});
         const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: soundSettings}); entrySound.update(previousRows, soundSettings);};
         window.addEventListener("bold:notification-sound-changed", changeSound);
+        const online = () => navigator.onLine !== false;
         const store = createSessionNotifications({initialRows: cachedRows, onChange: rows => {
             if (mounted) {
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
@@ -290,13 +291,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onError: error => {if (mounted && [401, 403].includes(error.status)) window.dispatchEvent(new Event("bold:unauthorized"));},
         });
         messagingController.current = chat;
-        const sync = createNotificationSync({onError: report, refresh: (reason, background) =>
-            store.refresh({reason, force: background, immediate: reason === "notification-bootstrap"})});
-        const reconcile = (reason, desktopEvent = false) => {
-            const force = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
-                && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
-            return sync.request(reason, {force, event: desktopEvent || reason === "notification-event"});
-        };
+        // The scheduler gates reads; a second visibility check could stall an in-flight batch.
+        const sync = createNotificationSync({onError: report, canRunBackground: online, refresh: reason =>
+            store.refresh({reason, force: true, immediate: reason === "notification-bootstrap"})});
+        const reconcile = reason => sync.request(reason, {force: online(), event: reason === "notification-event"});
         // Retry exhausted receipt batches only on real connectivity events,
         // never from the notification coordinator's existing periodic timer.
         const recoverChat = () => chat.recover();
@@ -304,7 +302,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         window.addEventListener("bold:permissions-revision", invalidate);
         window.addEventListener("online", recoverChat);
         realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
-            onNotification: envelope => reconcile("notification-event", envelope.event_type === "notification.created"),
+            onNotification: () => reconcile("notification-event"),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
             onMessaging: envelope => {

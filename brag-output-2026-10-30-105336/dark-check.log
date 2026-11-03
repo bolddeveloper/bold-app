@@ -1,0 +1,54 @@
+◆  Checking dark
+[hyperframes] browserGpuMode probe → hardware (WebGL renderer vendor="Google Inc. (NVIDIA)" renderer="ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 SUPER (0x00001E81) Direct3D11 vs_5_0 ps_5_0, D3D11)")
+
+Lint
+  ◇ 0 errors, 0 warnings
+
+Runtime
+  ◇ 0 errors, 0 warnings
+
+Layout
+  ⚠ t=1-17s (2 samples) container_overflow g.dot_field inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 346.62px, right 238.37px, top 189.9px, bottom 139.16px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=1-17s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 608.42px, top 323.6px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=1-17s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(3) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 623.52px, bottom 518.57px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=3-15s (2 samples) container_overflow g.dot_field inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 354.24px, right 296.64px, top 196.56px, bottom 169.56px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=3-15s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(3) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 630.73px, bottom 526.11px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=5-13s (2 samples) container_overflow g.dot_field inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 365.86px, right 385.86px, top 206.73px, bottom 216.11px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=5-13s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 624.68px, top 343.2px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=5-13s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(3) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 641.68px, bottom 537.56px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=7-11s (2 samples) container_overflow g.dot_field inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 376.16px, right 464.41px, top 215.73px, bottom 257.1px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=7-11s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 633.22px, top 353.52px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ⚠ t=7-11s (2 samples) container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(3) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 651.25px, bottom 547.57px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=3s container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 614.82px, top 331.32px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=9s container_overflow g.dot_field inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 380.16px, right 495.36px, top 219.24px, bottom 273.24px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=9s container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 636.56px, top 357.56px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=9s container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(3) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 655.04px, bottom 551.54px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=15s container_overflow [data-composition-id="main"] > svg:nth-of-type(1) > g:nth-of-type(2) inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 614.88px, top 331.38px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  0 error(s), 11 warning(s), 5 info(s)
+
+Motion
+  ◇ 0 errors, 0 warnings
+
+Contrast
+  ◇ 0/0 text checks pass WCAG AA
+
+Snapshots
+  ◇ disabled
+
+◇  Check passed

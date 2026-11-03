@@ -3,27 +3,26 @@
 .bold_color_trigger > span { width: 30px; height: 30px; margin: 4px; border-radius: 50%; border: 2px solid var(--bold_surface); }
 /* Controles secundarios por encima de drawers y diálogos de Workspace (hasta 15000). */
 .bold_control_overlay { position: fixed; inset: 0; z-index: 16010; }
-.bold_avatar_editor header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.bold_avatar_editor header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--bold_line); }
 /* Editor de avatar: recorte circular, zoom, desplazamiento y giro. */
 .bold_image_overlay { position: fixed; inset: 0; z-index: 16000; display: grid; place-items: center; padding: 16px; background: transparent; }
-.bold_avatar_editor { width: min(480px,100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; box-sizing: border-box; border-radius: 16px; border: 1px solid var(--bold_line); background: var(--bold_surface); color: var(--bold_text); }
-.bold_avatar_editor h2 { margin: 0; font-size: 20px; }
-.bold_avatar_crop { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; touch-action: none; cursor: grab; background: #0003; }
+.bold_avatar_editor { width: min(366px,100%); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; padding: 12px; box-sizing: border-box; border: 1px solid var(--bold_line); background: var(--bold_surface); color: var(--bold_text); box-shadow: 0 12px 32px #0004; }
+.bold_avatar_editor h2 { margin: 0; font-size: 17px; }
+.bold_avatar_crop { position: relative; width: min(100%, max(144px, calc(100dvh - 245px))); margin-inline: auto; aspect-ratio: 1; overflow: hidden; touch-action: none; cursor: grab; background: var(--bold_surface_soft); }
 .bold_avatar_crop:active { cursor: grabbing; }
 .bold_avatar_crop canvas { display: block; width: 100%; height: 100%; }
-.bold_avatar_mask { position: absolute; inset: 0; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 60px #0007; pointer-events: none; }
-.bold_avatar_editor label { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; }
-.bold_avatar_editor input { width: 100%; accent-color: var(--bold_red); }
-.bold_avatar_position { display: flex; align-items: end; gap: 12px; }
+.bold_avatar_mask { position: absolute; inset: 0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 100px #0007; pointer-events: none; }
+.bold_avatar_editor label { display: grid; gap: 3px; margin-top: 8px; font-size: 12px; color: var(--bold_muted); }
+.bold_avatar_editor input { width: 100%; min-width: 0; margin: 0; accent-color: var(--bold_red); }
+.bold_avatar_position { display: flex; align-items: end; gap: 8px; }
 .bold_avatar_position label { min-width: 0; flex: 1; }
-.bold_avatar_editor footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.bold_avatar_editor footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--bold_line); }
 .bold_avatar_editor footer button:first-child { margin-right: auto; }
-.bold_avatar_editor button { padding: 8px; display: inline-flex; align-items: center; justify-content: center; font: inherit; color: inherit; background: var(--bold_surface_soft); border: 1px solid var(--bold_line); border-radius: 7px; cursor: pointer; transition: background-color 150ms ease; }
-.bold_avatar_editor .bold_control_primary { background: var(--bold_red); color: white; }
+.bold_avatar_editor button { min-height: 34px; padding: 5px 8px; display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 13px; color: inherit; background: var(--bold_surface); border: 1px solid var(--bold_line); border-radius: 0; cursor: pointer; transition: background-color 150ms ease; }
+.bold_avatar_editor :is(header button, footer button:first-child) { border-color: transparent; color: var(--bold_muted); }
+.bold_avatar_editor button:not(:disabled):hover { background: var(--bold_surface_soft); }
+.bold_avatar_editor .bold_control_primary { background: var(--bold_red_dark); border-color: transparent; color: white; font-weight: 600; }
+.bold_avatar_editor .bold_control_primary:not(:disabled):hover { background: color-mix(in srgb, var(--bold_red_dark) 88%, black); }
 .bold_avatar_editor button:disabled { opacity: .5; cursor: default; }
 .bold_avatar_editor :focus-visible, .bold_color_trigger:focus-visible { outline: 2px solid var(--bold_red); outline-offset: 3px; }
 @media(prefers-reduced-motion: reduce) { .bold_avatar_editor button { transition: none; } }
-
-/* Las capas conservan las variables del tema sin pintar el fondo de BOLD. */
-.bold_control_overlay, .bold_control_overlay.theme_dark,
-.bold_image_overlay, .bold_image_overlay.theme_dark { background: transparent; }

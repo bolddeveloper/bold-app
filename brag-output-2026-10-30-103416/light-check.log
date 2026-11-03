@@ -1,0 +1,58 @@
+◆  Checking light
+[hyperframes] browserGpuMode probe → hardware (WebGL renderer vendor="Google Inc. (NVIDIA)" renderer="ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 SUPER (0x00001E81) Direct3D11 vs_5_0 ps_5_0, D3D11)")
+
+Lint
+  ◇ 0 errors, 0 warnings
+
+Runtime
+  ◇ 0 errors, 0 warnings
+
+Layout
+  ℹ t=1s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 404.17px, top 220.14px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=1s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 376.33px, bottom 325.39px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=3s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 397.93px, top 257.43px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=3s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed right 94.27px, bottom 182.27px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=5s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 388.24px, top 314.43px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=5s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed top 142.09px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=7s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 379.46px, top 364.29px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=7s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 290.69px, top 362.62px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=9s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 375.91px, top 383.91px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=9s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 451.69px, top 449.69px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=11s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 373.61px, top 380.67px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=11s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 443.93px, top 442.17px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=13s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 367.58px, top 372.27px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=13s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 424.23px, top 423.05px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=15s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 360.47px, top 362.47px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=15s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 401.77px, top 401.27px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=17s container_overflow g.orbit_a inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 355.68px, top 355.92px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  ℹ t=17s container_overflow g.orbit_b inside [data-composition-id="main"] > svg:nth-of-type(1) overflowed left 387.04px, top 386.98px — Element extends outside a clipping layout container.
+        Fix: Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.
+  0 error(s), 0 warning(s), 18 info(s)
+
+Motion
+  ◇ 0 errors, 0 warnings
+
+Contrast
+  ◇ 0/0 text checks pass WCAG AA
+
+Snapshots
+  ◇ disabled
+
+◇  Check passed
