@@ -1,4 +1,4 @@
-import {lazy,Suspense,useEffect,useRef,useState} from 'react';
+import {lazy,Suspense,useEffect,useId,useRef,useState} from 'react';
 import {createPortal,flushSync} from 'react-dom';
 import {ArrowDown,ArrowUp,FileText,X} from 'lucide-react';
 import {useCore} from '../core/core_provider.jsx';
@@ -20,6 +20,8 @@ export default function MessageAgreements(props){
 function AgreementReview({kind,containerId,messages=[],more,loadingMessages,onMore,onOpenPage,identity,onClose}){
     const [form,setForm]=useState(initialAgreement),[attempt,setAttempt]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[result,setResult]=useState(null);
     const [destinations,setDestinations]=useState([]),[next,setNext]=useState(null),[query,setQuery]=useState(''),[usedQuery,setUsedQuery]=useState(''),[chosen,setChosen]=useState(null);
+    const [catalogBusy,setCatalogBusy]=useState(false),[catalogReady,setCatalogReady]=useState(false),[catalogError,setCatalogError]=useState('');
+    const destinationId=useId();
     const active=useRef(true),current=useRef(null),requests=useRef(new Set()),writing=useRef(false),review=useRef(null),catalogRequest=useRef(null);
     current.current=identity;review.current={form,attempt};
     const controller=()=>{const value=new AbortController();requests.current.add(value);return value;};
@@ -31,10 +33,12 @@ function AgreementReview({kind,containerId,messages=[],more,loadingMessages,onMo
     useDialog(true,'.agreement_dialog',close);
     function change(key,value){setForm(old=>({...old,[key]:value,touched:true,...(key==='confirmed' ? {}:{confirmed:false})}));setError('');}
     async function findDestinations(cursor=null){
-        catalogRequest.current?.abort();const c=controller(),term=cursor ? usedQuery:query;catalogRequest.current=c;
-        try{const value=await agreementApi.destinations(term,cursor,{signal:c.signal});if(valid(c)){setDestinations(old=>[...new Map([...(cursor ? old:[]),...value.results].map(row=>[row.id,row])).values()]);setNext(value.next);setUsedQuery(term);}}
-        catch(err){if(valid(c))setError(agreementError(err));}finally{requests.current.delete(c);}
+        catalogRequest.current?.abort();const c=controller(),term=cursor ? usedQuery:query.trim();catalogRequest.current=c;
+        setCatalogBusy(true);setCatalogError('');if(!cursor){setDestinations([]);setNext(null);setCatalogReady(false);}
+        try{const value=await agreementApi.destinations(term,cursor,{signal:c.signal});if(valid(c)){setDestinations(old=>[...new Map([...(cursor ? old:[]),...value.results].map(row=>[row.id,row])).values()]);setNext(value.next);setUsedQuery(term);setCatalogReady(true);}}
+        catch(err){if(valid(c))setCatalogError([401,403,404].includes(err.status) ? 'No tienes acceso a los canales de destino con tus permisos actuales.':'No se pudieron buscar canales. Comprueba tu conexión y pulsa Buscar canales para reintentar.');}finally{requests.current.delete(c);if(valid(c))setCatalogBusy(false);}
     }
+    function changeQuery(value){catalogRequest.current?.abort();setCatalogBusy(false);setCatalogReady(false);setCatalogError('');setDestinations([]);setNext(null);setQuery(value);}
     useEffect(()=>{if(form.stage==='review')findDestinations();},[form.stage]);
     useEffect(()=>{setChosen(null);if(!form.destination)return;const c=controller();agreementApi.destination(form.destination,{signal:c.signal}).then(value=>{if(valid(c))setChosen(value);}).catch(err=>{if(valid(c))setError(agreementError(err));}).finally(()=>requests.current.delete(c));return()=>c.abort();},[form.destination]);
     async function prepare(renew=false){
@@ -80,8 +84,11 @@ function AgreementReview({kind,containerId,messages=[],more,loadingMessages,onMo
                 <button type="button" disabled={readonly || !form.selected.length} onClick={()=>prepare()}>Revisar {form.selected.length || ''} mensajes</button>
             </section>:<form onSubmit={create} aria-busy={busy}>
                 <button type="button" disabled={readonly} onClick={()=>change('stage','selection')}>Cambiar selección</button>
-                <label>Buscar canal de destino<input maxLength={80} value={query} disabled={readonly} onChange={event=>setQuery(event.target.value)}/></label><button type="button" disabled={readonly} onClick={()=>findDestinations()}>Buscar canales</button>{next && <button type="button" disabled={readonly} onClick={()=>findDestinations(next)}>Más canales</button>}
-                <label>Canal de destino<select required value={form.destination} disabled={readonly} onChange={event=>change('destination',event.target.value)}><option value="">Seleccionar canal autorizado</option>{options.map(row=><option key={row.id} value={row.id}>#{row.name} · {row.department} · {row.visibility==='private' ? 'Privado':row.visibility==='department' ? 'Departamental':'Público'}</option>)}</select></label>
+                <div className="agreement_destination_search"><label>Buscar canal de destino<input type="search" maxLength={80} placeholder="Nombre del canal…" value={query} disabled={readonly} onChange={event=>changeQuery(event.target.value)} onKeyDown={event=>{if(event.key==='Enter' && !event.nativeEvent.isComposing){event.preventDefault();if(!readonly && !catalogBusy)findDestinations();}}}/></label><button type="button" disabled={readonly || catalogBusy} aria-controls={destinationId} onClick={()=>findDestinations()}>{catalogBusy ? 'Buscando canales…':'Buscar canales'}</button></div>
+                <p className="agreement_destination_status" role="status" aria-live="polite">{catalogBusy ? 'Buscando canales de destino…':catalogReady ? destinations.length ? `${destinations.length} ${destinations.length===1 ? 'canal disponible':'canales disponibles'}${usedQuery ? ` para «${usedQuery}»`:''}. Elige uno en Canal de destino.`:'No hay canales disponibles para esta búsqueda. Prueba otro nombre; solo aparecen canales activos donde puedes leer y crear páginas.':'Busca por nombre; deja el campo vacío para ver los canales donde puedes crear páginas.'}</p>
+                {catalogError && <p role="alert" className="agreement_problem">{catalogError}</p>}
+                {next && <button type="button" disabled={readonly || catalogBusy} onClick={()=>findDestinations(next)}>Más canales</button>}
+                <label>Canal de destino<select id={destinationId} required value={form.destination} disabled={readonly || catalogBusy} onChange={event=>change('destination',event.target.value)}><option value="">Seleccionar canal autorizado</option>{options.map(row=><option key={row.id} value={row.id}>#{row.name} · {row.department} · {row.visibility==='private' ? 'Privado':row.visibility==='department' ? 'Departamental':'Público'}</option>)}</select></label>
                 <label>Título de los acuerdos<input maxLength={160} required value={form.title} disabled={readonly} onChange={event=>change('title',event.target.value)}/></label>
                 <label>Introducción opcional<textarea rows={2} maxLength={4000} value={form.introduction} disabled={readonly} onChange={event=>change('introduction',event.target.value)}/></label>
                 <ol className="agreement_excerpts">{form.entries.map((row,index)=><li key={row.message_id}><h3>Texto del mensaje {index+1}</h3><details><summary>Ver fuente revisada · versión {row.source_version}</summary><p>{row.source_text || 'Mensaje multimedia sin texto.'}</p></details><label>Texto que se compartirá {index+1}<textarea rows={3} maxLength={10000} disabled={readonly} value={row.text} onChange={event=>change('entries',form.entries.map((value,i)=>i===index ? {...value,text:event.target.value}:value))}/></label><div className="agreement_actions"><button type="button" aria-label={`Subir mensaje ${index+1}`} disabled={readonly || !index} onClick={()=>move(index,-1)}><ArrowUp size={17} aria-hidden="true"/></button><button type="button" aria-label={`Bajar mensaje ${index+1}`} disabled={readonly || index===form.entries.length-1} onClick={()=>move(index,1)}><ArrowDown size={17} aria-hidden="true"/></button></div></li>)}</ol>

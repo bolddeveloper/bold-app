@@ -16,6 +16,15 @@ import "./shared/universal_responsive.css";
 import "../docs/development_notice.css";
 import "../perfil/shortcut_preferences.css";
 import "../mensajeria/phone_transfer.css";
+import "./design_v3.css";
+import "./workspace_v3.css";
+import "../tareas/src/task_workspace_v3.css";
+import "../tareas/src/task_detail_v3.css";
+import "../tareas/src/team_workspace_v3.css";
+import "../tareas/src/pipeline_workspace_v3.css";
+import "../tareas/src/workspace_organization_v3.css";
+import "../tareas/src/project_workspace_v3.css";
+import "./motion_v3.css";
 
 
 // Mounts the React application into the document root.

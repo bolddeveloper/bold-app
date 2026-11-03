@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {channelMatches, channelColor, invitePeople, personMatches} from "./channel_discovery.js";
+import {channelMatches, channelColor, invitePeople, personMatches,channelServerKey,channelServerFilters} from "./channel_discovery.js";
 import {channelPage, createChannelApi} from "./channel_api.js";
 
 test("discovery matches accents, substrings, reordered words and bounded typos",()=>{
@@ -8,6 +8,16 @@ test("discovery matches accents, substrings, reordered words and bounded typos",
         assert.ok(channelMatches("Diseño · Campañas",query),query);
     for(const query of ["finanzas","xyz","diq","campanhas urgentes"])assert.equal(channelMatches("Diseño · Campañas",query),false,query);
     assert.ok(channelMatches("General",""));
+});
+test('server keys and pagination cannot mix private servers, departments or legacy channels',()=>{
+    assert.equal(channelServerKey({department:{id:'it'}}),'it');
+    assert.equal(channelServerKey({server:{id:'private'},department:null}),'server:private');
+    assert.equal(channelServerKey({department:null}),'independent');
+    assert.deepEqual(channelServerFilters('server:private'),{server:'private'});
+    assert.deepEqual(channelServerFilters('it'),{unit:'it'});
+    const root='/api/v2/messaging/channels/';
+    assert.throws(()=>channelPage(root,root+'?server=other&cursor=a',{server:'private'}));
+    assert.equal(channelPage(root,root+'?server=private&cursor=a',{server:'private'}),root+'?server=private&cursor=a');
 });
 test("people discovery includes name, corporate email and all departments",()=>{
     const person={name:"María Pérez",email:"mperez@bold.gt",departments:[{name:"Diseño"},{name:"IT"}]};

@@ -1,8 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mentionParts,insertMention} from './mention_model.js';
+import {chatMentionAtCaret,mentionParts,insertMention} from './mention_model.js';
 
 const person={employee_id:'person',name:'Persona de prueba',token:'@person+alias@bold.gt'};
+test('typed @ detects the current name range without treating emails, links or code as mentions',()=>{
+    assert.deepEqual(chatMentionAtCaret('Hola @',6),{query:'',start:5,end:6});
+    assert.deepEqual(chatMentionAtCaret('Hola @María José final',16),{query:'María José',start:5,end:16});
+    for(const body of ['hola@persona','https://example.com/@persona','`@persona`','@person@bold.gt'])assert.equal(chatMentionAtCaret(body,body.length),null);
+    assert.equal(chatMentionAtCaret('Hola @persona',7,9),null);
+    assert.equal(chatMentionAtCaret('Hola @persona',-1),null);
+});
 test('only verified explicit mentions render as people, never ordinary email, URLs or code',()=>{
     const body='person+alias@bold.gt @Person+Alias@Bold.gt. `@person+alias@bold.gt` https://example.com/@person+alias@bold.gt @unknown@bold.gt';
     const parts=mentionParts(body,[person]);

@@ -83,7 +83,9 @@ test('fallback reconciliation is bounded to an active wait and does not authoriz
 
 test('only a new explicit send retries a failed job, with the original reservation',async()=>{
     const h=harness({initial:'failed'});await h.send();
-    assert.equal(h.calls.filter(row=>row.body?.action==='retry').length,1);assert.equal(h.calls.at(-1).body.upload_id,uploadId);
+    const retried=h.calls.find(row=>row.method==='POST' && row.body instanceof FormData);
+    assert.equal(retried.body.get('client_id'),clientId);assert.equal(await retried.body.get('file').text(),await file.text());
+    assert.equal(h.calls.filter(row=>row.body?.action==='retry').length,0);assert.equal(h.calls.at(-1).body.upload_id,uploadId);
     const during=harness({initial:'queued'}),pending=during.send();const rejected=assert.rejects(pending,error=>error.status===409);
     await flush();await during.tick(0);during.row.state='failed';during.hint();await during.tick(300);await rejected;
     assert.equal(during.calls.filter(row=>row.body?.action==='retry').length,0);

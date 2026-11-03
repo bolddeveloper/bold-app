@@ -397,6 +397,32 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         response["Cache-Control"] = "private, no-store"
         return response
 
+    def list(self, request, *args, **kwargs):
+        from .progress import pipeline_progress
+        response = super().list(request, *args, **kwargs)
+        rows = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        progress = pipeline_progress([row["id"] for row in rows], self.visible_projects(), request.assignment.employee_id)
+        for row in rows:
+            row["pipeline_progress"] = progress.get(str(row["id"]), [])
+        return response
+
+    @action(detail=False, methods=["get"], url_path="daily-progress")
+    def daily_progress(self, request):
+        from datetime import date, timedelta
+        try:
+            start = date.fromisoformat(request.query_params.get("start", ""))
+            end = date.fromisoformat(request.query_params.get("end", ""))
+        except (ValueError, TypeError):
+            raise ValidationError("Indica un inicio y fin válidos.")
+        if not 0 <= (end - start).days <= 30:
+            raise ValidationError("El intervalo máximo es de 31 días.")
+        assignment = request.assignment
+        tasks = Task.objects.filter(parent_task__isnull=True, due_date__range=(start,end)).filter(
+            Q(assignee_assignment=assignment) | Q(created_by_assignment=assignment) | Q(followers__assignment=assignment)).distinct()
+        tasks = self.visible_tasks(tasks).order_by().values("due_date").annotate(total=Count("pk",distinct=True), completed=Count("pk",filter=Q(status__is_final=True),distinct=True))
+        counts = {row["due_date"]: row for row in tasks}
+        return Response([{"date": (day := start + timedelta(days=index)).isoformat(), "total": counts.get(day, {}).get("total", 0), "completed": counts.get(day, {}).get("completed", 0)} for index in range((end-start).days+1)])
+
     @action(detail=True, methods=["get"], url_path="voice-note")
     def voice_note(self, request, pk=None):
         return audio_response(self.get_object().voice_notes, request.query_params.get("note"))

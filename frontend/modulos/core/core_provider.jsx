@@ -28,6 +28,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const generation = useRef(0);
     const permissionCache = useRef(null);
     const enteredFromLogin = useRef(false);
+    const finishSessionEntrance = useCallback(() => { enteredFromLogin.current = false; }, []);
     const notificationController = useRef(null);
     const messagingController = useRef(null);
     const [messagingConnection, setMessagingConnection] = useState("disconnected");
@@ -39,6 +40,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [notificationPreferences, setNotificationPreferences] = useState({assignmentId: null, settings: defaultNotificationSettings});
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
     const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
+    const dismissNotification = useCallback(id => notificationController.current?.dismiss(id) || Promise.resolve(), []);
     const clearNotifications = useCallback(() => {
         notificationController.current?.dispose(); notificationController.current = null;
         setNotificationSnapshot({ assignmentId: null, rows: [], error: "" });
@@ -464,7 +466,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", settings: notificationPreferences.assignmentId === active ? notificationPreferences.settings : defaultNotificationSettings, getRows: notificationRows, setRead: setNotificationRead, clear: () => notificationController.current?.clear() || Promise.resolve() };
+    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", settings: notificationPreferences.assignmentId === active ? notificationPreferences.settings : defaultNotificationSettings, getRows: notificationRows, setRead: setNotificationRead, dismiss: dismissNotification, clear: () => notificationController.current?.clear() || Promise.resolve() };
     function updateProfile(profile) {
         const current = getCoreState(), employeeId = current.account?.employee;
         const initials = profile.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("");
@@ -474,7 +476,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const unread = chatAllowed && unreadChats.assignmentId === state.activeAssignment?.id ? unreadChats : {total: 0, byEmployee: {}, byConversation: {}};
     const slackUnread=chatAllowed && unreadChannels.assignmentId===state.activeAssignment?.id ? unreadChannels : {total:0,byChannel:{},ready:false};
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, finishSessionEntrance, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

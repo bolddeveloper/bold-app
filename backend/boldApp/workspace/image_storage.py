@@ -49,6 +49,9 @@ def storage_user(root):
 
 
 def resource(kind, identity):
+    if kind in ("slack_department_icon", "slack_private_icon"):
+        from boldApp.mensajeria.models import ServerIcon
+        return ServerIcon.objects.select_related("unit", "server").filter(**{"unit_id" if kind == "slack_department_icon" else "server_id": identity}).first()
     from boldApp.core.models import UserAccount, JobRole
     from boldApp.autenticacion.models import PrivateNote
     from boldApp.tareas.models import Task, Project, Comment, Attachment
@@ -63,6 +66,8 @@ def resource(kind, identity):
 
 def resource_key(instance):
     name = instance._meta.model_name
+    if name == "servericon":
+        return ("slack_department_icon", instance.unit_id) if instance.unit_id else ("slack_private_icon", instance.server_id)
     kind = {"useraccount": "profile", "privatenote": "note", "jobrole": "role", "imagedocument": "document"}.get(name, name)
     return kind, instance.user_id if kind == "note" else instance.pk
 
@@ -79,6 +84,14 @@ def can_read(request, kind, instance, field=None, image=None):
     from boldApp.core.permissions import HasActiveAssignment
     if not HasActiveAssignment().has_permission(request, None):
         return False
+    if kind in ("slack_department_icon", "slack_private_icon"):
+        from boldApp.mensajeria.access import assignment_can_chat
+        from boldApp.mensajeria.channel_access import ChannelPolicy
+        if not assignment_can_chat(request.assignment):
+            return False
+        if instance.server_id and not instance.server.members.filter(employee_id=request.assignment.employee_id).exists():
+            return False
+        return ChannelPolicy(request.assignment, request).allows("slack.channel.read", instance.unit)
     if kind == "workbook":
         from boldApp.hojas.access import readable
         return readable(request.assignment, instance.pk)
@@ -161,6 +174,9 @@ def task_path(task):
 
 def folders_for(instance, field):
     kind, identity = resource_key(instance)
+    if kind in ("slack_department_icon", "slack_private_icon"):
+        target = instance.unit if instance.unit_id else instance.server
+        return [("slack", "Slack"), ("server_icons", "Imágenes de servidores"), (f"{kind}:{identity}", target.name)]
     if kind in ("task", "comment", "attachment"):
         task = instance if kind == "task" else instance.task
         if kind == "comment" and instance.image_section == "timeline" and instance.image_project_id:
@@ -254,6 +270,10 @@ def _persist_image(value, instance, field, request=None):
             name = f"{kind}-{str(identity)[:8]}-{digest[:16]}.{MIME_EXTENSIONS[mime]}"
             result = existing[0] if existing else google(user, "POST", "/files", api="upload", params={"uploadType": "multipart", "fields": "id", "supportsAllDrives": "true"}, files={"metadata": (None, json.dumps({"name": name, "parents": [folder], "appProperties": {"bold_image": str(stable_id)}}), "application/json"), "file": (name, content, mime)})
             image = StoredImage.objects.create(id=stable_id, root=root, drive_id=result["id"], mime_type=mime, size_bytes=len(content))
+        if kind in ('slack_department_icon','slack_private_icon'):
+            remote=google(user,'GET','/files/'+image.drive_id,params={'alt':'media','supportsAllDrives':'true'},raw=True)
+            if hashlib.sha256(remote.content).hexdigest()!=digest:
+                raise ValidationError('Drive no confirmó la imagen original. Se conserva la versión anterior.')
     ImageBinding.objects.get_or_create(image=image, resource_kind=kind, resource_id=identity, field=field)
     return image_url(image)
 
@@ -296,7 +316,7 @@ class ImageHTML(HTMLParser):
         self.output.append(f"<!--{data}-->")
 
 
-IMAGE_FIELDS = {"profile": ("avatar_url",), "project": ("avatar_data_url", "description"), "task": ("description",), "comment": ("body",), "attachment": ("file_url",), "suggestion": ("message", "screenshots", "internal_note"), "note": ("content",), "role": ("description",), "document": ("content",)}
+IMAGE_FIELDS = {"profile": ("avatar_url",), "project": ("avatar_data_url", "description"), "task": ("description",), "comment": ("body",), "attachment": ("file_url",), "suggestion": ("message", "screenshots", "internal_note"), "note": ("content",), "role": ("description",), "document": ("content",), "slack_department_icon": ("image",), "slack_private_icon": ("image",)}
 
 
 def store_instance_images(instance, request=None, fields=None, write=True):
@@ -308,7 +328,7 @@ def store_instance_images(instance, request=None, fields=None, write=True):
         value = getattr(instance, field)
         if field == "screenshots":
             updated = [{**item, "data_url": persist_image(item["data_url"], instance, field, request)} for item in value]
-        elif field in ("avatar_url", "avatar_data_url", "file_url"):
+        elif field in ("avatar_url", "avatar_data_url", "file_url", "image"):
             updated = persist_image(value, instance, field, request) if value and (value.startswith("data:image/") or image_id(value)) else value
         elif value and re.search(r"<img\b", value, re.I):
             parser = ImageHTML(instance, field, request)

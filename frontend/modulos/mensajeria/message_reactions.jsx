@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {SmilePlus,X} from 'lucide-react';
 import {useCore} from '../core/core_provider.jsx';
+import {useAnchoredPopover} from '../core/shared/use_anchored_popover.js';
 import {reactionApi,reactionError} from './reaction_api.js';
 import {newestReactions} from './reaction_model.js';
 import './message_reactions.css';
@@ -10,14 +11,15 @@ export default function MessageReactions(props){
     if(core.securityUncertain || core.activeAssignment?.chat_enabled!==true)return null;
     return <Reactions key={`${identity}:${props.kind}:${props.containerId}:${props.message.id}`} {...props} identity={identity}/>;
 }
-function Reactions({message,kind,containerId,disabled=false,identity}){
+function Reactions({message,kind,containerId,disabled=false,identity,renderTrigger,anchorRef}){
     const [snapshot,setSnapshot]=useState(message.reactions),[panel,setPanel]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
     const active=useRef(true),request=useRef(null),pending=useRef(false),attempt=useRef(null),opener=useRef(null),picker=useRef(null),live=useRef(null);
     const core=useCore();live.current={identity,allowed:!core.securityUncertain};
     const value=newestReactions(snapshot,message.reactions),items=value?.items || [];
     const valid=controller=>active.current && !controller.signal.aborted && live.current.identity===identity && live.current.allowed;
     const update=reactions=>setSnapshot(old=>newestReactions(old,reactions));
-    function close(){setPanel(null);setError('');opener.current?.focus();}
+    function close(){setPanel(null);setError('');(anchorRef || opener).current?.focus();}
+    useAnchoredPopover(!!panel && !!anchorRef,anchorRef || opener,picker,{minWidth:260,maxWidth:320,maxHeight:360});
     useEffect(()=>{active.current=true;return()=>{active.current=false;request.current?.abort();};},[]);
     useEffect(()=>{
         const changed=event=>{
@@ -67,11 +69,12 @@ function Reactions({message,kind,containerId,disabled=false,identity}){
             if(valid(controller))setError(reactionError(err));
         }}finally{pending.current=false;if(valid(controller))setBusy(false);}
     }
+    const trigger=<button ref={opener} type="button" aria-label={busy ? 'Confirmando reacciones…':'Elegir reacción'} aria-expanded={!!panel} disabled={disabled || busy} onClick={open}><SmilePlus size={16} aria-hidden="true"/>{renderTrigger && <span>Reaccionar</span>}</button>;
     return <div className="message_reactions" aria-label="Reacciones del mensaje">
         <div className="message_reaction_chips">{items.map(item=><button type="button" key={item.key} aria-pressed={!!item.mine} disabled={disabled || busy || !!attempt.current} title={`${item.label}: ${item.count}${item.mine ? ' · Tú también':''}`} aria-label={`${item.label}: ${item.count} ${item.count===1 ? 'reacción':'reacciones'}${item.mine ? '. Retirar mi reacción':'. Añadir mi reacción'}`} onClick={()=>change(item.key)}><span aria-hidden="true">{item.emoji}</span><span>{item.count}</span></button>)}
-            <button ref={opener} type="button" aria-label={busy ? 'Confirmando reacciones…':'Elegir reacción'} aria-expanded={!!panel} disabled={disabled || busy} onClick={open}><SmilePlus size={16} aria-hidden="true"/></button>
+            {renderTrigger ? renderTrigger(trigger,{change,busy:busy || !!attempt.current}):trigger}
         </div>
-        {panel && <div ref={picker} className="message_reaction_picker" role="group" aria-label="Elegir mi reacción" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();event.preventDefault();close();}}}>
+        {panel && <div ref={picker} popover={anchorRef ? 'auto':undefined} className="message_reaction_picker" role="group" aria-label="Elegir mi reacción" onToggle={event=>{if(anchorRef && event.newState==='closed')setPanel(null);}} onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();event.preventDefault();close();}}}>
             <div><span>Reacciones · hasta {panel.max_own} tuyas</span><button type="button" aria-label="Cerrar reacciones" onClick={close}><X size={16} aria-hidden="true"/></button></div>
             {!panel.can_change && <p>Solo lectura con tus permisos actuales, o canal archivado.</p>}
             <div className="message_reaction_choices">{panel.choices.map(choice=>{const mine=items.some(item=>item.key===choice.key && item.mine);return <button type="button" key={choice.key} aria-label={choice.label} aria-pressed={mine} disabled={disabled || busy || !panel.can_change || !!attempt.current} onClick={()=>change(choice.key)}><span aria-hidden="true">{choice.emoji}</span></button>;})}</div>

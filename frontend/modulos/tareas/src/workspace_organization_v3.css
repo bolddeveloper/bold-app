@@ -1,0 +1,189 @@
+/* Workspace uses the same compact geometry and semantic colors as Tareas. */
+.bold_v3 .module_transition>.folder_module {padding:12px 16px 16px;min-width:0;}
+.bold_v3 .workspace_main_nav,.folder_picker_tabs {display:flex;align-items:center;gap:3px;margin:0 0 12px;padding:4px;border:1px solid var(--bold_line);background:var(--bold_surface);}
+.bold_v3 .workspace_main_nav>button,.folder_dialog .folder_picker_tabs>button {display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:7px 10px;border:0;border-radius:0;background:transparent;color:var(--bold_muted);font-size:12px;cursor:pointer;}
+.bold_v3 .workspace_main_nav>button[aria-pressed=true],.folder_dialog .folder_picker_tabs>button[aria-pressed=true] {background:var(--bold_red_tint);color:var(--bold_red_dark);box-shadow:inset 0 -2px var(--bold_red);}
+.bold_v3.theme_dark .workspace_main_nav>button[aria-pressed=true],.theme_dark .folder_picker_tabs>button[aria-pressed=true] {color:#ff8585;}
+.bold_v3 .folder_module .folder_breadcrumb {gap:4px;margin:0 0 10px;font-size:11px;color:var(--bold_muted);}
+.bold_v3 .folder_breadcrumb button {padding:4px;text-decoration:none;}
+.bold_v3 .folder_breadcrumb button:hover {color:var(--bold_text);background:var(--bold_hover);}
+.bold_v3 .folder_module .projects_module_header {align-items:center;gap:12px;margin:0 0 12px;padding:0;}
+.bold_v3 .folder_module .projects_module_header>div:first-child {flex:1;min-width:180px;}
+.bold_v3 .folder_module .projects_module_header h2 {font-size:18px;margin:0 0 5px;}
+.bold_v3 .folder_module .projects_module_header p {font-size:12px;line-height:1.5;color:var(--bold_muted);margin:0;max-width:620px;}
+.bold_v3 .folder_module_current .projects_module_header {display:grid;grid-template-columns:minmax(0,1fr);gap:10px;}
+.bold_v3 .folder_module .projects_module_header .task_formatted_text {font-size:12px;line-height:1.5;color:var(--bold_muted);}
+.bold_v3 .folder_actions {gap:6px;justify-content:flex-start;}
+.bold_v3 .folder_actions button {display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:7px 10px;border-radius:0;font-size:12px;cursor:pointer;box-shadow:none;}
+.bold_v3 .folder_actions>[role=status]:empty {display:none;}
+.bold_v3 .folder_more_menu {position:relative;}
+.bold_v3 .folder_more_menu>summary {display:grid;place-items:center;list-style:none;cursor:pointer;width:34px;height:34px;border:1px solid var(--bold_line);}
+.bold_v3 .folder_more_menu>summary::-webkit-details-marker {display:none;}
+.bold_v3 .folder_more_menu>div {position:absolute;right:0;top:calc(100% + 5px);z-index:40;width:230px;max-width:calc(100vw - 32px);padding:6px;border:1px solid var(--bold_line);background:var(--bold_surface);box-shadow:0 8px 24px #0002;}
+.bold_v3 .folder_more_menu button {text-align:left;border:0;width:100%;line-height:1.5;}
+.folder_library_search {display:flex;align-items:center;gap:7px;min-width:0;padding:8px 10px;border:1px solid var(--bold_line);background:var(--bold_surface);color:var(--bold_muted);}
+.bold_v3 .folder_library_search {margin:0 0 12px;max-width:100%;}
+:root .folder_library_search input {flex:1;width:100%;min-width:0;border:0;border-radius:0;padding:0;background:transparent;color:var(--bold_text);font:inherit;font-size:12px;outline:0;box-shadow:none;}
+.folder_library_search:focus-within {border-color:var(--bold_red);}
+.bold_v3 .folder_section {min-width:0;margin:0 0 12px;padding:0 10px 10px;border:1px solid var(--bold_line);background:var(--bold_surface_soft);interpolate-size:allow-keywords;}
+.bold_v3 .folder_section>summary {display:flex;align-items:center;gap:8px;min-height:40px;padding:7px 2px;font-size:12px;font-weight:600;list-style:none;cursor:pointer;box-sizing:border-box;}
+.bold_v3 .folder_section>summary::-webkit-details-marker {display:none;}
+.bold_v3 .folder_section>summary::before {content:"";width:5px;height:5px;border:solid var(--bold_muted);border-width:0 1px 1px 0;transform:rotate(-45deg);transition:transform 180ms;}
+.bold_v3 .folder_section[open]>summary::before {transform:rotate(45deg);}
+.bold_v3 .folder_section>summary>span {font-size:10px;font-weight:400;padding:2px 5px;background:var(--bold_surface);border:1px solid var(--bold_line);color:var(--bold_muted);}
+.bold_v3 .folder_section::details-content {block-size:0;overflow:hidden;transition:block-size 220ms ease,content-visibility 220ms allow-discrete;}
+.bold_v3 .folder_section[open]::details-content {block-size:auto;}
+.bold_v3 .folder_module .projects_grid {gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr));}
+.bold_v3 .folder_module .project_summary_card {padding:12px;gap:8px;min-width:0;border-radius:0;border:1px solid var(--bold_line);background:var(--bold_surface);box-shadow:0 1px 3px #00000012;}
+.bold_v3 .folder_card .folder_card_title {gap:9px;margin:0;}
+.bold_v3 .folder_card .folder_card_title strong {font-size:14px;min-width:0;overflow-wrap:anywhere;}
+.bold_v3 .folder_card .folder_card_title>span {width:32px;height:32px;border-radius:0;background:color-mix(in srgb,var(--folder-color) 12%,var(--bold_surface));}
+.bold_v3 .folder_card :is(p,small) {font-size:11px;line-height:1.5;color:var(--bold_muted);margin:0;}
+.bold_v3 .folder_card footer {padding-top:6px;border-top:1px solid var(--bold_line);}
+.bold_v3 .folder_card footer button {width:30px;height:30px;border:0;border-radius:0;background:transparent;color:var(--bold_muted);}
+.bold_v3 .folder_card footer button:hover {background:var(--bold_hover);color:var(--bold_text);}
+.bold_v3 .folder_card .project_summary_progress {gap:8px;margin:2px 0;}
+.bold_v3 .folder_project_card .project_summary_title>button {font-size:13px;}
+.bold_v3 .folder_project_card :is(.project_summary_metrics,.project_summary_badges,.project_summary_dates) {font-size:11px;}
+.bold_v3 .folder_project_card .project_actions_toggle {border-top:1px solid var(--bold_line);}
+.bold_v3 .folder_project_card .project_actions_toggle>summary {min-height:30px;border-radius:0;}
+.bold_v3 .folder_project_card .project_summary_actions {gap:6px;flex-wrap:wrap;}
+.bold_v3 .folder_project_card .project_summary_actions button {border-radius:0;font-size:11px;min-height:32px;padding:6px 8px;}
+.bold_v3 .folder_content {grid-template-columns:minmax(0,1fr);gap:6px;}
+.bold_v3 .folder_module .folder_task_row {min-height:0;padding:10px 12px;gap:8px;border-radius:0;box-shadow:none;flex-wrap:nowrap;background:var(--bold_surface);}
+.bold_v3 .folder_task_row>button {flex:1;flex-basis:0;font-size:12px;}
+.bold_v3 .folder_task_row .folder_task_meta {width:auto;min-width:0;padding:0;justify-content:flex-end;font-size:10px;}
+.bold_v3 .folder_task_meta small {max-width:none;font-size:11px;}
+.bold_v3 .folder_module .folder_drive_links {margin:0 0 12px;}
+.bold_v3 .folder_drive_card .folder_drive_open {gap:8px;padding:0 36px 0 0;box-sizing:border-box;border:0;background:transparent;color:var(--bold_text);font-size:13px;}
+.bold_v3 .folder_drive_card .folder_drive_remove {display:grid;place-items:center;border:0;border-radius:0;background:transparent;color:var(--bold_muted);width:30px;height:30px;padding:6px;}
+.bold_v3 .folder_drive_card .folder_drive_remove:hover {color:var(--bold_red);background:var(--bold_hover);}
+.bold_v3 .folder_empty {padding:12px;margin:0!important;border:0;background:transparent;color:var(--bold_muted);font-size:12px;line-height:1.5;}
+.bold_v3 .folder_selection {position:sticky;top:6px;z-index:35;margin:0 0 12px;padding:8px 10px;border-radius:0;background:var(--bold_surface);box-shadow:0 3px 12px #0002;}
+.bold_v3 .folder_selection button {font-size:11px;min-height:32px;padding:6px 8px;border-radius:0;}
+.bold_v3 .folder_selection strong {font-size:12px;}
+.folder_help {color:var(--bold_muted);font-size:12px;line-height:1.5;}
+:root .folder_dialog {display:flex;flex-direction:column;gap:12px;width:min(600px,100%);max-height:calc(100dvh - 24px);padding:16px;border:1px solid var(--bold_line);border-radius:0;overflow:auto;scrollbar-width:thin;box-shadow:0 16px 56px #0004;}
+:root .folder_dialog:has(.folder_picker) {width:min(640px,100%);}
+:root .folder_dialog>header {flex-shrink:0;padding:0 0 12px;border-bottom:1px solid var(--bold_line);}
+:root .folder_dialog h2 {font-size:16px;}
+:root .folder_dialog>header>button {display:grid;place-items:center;width:32px;height:32px;min-height:32px;padding:5px;border:0;background:transparent;color:var(--bold_muted);}
+:root .folder_dialog :is(button,input:not([type=checkbox]),textarea,select),:root .workspace_assignment_modal :is(button,input) {border-radius:0;}
+:root .folder_dialog p {margin:0;}
+:root .folder_dialog label {font-size:12px;gap:5px;margin-top:0;min-width:0;}
+:root .folder_dialog>form {display:grid;gap:12px;min-width:0;}
+:root .folder_dialog input:not([type=checkbox]),:root .folder_dialog textarea {font-size:12px;}
+:root .folder_dialog .bold_color_trigger {border-radius:50%;}
+:root .folder_dialog .admin_select {min-width:0;width:100%;}
+:root .folder_dialog .admin_select_trigger {border-radius:0;min-height:36px;}
+:root .folder_dialog .admin_select_menu {border-radius:0;background:var(--bold_surface);color:var(--bold_text);}
+:root .folder_dialog .admin_select_search {display:flex;align-items:center;gap:6px;padding:6px;background:var(--bold_surface_soft);border:1px solid var(--bold_line);}
+:root .folder_dialog .admin_select_search input:is(:focus,:focus-visible) {border:0;outline:0;box-shadow:none;}
+:root .folder_dialog footer {position:sticky;bottom:-16px;flex-shrink:0;gap:8px;margin:0 -16px -16px;padding:10px 16px;background:var(--bold_surface_soft);border-top:1px solid var(--bold_line);z-index:2;}
+:root .folder_dialog footer button {min-height:34px;padding:7px 12px;font-size:12px;}
+:root .folder_dialog footer button:not(.primary_button) {background:var(--bold_surface);color:var(--bold_text);border:1px solid var(--bold_line);}
+:root .folder_dialog .folder_picker_tabs {flex-shrink:0;margin:0;}
+:root .folder_picker_tabs span {font-size:10px;color:var(--bold_muted);}
+:root .folder_dialog .folder_picker {display:block;margin:0;min-height:220px;}
+:root .folder_dialog .folder_picker_column {padding:0;border:0;border-radius:0;gap:8px;}
+:root .folder_picker_column>h3 {display:none;}
+:root .folder_picker_list {height:auto;min-height:0;max-height:280px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;}
+:root .folder_picker_row {padding:8px;border:1px solid var(--bold_line);border-radius:0;margin-bottom:5px;background:var(--bold_surface);}
+:root .folder_picker_row:has(input:checked) {background:var(--bold_red_tint);border-color:var(--bold_red);}
+:root .folder_picker_row>button {padding:4px;font-size:12px;min-height:28px;}
+:root .folder_share_dialog {width:min(500px,100%);overflow:hidden;}
+:root .folder_share_context {font-size:12px;font-weight:600;}
+:root .folder_share_search {display:flex;align-items:center;gap:7px;min-width:0;border:1px solid var(--bold_line);border-radius:0;padding:8px 10px;background:var(--bold_surface_soft);}
+:root .folder_share_search input {border:0;min-height:0;padding:0;background:transparent;outline:0;box-shadow:none;}
+:root .folder_share_search:focus-within {border-color:var(--bold_red);}
+:root .folder_share_people {min-height:100px;max-height:340px;overflow:auto;scrollbar-width:thin;}
+:root .folder_share_person {gap:9px;min-height:44px;padding:8px;border:0;border-radius:0;background:transparent;}
+:root .folder_share_person>span:nth-child(2) {flex:1;min-width:0;}
+:root .folder_share_person :is(strong,small) {overflow-wrap:anywhere;}
+:root .folder_share_person>span:nth-child(2)>small {font-size:11px;font-weight:400;color:var(--bold_muted);}
+:root .folder_share_person>small {font-size:10px;color:var(--bold_muted);}
+:root button.folder_share_person {width:100%;color:var(--bold_text);}
+:root button.folder_share_person:hover {background:var(--bold_hover);}
+:root .folder_share_candidates_heading {display:flex;gap:6px;margin-top:8px;padding:10px 8px 6px;border-top:1px solid var(--bold_line);font-size:11px;color:var(--bold_muted);}
+:root .folder_share_dialog footer small {font-size:11px;flex:1;}
+:root .workspace_assignment_modal {width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:16px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 16px 56px #0004;}
+:root .workspace_assignment_modal h2 {font-size:16px;}
+:root .workspace_assignment_modal>header {padding:0 0 10px;margin-bottom:10px;border-bottom:1px solid var(--bold_line);}
+:root .workspace_assignment_modal>header>button {width:32px;height:32px;min-height:32px;padding:4px;border:0;background:transparent;color:var(--bold_muted);}
+:root .workspace_assignment_modal .folder_help {margin:0 0 12px;}
+:root .workspace_assignment_modal .folder_library_search input {min-height:0;padding:0;border:0;}
+:root .workspace_assignment_count {display:block;margin:10px 0 6px;color:var(--bold_muted);font-size:11px;}
+:root .workspace_assignment_list {max-height:300px;overflow:auto;scrollbar-width:thin;}
+:root .workspace_assignment_list>label {display:flex;align-items:center;gap:8px;min-height:44px;padding:8px;border:1px solid var(--bold_line);border-radius:0;margin-bottom:6px;font-size:12px;cursor:pointer;}
+:root .workspace_assignment_list>label:has(input:checked) {background:var(--bold_red_tint);border-color:var(--bold_red);}
+:root .workspace_assignment_list>label>svg {flex-shrink:0;color:var(--bold_muted);}
+:root .workspace_assignment_list>label>span {min-width:0;overflow-wrap:anywhere;}
+:root .workspace_assignment_modal footer {padding-top:10px;margin-top:10px;border-top:1px solid var(--bold_line);display:flex;align-items:center;justify-content:space-between;}
+.bold_v3 .workspace_selector_menu>button {display:flex;align-items:center;gap:8px;text-align:left;}
+.bold_v3 .workspace_selector_menu>button>span {display:grid;gap:3px;}
+.bold_v3 .workspace_selector_menu strong {font-size:12px;font-weight:500;}
+.bold_v3 .workspace_selector_menu small {font-size:10px;font-weight:400;color:var(--sidebar_text);opacity:.85;}
+.bold_v3 .workspace_selector_main[aria-current=page] {background:var(--sidebar_selected);color:var(--sidebar_active);box-shadow:inset 2px 0 var(--bold_red);}
+.bold_v3 .workspace_selector_menu>button[aria-current=page] {background:var(--sidebar_selected);color:var(--sidebar_active);box-shadow:inset 2px 0 var(--bold_red);}
+.bold_v3 .workspace_ops {margin:0;}
+.bold_v3 .workspace_ops_heading {gap:10px;margin-bottom:12px;}
+.bold_v3 .workspace_ops_heading h1 {font-size:18px;}
+.bold_v3 .workspace_ops_heading p {font-size:12px;line-height:1.5;}
+.bold_v3 .workspace_ops :is(button,summary,select,input:not([type=checkbox])),.workspace_modal {border-radius:0;}
+.bold_v3 .workspace_toolbar {gap:6px;padding:8px;border:1px solid var(--bold_line);background:var(--bold_surface);margin-bottom:10px;}
+.bold_v3 .workspace_ops .workspace_toolbar {border-radius:0;}
+.bold_v3 .workspace_toolbar>label {font-size:11px;gap:5px;}
+.bold_v3 .workspace_ops :is(button,summary,.task_select_trigger) {font-size:12px;min-height:34px;padding:6px 9px;}
+.bold_v3 .workspace_ops .workspace_completion {min-height:18px;width:18px;height:18px;padding:0;border-radius:50%;}
+.bold_v3 .workspace_ops .workspace_task_title {padding:0;}
+.bold_v3 .workspace_ops .workspace_filter_panel {padding:12px;gap:10px;border-radius:0;max-height:calc(100dvh - 32px);}
+.bold_v3 .workspace_filter_heading {padding:8px 0;top:-12px;gap:8px;}
+.bold_v3 .workspace_filter_heading h2 {font-size:14px;}
+.bold_v3 .workspace_filter_panel fieldset {padding:8px;border-radius:0;min-width:0;}
+.bold_v3 .workspace_filter_panel legend {font-size:11px;}
+.bold_v3 .workspace_filter_panel fieldset>input[type=search] {width:100%;min-width:0;box-sizing:border-box;min-height:30px;margin-bottom:6px;font-size:12px;}
+.bold_v3 .workspace_ops :is(.workspace_fields_panel,.workspace_more) {border-radius:0;width:min(330px,calc(100vw - 32px));max-height:min(55dvh,440px);font-size:12px;}
+.bold_v3 .workspace_ops :is(.workspace_fields_panel,.workspace_more) {position:fixed;left:50%;right:auto;top:112px;transform:translateX(-50%);z-index:15000;}
+.bold_v3 .workspace_ops .workspace_bulk {gap:8px;padding:8px 10px;border-radius:0;background:var(--bold_surface);border:1px solid var(--bold_line);box-shadow:inset 2px 0 var(--bold_red);}
+.bold_v3 .workspace_bulk>strong {font-size:12px;margin-right:auto;}
+.bold_v3 .workspace_edit_fields {position:fixed;left:50%;top:112px;transform:translateX(-50%);z-index:15000;width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 140px);padding:12px;border:1px solid var(--bold_line);background:var(--bold_surface);box-shadow:0 10px 30px #0002;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;overflow:auto;box-sizing:border-box;}
+.bold_v3 .workspace_edit_fields .workspace_select {width:100%;min-width:0;}
+.bold_v3 .workspace_edit_fields>.folder_help {grid-column:1/-1;margin:0;}
+.bold_v3 .workspace_edit_fields>button {grid-column:1/-1;justify-self:end;}
+.bold_v3 .workspace_ops .workspace_completion {border-radius:50%!important;}
+.bold_v3 .workspace_table {border-radius:0;}
+.bold_v3 .workspace_task_row {min-height:46px;}
+.bold_v3 .workspace_table_head {font-size:11px;}
+.bold_v3 .workspace_table_head .task_select_text strong {text-transform:none;font-size:11px;letter-spacing:0;}
+.bold_v3 .workspace_task_cell {font-size:12px;}
+.bold_v3 .workspace_ops .task_select_option[aria-selected=true] {background:var(--bold_red_tint);color:var(--bold_text);}
+.workspace_modal {background:var(--bold_surface);color:var(--bold_text);}
+.workspace_modal :is(button,input,select,textarea) {border-radius:0;}
+.bold_v3 .folder_module :focus-visible,:root .folder_dialog :focus-visible,:root .workspace_assignment_modal :focus-visible {outline:2px solid var(--bold_red);outline-offset:2px;}
+:root :is(.folder_share_search,.folder_library_search) input:is(:focus,:focus-visible) {outline:0;border:0;box-shadow:none;}
+@media(max-width:767px) {
+    .bold_v3 .module_transition>.folder_module {padding:8px 10px 12px;}
+    .bold_v3 .folder_module .projects_module_header {align-items:stretch;}
+    .bold_v3 .folder_actions {width:100%;}
+    .bold_v3 .folder_actions button,.bold_v3 .workspace_main_nav>button,.folder_dialog .folder_picker_tabs>button,.bold_v3 .folder_selection button {min-height:44px;}
+    .bold_v3 .folder_more_menu>summary {width:44px;height:44px;}
+    .bold_v3 .folder_section>summary {min-height:44px;}
+    .bold_v3 .folder_module .folder_task_row {flex-wrap:wrap;}
+    .bold_v3 .folder_task_row>button {flex-basis:calc(100% - 34px);}
+    .bold_v3 .folder_task_row .folder_task_meta {flex-basis:100%;padding-left:26px;justify-content:flex-start;}
+    .bold_v3 .folder_card footer button {width:44px;height:44px;}
+    .bold_v3 .folder_drive_card .folder_drive_open {padding-right:50px;}
+    .bold_v3 .folder_drive_card .folder_drive_remove {width:44px;min-width:44px;max-width:44px;height:44px;min-height:44px;right:8px;top:6px;}
+    :root .folder_dialog {padding:12px;gap:10px;}
+    :root .folder_dialog footer {margin:0 -12px -12px;padding:10px 12px;bottom:-12px;}
+    :root .folder_dialog footer button,:root .folder_dialog .admin_select_trigger,:root .folder_picker_row>button,:root .workspace_assignment_modal footer button {min-height:44px;}
+    :root .folder_dialog input:not([type=checkbox]),:root .folder_dialog textarea,:root .folder_library_search input {font-size:16px;}
+    :root .folder_dialog>header>button,:root .workspace_assignment_modal>header>button {width:44px;height:44px;min-height:44px;}
+    .bold_v3 .workspace_ops :is(button,summary,.task_select_trigger) {min-height:44px;}
+    .bold_v3 .workspace_ops .workspace_completion {min-height:22px;width:22px;height:22px;}
+    .bold_v3 .workspace_ops_heading .primary_button {width:auto;}
+    .bold_v3 .workspace_ops .workspace_filter_panel {inset:8px;width:auto;transform:none;max-height:calc(100dvh - 16px);grid-template-columns:1fr;}
+    .bold_v3 .workspace_ops :is(.workspace_fields_panel,.workspace_more) {position:fixed;left:12px;right:12px;top:110px;width:auto;z-index:15000;transform:none;}
+    .bold_v3 .workspace_edit_fields {left:12px;right:12px;top:110px;width:auto;transform:none;grid-template-columns:minmax(0,1fr);}
+}
+@media(prefers-reduced-motion:reduce) {.bold_v3 .folder_section::details-content,.bold_v3 .folder_section>summary::before {transition:none;}}

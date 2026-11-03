@@ -18,13 +18,14 @@ export function installMessagingFixture(target = globalThis) {
     fixture.forwardDestination = {id:"dddddddd-dddd-4ddd-8ddd-dddddddddddd",me,peer:forwardPeer,updated_at:now.toISOString()};
     target.__messagingCore = {
         account: {id: "fixture-account", employee: actor}, employee: {id: actor}, activeAssignment: {id: "fixture-assignment", personId: actor, chat_enabled: true},
-        directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}, {id:"forward-assignment",personId:forwardPeer.employee_id,name:forwardPeer.name,chat_enabled:true}],
+        directory: [{id:"fixture-assignment", personId:actor, name:me.name, chat_enabled:true}, {id:"peer-assignment", personId:peerId, name:peer.name, unit_name:"Equipo de IT", job_role_title:"Analista", email:"fixture.peer@bold.gt", chat_enabled:true}, {id:"forward-assignment",personId:forwardPeer.employee_id,name:forwardPeer.name,chat_enabled:true}, {id:'restricted-assignment',personId:'55555555-5555-4555-8555-555555555555',name:'Ana de prueba',email:'ana@fixture.invalid',unit_name:'Marketing',chat_enabled:false}],
         presence: {rows: [{...peer, status: "online", units:[{id:"it", name:"Equipo de IT"}]}], units: [{id:"it", name:"Equipo de IT"}]},
         messaging: {connection:"open", markDelivered:()=>{}, markRead:()=>{}, unread:{total:2,byEmployee:{[peerId]:2},byConversation:{[conversationId]:{count:2,version:2}}}},
     };
     target.__messagingShell = {chat_target: {employee_id: peerId}, set_active_module:module=>calls.push(`module:${module}`), open_direct_chat: person => {calls.push(`card:${person.employee_id}`);}};
     target.__messagingApi = {
-        mentionPeople:async(_id,query,options)=>{calls.push('mention-search');fixture.mentionSignal=options.signal;if(fixture.mentionDelay)return fixture.mentionDelay;return {results:query.toLowerCase().includes('peer') ? [{...peer,email:'fixture.peer@bold.gt',token:'@fixture.peer@bold.gt'}]:[],refine:false};},
+        mentionPeople:async(_id,query,options)=>{calls.push('mention-search');fixture.mentionSignal=options.signal;if(fixture.mentionDelay)return fixture.mentionDelay;if(fixture.mentionError)throw fixture.mentionError;return {results:!query ? [{...peer,email:'fixture.peer@bold.gt',token:'@fixture.peer@bold.gt'},{...me,email:'fixture.me@bold.gt',token:'@fixture.me@bold.gt'}]:query.toLowerCase().includes('peer') ? [{...peer,email:'fixture.peer@bold.gt',token:'@fixture.peer@bold.gt'}]:[],refine:false};},
+        typing: async () => {},
         preferences: async () => ({enter_behavior:fixture.enterBehavior}),
         savePreferences: async value => {fixture.enterBehavior=value; return {enter_behavior:value};},
         list: async () => {calls.push("list"); return {results: [{id: conversationId, peer, updated_at: now.toISOString(), preview: "De acuerdo. Lo reviso y te comento 👍"}], next: null};},

@@ -1,0 +1,20 @@
+/* Shared by task comment editors, including panels outside the main workspace. */
+:root .task_text_editor .task_mention_menu {display:flex;flex-direction:column;gap:0;min-width:0;max-height:min(240px,32dvh);margin:5px 8px 8px;padding:4px;border:1px solid var(--bold_line);border-radius:6px;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 5px 16px #0002;overflow:hidden;}
+:root .task_mention_menu .task_mention_heading {display:flex;align-items:center;gap:6px;flex:0 0 auto;padding:4px 6px 6px;color:var(--bold_muted);}
+:root .task_mention_heading strong {font-size:11px;font-weight:500;}
+:root .task_mention_heading small {margin-left:auto;padding:1px 5px;border-radius:4px;background:var(--bold_surface_soft);font-size:10px;opacity:1;}
+:root .task_mention_menu .task_mention_options {position:relative;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;}
+:root .task_mention_menu .task_mention_option {display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:40px;margin:0;padding:6px;border:0;border-radius:4px;background:transparent;color:var(--bold_text);text-align:left;cursor:pointer;transition:background-color 140ms ease;}
+:root .task_mention_menu .task_mention_option:is(:hover,[aria-selected="true"]) {background:var(--bold_red_tint);color:var(--bold_text);box-shadow:inset 2px 0 var(--bold_red);}
+:root .task_mention_menu .task_mention_avatar {display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:50%;overflow:hidden;background:var(--bold_surface_soft);color:var(--bold_text);font-size:10px;font-weight:600;}
+:root .task_mention_menu .task_mention_identity {display:grid;gap:2px;flex:1;min-width:0;overflow:hidden;}
+:root .task_mention_identity strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:550;line-height:1.35;}
+:root .task_mention_identity small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:1.3;color:var(--bold_muted);opacity:1;}
+:root .task_mention_menu .task_mention_enter {display:block;flex:0 0 auto;font-size:9px;color:var(--bold_muted);opacity:0;}
+:root .task_mention_option[aria-selected="true"] .task_mention_enter {opacity:1;}
+:root .task_mention_menu .task_mention_hint {display:flex;flex-wrap:wrap;gap:4px 12px;flex:0 0 auto;padding:6px 6px 2px;margin-top:3px;border-top:1px solid var(--bold_line);font-size:10px;line-height:1.4;color:var(--bold_muted);}
+:root .task_mention_menu .task_mention_hint span {display:inline;}
+:root .task_mention_menu .task_mention_empty {margin:0;padding:10px 6px;font-size:12px;line-height:1.5;color:var(--bold_muted);}
+:root .task_mention_menu .task_mention_option:focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;}
+@media(max-width:767px),(pointer:coarse) {:root .task_mention_menu .task_mention_option {min-height:44px;}}
+@media(prefers-reduced-motion:reduce) {:root .task_mention_menu .task_mention_option {transition:none;}}

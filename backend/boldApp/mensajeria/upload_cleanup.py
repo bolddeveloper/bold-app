@@ -19,7 +19,7 @@ from .upload_provider import FIELDS
 def reconcile(identity):
     now=timezone.now()
     with transaction.atomic():
-        row=rows().select_for_update(of=('self',)).filter(pk=identity,state__in=['cancelled','expired'],
+        row=rows().select_for_update(of=('self',)).filter(pk=identity,content=b'',state__in=['cancelled','expired'],
             cleaned_at__isnull=True,cleanup_attempts__lt=6,next_at__lte=now).first()
         if not row or row.lease_until and row.lease_until>now:
             return False
@@ -69,7 +69,7 @@ def reconcile(identity):
 
 def reconcile_pending(limit=4):
     now=timezone.now()
-    ids=list(MediaUpload.objects.filter(state__in=['cancelled','expired'],cleaned_at__isnull=True,
+    ids=list(MediaUpload.objects.filter(content=b'',state__in=['cancelled','expired'],cleaned_at__isnull=True,
         cleanup_attempts__lt=6,next_at__lte=now).filter(Q(lease_until__isnull=True)|Q(lease_until__lte=now))
         .order_by('next_at','pk').values_list('pk',flat=True)[:limit])
     return sum(bool(reconcile(identity)) for identity in ids)

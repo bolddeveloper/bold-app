@@ -7,9 +7,9 @@ from channels.layers import get_channel_layer
 from django.db import transaction
 
 from boldApp.core.events import build_event_envelope
-from boldApp.core.models import PositionAssignment
+from boldApp.core.models import OrganizationalUnit, PositionAssignment
 from .channel_access import ChannelPolicy
-from .models import DepartmentChannel
+from .models import DepartmentChannel, PrivateServer
 
 log = logging.getLogger(__name__)
 
@@ -30,12 +30,27 @@ def publish_channel(channel, kind, employee_id=None):
 
 def channel_event(assignment_id, event, session_id=None):
     assignment = PositionAssignment.objects.select_related("employee__user_account", "position__unit", "position__job_role").filter(pk=assignment_id).first()
-    channel = DepartmentChannel.objects.select_related("unit").filter(pk=event.get("channel_id")).first()
     request = None
     if session_id:
         from boldApp.autenticacion.models import AuthSession
         session = AuthSession.objects.filter(pk=session_id, user_account__employee_id=getattr(assignment, "employee_id", None)).first()
         request = SimpleNamespace(auth=session)
+    if event.get("kind") == "channel.categories_changed":
+        if not assignment:
+            return None
+        unit_id, server_id = event.get("unit_id"), event.get("server_id")
+        if unit_id and server_id:
+            return None
+        unit = OrganizationalUnit.objects.filter(pk=unit_id).first() if unit_id else None
+        if unit_id and not unit:
+            return None
+        if server_id and not PrivateServer.objects.filter(pk=server_id, members__employee_id=assignment.employee_id).exists():
+            return None
+        if not ChannelPolicy(assignment, request).allows("slack.channel.read", unit):
+            return None
+        scope = f"server:{server_id}" if server_id else str(unit_id) if unit_id else "independent"
+        return build_event_envelope("slack.changed", "slack_categories", scope, {"kind": "channel.categories_changed", "scope": scope})
+    channel = DepartmentChannel.objects.select_related("unit").filter(pk=event.get("channel_id")).first()
     if not assignment or not channel or not ChannelPolicy(assignment, request).allows("slack.channel.read", channel.unit, channel.pk):
         return None
     if event.get('kind')=='page.comments_changed':
@@ -51,6 +66,18 @@ def channel_event(assignment_id, event, session_id=None):
     # Read current revisions, not a delayed or reordered broadcast's old values.
     return build_event_envelope("slack.changed", "slack_channel", channel.pk,
         {"channel_id": str(channel.pk), "kind": event["kind"], "activity_version": channel.activity_version, "version": channel.version})
+
+
+def publish_categories(unit_id, server_id):
+    event = {"type": "slack.changed", "kind": "channel.categories_changed", "unit_id": str(unit_id) if unit_id else None, "server_id": str(server_id) if server_id else None}
+    def dispatch():
+        try:
+            layer = get_channel_layer()
+            if layer is not None:
+                async_to_sync(layer.group_send)("slack_watch", event)
+        except Exception:
+            log.warning("Category push unavailable; persisted order remains available")
+    transaction.on_commit(dispatch, robust=True)
 
 
 def publish_page_link_hint(channel_id, related_channel_id):

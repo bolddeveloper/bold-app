@@ -76,6 +76,41 @@ class TeamTests(TestCase):
     def publish(self, tasks=None, visible=True):
         return self.client.put(self.root + "self/", {"task_ids": [str(task.pk) for task in (tasks or [self.task])], "visible": visible}, format="json")
 
+    def test_native_meeting_range_includes_end_day_and_preserves_privacy(self):
+        from boldApp.calendario.models import AppCalendar
+        calendar = AppCalendar.objects.create(name="Semana", owner=self.owner.employee.user_account)
+        root = f"/api/v2/calendar/local/{calendar.pk}/"
+        for day in (18, 19, 21, 25, 26):
+            response = self.client.post(root + "events/", {"summary": f"Evento {day}", "visibility": "private" if day == 21 else "default",
+                "start": {"date": f"2026-10-{day}"}, "end": {"date": f"2026-10-{day+1}"}}, format="json")
+            self.assertEqual(response.status_code, 201, response.data)
+        url = self.profile_url + "meetings/?date=2026-10-19&end_date=2026-10-25"
+        self.assertEqual(self.client.get(url).data["state"], "hidden")
+        self.client.put(root + "team-share/", {"share_team": True}, format="json")
+        self.login(self.reader)
+        result = self.client.get(url)
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual({row["title"] for row in result.data["meetings"]}, {"Evento 19", "Ocupado", "Evento 25"})
+        self.assertTrue(all(row["all_day"] for row in result.data["meetings"]))
+
+    @patch("boldApp.calendario.service.google_request")
+    def test_google_meeting_range_uses_one_cached_window_and_rejects_invalid_ranges(self, google):
+        TeamProfile.objects.create(employee=self.owner.employee, share_calendar=True)
+        GoogleConnection.objects.create(user=self.owner.employee.user_account, email="ana@bold.gt", subject="test", time_zone="America/Tegucigalpa")
+        google.return_value = {"items": []}
+        url = self.profile_url + "meetings/?date=2026-10-19&end_date=2026-10-25"
+        self.assertEqual(self.client.get(url).status_code, 200)
+        params = google.call_args.kwargs["params"]
+        self.assertEqual(params["timeMin"], "2026-10-19T00:00:00-06:00")
+        self.assertEqual(params["timeMax"], "2026-10-26T00:00:00-06:00")
+        self.client.get(url)
+        self.assertEqual(google.call_count, 1)
+        self.client.get(self.profile_url + "meetings/?date=2026-10-19")
+        self.assertEqual(google.call_count, 2, "Daily and weekly caches must be independent")
+        for query in ("date=bad", "date=2026-10-19&end_date=bad", "date=2026-10-19&end_date=2026-10-18", "date=2026-10-19&end_date=2026-11-19", "date=9999-12-31"):
+            self.assertEqual(self.client.get(self.profile_url + "meetings/?" + query).status_code, 400)
+        self.assertEqual(google.call_count, 2)
+
     def test_default_hidden_and_persistent_independent_publications(self):
         settings = self.client.get(self.root + "self/")
         self.assertIn("no-store", settings["Cache-Control"])

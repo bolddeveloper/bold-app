@@ -304,6 +304,18 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         if envelope and await notification_identity_is_active(self.session_id,self.assignment_id) and await chat_assignment_is_allowed(self.assignment_id):
             await self.send_json(envelope)
 
+    async def messaging_typing(self, event):
+        if self.closing or not await chat_assignment_is_allowed(self.assignment_id):
+            return
+        if not await notification_identity_is_active(self.session_id, self.assignment_id):
+            self.closing = True
+            await self.close(code=4403)
+            return
+        from boldApp.mensajeria.typing import typing_event
+        envelope = await database_sync_to_async(typing_event)(self.employee_id, event)
+        if envelope and not self.closing and await notification_identity_is_active(self.session_id, self.assignment_id) and await chat_assignment_is_allowed(self.assignment_id):
+            await self.send_json(envelope)
+
     async def slack_changed(self, event):
         if self.closing:
             return

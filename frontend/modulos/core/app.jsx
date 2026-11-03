@@ -5,9 +5,9 @@ import AdministrationModule from "../administrativo/admin_module.jsx";
 import PermissionsModule from "../permisos/permissions_module.jsx";
 import CalendarModule from "../calendario/calendar_module.jsx";
 import ProfileModule from "../perfil/profile_module.jsx";
+import GoogleConnection from "../docs/google_connection.jsx";
 import WorkspaceModule from "../docs/workspace_module.jsx?docs-uploads";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
-import BrandsModule from "../marcas/brands_module.jsx";
 import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
 import {hasChatAttention,hasSlackAttention} from './reading_attention.js';
@@ -29,7 +29,6 @@ const baseNavigation = [
     { id: "docs", label: "Docs", icon: "docs", group: "work" },
     { id: "drive", label: "Drive", icon: "drive", group: "work" },
     { id: "suggestions", label: "Sugerencias", icon: "suggestions", group: "work" },
-    { id: "brands", label: "Marcas", icon: "brands", group: "work" },
     { id: "reports", label: "Informes", icon: "reports", group: "management" },
 ];
 
@@ -55,11 +54,12 @@ function ApplicationWorkspace() {
         ...baseNavigation,
         ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: hasChatAttention(core.messaging?.unread)}] : []),
         ...(canChat ? [{id: "slack", label: "Slack", icon: "slack", group: "work", unread:hasSlackAttention(core.slack?.unread,core.messaging?.unread)}] : []),
-        ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "reports", group: "work"}] : []),
+        ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "sheets", group: "work"}] : []),
         ...(canManagePermissions ? [{ id: "permissions", label: "Permisos", icon: "permissions", group: "management" }] : []),
         ...(canAdminister ? [{ id: "administration", label: "Administración", icon: "administration", group: "management" }] : []),
     ];
     const externalModules = {
+        welcomeConnection: <GoogleConnection/>,
         profile: <ProfileModule/>,
         ...(canChat ? {messaging: <Suspense fallback={<p role="status">Cargando chat…</p>}><MessagingModule key={permissionContext}/></Suspense>} : {}),
         ...(canChat ? {slack: <Suspense fallback={<p role="status">Cargando canales…</p>}><ChannelModule key={permissionContext}/></Suspense>} : {}),
@@ -68,7 +68,6 @@ function ApplicationWorkspace() {
         drive: <WorkspaceModule key="drive" mode="drive" />,
         suggestions: <SuggestionsModule />,
         ...(canSheets ? {sheets: <Suspense fallback={<p>Abriendo editor de Sheets…</p>}><SheetsModule/></Suspense>} : {}),
-        brands: <BrandsModule key={core.activeAssignment?.id || "brands"} />,
         ...(canManagePermissions ? { permissions: <PermissionsModule /> } : {}),
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };

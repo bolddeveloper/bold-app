@@ -1,10 +1,11 @@
 from django.urls import path
 from .mail_contacts import CalendarMailContactSearchView
-from .local import LocalCalendarsView, LocalCalendarView, LocalMembersView, LocalEventsView, LocalEventView, LocalMeetView, LocalTeamShareView
+from .local import LocalCalendarsView, LocalCalendarView, LocalMembersView, LocalEventsView, LocalEventView, LocalMeetView, LocalTeamShareView, LocalAgendaView
 
 from .views import CalendarConnectionView, CalendarOAuthCallbackView, CalendarOAuthStartView, CalendarDraftView, CalendarDraftsView, CalendarEventView, CalendarEventsView, CalendarTaskListsView, CalendarTasksView, CalendarTaskView, CalendarContactSearchView
 
 urlpatterns = [
+    path("local/agenda/", LocalAgendaView.as_view()),
     path("local/", LocalCalendarsView.as_view()),
     path("local/<uuid:calendar_id>/", LocalCalendarView.as_view()),
     path("local/<uuid:calendar_id>/members/", LocalMembersView.as_view()),

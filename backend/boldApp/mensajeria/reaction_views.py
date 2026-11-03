@@ -82,4 +82,7 @@ class ChannelReactionView(ReactionMixin, SlackView):
         message = get_object_or_404(channel.messages, pk=values["message_id"])
         document = get_object_or_404(SearchDocument.objects.select_for_update(), channel_message=message)
         allowed = not channel.archived_at and self.policy().allows("slack.reaction.create", channel.unit, channel.pk)
+        if message.parent_id:
+            parent = message.parent
+            allowed = allowed and not (parent.thread_closed_at or parent.thread_locked or parent.thread_deleted_at)
         return document, allowed, lambda:publish_channel(channel, "reactions.updated")

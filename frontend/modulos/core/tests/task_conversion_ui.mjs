@@ -7,7 +7,7 @@ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost:5192',pretend
 globalThis.BroadcastChannel=undefined;
 for(const key of ['window','document','navigator','HTMLElement','Event','CustomEvent'])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-globalThis.__conversionCore={account:{id:'alpha'},activeAssignment:{id:'it',chat_enabled:true},authorizationRevision:1,securityUncertain:false,directory:[{id:id(5),name:'Colega',unit_name:'IT'}]};
+globalThis.__conversionCore={account:{id:'alpha'},activeAssignment:{id:'it',chat_enabled:true},authorizationRevision:1,securityUncertain:false,directory:[{id:id(5),name:'Colega',email:'colega@bold.gt',unit_name:'IT'}]};
 let snapshot=null;
 globalThis.__conversionDraft=options=>({blocked:false,status:'protected',flush:async()=>{snapshot=options.read();return true;},retry:()=>{}});
 const server=await createServer({configFile:false,plugins:[{name:'isolated-conversion',enforce:'pre',transform(_,module){const value=module.replaceAll('\\','/');
@@ -23,9 +23,9 @@ const {taskConversionApi}=await load('../mensajeria/task_conversion_api.js');
 console.log('Message task UI: API loaded; loading review…');
 const {default:MessageTasks}=await load('../mensajeria/message_tasks.jsx');
 console.log('Message task UI: controls loaded; mounting…');
-const calls=[],projects=[{id:id(3),name:'Proyecto autorizado',unit_name:'IT'}];let reads=0,fail=true,hold=null,lateSignal;
+const calls=[],projectQueries=[],projects=[{id:id(3),name:'Proyecto autorizado',unit_name:'IT'}];let reads=0,fail=true,hold=null,lateSignal;
 taskConversionApi.links=async()=>{reads++;return {results:[],next:null,source_version:1,source_text:'Revisar el texto privado <script>literal</script>'};};
-taskConversionApi.projects=async()=>({results:projects,next:null});
+taskConversionApi.projects=async query=>{projectQueries.push(query);return {results:query==='sin resultados' ? []:projects,next:null};};
 taskConversionApi.project=async()=>({project:projects[0],sections:[{id:id(4),name:'Pendiente'}],statuses:[]});
 taskConversionApi.create=async(kind,container,message,attempt,options)=>{calls.push({...attempt});assert.equal(snapshot.payload.attempt.client_id,attempt.client_id,'protect attempt before HTTP');
     if(hold){lateSignal=options.signal;return new Promise(resolve=>hold=resolve);}if(fail)throw {status:500};return {id:id(9),task:{available:true,id:id(8),title:attempt.title,status:'Pendiente'},created:false};};
@@ -33,12 +33,43 @@ const root=createRoot(document.getElementById('root')),settle=()=>new Promise(re
 async function until(predicate){const end=Date.now()+7000;while(!predicate() && Date.now()<end)await settle();assert.ok(predicate(),'message task control state');}
 const button=text=>[...document.querySelectorAll('button')].find(node=>node.textContent===text || node.getAttribute('aria-label')===text);
 const field=text=>[...document.querySelectorAll('label')].find(node=>node.childNodes[0]?.textContent===text)?.querySelector('select,input,textarea');
-const mount=()=>root.render(React.createElement(MessageTasks,{kind:'chat',containerId:id(1),message:{id:id(2)}}));
+const input=(node,value)=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));};
+const mount=(kind='chat')=>root.render(React.createElement(MessageTasks,{key:kind,kind,containerId:id(1),message:{id:id(2)}}));
+async function chooseProject(){
+    await until(()=>button('Seleccionar proyecto autorizado') && !button('Seleccionar proyecto autorizado').disabled);
+    button('Seleccionar proyecto autorizado').click();await until(()=>document.querySelector('[data-picker-option]'));
+    assert.ok(document.querySelector('input[type=search]'),'project picker includes search');
+    document.querySelector('[data-picker-option]').click();await until(()=>field('Sección')?.options.length===2);
+}
 try{
     mount();await until(()=>button('Tareas del mensaje'));assert.equal(reads,0,'closed message controls have no requests');
-    button('Tareas del mensaje').focus();button('Tareas del mensaje').click();await until(()=>field('Proyecto')?.options.length===2);
+    button('Tareas del mensaje').focus();button('Tareas del mensaje').click();await chooseProject();
     console.log('Message task UI: review opened; checking consent…');
-    field('Proyecto').value=id(3);field('Proyecto').dispatchEvent(new Event('change',{bubbles:true}));await until(()=>field('Sección')?.options.length===2);
+    button('Proyecto autorizado').click();await until(()=>document.querySelector('input[type=search]'));
+    input(document.querySelector('input[type=search]'),'sin resultados');await settle();
+    assert.equal(projectQueries.length,1,'typing does not send repeated project requests');
+    document.querySelector('input[type=search]').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    await until(()=>document.querySelector('.message_task_options')?.textContent.includes('No hay proyectos'));
+    assert.equal(projectQueries.at(-1),'sin resultados');assert.ok(button('Proyecto autorizado'),'selection survives a search with no matches');
+    document.querySelector('input[type=search]').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await settle();
+    button('Sin responsable').click();await until(()=>document.querySelector('input[placeholder="Nombre o correo interno"]'));
+    input(document.querySelector('input[type=search]'),'nadie');await until(()=>document.querySelector('.message_task_options').textContent.includes('No hay personas'));
+    input(document.querySelector('input[type=search]'),'colega@bold.gt');await until(()=>document.querySelector('.message_task_options button[aria-pressed="false"]'));
+    const searchEnter=new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});document.querySelector('input[type=search]').dispatchEvent(searchEnter);
+    assert.ok(searchEnter.defaultPrevented,'searching for a responsible person cannot submit the task');
+    assert.ok(document.querySelector('.message_task_options').textContent.includes('colega@bold.gt'),'internal email identifies the responsible person');
+    document.querySelector('.message_task_options button[aria-pressed="false"]').click();await until(()=>button('Colega'));
+    button('Colega').click();await settle();document.querySelector('input[type=search]').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await until(()=>!document.querySelector('.slack_dropdown_panel'));
+    assert.ok(document.querySelector('.message_task_dialog'),'Escape closes the picker, preserving the review');
+    assert.equal(document.querySelector('.message_task_dialog>footer button[type=submit]').form,document.querySelector('form'),'fixed footer submits the reviewed form');
+    assert.ok(document.querySelector('.message_task_description textarea'),'description remains visible');
+    button('Fecha límite de la tarea del mensaje').click();await until(()=>document.querySelector('.bold_date_picker'));
+    document.querySelector('[data-day][tabindex="0"]').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await until(()=>!document.querySelector('.bold_date_picker'));
+    assert.ok(document.querySelector('.message_task_dialog'),'Escape closes the calendar without discarding the task draft');
+    button('Fecha límite de la tarea del mensaje').click();await until(()=>button('Mañana'));button('Mañana').click();await settle();
+    const dueDate=document.querySelector('[data-day][aria-pressed="true"]').dataset.day;
+    document.querySelector('.bold_date_apply').click();await until(()=>!document.querySelector('.bold_date_picker'));
+    assert.equal(document.querySelector('input[type="date"]'),null,'message tasks use the BOLD calendar');
     assert.equal(field('Sección').options[0].disabled,true,'hidden unsectioned cannot be chosen as a misleading first-visible option');
     const create=()=>button('Crear tarea y vincular');assert.equal(create().disabled,true,'private text needs deliberate approval');
     document.querySelector('.message_task_consent input').click();await until(()=>create()?.disabled===false);
@@ -46,6 +77,9 @@ try{
     create().click();await until(()=>document.querySelector('[role="alert"]'));
     assert.equal(calls.length,1);assert.equal(field('Título').disabled,true,'unknown request stays immutable');
     assert.equal(calls[0].section,id(4),'the actual first visible section is sent');
+    assert.equal(calls[0].assignee_assignment,id(5),'selected responsible person reaches the task payload');
+    assert.equal(button('Colega').disabled,true,'responsible picker locks during an immutable retry');
+    assert.equal(calls[0].due_date,dueDate,'the chosen BOLD calendar date reaches the task payload');
     console.log('Message task UI: failed request protected; retrying…');
     const token=calls[0].client_id;fail=false;button('Reintentar creación pendiente').click();
     await until(()=>document.querySelector('[role="status"]')?.textContent.includes('no la duplicó'));
@@ -53,10 +87,17 @@ try{
     console.log('Message task UI: retry confirmed; checking focus and cancellation…');
     button('Cerrar tareas del mensaje').click();await until(()=>!document.querySelector('[role="dialog"]'));
     assert.ok(document.activeElement===button('Tareas del mensaje'),'focus returns to the message');
-    hold=true;mount();button('Tareas del mensaje').click();await until(()=>field('Proyecto')?.options.length===2);
-    field('Proyecto').value=id(3);field('Proyecto').dispatchEvent(new Event('change',{bubbles:true}));await until(()=>field('Sección')?.options.length===2);
+    hold=true;mount();button('Tareas del mensaje').click();await chooseProject();
     document.querySelector('.message_task_consent input').click();await until(()=>create()?.disabled===false);create().click();await until(()=>lateSignal);
     const resolve=hold;globalThis.__conversionCore.securityUncertain=true;mount();await until(()=>lateSignal.aborted);
     resolve({id:id(9),task:{available:true,id:id(8),title:'Late secret'},created:true});await settle();assert.ok(document.querySelector('[role="dialog"]')===null,'late response cannot reopen a closed review');
+    globalThis.__conversionCore.securityUncertain=false;
+    const openings=[],onTask=event=>openings.push(event.detail);window.addEventListener('bold:brand-resource',onTask);
+    taskConversionApi.links=async()=>({results:[{id:id(9),task:{id:id(8),available:true,title:'Tarea del canal',status:'Pendiente'}}],source_version:1,source_text:'Origen autorizado'});
+    taskConversionApi.task=async()=>({id:id(8)});
+    mount('channel');await until(()=>button('Tareas del mensaje'));button('Tareas del mensaje').click();
+    await until(()=>document.querySelector('[aria-label="Tareas vinculadas"] strong'));
+    document.querySelector('[aria-label="Tareas vinculadas"] strong').closest('button').click();await until(()=>openings.length===1);
+    assert.deepEqual(openings,[{task:id(8),context:'slack'}]);window.removeEventListener('bold:brand-resource',onTask);
     console.log('Message task UI passed: no idle reads, source review/consent, scoped options, protection before write, immutable retry, confirmed clear, focus return and identity cancellation.');
 }finally{root.unmount();await server.close();dom.window.close();}

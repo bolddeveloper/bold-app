@@ -1,0 +1,123 @@
+/* Short entrances finish with no transform, preserving fixed menus and popovers. */
+:root {--bold-motion-ease:cubic-bezier(.22,1,.36,1);--bold-load-ease:cubic-bezier(.165,.84,.44,1);}
+.bold_v3 .module_transition {animation:none;}
+/* Animate mounted content, including modules whose data arrives after navigation. */
+.bold_v3 .module_transition>* {animation:bold_view_enter 600ms var(--bold-load-ease) backwards;}
+.bold_v3 .module_transition>:is(.home_module,.tasks_module) {animation-name:bold_view_fade;}
+.bold_v3 :is(.home_header,.task_tabs_row),
+.bold_v3 .tasks_main_area>:is(.list_view,.board_view,.pipelines_panel,.bold_timeline) {
+    animation:bold_view_enter 600ms var(--bold-load-ease) backwards;
+}
+.bold_v3 :is(.list_view>.task_group,.board_view>.board_column) {
+    animation:bold_view_fade 600ms var(--bold-load-ease) var(--bold-group-delay,200ms) backwards;
+}
+.bold_v3 :is(.task_group,.board_column):nth-child(2) {--bold-group-delay:230ms;}
+.bold_v3 :is(.task_group,.board_column):nth-child(3) {--bold-group-delay:260ms;}
+.bold_v3 :is(.task_group,.board_column):nth-child(4) {--bold-group-delay:290ms;}
+.bold_v3 :is(.task_group,.board_column):nth-child(5) {--bold-group-delay:320ms;}
+.bold_v3 :is(.task_group,.board_column):nth-child(n+6) {--bold-group-delay:350ms;}
+.bold_v3 .home_dashboard>.home_widget_slot>.home_widget {
+    animation:bold_view_enter 600ms var(--bold-load-ease) var(--bold-widget-delay,200ms) backwards;
+}
+.bold_v3 .home_widget_slot:nth-child(2) {--bold-widget-delay:230ms;}
+.bold_v3 .home_widget_slot:nth-child(3) {--bold-widget-delay:260ms;}
+.bold_v3 .home_widget_slot:nth-child(4) {--bold-widget-delay:290ms;}
+.bold_v3 .home_widget_slot:nth-child(5) {--bold-widget-delay:320ms;}
+.bold_v3 .home_widget_slot:nth-child(n+6) {--bold-widget-delay:350ms;}
+.bold_v3 .home_dashboard>.home_widget_slot.is_dragging>.home_widget {animation:none;}
+.bold_v3 :is(.bold_timeline_bar,.bold_month_task) {
+    transform-origin:0% 50%;
+    animation:bold_timeline_fill 800ms var(--bold-load-ease) var(--bold-timeline-delay,200ms) backwards;
+}
+.bold_v3 .bold_timeline_today {
+    transform-origin:50% 0%;
+    animation:bold_timeline_today 700ms cubic-bezier(.77,0,.175,1) 300ms backwards;
+}
+
+.bold_v3 .section_chevron {transition:transform 240ms var(--bold-motion-ease);}
+.bold_v3 .bold_tasks :is(.task_group,.board_column) {
+    scale:none;
+    transform-origin:center top;
+    transition:scale 180ms var(--bold-motion-ease),opacity 150ms ease,box-shadow 180ms ease,outline-color 160ms ease,background 160ms ease;
+}
+.bold_v3 .bold_tasks :is(.task_group,.board_column)[data-task-drop="true"] {
+    position:relative;
+    z-index:3;
+    scale:1.006;
+    box-shadow:0 6px 18px #00000014;
+}
+.bold_v3 .bold_tasks .board_column[data-task-drop="true"] {scale:1.018;}
+
+/* Only active drop destinations paint the moving border; it never intercepts input. */
+.bold_v3 :is([data-task-drop="true"]:not(.task_group),[data-section-drop],.pipeline_drop_preview,.board_drop_preview,.drive_card.is_drop,.sheets_block.is_drop_target),
+.bold_v3 .drive_module nav button.is_drop,
+.bold_v3 .home_widget_slot.is_drop_target>.home_widget {position:relative;}
+
+/* Replace legacy static cues so each destination has only one animated border. */
+.bold_v3 :is(.task_group_drop_ready,.task_group[data-task-drop="true"])>.task_group_header {outline:0;}
+.bold_v3 .bold_tasks .task_group[data-section-drop="before"]>.task_group_header {box-shadow:none;}
+:root .bold_v3 .bold_tasks :is(.task_group,.board_column,.mobile_task_section)[data-section-drop] {box-shadow:none;}
+.bold_v3 .bold_tasks .board_column[data-task-drop="true"] {outline:0;}
+.bold_v3 .pipeline_board .pipeline_column.is_drop_target {border-color:var(--bold_line);box-shadow:none;}
+.bold_v3 :is(.pipeline_drop_preview,.board_drop_preview,.drive_drop_hint) {border-color:transparent;}
+.bold_v3 .home_widget_slot.is_drop_target>.home_widget,
+.bold_v3 .drive_module .is_drop {outline:0;}
+.bold_v3 .sheets_module .is_drop_target {outline:0;box-shadow:none;}
+.bold_v3 :is([data-task-drop="true"]:not(.task_group),[data-section-drop],.pipeline_drop_preview,.board_drop_preview,.drive_card.is_drop,.sheets_block.is_drop_target,.drive_drop_hint)::after,
+.bold_v3 .drive_module nav button.is_drop::after,
+.bold_v3 .home_widget_slot.is_drop_target>.home_widget::after {
+    content:"";
+    position:absolute;
+    inset:0;
+    z-index:4;
+    border-radius:inherit;
+    pointer-events:none;
+}
+.bold_v3 :is([data-task-drop="true"]:not(.task_group),[data-section-drop],.pipeline_drop_preview,.board_drop_preview,.drive_card.is_drop,.sheets_block.is_drop_target,.drive_drop_hint)::after,
+.bold_v3 .drive_module nav button.is_drop::after,
+.bold_v3 .home_widget_slot.is_drop_target>.home_widget::after,
+.bold_v3 :is(.task_group_drop_ready,.task_group[data-task-drop="true"])>.task_group_header,
+.bold_v3 .drive_table tr.is_drop,
+.bold_v3 .sheets_table_scroll tr.is_drop_target {
+    background-image:linear-gradient(90deg,var(--bold_red) 50%,transparent 50%),linear-gradient(180deg,var(--bold_red) 50%,transparent 50%),linear-gradient(90deg,var(--bold_red) 50%,transparent 50%),linear-gradient(180deg,var(--bold_red) 50%,transparent 50%);
+    background-size:16px 2px,2px 16px,16px 2px,2px 16px;
+    background-repeat:repeat-x,repeat-y,repeat-x,repeat-y;
+    background-position:0 0,100% 0,0 100%,0 0;
+    animation:bold_drop_lines 800ms linear infinite;
+}
+.bold_v3 .bold_tasks [data-section-drop="before"]::after {background-size:16px 2px,0 0,0 0,0 0;}
+.bold_v3 .bold_tasks [data-section-drop="after"]::after {background-size:0 0,0 0,16px 2px,0 0;}
+.bold_v3 .board_column[data-section-drop="before"]::after {background-size:0 0,0 0,0 0,2px 16px;}
+.bold_v3 .board_column[data-section-drop="after"]::after {background-size:0 0,2px 16px,0 0,0 0;}
+@keyframes bold_drop_lines {to {background-position:16px 0,100% 16px,-16px 100%,0 -16px;}}
+
+/* Anchored controls and sliding drawers retain their positioning and close lifecycle. */
+:root :is([role="dialog"][aria-modal="true"],dialog[open],.form_modal,.home_picker):not(:is(
+    [popover],.sidebar_shell,.task_drawer_panel,.permissions_drawer,.admin_organization_drawer,
+    .team_members_panel,.bold_profile_popover,.bold_color_panel,.project_preview,.project_members_popup
+)) {animation:bold_modal_enter 300ms var(--bold-motion-ease) backwards;}
+:root .swal2-popup.bold_dialog.swal2-show {animation:bold_modal_enter 300ms var(--bold-motion-ease) backwards;}
+:root .swal2-popup.bold_dialog.swal2-hide {animation:bold_modal_leave 160ms ease-in both;}
+:root .task_drawer_overlay:not(.task_drawer_closing)>.task_drawer_panel {animation-timing-function:var(--bold-motion-ease);}
+
+@keyframes bold_view_fade {from {opacity:0;} to {opacity:1;}}
+@keyframes bold_view_enter {from {opacity:0;translate:0 24px;} to {opacity:1;translate:none;}}
+@keyframes bold_timeline_fill {from {transform:scaleX(0);} to {transform:none;}}
+@keyframes bold_timeline_today {from {transform:scaleY(0);} to {transform:none;}}
+@keyframes bold_modal_enter {from {opacity:0;translate:0 12px;scale:.97;} to {opacity:1;translate:none;scale:none;}}
+@keyframes bold_modal_leave {to {opacity:0;translate:0 6px;scale:.985;}}
+
+@media (prefers-reduced-motion:reduce) {
+    .bold_v3 .module_transition>*,
+    .bold_v3 :is(.task_tabs_row,.task_group,.board_column,.bold_timeline_bar,.bold_month_task,.bold_timeline_today),
+    .bold_v3 .tasks_main_area>:is(.list_view,.board_view,.pipelines_panel,.bold_timeline) {animation:none!important;}
+    :root :is(.module_transition,.home_header,.home_widget,.task_row,.task_card,[role="dialog"],dialog[open],.form_modal,.home_picker,.swal2-popup.bold_dialog) {animation:none!important;}
+    .bold_v3 .section_chevron {transition:none;}
+    .bold_v3 .bold_tasks :is(.task_group,.board_column) {scale:none!important;transition:none;}
+    .bold_v3 :is([data-task-drop="true"]:not(.task_group),[data-section-drop],.pipeline_drop_preview,.board_drop_preview,.drive_card.is_drop,.sheets_block.is_drop_target,.drive_drop_hint)::after,
+    .bold_v3 .drive_module nav button.is_drop::after,
+    .bold_v3 .home_widget_slot.is_drop_target>.home_widget::after,
+    .bold_v3 :is(.task_group_drop_ready,.task_group[data-task-drop="true"])>.task_group_header,
+    .bold_v3 .drive_table tr.is_drop,
+    .bold_v3 .sheets_table_scroll tr.is_drop_target {animation:none!important;}
+}

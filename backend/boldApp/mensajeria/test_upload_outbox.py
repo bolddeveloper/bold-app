@@ -96,22 +96,21 @@ class UploadOutboxTests(TransactionTestCase):
         base=f'/api/v2/messaging/channels/{row.channel_id}/' if row.channel_id else f'{self.root}{row.conversation_id}/'
         return self.client.post(base+'messages/',{'client_id':str(row.client_id),'upload_id':str(row.pk),'body':'Archivo listo',**extra},format='json')
 
-    def test_queue_is_private_encrypted_idempotent_bounded_and_not_eager(self):
+    def test_upload_is_private_metadata_only_and_idempotent(self):
         token=uuid.uuid4();result=self.queue(token)
-        self.assertEqual(result.status_code,202,result.data);row=MediaUpload.objects.get(pk=result.data['id'])
-        self.assertNotIn(b'Documento privado',bytes(row.content));self.assertEqual(cipher().decrypt(bytes(row.content)),b'Documento privado de prueba')
-        self.assertEqual(self.drive.calls,[]);self.assertEqual(DirectMessage.objects.count(),0)
-        self.assertEqual(self.queue(token).status_code,200);self.assertEqual(MediaUpload.objects.count(),1)
+        self.assertEqual(result.status_code,202,result.data)
+        row=MediaUpload.objects.get(pk=result.data['id'])
+        self.assertEqual((row.state,bytes(row.content),row.cipher_bytes),('ready',b'',0))
+        self.assertTrue(self.drive.calls);self.assertEqual(DirectMessage.objects.count(),0)
+        calls=len(self.drive.calls)
+        self.assertEqual(self.queue(token).status_code,200)
+        self.assertEqual(len(self.drive.calls),calls)
         self.assertEqual(self.queue(token,b'Otro archivo').status_code,409)
         self.assertNotIn('drive_id',result.data);self.assertNotIn('content',result.data)
-        with override_settings(MESSAGING_UPLOAD_ACCOUNT_BYTES=row.cipher_bytes):
-            self.assertEqual(self.queue().status_code,429)
-        peer=self.as_person(self.bob)
-        self.assertEqual(peer.get(self.url+str(row.pk)+'/').status_code,404)
-        self.assertEqual(peer.get(self.url).data['results'],[])
-        outsider=self.as_person(self.owner)
-        self.assertEqual(outsider.get(self.url+str(row.pk)+'/').status_code,404)
-        self.assertEqual(self.send(row).status_code,409);self.assertEqual(DirectMessage.objects.count(),0)
+        for assignment in (self.bob,self.owner):
+            peer=self.as_person(assignment)
+            self.assertEqual(peer.get(self.url+str(row.pk)+'/').status_code,404)
+        self.assertEqual(self.as_person(self.bob).get(self.url).data['results'],[])
 
     def test_drive_ready_then_publish_is_atomic_and_no_network_in_message_transaction(self):
         row=self.make_ready()
@@ -129,47 +128,64 @@ class UploadOutboxTests(TransactionTestCase):
         wrong=self.client.post(f'{self.root}{self.conversation}/messages/',{'client_id':str(uuid.uuid4()),'upload_id':str(row.pk),'body':''},format='json')
         self.assertEqual(wrong.status_code,404)
 
-    def test_lost_success_response_and_duplicate_workers_keep_one_reserved_file(self):
-        result=self.queue();self.drive.lose_upload=True
+    def test_lost_success_response_keeps_one_reserved_file(self):
+        self.drive.lose_upload=True
+        result=self.queue();self.assertEqual(result.data['state'],'ready',result.data)
         self.assertTrue(perform(result.data['id']))
-        self.assertFalse(perform(result.data['id']))
         files=[row for row in self.drive.files.values() if row['metadata']['mimeType']=='text/plain']
         self.assertEqual(len(files),1)
         self.assertTrue(all('permissions' not in row['metadata'] for row in self.drive.files.values()))
-        self.assertTrue(all('parents' in row['metadata'] for row in self.drive.files.values()))
 
-    def test_bounded_retries_recovery_after_expired_lease_and_session_revocation(self):
-        result=self.queue();identity=result.data['id'];self.drive.unavailable=True
-        for attempt in range(3):
-            MediaUpload.objects.filter(pk=identity).update(next_at=timezone.now()-timedelta(seconds=1))
-            self.assertFalse(perform(identity))
-        row=MediaUpload.objects.get(pk=identity);self.assertEqual((row.state,row.attempts),('failed',3))
+    def test_recovery_without_browser_bytes_verifies_drive_when_sha_is_absent(self):
+        row=self.make_ready()
+        remote=self.drive.files[row.drive_id]
+        remote['metadata'].pop('sha256Checksum')
+        MediaUpload.objects.filter(pk=row.pk).update(state='queued',next_at=timezone.now())
+        self.assertTrue(perform(row.pk))
+        row.refresh_from_db();self.assertEqual((row.state,bytes(row.content)),('ready',b''))
+        remote['content']=b'wrong content'
+        MediaUpload.objects.filter(pk=row.pk).update(state='queued',next_at=timezone.now())
+        self.assertFalse(perform(row.pk))
+        row.refresh_from_db();self.assertEqual(row.state,'failed')
+
+    def test_only_an_explicit_file_resend_retries_a_failed_upload(self):
+        self.drive.unavailable=True
+        nonce=uuid.uuid4();result=self.queue(nonce);identity=result.data['id']
+        row=MediaUpload.objects.get(pk=identity)
+        self.assertEqual((row.state,row.attempts,bytes(row.content)),('failed',1,b''))
+        self.assertTrue(result.data['requires_file'])
+        self.assertEqual(self.client.post(self.url+str(identity)+'/',{'action':'retry'},format='json').status_code,409)
+        from .upload_tasks import drain_media_uploads
+        calls=len(self.drive.calls);drain_media_uploads();self.assertEqual(len(self.drive.calls),calls)
         self.drive.unavailable=False
-        retried=self.client.post(self.url+str(identity)+'/',{'action':'retry'},format='json')
-        self.assertEqual(retried.status_code,200,retried.data)
-        lease=claim(identity);self.assertIsNotNone(lease);self.assertIsNone(claim(identity))
-        MediaUpload.objects.filter(pk=identity).update(lease_until=timezone.now()-timedelta(seconds=1))
-        self.assertTrue(perform(identity));row.refresh_from_db();self.assertEqual(row.state,'ready')
-        result=self.queue();self.session.revoked_at=timezone.now();self.session.save(update_fields=['revoked_at'])
-        calls=len(self.drive.calls);self.assertFalse(perform(result.data['id']));self.assertEqual(len(self.drive.calls),calls)
-        self.assertEqual(MediaUpload.objects.get(pk=result.data['id']).error_code,'access_changed')
+        retried=self.queue(nonce);self.assertEqual(retried.data['state'],'ready',retried.data)
+        self.assertEqual(retried.data['id'],identity)
+        row.refresh_from_db();self.assertEqual(row.attempts,2);self.assertEqual(bytes(row.content),b'')
+        self.session.revoked_at=timezone.now();self.session.save(update_fields=['revoked_at'])
+        calls=len(self.drive.calls);self.assertFalse(perform(identity));self.assertEqual(len(self.drive.calls),calls)
 
     def test_cancel_during_provider_request_cannot_resurrect_or_publish(self):
-        result=self.queue();identity=result.data['id']
         def cancel():
-            response=self.client.post(self.url+str(identity)+'/',{'action':'cancel'},format='json')
+            row=MediaUpload.objects.get()
+            response=self.client.post(self.url+str(row.pk)+'/',{'action':'cancel'},format='json')
             self.assertEqual(response.status_code,200,response.data)
         self.drive.after_upload=cancel
-        self.assertFalse(perform(identity));row=MediaUpload.objects.get(pk=identity)
-        self.assertEqual(row.state,'cancelled');self.assertEqual(bytes(row.content),b'');self.assertTrue(row.drive_id)
-        self.assertEqual(DirectMessage.objects.count(),0);self.assertEqual(self.send(row).status_code,409)
+        result=self.queue();row=MediaUpload.objects.get(pk=result.data['id'])
+        self.assertEqual(row.state,'cancelled');self.assertEqual(bytes(row.content),b'')
+        self.assertTrue(row.drive_id);self.assertEqual(DirectMessage.objects.count(),0)
+        self.assertEqual(self.send(row).status_code,409)
 
-    def test_expiry_releases_ciphertext_and_integrity_error_is_not_retried_forever(self):
-        result=self.queue();identity=result.data['id'];MediaUpload.objects.filter(pk=identity).update(content=b'corrupt')
-        self.assertFalse(perform(identity));self.assertEqual(MediaUpload.objects.get(pk=identity).error_code,'integrity')
-        MediaUpload.objects.filter(pk=identity).update(expires_at=timezone.now()-timedelta(seconds=1))
-        self.assertEqual(expire_pending(),1);row=MediaUpload.objects.get(pk=identity)
-        self.assertEqual((row.state,row.cipher_bytes),('expired',0));self.assertEqual(bytes(row.content),b'')
+    def test_ram_integrity_and_expiry_never_persist_file_bytes(self):
+        with patch('boldApp.mensajeria.upload_views.perform',return_value=False):
+            result=self.queue()
+        from .upload_outbox import rows
+        row=rows().get(pk=result.data['id'])
+        self.assertEqual(bytes(row.content),b'')
+        self.assertFalse(perform(row.pk,b'wrong',lease=row))
+        row.refresh_from_db();self.assertEqual(row.error_code,'integrity')
+        MediaUpload.objects.filter(pk=row.pk).update(expires_at=timezone.now()-timedelta(seconds=1))
+        self.assertEqual(expire_pending(),1)
+        row.refresh_from_db();self.assertEqual((row.state,row.cipher_bytes),('expired',0))
 
     def test_channel_and_thread_uploads_publish_only_with_current_permissions(self):
         base='/api/v2/messaging/channels/'
@@ -203,41 +219,41 @@ class UploadOutboxTests(TransactionTestCase):
         self.assertFalse(self.drive.files[changed.drive_id]['metadata']['trashed'])
 
     def test_cancelled_inflight_lease_and_unknown_remote_are_retained_for_reconciliation(self):
-        result=self.queue();lease=claim(result.data['id'])
-        MediaUpload.objects.filter(pk=lease.pk).update(drive_id='pending_reserved',folder_id='synthetic_parent')
-        self.client.post(self.url+str(lease.pk)+'/',{'action':'cancel'},format='json')
-        self.assertFalse(reconcile(lease.pk));row=MediaUpload.objects.get(pk=lease.pk);self.assertEqual(row.cleanup_attempts,0)
-        MediaUpload.objects.filter(pk=lease.pk).update(lease_until=timezone.now()-timedelta(seconds=1))
-        self.assertFalse(reconcile(lease.pk));row.refresh_from_db()
+        with patch('boldApp.mensajeria.upload_views.perform',return_value=False):
+            result=self.queue()
+        row=MediaUpload.objects.get(pk=result.data['id'])
+        MediaUpload.objects.filter(pk=row.pk).update(drive_id='pending_reserved',folder_id='synthetic_parent')
+        self.client.post(self.url+str(row.pk)+'/',{'action':'cancel'},format='json')
+        self.assertFalse(reconcile(row.pk))
+        MediaUpload.objects.filter(pk=row.pk).update(lease_until=timezone.now()-timedelta(seconds=1))
+        self.assertFalse(reconcile(row.pk));row.refresh_from_db()
         self.assertIsNone(row.cleaned_at);self.assertEqual(row.error_code,'cleanup_not_found')
 
-    def test_old_worker_is_fenced_and_access_is_rechecked_after_remote_success(self):
-        result=self.queue();old=claim(result.data['id'])
+    def test_old_request_is_fenced_and_access_is_rechecked_after_remote_success(self):
+        with patch('boldApp.mensajeria.upload_views.perform',return_value=False):
+            result=self.queue()
+        from .upload_outbox import rows,StaleLease
+        old=rows().get(pk=result.data['id'])
         MediaUpload.objects.filter(pk=old.pk).update(lease_until=timezone.now()-timedelta(seconds=1))
         new=claim(old.pk);self.assertNotEqual(old.lease_token,new.lease_token)
         from .upload_provider import upload
-        from .upload_outbox import StaleLease
         with self.assertRaises(StaleLease):upload(old,b'Documento privado de prueba')
         self.assertEqual(self.drive.calls,[])
-        MediaUpload.objects.filter(pk=old.pk).update(lease_until=timezone.now()-timedelta(seconds=1))
         def revoke():
             AuthSession.objects.filter(pk=self.session.pk).update(revoked_at=timezone.now())
         self.drive.after_upload=revoke
-        self.assertFalse(perform(old.pk));row=MediaUpload.objects.get(pk=old.pk)
+        self.assertFalse(perform(new.pk,b'Documento privado de prueba',lease=new))
+        row=MediaUpload.objects.get(pk=old.pk)
         self.assertEqual(row.error_code,'access_changed');self.assertNotEqual(row.state,'ready')
-        self.assertTrue(row.drive_id);self.assertEqual(DirectMessage.objects.count(),0)
+        self.assertTrue(row.drive_id);self.assertEqual(bytes(row.content),b'')
 
-    def test_broker_loss_does_not_lose_the_durable_upload(self):
+    def test_upload_never_depends_on_a_broker_or_a_server_file_queue(self):
         with override_settings(CELERY_TASK_ALWAYS_EAGER=False),patch(
-            'boldApp.mensajeria.upload_tasks.drain_media_uploads.apply_async',side_effect=OSError('synthetic broker unavailable')):
+            'boldApp.mensajeria.upload_tasks.drain_media_uploads.apply_async',side_effect=OSError('synthetic broker unavailable')) as broker:
             result=self.queue()
-        self.assertEqual(result.status_code,202,result.data);self.assertEqual(MediaUpload.objects.count(),1)
-        self.assertEqual(self.drive.calls,[])
-        from io import StringIO
-        from django.core.management import call_command
-        report=StringIO();call_command('drain_media_uploads',stdout=report)
-        self.assertEqual(MediaUpload.objects.get(pk=result.data['id']).state,'ready')
-        self.assertIn("'ready': 1",report.getvalue())
+        self.assertEqual(result.status_code,202,result.data)
+        self.assertEqual(result.data['state'],'ready');broker.assert_not_called()
+        self.assertEqual(bytes(MediaUpload.objects.get().content),b'')
 
     def test_action_endpoint_rejects_oversized_files_without_changing_the_upload(self):
         from .media import MAX_BYTES
@@ -245,7 +261,7 @@ class UploadOutboxTests(TransactionTestCase):
         result=self.client.post(self.url+str(identity)+'/',{'action':'cancel',
             'file':SimpleUploadedFile('wrong.txt',b'x'*(MAX_BYTES+1),content_type='text/plain')},format='multipart')
         self.assertEqual(result.status_code,400,result.data)
-        self.assertEqual(MediaUpload.objects.get(pk=identity).state,'queued')
+        self.assertEqual(MediaUpload.objects.get(pk=identity).state,'ready')
 
     def test_retired_root_does_not_redirect_upload_and_post_publish_retry_remains_idempotent(self):
         row=self.make_ready();response=self.send(row);self.assertEqual(response.status_code,201,response.data)
@@ -254,7 +270,7 @@ class UploadOutboxTests(TransactionTestCase):
         ImageStorageRoot.objects.filter(pk=self.storage.pk).update(active=True)
         staged=self.queue();ImageStorageRoot.objects.filter(pk=self.storage.pk).update(active=False)
         calls=len(self.drive.calls);self.assertFalse(perform(staged.data['id']))
-        self.assertEqual(len(self.drive.calls),calls);self.assertEqual(MediaUpload.objects.get(pk=staged.data['id']).error_code,'access_changed')
+        self.assertEqual(len(self.drive.calls),calls);self.assertEqual(MediaUpload.objects.get(pk=staged.data['id']).state,'ready')
 
 
 @override_settings(MESSAGING_PILOT_ENABLED=False,AUTH_MFA_REQUIRED=False,CELERY_TASK_ALWAYS_EAGER=True,
@@ -287,7 +303,7 @@ class UploadCookieTests(TransactionTestCase):
         self.assertEqual(self.clients[1].get(self.url+'uploads/'+str(row.pk)+'/').status_code,404)
         self.assertEqual(self.clients[1].get(self.url+'messages/').data['results'],[])
         self.assertEqual(self.clients[1].get(self.url+'library/').data['results'],[])
-        self.assertEqual(self.drive.calls,[]);self.assertTrue(perform(row.pk))
+        self.assertTrue(self.drive.calls);self.assertTrue(perform(row.pk))
         sent=self.clients[0].post(self.url+'messages/',{'client_id':str(row.client_id),'upload_id':str(row.pk),'body':'Archivo confirmado'},format='json')
         self.assertEqual(sent.status_code,201,sent.data)
         download=self.clients[1].get(self.url+'messages/'+sent.data['message']['id']+'/media/')
@@ -297,7 +313,7 @@ class UploadCookieTests(TransactionTestCase):
     def test_logout_stops_pending_network_and_pilot_boundary_remains_fail_closed(self):
         response=self.queue();self.assertEqual(response.status_code,202,response.data)
         self.assertEqual(self.clients[0].post('/api/v2/auth/logout/',{},format='json').status_code,204)
-        self.assertFalse(perform(response.data['id']));self.assertEqual(self.drive.calls,[])
-        self.assertEqual(MediaUpload.objects.get(pk=response.data['id']).error_code,'access_changed')
+        calls=len(self.drive.calls);self.assertFalse(perform(response.data['id']));self.assertEqual(len(self.drive.calls),calls)
+        self.assertEqual(bytes(MediaUpload.objects.get(pk=response.data['id']).content),b'')
         with override_settings(MESSAGING_PILOT_ENABLED=True,MESSAGING_PILOT_UNIT_IDS=(str(self.assignments[0].position.unit_id),)):
             self.assertEqual(self.clients[1].get(self.url+'uploads/').status_code,403)

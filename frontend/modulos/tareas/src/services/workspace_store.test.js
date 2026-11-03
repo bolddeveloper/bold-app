@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cleanWorkspaces, readWorkspaces, saveWorkspaces, folderBranch, folderPath, folderSummary, transferFolderItems, tasksInWorkspace, toggleWorkspaceItem, workspaceStorageKey } from "./workspace_store.js";
+import { cleanWorkspaces, readWorkspaces, saveWorkspaces, folderBranch, folderPath, folderSummary, moveWorkspaceFolder, transferFolderItems, tasksInWorkspace, toggleWorkspaceItem, workspaceStorageKey } from "./workspace_store.js";
 
 test("invalid storage is reported without overwriting data; inaccessible references survive", () => {
     assert.throws(() => readWorkspaces({ getItem: () => "{" }, "u1"));
@@ -74,4 +74,24 @@ test("Drive shortcuts persist with their workspace and reject unsafe identifiers
     assert.deepEqual(rows[0].driveFolders, [{id: 'folder_123', name: 'Assets'}]);
     assert.deepEqual(transferFolderItems(rows, 'workspace', 'workspace', [], 'add')[0].driveFolders, rows[0].driveFolders);
     assert.equal(readWorkspaces(storage, 'another-unit').length, 0);
+});
+
+test("moving folders preserves their branch and links and rejects cycles, foreign destinations and collisions", () => {
+    const items=cleanWorkspaces([{id:"a",name:"Campaña",projectIds:["p"],taskIds:["t"],driveFolders:[{id:"assets",name:"Assets"}]},{id:"child",name:"Piezas",parentId:"a"},{id:"b",name:"Destino"},{id:"same",name:"campaña",parentId:"b"}]);
+    const source=structuredClone(items);
+    const moved=moveWorkspaceFolder(items,"a",null);
+    assert.deepEqual(moved,items);
+    assert.throws(()=>moveWorkspaceFolder(items,"a","b"),/ese nombre/);
+    const relocated=moveWorkspaceFolder(items.filter(row=>row.id!=="same"),"a","b");
+    assert.equal(relocated.find(row=>row.id==="a").parentId,"b");
+    assert.equal(relocated.find(row=>row.id==="child").parentId,"a");
+    assert.deepEqual(relocated.find(row=>row.id==="a").projectIds,["p"]);
+    assert.deepEqual(relocated.find(row=>row.id==="a").taskIds,["t"]);
+    assert.deepEqual(relocated.find(row=>row.id==="a").driveFolders,[{id:"assets",name:"Assets"}]);
+    assert.throws(()=>moveWorkspaceFolder(items,"a","child"),/subcarpetas/);
+    assert.throws(()=>moveWorkspaceFolder(items,"a","a"),/subcarpetas/);
+    assert.throws(()=>moveWorkspaceFolder(items,"a","missing"),/propia/);
+    assert.throws(()=>moveWorkspaceFolder([...items,{id:"foreign",shared:true}],"a","foreign"),/propia/);
+    assert.throws(()=>moveWorkspaceFolder([...items,{id:"foreign",shared:true}],"foreign",null),/propia/);
+    assert.deepEqual(items,source);
 });

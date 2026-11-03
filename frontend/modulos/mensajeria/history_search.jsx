@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState} from "react";
-import {ArrowLeft,Search,X} from "lucide-react";
+import {ArrowLeft,Bookmark,FileText,History,Image,Info,Mail,MessageCircle,Mic,Search,SlidersHorizontal,X} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
 import {useDialog} from "../core/shared/use_dialog.js";
+import {CalendarDateRangeField} from "../core/shared/date_picker.jsx";
 import {historyApi,historyDates,historyError} from "./history_api.js";
 import {channelApi,createChannelRefresh} from "./channel_api.js";
 import MessageReactions from './message_reactions.jsx';
@@ -13,7 +14,10 @@ import {readingScope} from '../core/reading_attention.js';
 import MentionText from "./mention_text.jsx";
 import {ReadBlocks} from './page_blocks.jsx';
 import "./history_search.css";
+import "./chat_panels_v3.css";
 
+const kindIcons={text:MessageCircle,image:Image,audio:Mic,document:FileText,page:FileText};
+function ResultIcon({kind}) {const Icon=kindIcons[kind] || FileText;return <Icon size={17} aria-hidden="true"/>;}
 const kinds={text:"Mensaje",image:"Imagen",audio:"Nota de voz",document:'Documento',page:"Página"};
 const emptyView=identity=>({identity,rows:[],next:null,searched:false,context:null,target:null,trail:[null],page:0});
 const time=value=>new Date(value).toLocaleString("es",{dateStyle:"medium",timeStyle:"short"});
@@ -40,6 +44,14 @@ export default function HistorySearch({onClose,initialScope="all",initialChannel
         request.current?.abort();setBusy(false);setError("");setView(emptyView(identity));
         setFilters(old=>({...old,[key]:value,...(key==="scope" ? {channel:"",conversation:"",...(value==="chat" ? {threads:false}:{})}: {}),...(["threads","marked_unread"].includes(key) && value && old.kind==="page" ? {kind:"all"}:{})}));
     }
+    function selectView(mode){
+        const next={...filters,saved:mode==='saved',marked_unread:mode==='unread',threads:mode==='threads',archived:mode!=='history',...(['unread','threads'].includes(mode) && filters.kind==='page' ? {kind:'all'}:{})};
+        setFilters(next);setView(emptyView(identity));search(null,0,next);
+    }
+    function resetFilters(){
+        request.current?.abort();setBusy(false);setError('');setView(emptyView(identity));
+        setFilters(old=>({...old,q:'',kind:'all',author:'',channel:'',from:'',to:'',scope:initialScope,conversation:initialConversation || '',archived:old.saved || old.threads || old.marked_unread}));
+    }
     async function loadChannels(next=null){
         channelRequest.current?.abort();const controller=new AbortController();channelRequest.current=controller;
         const context=identity;setChannelBusy(true);setChannelError("");
@@ -49,11 +61,11 @@ export default function HistorySearch({onClose,initialScope="all",initialChannel
         finally{if(active.current && !controller.signal.aborted)setChannelBusy(false);}
     }
     useEffect(()=>{if(allowed && filters.scope!=="chat")loadChannels();return()=>channelRequest.current?.abort();},[filters.scope,filters.archived]);
-    async function search(cursor=null,index=0){
+    async function search(cursor=null,index=0,selectedFilters=filters){
         request.current?.abort();const controller=new AbortController();request.current=controller;
         const context=identity;setBusy(true);setError("");
         try{
-            const {from,to,...base}=filters,values={...base,...historyDates(from,to)};
+            const {from,to,...base}=selectedFilters,values={...base,...historyDates(from,to)};
             const result=await historyApi.search(values,cursor,{signal:controller.signal});
             if(active.current && !controller.signal.aborted && current.current===context)setView(old=>({identity:context,rows:result.results,next:result.next_cursor,searched:true,context:null,target:null,
                 trail:index===0 ? [result.first_cursor || null]:[...old.trail.slice(0,index),cursor],page:index}));
@@ -99,6 +111,8 @@ export default function HistorySearch({onClose,initialScope="all",initialChannel
         ...visible.rows.map(row=>row.author)].filter(row=>row.employee_id).map(row=>[row.employee_id,row])).values()].sort((a,b)=>(a.name || "").localeCompare(b.name || "","es"));
     if(!allowed || view.identity!==identity)return null;
     const context=visible.context,target=visible.target;
+    const activeFilters=[filters.kind!=='all',!!filters.author,!!filters.channel,!!filters.from,!!filters.to,!!filters.conversation,filters.archived].filter(Boolean).length;
+
     return <div className="history_search_scrim"><section className="history_search_dialog" role="dialog" aria-modal="true" aria-labelledby="history_search_title" aria-busy={busy}>
         <header><div className="history_search_heading">{context && <button type="button" aria-label="Volver a los resultados" onClick={()=>{setView(old=>({...old,context:null,target:null}));setError("");}}><ArrowLeft size={18} aria-hidden="true"/></button>}<h2 id="history_search_title">{context ? "Contexto del resultado":filters.marked_unread ? 'Marcados como no leídos':filters.threads ? "Hilos que sigo":filters.saved ? "Mis guardados":"Buscar en el historial"}</h2></div><button type="button" aria-label="Cerrar búsqueda del historial" onClick={onClose}><X size={20} aria-hidden="true"/></button>
             {target?.kind==="page" && onOpenPage && <button className="history_search_page_open" type="button" disabled={busy} onClick={()=>navigate(callbacks.current.onOpenPage,target)}>Abrir página en Slack</button>}
@@ -119,16 +133,23 @@ export default function HistorySearch({onClose,initialScope="all",initialChannel
                         {message.body && <Text value={message.body} mentions={message.mentions}/>} {message.task && <p>Referencia a tarea: {message.task.available ? message.task.title:"no disponible para tu asignación activa"}</p>}{message.page && <p>Referencia a página: {message.page.available ? message.page.title:"no disponible para tu asignación activa"}</p>} {message.media && <MessageMedia message={message} author={author} fetchMedia={target.kind==="chat" ? undefined:channelApi.media}/>}</article></li>;
                 })}</ol></>}
         </div>:<>
+            <div className="history_search_modes" role="group" aria-label="Vistas del historial">
+                <button type="button" aria-pressed={!filters.saved && !filters.marked_unread && !filters.threads} onClick={()=>selectView('history')}><History size={16} aria-hidden="true"/>Historial</button>
+                <button type="button" aria-pressed={filters.saved && !filters.marked_unread && !filters.threads} onClick={()=>selectView('saved')}><Bookmark size={16} aria-hidden="true"/>Guardados</button>
+                <button type="button" aria-pressed={filters.marked_unread && !filters.saved && !filters.threads} onClick={()=>selectView('unread')}><Mail size={16} aria-hidden="true"/>Sin leer</button>
+                {filters.scope!=='chat' && <button type="button" aria-pressed={filters.threads && !filters.saved && !filters.marked_unread} onClick={()=>selectView('threads')}><MessageCircle size={16} aria-hidden="true"/>Hilos</button>}
+            </div>
             <form onSubmit={event=>{event.preventDefault();search();}}>
-                <label>Palabras<input type="search" autoComplete="off" maxLength={160} value={filters.q} onChange={event=>change("q",event.target.value)} aria-describedby="history_search_help"/></label>
-                <p id="history_search_help">Busca palabras completas, sin distinguir tildes. Se incluyen mensajes antiguos, páginas y metadatos de adjuntos; no el contenido de imágenes o audios.</p>
+                <div className="history_search_query"><label>Palabras<input type="search" autoComplete="off" maxLength={160} placeholder="Buscar mensajes, archivos o páginas…" value={filters.q} onChange={event=>change("q",event.target.value)} aria-describedby="history_search_help"/></label><button type="submit" aria-label="Buscar historial" disabled={busy}><Search size={17} aria-hidden="true"/>{busy ? "Buscando…":"Buscar"}</button></div>
+                <details className="history_search_advanced"><summary><SlidersHorizontal size={15} aria-hidden="true"/>Filtros{activeFilters>0 && <span aria-label={`${activeFilters} filtros activos`}>{activeFilters}</span>}<small className="history_scope_hint">{filters.scope==='all' ? 'Chat y Slack':filters.scope==='chat' ? filters.conversation ? 'Esta conversación':'Chats privados':'Slack'}</small></summary><div className="history_search_advanced_body">
                 <div className="history_search_filters">
                     <label>Ámbito<select value={filters.scope} onChange={event=>change("scope",event.target.value)}><option value="all">Chat y Slack</option><option value="chat">Chat privado</option><option value="slack">Slack</option></select></label>
                     <label>Tipo<select value={filters.kind} onChange={event=>change("kind",event.target.value)}><option value="all">Todos</option><option value="text">Mensajes de texto</option><option value="image">Imágenes</option><option value="audio">Notas de voz</option><option value="document">Documentos</option><option value="file">Todos los adjuntos</option>{!filters.threads && !filters.marked_unread && <option value="page">Páginas</option>}</select></label>
                     <label>Autor (creador en páginas)<select value={filters.author} onChange={event=>change("author",event.target.value)}><option value="">Cualquier persona</option>{people.map(person=><option key={person.employee_id} value={person.employee_id}>{person.name}</option>)}</select></label>
                     {filters.scope!=="chat" && <label>Canal<select value={filters.channel} onChange={event=>change("channel",event.target.value)}><option value="">Todos los canales accesibles</option>{channels.map(channel=><option key={channel.id} value={channel.id}>{channel.name}</option>)}</select></label>}
-                    <label>Desde<input type="date" value={filters.from} onChange={event=>change("from",event.target.value)}/></label><label>Hasta (incluido)<input type="date" value={filters.to} onChange={event=>change("to",event.target.value)}/></label>
+                    <div className="history_date_range"><span>Desde / hasta (incluido)</span><CalendarDateRangeField start={filters.from} end={filters.to} onChange={({start,end})=>{change('from',start);change('to',end);}}/></div>
                 </div>
+                <div className="history_search_checks">
                 {initialConversation && filters.scope!=="slack" && <label className="history_search_check"><input type="checkbox" checked={!!filters.conversation} onChange={event=>change("conversation",event.target.checked ? initialConversation:"")}/>Solo esta conversación</label>}
                 {filters.scope!=="chat" && <label className="history_search_check"><input type="checkbox" checked={filters.archived} onChange={event=>change("archived",event.target.checked)}/>Incluir canales y páginas archivados</label>}
                 <label className="history_search_check"><input type="checkbox" checked={filters.saved} onChange={event=>change("saved",event.target.checked)}/>Solo mis guardados</label>
@@ -137,13 +158,17 @@ export default function HistorySearch({onClose,initialScope="all",initialChannel
                 {filters.scope!=="chat" && <label className="history_search_check"><input type="checkbox" checked={filters.threads} onChange={event=>change("threads",event.target.checked)}/>Solo hilos que sigo</label>}
                 {filters.threads && <p>Se muestran los mensajes iniciales de tus hilos seguidos. La búsqueda, las fechas y el orden corresponden a ese mensaje inicial. Seguir no marca respuestas como leídas.</p>}
                 {filters.saved && <p>Referencias privadas de tu empleado, disponibles entre dispositivos. Guardar no concede acceso: solo aparecen las que puedes leer con tu asignación actual.</p>}
+                </div>
                 {channelBusy && <p>Cargando opciones de canal…</p>}{channelError && <p role="alert">{channelError}<button type="button" onClick={()=>loadChannels()}>Reintentar canales</button></p>}
                 {channelNext && <button type="button" disabled={channelBusy} onClick={()=>loadChannels(channelNext)}>Cargar más opciones de canal</button>}
-                <button type="submit" disabled={busy}><Search size={18} aria-hidden="true"/>{busy ? "Buscando…":"Buscar historial"}</button>
+                    <p id="history_search_help">Busca palabras completas, sin distinguir tildes. Incluye mensajes, páginas y datos de adjuntos; no el contenido de imágenes o audios.</p>
+                    <div className="history_search_advanced_actions"><button type="button" onClick={resetFilters}>Limpiar filtros</button></div>
+                </div></details>
+                {(filters.marked_unread || filters.saved) && <p className="history_search_note"><Info size={13} aria-hidden="true"/>{filters.marked_unread ? 'Consultar esta lista no marca mensajes como leídos ni quita tu marca personal.':'Tus referencias guardadas son privadas y respetan los permisos actuales.'}</p>}
             </form>
             <div className="history_search_content" aria-label="Resultados del historial">
                 <p role="status">{busy ? "Consultando el historial autorizado…":visible.searched ? visible.rows.length ? `Página ${visible.page+1} · ${visible.rows.length} ${visible.rows.length===1 ? "resultado mostrado":"resultados mostrados"}, del más reciente al más antiguo.`:filters.saved ? "No hay guardados accesibles con estos filtros. Guarda un mensaje o página para encontrarlo aquí, o revisa los filtros.":"No hay coincidencias. Prueba menos palabras, otro intervalo o elimina algún filtro.":"Escribe palabras o utiliza los filtros para consultar el historial."}</p>
-                <ol className="history_search_results">{visible.rows.map(row=><li key={row.id}><button type="button" disabled={busy} onClick={()=>open(row)}><span><strong>{row.title}</strong><small>{kinds[row.kind]} · {row.channel ? `# ${row.channel.name}`:row.conversation?.peer ? `Chat con ${row.conversation.peer.name}`:"Chat privado"} · {row.author.name} · {time(row.created_at)}</small><span className="history_search_excerpt">{row.snippet}</span></span></button>{filters.threads && onOpenThread && <button type="button" disabled={busy} onClick={()=>navigate(callbacks.current.onOpenThread,{channel_id:row.target.channel_id,parent_id:row.target.message_id})}>Abrir hilo en Slack</button>}<SaveResource kind={row.target.kind} sourceId={row.source_id} initialSaved={row.saved} documentId={row.id} disabled={busy} onChange={value=>setView(old=>({...old,rows:old.rows.flatMap(item=>item.id!==row.id ? [item]:filters.saved && !value.saved ? []:[{...item,saved:value.saved}])}))}/>{row.target.kind!=='page' && <ReadingReminder kind={row.target.kind} sourceId={row.source_id} scopeKey={readingScope(row.target)} disabled={busy} onChange={value=>{if(filters.marked_unread && !value.marked)setView(old=>({...old,rows:old.rows.filter(item=>item.id!==row.id)}));}}/>}</li>)}</ol>
+                <ol className="history_search_results">{visible.rows.map(row=><li key={row.id}><button type="button" className="history_result_open" disabled={busy} onClick={()=>open(row)}><ResultIcon kind={row.kind}/><span><strong>{row.title}</strong><small>{kinds[row.kind]} · {row.channel ? `# ${row.channel.name}`:row.conversation?.peer ? `Chat con ${row.conversation.peer.name}`:"Chat privado"}{row.author.employee_id!==row.conversation?.peer?.employee_id && ` · ${row.author.name}`} · {time(row.created_at)}</small><span className="history_search_excerpt">{row.snippet}</span></span></button>{filters.threads && onOpenThread && <button type="button" disabled={busy} onClick={()=>navigate(callbacks.current.onOpenThread,{channel_id:row.target.channel_id,parent_id:row.target.message_id})}>Abrir hilo en Slack</button>}<div className="history_result_actions"><SaveResource compact kind={row.target.kind} sourceId={row.source_id} initialSaved={row.saved} documentId={row.id} disabled={busy} onChange={value=>setView(old=>({...old,rows:old.rows.flatMap(item=>item.id!==row.id ? [item]:filters.saved && !value.saved ? []:[{...item,saved:value.saved}])}))}/>{row.target.kind!=='page' && <ReadingReminder compact kind={row.target.kind} sourceId={row.source_id} scopeKey={readingScope(row.target)} disabled={busy} onChange={value=>{if(filters.marked_unread && !value.marked)setView(old=>({...old,rows:old.rows.filter(item=>item.id!==row.id)}));}}/>}</div></li>)}</ol>
                 <nav aria-label="Páginas de resultados">{visible.page>0 && <button type="button" disabled={busy} onClick={()=>search(visible.trail[visible.page-1],visible.page-1)}>Resultados anteriores</button>}{visible.next && <button type="button" disabled={busy} onClick={()=>search(visible.next,visible.page+1)}>Siguientes resultados</button>}</nav>
             </div>
         </>}

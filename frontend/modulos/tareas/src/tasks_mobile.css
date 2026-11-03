@@ -807,10 +807,6 @@
         scroll-snap-align: start;
     }
 
-    .board_card_stack {
-        overflow: visible;
-    }
-
     .board_card {
         padding: 12px;
         min-width: 0;

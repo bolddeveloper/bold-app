@@ -95,6 +95,15 @@ export function tasksInWorkspace(workspace, tasks) {
     return tasks.filter(task => taskIds.has(String(task.id)) || projectIds.has(String(task.project_id)) || task.taskProjects?.some(link => projectIds.has(String(link.projectId))));
 }
 
+export function moveWorkspaceFolder(items, id, parentId) {
+    const source = items.find(item => item.id === id);
+    const target = items.find(item => item.id === parentId);
+    if (!source || source.shared || (parentId !== null && (!target || target.shared))) throw new Error("Selecciona una carpeta propia como destino.");
+    if (folderBranch(items, id).some(item => item.id === parentId)) throw new Error("Una carpeta no puede moverse dentro de sí misma ni de sus subcarpetas.");
+    if (items.some(item => item.id !== id && item.parentId === parentId && item.name.toLocaleLowerCase() === source.name.toLocaleLowerCase())) throw new Error("Ya existe una carpeta con ese nombre en el destino.");
+    return items.map(item => item.id === id ? {...item, parentId} : item);
+}
+
 export function toggleWorkspaceItem(workspaces, workspaceId, field, itemId) {
     return workspaces.map(workspace => {
         if (workspace.id !== workspaceId) return workspace;

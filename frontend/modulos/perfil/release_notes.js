@@ -1,6 +1,73 @@
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
 // aceptación antes de incorporarlos a releaseNotes al autorizar su publicación.
 export const pendingPilotReleaseNotes = [{
+    id:'2026-11-02-compact-profile-shortcuts',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Menús de cuenta y accesos más claros',
+    summary:'El perfil rápido y la selección de accesos de Inicio tienen una presentación más compacta y fácil de recorrer.',
+    sections:[{title:'Menos espacio, opciones más claras',items:[
+        'Pulsa tu foto de perfil para abrir el menú compacto de cuenta. Disponibilidad y Cambiar departamento se abren con un clic; conserva las opciones de perfil, novedades y cierre de sesión.',
+        'En Inicio, abre las opciones de Accesos rápidos y elige Personalizar contenido. Busca módulos y proyectos desde un solo campo y filtra por Todos, Accesos o Proyectos.',
+        'Las marcas y el contador muestran qué accesos elegiste. Aplicar guarda la selección; Cancelar conserva la anterior. Solo aparecen módulos y proyectos que ya puedes consultar.',
+        'Diseños preparados localmente para ambos temas y teléfonos; esta nota no anuncia despliegue ni cambios de permisos.',
+    ]}],
+}, {
+    id:'2026-11-02-home-widgets',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Un Inicio más claro y conectado',
+    summary:'Tarjetas compactas, gráficas de tareas y las próximas reuniones del día en un tablero con tamaños automáticos.',
+    sections:[{title:'Tu día en un vistazo',items:[
+        'Inicio reúne resumen de tareas, prioridades, carga semanal, progreso de proyectos y accesos rápidos. Los indicadores y vencimientos repetidos se integran en una sola tarjeta de cada tipo.',
+        'Agenda de hoy muestra hasta tres reuniones en curso o pendientes de tus calendarios internos y de Google, si está conectado. Las reuniones terminadas dejan paso a las siguientes y los enlaces de Meet permiten entrar directamente.',
+        'La gráfica semanal usa las fechas límite y el estado actual de tus tareas. Selecciona un día para consultar sus cifras; no representa horas trabajadas ni historial de finalización.',
+        'Arrastra las tarjetas desde su asa para cambiar el orden con animación, o usa las flechas del teclado. El tamaño se ajusta automáticamente. Notas privadas y Actividad reciente siguen disponibles en Agregar widget.',
+        'Se conservan las notas y se adapta la organización anterior sin duplicar tarjetas. Cambios preparados localmente; esta nota no anuncia despliegue.',
+    ]}],
+}, {
+    id:'2026-11-02-slack-category-actions',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Edita y elimina categorías de Slack',
+    summary:'Cambia el nombre o elimina una categoría desde sus tres puntos o con clic derecho. Los canales se conservan.',
+    sections:[{title:'Organiza sin perder conversaciones',items:[
+        'Las personas con permiso para administrar categorías pueden editar su nombre desde las opciones de la categoría.',
+        'Eliminar pide confirmación. Sus canales, incluidos los privados y archivados, quedan sin categoría y conservan sus mensajes y permisos.',
+        'Si otra persona cambió la categoría, actualiza antes de volver a intentarlo. Cambios preparados localmente; todavía sin desplegar.',
+    ]}],
+}, {
+    id:'2026-11-02-image-shortcuts',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Arrastra o pega imágenes para compartirlas',
+    summary:'Añade imágenes con Ctrl+V o arrastrándolas a la conversación de Slack, un hilo o Chat. Revisa la vista previa antes de enviar.',
+    sections:[{title:'Menos pasos para adjuntar',items:[
+        'Puedes soltar archivos sobre el área de la conversación, además de usar el botón de adjuntar. Un indicador muestra dónde se añadirán; los hilos conservan su propio borrador.',
+        'Los editores de descripciones y comentarios que permiten imágenes también aceptan arrastrarlas sobre su barra de herramientas. Se mantienen las validaciones y restricciones de cada apartado.',
+        'Pegar o soltar prepara el contenido sin enviar el mensaje. Las cargas siguen utilizando Drive y requieren que el almacenamiento esté conectado. Cambio preparado localmente, todavía sin desplegar.',
+    ]}],
+}, {
+    id:'2026-11-02-slack-task-details',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Consulta tareas sin salir de Slack',
+    summary:'Las tareas compartidas abren su panel de detalles sobre el canal, conservando la conversación y el borrador.',
+    sections:[{title:'La tarea y su conversación, juntas',items:[
+        'Pulsa una tarea compartida en Slack o una tarea vinculada a un mensaje para consultar sus detalles, comentarios, progreso y subtareas sin cambiar al módulo Tareas.',
+        'El panel utiliza las mismas funciones y permisos de Tareas. Compartir una referencia no concede acceso; una tarea que ya no puedes consultar se muestra como no disponible.',
+        'Al cerrar el panel regresas al mismo canal y conservas tu borrador. Cambio preparado localmente; esta nota no anuncia despliegue.',
+    ]}],
+}, {
+    id:'2026-11-02-personal-server-order',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Ordena tus servidores de Slack',
+    summary:'Mantén pulsado un servidor y arrástralo para colocarlo donde prefieras. El orden se guarda para tu cuenta.',
+    sections:[{title:'Tu organización personal',items:[
+        'Ordena los servidores de la barra lateral sin cambiar sus canales ni la organización de las demás personas. Tu orden se conserva al recargar y volver a entrar.',
+        'También puedes usar Subir servidor y Bajar servidor en sus opciones, o Alt + flecha arriba o abajo. En teléfono, mantén pulsado para mover; una pulsación larga sin mover abre las opciones.',
+        'El orden solo cambia tu presentación. No añade acceso a servidores ni modifica sus permisos. Cambio preparado localmente; esta nota no anuncia despliegue.',
+    ]}],
+}, {
+    id:'2026-11-02-messaging-drive-only',date:'2026-11-02',category:'Piloto IT',icon:'update',
+    title:'Archivos de Chat y Slack guardados en Drive',
+    summary:'Preparación local para guardar iconos, imágenes, audios y documentos en Drive, sin copias temporales de archivos en el servidor.',
+    sections:[{title:'Guardado y recuperación',items:[
+        'Los nuevos iconos de servidores y los archivos de Chat y Slack utilizan el almacenamiento privado de Drive. También las imágenes recibidas desde el teléfono.',
+        'Si falla la conexión, conserva el archivo en tu dispositivo y vuelve a pulsar Enviar. El mensaje se publica después de confirmar el archivo en Drive; los reintentos conservan su identificador.',
+        'Se necesita una conexión de Almacenamiento de imágenes vigente. Los originales antiguos se conservan hasta trasladarlos y verificar su copia; esta nota no anuncia que ya se hayan migrado.',
+        'Cambio preparado y probado localmente con Drive simulado. No anuncia despliegue ni apertura del piloto fuera de IT.',
+    ]}],
+}, {
     id:'2026-10-29-functional-web-review-pilot',date:'2026-10-29',category:'Piloto IT',icon:'update',
     title:'Chat y Slack: mejoras funcionales para revisión web',
     summary:'Borradores, búsqueda, seguimiento, tareas, conocimiento, archivos y automatizaciones reunidos en el entorno local de pruebas.',
@@ -238,6 +305,7 @@ export const pendingPilotReleaseNotes = [{
         "Los avisos abren la conversación correspondiente, incluso si estabas viendo Páginas. Los cambios pendientes de una página conservan su confirmación antes de salir.",
         "Puedes seguir hasta 500 hilos. Solo se muestran los que tu asignación puede leer actualmente; seguir no concede acceso ni sustituye una invitación. Continúa la revisión local del piloto IT.",
     ]}, {title: "Menciones en mensajes y respuestas de Slack", items: [
+        "Escribe @ en un mensaje, hilo o edición de Slack para ver personas con acceso al canal. Filtra por nombre, usa las flechas y pulsa Enter para insertar sin enviar; Escape cierra la lista y conserva el borrador.",
         "Usa Mencionar a una persona en el compositor, busca por nombre o correo y selecciona a alguien con acceso al canal. También puedes escribir @ seguido de su correo completo. En el mensaje enviado, la referencia verificada se resalta con su nombre.",
         "Una mención puede avisarte aunque no sigas ese canal o hilo. En Perfil → Notificaciones puedes desactivar Menciones de Slack, también en canales no seguidos. Eso no desactiva los avisos normales de conversaciones que sí sigues.",
         "Mencionar no invita, no concede permisos y no añade seguidores. Solo reciben avisos quienes mantienen acceso; los correos escritos dentro de enlaces o fragmentos de código no activan menciones.",
@@ -356,6 +424,232 @@ export const pendingPilotReleaseNotes = [{
 
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
 export const releaseNotes = [
+    {
+        "id": "2026-11-03-bold-interface-refresh",
+        "date": "2026-11-03",
+        "category": "Diseño",
+        "icon": "update",
+        "title": "Una nueva presentación para BOLD",
+        "summary": "Cambios de diseño y uso en Inicio, Tareas, Calendario, Chat, Slack y los demás módulos.",
+        "sections": [
+            {
+                "title": "Tus hilos, más fáciles de organizar",
+                "items": [
+                    "Marca un hilo como leído, añádelo a favoritos o copia su enlace. En Hilos puedes filtrar activos, cerrados, favoritos y eliminados del canal actual.",
+                    "Elige avisos para todos los mensajes, solo menciones o ninguno. También puedes silenciar temporalmente el hilo o abandonarlo; estos ajustes son personales y conservan el acceso al canal.",
+                    "Puedes cerrar y reabrir hilos según tus permisos. Administrar el canal permite bloquearlos, enviarlos a Eliminados y restaurarlos. Editar su nombre no modifica el mensaje original.",
+                    "Eliminar pide confirmación y conserva el historial en modo de lectura. Cerrar o bloquear impide nuevas respuestas; tus borradores se conservan para continuar cuando el hilo vuelva a abrirse."
+                ]
+            },
+            {
+                "title": "Categorías para ordenar los canales de Slack",
+                "items": [
+                    "Crear categoría aparece debajo de Canales de texto cuando tienes permiso para organizar el servidor. También está disponible al hacer clic derecho en un espacio vacío de la lista.",
+                    "Arrastra un canal al título o al interior de una categoría para agruparlo. Arrástralo a Canales de texto para dejarlo sin categoría. El menú del canal ofrece la misma función sin arrastrar.",
+                    "Arrastra una categoría sobre otra para cambiar su posición. Sus canales se desplazan con ella. También puedes usar Subir categoría y Bajar categoría desde sus opciones.",
+                    "El título permite plegar o desplegar sus canales. El botón + de una categoría crea el canal dentro de ella.",
+                    "Cada departamento, servidor privado y grupo de canales independientes mantiene sus propias categorías. Agrupar no cambia la visibilidad, las invitaciones, los mensajes ni los archivos de un canal.",
+                    "Los servidores privados conservan su acceso por invitación y la organización corresponde a su creador. Las restricciones de Permisos siguen aplicándose; una categoría no concede acceso a canales privados.",
+                    "Los canales anteriores siguen disponibles sin categoría. Cada servidor admite hasta 100 categorías; los cambios de orden se guardan y se comprueban para evitar sustituir una versión más reciente."
+                ]
+            },
+            {
+                "title": "Hilos y mensajes fijados, organizados por canal",
+                "items": [
+                    "Abre Hilos en la cabecera del canal para buscar sus conversaciones o crear una con nombre. También puedes iniciar un hilo desde las opciones de un mensaje; el nombre es opcional y el mensaje original se conserva.",
+                    "En pantallas amplias el hilo se abre a la derecha y el canal permanece visible. Escribir en el canal vuelve a su caja de mensaje conservando el borrador del hilo. En teléfonos se muestra una conversación a la vez con un botón para volver.",
+                    "Las respuestas anteriores también aparecen en Hilos. Seguir un hilo continúa siendo una preferencia personal y no añade invitaciones ni cambia los permisos del canal.",
+                    "El icono de fijados muestra los mensajes del canal con autor y fecha. Abre una tarjeta para consultar el mensaje original, también cuando pertenece a un hilo.",
+                    "Fijar y desfijar requiere participación y permiso para administrar el canal. Hay un máximo de 50 fijados por canal; los canales archivados conservan sus listas como solo lectura.",
+                    "Las opciones del mensaje reúnen reacciones rápidas, hilos, copia de texto y las acciones existentes. Guardar sigue siendo personal; fijar comparte el acceso rápido con quienes ya pueden leer ese canal."
+                ]
+            },
+            {
+                "title": "Slack organizado por servidores y canales de texto",
+                "items": [
+                    "La barra de iconos representa departamentos y servidores privados. Cada uno muestra únicamente sus propios canales de texto en la columna contigua; en escritorio la lista permanece visible.",
+                    "Pasa el cursor por un icono para ver su nombre. La lupa amplía la barra para buscar por nombre de departamento o de servidor privado; también puedes recorrerla con el teclado. Los departamentos muestran únicamente su nombre, sin etiquetas adicionales.",
+                    "Crear canal desde la lista lo añade al servidor seleccionado. Los canales anteriores sin departamento se conservan en Independientes, con sus permisos originales.",
+                    "El clic derecho sobre un servidor permite cambiar su imagen cuando tienes autorización. Los jefes definidos en el organigrama pueden hacerlo en su propia área; Dirección puede hacerlo en los servidores a los que tiene acceso. El nombre se conserva y los privados siguen requiriendo invitación.",
+                    "Slack aprovecha el área del módulo con cabecera, mensajes y escritura más compactos. Las acciones de cada mensaje se reúnen en una flecha; los hilos y las reacciones añadidas siguen disponibles.",
+                    "Páginas, ventanas de archivos, invitaciones y menús mantienen el estilo de BOLD en ambos temas. En teléfonos, el botón de volver abre los canales y las opciones del canal incluyen Archivos y enlaces.",
+                    "La programación de recordatorios usa el calendario de BOLD y un campo separado para la hora local. Seleccionar una fecha no guarda ni activa una regla.",
+                    "Usa el botón + de la barra para crear un servidor privado. Su creador administra los canales y las invitaciones; las personas invitadas pueden tener lectura o participación.",
+                    "Todos los canales privados del servidor heredan la misma lista de personas. Retirar una invitación quita el acceso a sus canales sin borrar mensajes ni archivos.",
+                    "Las invitaciones requieren una cuenta activa y Chat habilitado para la asignación actual. No sustituyen las restricciones configuradas en Permisos.",
+                    "Cada servidor admite hasta 200 personas, incluido el creador. Una persona puede crear hasta 50 servidores privados."
+                ]
+            },
+            {
+                "title": "Historial y recursos de Chat más fáciles de consultar",
+                "items": [
+                    "Buscar empleado admite nombre o correo. Los perfiles sin Chat habilitado aparecen con ese estado y no permiten iniciar una conversación; encontrarlos no cambia sus permisos.",
+                    "Las acciones de cada mensaje de Chat se reúnen en una flecha: reaccionar, guardar, marcar como no leído, reenviar, consultar tareas y editar cuando esté permitido. Las burbujas ocupan menos espacio y las reacciones añadidas siguen visibles.",
+                    "Emojis tiene un acceso propio junto al micrófono. El panel incluye categorías, búsqueda y recientes de la sesión; se cierra con Escape o al pulsar fuera y conserva el fondo del chat sin oscurecerlo.",
+                    "En Chat, escribe @ para elegir a una persona con acceso a la conversación. La lista se filtra mientras escribes; usa las flechas y Enter o pulsa el nombre para insertar la mención sin enviar el mensaje.",
+                    "Cambia entre Historial, Guardados y Sin leer desde la misma ventana. Los filtros de autor, fechas, tipo y ámbito quedan disponibles en Filtros.",
+                    "Limpiar filtros conserva la colección seleccionada y cancela las consultas pendientes. Escribir no inicia búsquedas automáticas.",
+                    "Los resultados separan la apertura del mensaje de las acciones personales de guardar o marcar como no leído.",
+                    "Archivos y enlaces reúne la búsqueda principal y sus filtros en una ventana más compacta. Reenvíos, tareas vinculadas, acuerdos y reacciones adoptan controles más pequeños en Chat.",
+                    "Al abrir Archivos y enlaces desde un contacto, consulta lo compartido en ese chat agrupado por meses. Cargar anteriores añade recursos antiguos al historial; Limpiar filtros restaura la consulta del chat.",
+                    "Al preparar una página de acuerdos, busca el canal de destino por nombre con Enter o Buscar canales. La búsqueda muestra carga, resultados y errores; solo ofrece canales donde puedes crear páginas.",
+                    "Los filtros de fechas del historial y de archivos usan el calendario de BOLD, con selección de rangos, semanas y limpieza. Las tareas creadas desde un mensaje también usan el selector de fechas de BOLD.",
+                    "Consultar Sin leer no confirma lecturas ni retira marcas personales. Guardar una referencia no concede acceso al contenido.",
+                    "Los archivos siguen cargándose al abrirlos o descargarlos. Los permisos y las confirmaciones para crear tareas, acuerdos o reenviar mensajes se mantienen."
+                ]
+            },
+            {
+                "title": "Chat con más espacio y controles más claros",
+                "items": [
+                    "Chat aprovecha el espacio del módulo en escritorio y teléfono, con colores adaptados al modo claro y oscuro.",
+                    "Historial, guardados y mensajes sin leer se reúnen junto al buscador. El clip de la barra de escritura agrupa emojis, menciones, documentos, imágenes y transferencia desde el teléfono.",
+                    "El selector incluye 76 emojis organizados por categorías y búsqueda en español. Elegir uno lo añade al borrador sin enviar el mensaje.",
+                    "La preferencia de Enter se puede cambiar en una ventana dentro de Chat. Las menciones y la transferencia desde el teléfono presentan controles más compactos y conservan sus restricciones de acceso.",
+                    "El indicador animado de escritura aparece junto al nombre cuando llega la señal de la otra persona. Las notas de voz distinguen grabación y reproducción, con tiempo transcurrido, duración y velocidad.",
+                    "Detener una grabación permite escucharla antes de enviarla. Los adjuntos siguen pendientes hasta pulsar Enviar y las imágenes conservan su visor.",
+                    "Las animaciones respetan la preferencia de movimiento reducido. Esta actualización visual no amplía el acceso a Chat ni modifica sus permisos."
+                ]
+            },
+            {
+                "title": "Docs y Sugerencias con una presentación más clara",
+                "items": [
+                    "Documentos, hojas de cálculo y presentaciones muestran su propósito y su acción de creación. Subir archivo se reúne en una sola acción junto a la cuenta conectada.",
+                    "El diálogo de creación conserva la elección de carpeta en Drive y añade un cierre visible. Las pestañas y el aviso de desarrollo utilizan la presentación de BOLD.",
+                    "Los archivos continúan usando su conexión y sus permisos de Google. El módulo conserva su aviso de desarrollo y la opción de abrir el archivo en Google.",
+                    "Nuevo reporte, Mis reportes y Bandeja IT utilizan una barra compacta. Los reportes y su detalle muestran la información con menos separación y mayor contraste en ambos temas.",
+                    "Filtros abre una ventana anclada que se mantiene dentro de la pantalla y se cierra con Escape. El seguimiento IT y las acciones del autor conservan sus permisos actuales.",
+                    "Marcas deja de aparecer como apartado de la aplicación. Este cambio de navegación no elimina los registros guardados."
+                ]
+            },
+            {
+                "title": "Un calendario más claro y compacto",
+                "items": [
+                    "Calendario reúne la navegación, la búsqueda, las vistas y Crear en una barra compacta. La vista activa utiliza el rojo de BOLD.",
+                    "El botón del mini calendario permite mostrarlo u ocultarlo; en teléfono empieza oculto. Las cuadrículas amplias se desplazan dentro del calendario sin ensanchar la página.",
+                    "Los formularios y detalles utilizan superficies y controles coherentes con los modos claro y oscuro. Crear permite elegir evento o tarea y cerrar el menú con Escape.",
+                    "La pestaña BOLD mantiene su conexión con Google; los calendarios internos permanecen dentro de la aplicación. Se conservan los permisos vigentes y la protección del Calendario producción.",
+                    "Compartir agenda mantiene su función de publicar horarios en Equipo. Administrar acceso a un calendario interno continúa siendo una acción independiente."
+                ]
+            },
+            {
+                "title": "Una bandeja para leer y responder",
+                "items": [
+                    "Bandeja de entrada muestra nombre y foto o iniciales del remitente, el mensaje y su contexto. Sin leer y Menciones ayudan a priorizar; un comentario sin mención ya no aparece como si te hubieran mencionado.",
+                    "Busca por persona, tarea o contenido y filtra por estado, tipo o proyecto. Puedes seleccionar los avisos visibles y marcarlos como leídos, guardarlos o archivarlos en grupo.",
+                    "Guardadas y Archivadas conservan su organización en este navegador y con tu cuenta activa. Restaurar devuelve un aviso a la actividad; archivar no elimina la tarea.",
+                    "Los avisos vinculados a una tarea permiten consultar su conversación y responder con texto y menciones desde la bandeja. Los borradores se conservan al cambiar entre avisos mientras mantienes abierta la bandeja.",
+                    "En la campana, Responder abre esa conversación en la bandeja; Abrir bandeja permite ver toda la actividad disponible. Los demás avisos mantienen el acceso a su módulo de origen.",
+                    "Los permisos actuales siguen aplicándose al historial y al envío. Un aviso sin una referencia válida no abre otra tarea por coincidencia de nombres."
+                ]
+            },
+            {
+                "title": "Un mismo selector de colores en BOLD",
+                "items": [
+                    "Los selectores de carpetas, proyectos, calendarios, pipelines y editores comparten presentación en claro y oscuro, adaptada a pantallas pequeñas.",
+                    "Ajusta tono, saturación y brillo, escribe un código HEX o elige un color rápido. La vista previa y los valores indican el color elegido; Listo cierra el panel.",
+                    "Los colores personalizados de canales, las opciones de listas en Sheets y los trazos del editor de imágenes usan este mismo selector. El cuentagotas aparece si tu navegador lo admite.",
+                    "Cada módulo conserva su forma de guardar: los formularios mantienen el color en el borrador hasta guardar y los cambios directos conservan su aplicación inmediata o al cerrar el selector."
+                ]
+            },
+            {
+                "title": "Proyectos y Mis tareas comparten presentación",
+                "items": [
+                    "Proyectos incorpora un buscador propio y tarjetas compactas con fechas, estado, prioridad y progreso. El menú de cada tarjeta reúne Editar, Compartir, Organizar en Workspace y Eliminar.",
+                    "Dentro del proyecto, lista, tablero y estados usan los estilos de Mis tareas: filas compactas, tarjetas, controles y desplegables consistentes.",
+                    "Crear y editar proyectos, consultar su información y compartir usan superficies compactas en claro y oscuro, con campos y controles adaptados a pantallas pequeñas.",
+                    "Los cambios son de presentación y navegación. Se conservan los datos, permisos y confirmaciones de las operaciones del proyecto."
+                ]
+            },
+            {
+                "title": "Subtareas con detalles desde su creación",
+                "items": [
+                    "En Subtareas, cada fila incluye Detalles a la derecha del nombre. Ábrelo para elegir responsable, inicio y fecha límite, prioridad y descripción de esa subtarea.",
+                    "Puedes cerrar y volver a abrir los detalles sin perder lo escrito. Los datos se conservan en el borrador y las subtareas se guardan al crear la tarea principal.",
+                    "Los campos mantienen la presentación de BOLD en claro y oscuro y se apilan en pantallas pequeñas."
+                ]
+            },
+            {
+                "title": "Workspace: organizar y compartir con más claridad",
+                "items": [
+                    "Workspace separa Carpetas y Todas las tareas. Las carpetas tienen buscador y secciones plegables para subcarpetas, proyectos y tareas, con sus cantidades visibles.",
+                    "Agregar contenido separa Proyectos, Tareas y Drive para elegir sin perder la selección. Drive se consulta cuando abres su pestaña.",
+                    "Puedes mover carpetas propias con sus subcarpetas y asociaciones, usando un destino buscable. Se bloquean destinos dentro de la propia carpeta y nombres duplicados en el destino.",
+                    "En Todas las tareas, selecciona varias y usa Agregar a carpeta. Desde el detalle de una tarea o las opciones de un proyecto, Organizar en Workspace permite buscar carpetas y asociar el elemento a varias.",
+                    "Las tareas pueden seleccionarse individualmente. Editar datos y Más acciones agrupan los cambios masivos para mantener libre el espacio de trabajo.",
+                    "Compartir muestra personas de BOLD disponibles, con búsqueda por nombre o correo y una explicación del acceso. Las personas añadidas pueden organizar el contexto compartido; los permisos de proyectos, tareas y Drive se mantienen.",
+                    "Los filtros y formularios usan el estilo BOLD en claro y oscuro, con controles adaptados a pantallas pequeñas."
+                ]
+            },
+            {
+                "title": "Equipo aprovecha mejor tu pantalla",
+                "items": [
+                    "En Tareas → Equipo, el directorio y el espacio de trabajo ocupan el ancho disponible, con menos marcos y separaciones. El buscador permanece visible al recorrer los departamentos.",
+                    "Las tarjetas adoptan la presentación de BOLD y las columnas tienen desplazamiento independiente. En teléfono, el directorio aparece arriba y el tablero conserva su desplazamiento lateral.",
+                    "Las pestañas Tareas y Reuniones son más compactas. El contenido continúa siendo de solo lectura y cada persona conserva el control de lo que comparte.",
+                    "En Reuniones puedes consultar un día o un rango con el mismo selector de fechas de Tareas, incluidos los accesos de una y dos semanas. El máximo por consulta es de 31 días y cada reunión indica su fecha."
+                ]
+            },
+            {
+                "title": "Tareas más claras, de principio a fin",
+                "items": [
+                    "Los datos principales se agrupan en filas compactas. La descripción siempre está visible; repetición y subtareas se abren cuando las necesitas. Las acciones para guardar permanecen al pie del panel.",
+                    "Al crear una tarea puedes elegir inicio y fecha límite con el mismo selector de rangos de la edición. Sus accesos rápidos, limpieza de fechas y navegación con teclado se conservan.",
+                    "Los colaboradores aparecen en fichas pequeñas, sin desplegar un bloque grande. Agregar abre un buscador por nombre o correo; puedes seleccionar varias personas y quitar una desde su ficha. El responsable sigue siendo una relación independiente.",
+                    "El detalle separa la información, las subtareas y los comentarios en pestañas. Cambiar de pestaña conserva el comentario que estás escribiendo, sin enviarlo.",
+                    "Las subtareas muestran cuántas están completas y una barra de progreso. Pulsa Detalles para abrir una subtarea; su cabecera permite volver a la tarea principal cuando tienes acceso a ella.",
+                    "Crear y abrir añade una subtarea y abre sus propios detalles. Los formularios y selectores se adaptan al teléfono y a los temas claro y oscuro.",
+                    "En Estados, el nombre del pipeline, Mostrar y Configurar se agrupan a la izquierda. Crear y configurar un pipeline comparten un formulario más compacto, con etapas identificadas por color, avance y cantidad de tareas.",
+                    "En teléfono, las etapas se organizan en bloques y las acciones permanecen al pie. Se conservan el orden, los colores y el traslado obligatorio de tareas al quitar una etapa con contenido."
+                ]
+            },
+            {
+                "title": "Navegación más fluida en cada pantalla",
+                "items": [
+                    "Las vistas principales aprovechan el ancho disponible con márgenes más estrechos. En Tareas, la barra queda más cerca de la cabecera y el tablero dispone de más altura.",
+                    "El modo claro diferencia el fondo, las secciones y las tarjetas con tonos neutros, bordes más visibles y sombras suaves. Los textos secundarios tienen mayor contraste; el modo oscuro conserva su paleta.",
+                    "La campana muestra tarjetas compactas con el nombre y avatar del autor cuando están disponibles. Las menciones se distinguen con @ y puedes filtrar Todas, Sin leer o Menciones.",
+                    "Abre el aviso para ir a su contexto, cambia su lectura o quítalo individualmente. Limpiar todo pide confirmar y retira solo tus avisos visibles; conserva las tareas y comentarios de origen.",
+                    "El buscador superior y los accesos ocupan menos altura para dejar más espacio al contenido. Los iconos de ayuda, novedades, tema, notificaciones y equipo se muestran sin recuadros, con respuestas suaves al pasar el cursor o pulsarlos.",
+                    "La búsqueda destaca el foco y conserva sus sugerencias y navegación con teclado. Los avisos de no leído siguen visibles; los controles mantienen áreas de toque amplias en teléfono y se adaptan a los temas claro y oscuro.",
+                    "El botón de Novedades abre un panel con los tres parches más recientes. Pulsa una tarjeta para leer la nota completa o Ver todo, a la derecha, para consultar el historial.",
+                    "Al iniciar sesión, los bloques isométricos en rojo BOLD completan su ensamblaje antes de mostrar tu espacio. Recargar una sesión abierta no repite la presentación. El dibujo conserva su nitidez, se adapta al tema y omite la espera si prefieres movimiento reducido.",
+                    "Al entrar en un módulo o cambiar entre Lista, Columnas, Cronograma y Estados, el contenido aparece por etapas. En Inicio, los widgets siguen la misma secuencia; actualizar sus datos no repite la presentación.",
+                    "En Cronograma, las barras se despliegan de izquierda a derecha y la línea del día actual crece de arriba abajo. La entrada se repite al cambiar de período o vista y respeta la preferencia de movimiento reducido, sin esperas añadidas para usar los controles.",
+                    "Los módulos y las ventanas incorporan entradas suaves con pequeños desplazamientos. Los paneles laterales mantienen su dirección de apertura y los selectores conservan su posición.",
+                    "Al completar o reabrir una tarea, su cambio de posición y el ajuste de las tareas vecinas se animan suavemente. El check responde de inmediato y el guardado continúa en segundo plano.",
+                    "Las secciones de la lista se expanden y contraen suavemente, también en teléfono. Puedes invertir el movimiento sin esperar; su contenido queda fuera del teclado al contraerlas.",
+                    "Al arrastrar una tarea en lista o tablero, la sección de destino se amplía ligeramente. Al soltarla, las tareas visibles se acomodan con un desplazamiento suave; cancelar el arrastre retira el resaltado.",
+                    "Los destinos de arrastre muestran líneas rojas en movimiento mientras colocas el elemento. El mismo aviso aparece al ordenar secciones y widgets, mover archivos en Drive y reorganizar bloques o filas de Sheets; con movimiento reducido, las líneas permanecen estáticas.",
+                    "Las transiciones funcionan en los temas claro y oscuro, se adaptan a teléfonos y respetan la preferencia de movimiento reducido del dispositivo.",
+                    "Personalizar incluye Subtareas, activado de forma predeterminada. La lista muestra el mismo icono y contador de completadas y total del tablero; pulsa el contador para abrir la tarea y revisar sus subtareas. Puedes ocultarlo desde Campos visibles, también en la lista de teléfono.",
+                    "La barra de Tareas, Cronograma y Estados conserva controles compactos en teléfonos y tablets, sin los grandes espacios vacíos de la distribución anterior.",
+                    "La lista utiliza filas compactas en teléfono, con las acciones al costado y el progreso bajo el título, y dos columnas de tarjetas en tablet. El título de cada sección y sus botones permanecen juntos, sin dejar huecos entre tareas.",
+                    "Estados utiliza las mismas tarjetas del tablero: fecha y prioridad arriba, responsable y proyecto bajo el título, y progreso con avatar al pie. El progreso corresponde a la etapa del pipeline abierto; se conservan el arrastre y los atajos para cambiar de etapa.",
+                    "La cabecera compacta alinea el logotipo y sus botones, sin repetir los accesos de ayuda, novedades y personas junto al buscador."
+                ]
+            },
+            {
+                "title": "Una nueva presentación para BOLD",
+                "items": [
+                    "El acceso incorpora aros y puntos animados que mantienen su nitidez al ampliar y en pantallas de alta resolución, sin descargar un vídeo de fondo. Incluye versiones clara y oscura, adaptación a teléfono y movimiento reducido.",
+                    "Pliega o amplía la barra lateral desde su control inferior, con los iconos siempre alineados y transiciones suaves. Conserva tu preferencia y respeta el movimiento reducido. En teléfonos, la navegación conserva su menú y los widgets de Inicio se ordenan en una columna.",
+                    "Mis tareas reúne una lista compacta y tarjetas por secciones, con su recuento y un botón + para crear tareas directamente en cada sección. En teléfonos, los controles se adaptan a una barra de iconos.",
+                    "Las tarjetas muestran el progreso real de su etapa y los responsables. Las subtareas conservan su recuento independiente; no se muestran contadores vacíos. Los checks, desplegables y campos configurables comparten la nueva estética; la vista activa se destaca en rojo y las transiciones respetan el movimiento reducido.",
+                    "La lista alinea responsables, etiquetas, fechas y los comentarios y adjuntos disponibles en columnas compactas. El menú de tres puntos reúne las acciones de tareas y secciones.",
+                    "Cronograma organiza las tareas por responsable sobre una cuadrícula de fechas, con avatares, barras redondeadas de distintos colores según su duración real y filas separadas cuando coinciden. Navega por semana o dos semanas, o elige Mes para ver una cuadrícula mensual con barras de varios días, filtro de estado y acceso a las tareas que no caben en un día. Vuelve a Hoy desde sus controles. Las tareas sin fecha permanecen accesibles. Se retiró el bloque de comentarios del cronograma; cada tarea conserva sus detalles y comentarios.",
+                    "Los selectores de fechas incorporan inicio y fin, rangos resaltados, duración entre fechas y accesos para fin de semana, tres días, una o dos semanas en proyectos, eventos y edición de tareas. Las fechas únicas conservan su selección de un día. Puedes limpiar cuando el campo lo permite; los horarios se mantienen y las animaciones respetan el movimiento reducido.",
+                    "Las cuentas nuevas pueden elegir tema y conectar Google al entrar por primera vez. Las cuentas existentes conservan su acceso habitual.",
+                    "Chat presenta una barra de escritura compacta y un indicador temporal cuando la otra persona escribe. Se mantienen los permisos de acceso de cada módulo."
+                ]
+            },
+            {
+                "title": "Creación rápida de tareas",
+                "items": [
+                    "Pulsa el campo Nombre de tarea dentro de una sección para escribir sin cerrar el formulario."
+                ]
+            }
+        ]
+    },
     {
         id: "2026-10-19-notification-push-recovery", date: "2026-10-19", category: "Mejoras", icon: "bell",
         title: "Notificaciones en directo con menos consultas de fondo",

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { AtSign, ArrowUp, Bold, ChevronDown, ImagePlus, Italic, Link, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
+import {useFileTransfer,FileDropHint} from "../../core/shared/use_file_transfer.jsx";
 import { ImageGallery } from "./image_gallery.jsx";
 import { VoiceNotes } from "./voice_notes.jsx";
 import { editorDisplayHTML, inlineTextClasses, saveRichText, richImageSources } from "./rich_text.js";
@@ -8,6 +9,8 @@ import {transferredFiles, validateEditorImages} from "./editor_media.js";
 
 import {getCoreState, subscribeCore} from "../../core/core_store.js";
 import {mentionAtCaret, mentionPeople} from "./mentions.js";
+import {AvatarImage} from "../../core/shared/avatar_image.jsx";
+import "./task_mentions.css";
 
 const formats = [["Deshacer", "undo", Undo2], ["Rehacer", "redo", Redo2], ["Negrita", "bold", Bold], ["Cursiva", "italic", Italic], ["Tachado", "strikeThrough", Strikethrough], ["Subrayado", "underline", Underline], ["Lista", "insertUnorderedList", List], ["Lista numerada", "insertOrderedList", ListOrdered]];
 const textStyles = [["3", "Texto normal"], ["5", "Título"], ["4", "Subtítulo"], ["2", "Cita"]];
@@ -39,8 +42,11 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
     const core = useSyncExternalStore(subscribeCore, getCoreState, getCoreState);
     const mentionId = useId();
     const [mention, setMention] = useState(null), [mentionIndex, setMentionIndex] = useState(0);
-    const mentionRange = useRef(null);
+    const mentionRange = useRef(null), mentionOptions = useRef(null);
     const candidates = mention && !core.securityUncertain ? mentionPeople(core.directory || [], mention.query) : [];
+    useEffect(() => {
+        if (mention) mentionOptions.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest"});
+    }, [mention, mentionIndex]);
     function findMention() {
         if (!compact || disabled) return;
         const range = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null;
@@ -118,7 +124,9 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         } catch (error) { setImageError(error.message); }
         finally { imagesInFlight.current = false; setImagesBusy(false); onBusyChange?.(false); }
     }
-    return <div className={`task_text_editor${compact ? " task_comment_editor" : ""}${disabled ? " is_disabled" : ""}`}>
+    const fileTransfer=useFileTransfer({field:editor,context:resourceId,disabled:disabled || !allowImages || imagesBusy,onFiles:insertImages});
+    return <div className={`task_text_editor bold_file_drop_target${compact ? " task_comment_editor" : ""}${disabled ? " is_disabled" : ""}`} {...fileTransfer.bindings}>
+        {fileTransfer.dragging && <FileDropHint label="Suelta imágenes en este editor"/>}
         <div className="task_editor_toolbar" role="toolbar" aria-label={`Formato de ${label.toLowerCase()}`} onMouseDown={event => { remember(); if (!event.target.closest("summary")) event.preventDefault(); }}>
             <details className="task_editor_style task_select" ref={styleMenu} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; } }}><summary aria-label="Estilo de texto" aria-disabled={disabled} onClick={event => disabled && event.preventDefault()}>{style}<ChevronDown size={13} /></summary><div className="task_select_menu">{textStyles.map(([tag, name]) => <button type="button" className="task_select_option" aria-label={name} key={tag} disabled={disabled} onClick={() => changeStyle(tag)}>{name}</button>)}</div></details>
             <span className="task_editor_divider" />{formats.map(([name, action, Icon]) => <button type="button" key={action} title={name} aria-label={name} disabled={disabled} onClick={() => command(action)}><Icon size={15} /></button>)}<button type="button" title="Enlace" aria-label="Insertar enlace" disabled={disabled} onClick={() => { setLinkAlias(selection.current?.toString() || ""); setLinkOpen(current => !current); setLinkError(""); }}><Link size={15} /></button>
@@ -138,7 +146,15 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
             if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && ["Título", "Subtítulo"].includes(style)) { event.preventDefault(); remember(); command("insertParagraph"); command("fontSize", "3"); }
             if ((event.ctrlKey || event.metaKey) && ["b", "i", "u"].includes(event.key.toLowerCase())) { event.preventDefault(); command(({ b: "bold", i: "italic", u: "underline" })[event.key.toLowerCase()]); }
         }} />
-        {mention && <div id={mentionId} className="task_mention_menu" role="listbox" aria-label="Personas para mencionar">{candidates.length ? candidates.map((person, index) => <button id={`${mentionId}-${index}`} type="button" role="option" aria-selected={index === mentionIndex} key={person.email} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(person)}><AtSign size={15}/><span><strong>{person.name}</strong><small>{person.email}</small></span></button>) : <small>No hay coincidencias. Busca por nombre o correo.</small>}</div>}
+        {mention && <div className="task_mention_menu">
+            <div className="task_mention_heading" aria-hidden="true"><AtSign size={13}/><strong>Mencionar</strong><small>{candidates.length}</small></div>
+            <div id={mentionId} ref={mentionOptions} className="task_mention_options" role="listbox" aria-label="Personas para mencionar">{candidates.length ? candidates.map((person, index) => <button className="task_mention_option" id={`${mentionId}-${index}`} type="button" role="option" aria-selected={index === mentionIndex} key={person.email} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(person)}>
+                <span className="task_mention_avatar" aria-hidden="true"><AvatarImage url={person.avatar_url} initials={person.initials || (person.name || person.email).trim().split(/\s+/).slice(0,2).map(word=>word[0]).join("").toUpperCase()}/></span>
+                <span className="task_mention_identity"><strong>{person.name}</strong><small>{person.email}</small></span>
+                <span className="task_mention_enter" aria-hidden="true">Enter</span>
+            </button>) : <p className="task_mention_empty" role="status">Sin coincidencias. Prueba otro nombre o correo.</p>}</div>
+            <div className="task_mention_hint" aria-hidden="true">↑↓ Elegir <span>Enter · Mencionar</span><span>Esc · Cerrar</span></div>
+        </div>}
         {limitReached && <small className="task_editor_limit" role="alert">Se alcanzó el límite de texto de este campo.</small>}
         {allowVoiceNotes && <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />}
         <div className="task_editor_footer"><div className="task_editor_insert" ref={controls}>

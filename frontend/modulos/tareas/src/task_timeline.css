@@ -1,0 +1,136 @@
+/* A bounded, scrollable schedule; date navigation never changes task dates. */
+:root .bold_timeline {--timeline-person:184px;--timeline-cell:84px;min-width:0;width:100%;max-width:100%;border:1px solid var(--bold_line);background:var(--bold_surface);color:var(--bold_text);}
+:root .bold_timeline .bold_timeline_toolbar {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px;border-bottom:1px solid var(--bold_line);}
+:root .bold_timeline .bold_timeline_period {display:flex;align-items:center;gap:8px;min-width:0;}
+:root .bold_timeline .bold_timeline_period strong {font-size:12px;font-weight:500;line-height:1.5;}
+:root .bold_timeline .bold_timeline_count {font-size:11px;line-height:1.5;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_scale {display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_scale select {width:auto;min-height:32px;padding:5px 8px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface_soft);color:var(--bold_text);font-family:inherit;font-size:12px;font-weight:400;box-shadow:none;}
+:root .bold_timeline .bold_timeline_scroll {width:100%;max-width:100%;max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--bold_line) transparent;}
+:root .bold_timeline .bold_timeline_grid {position:relative;width:100%;min-width:calc(var(--timeline-person) + var(--timeline-days)*var(--timeline-cell));isolation:isolate;}
+:root .bold_timeline .bold_timeline_today {position:absolute;top:0;bottom:0;z-index:2;width:1px;background:var(--bold_red);pointer-events:none;}
+:root .bold_timeline .bold_timeline_header,:root .bold_timeline .bold_timeline_row {display:grid;grid-template-columns:var(--timeline-person) minmax(0,1fr);}
+:root .bold_timeline .bold_timeline_header {position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid var(--bold_line);background:var(--bold_surface);}
+:root .bold_timeline .bold_timeline_corner {position:sticky;left:0;z-index:6;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;padding:8px 12px;border-right:1px solid var(--bold_line);background:var(--bold_surface);}
+:root .bold_timeline .bold_timeline_corner>span {font-size:10px;line-height:1.5;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_corner>div {display:flex;align-items:center;gap:4px;}
+:root .bold_timeline .bold_timeline_corner button {display:grid;place-items:center;min-width:28px;min-height:28px;padding:3px 6px;border:0;border-radius:0;background:transparent;color:var(--bold_text);font-size:11px;font-weight:500;}
+:root .bold_timeline .bold_timeline_corner button:hover {background:var(--bold_hover);}
+:root .bold_timeline .bold_timeline_dates {display:grid;grid-template-columns:repeat(var(--timeline-days),minmax(0,1fr));}
+:root .bold_timeline .bold_timeline_day {display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:8px 2px;border-right:1px solid var(--bold_line);color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_day>span {font-size:10px;line-height:1.5;text-transform:uppercase;}
+:root .bold_timeline .bold_timeline_day strong {font-size:13px;line-height:1.5;font-weight:500;color:var(--bold_text);}
+:root .bold_timeline .bold_timeline_day small {font-size:10px;font-weight:400;}
+:root .bold_timeline .bold_timeline_day.is_weekend {background:var(--bold_surface_soft);}
+:root .bold_timeline .bold_timeline_day.is_today {background:var(--bold_red_tint);box-shadow:inset 0 -2px var(--bold_red);}
+:root .bold_timeline .bold_timeline_day.is_today strong {color:var(--bold_red);font-weight:600;}
+:root .bold_timeline .bold_timeline_row {min-height:72px;border-bottom:1px solid var(--bold_line);}
+:root .bold_timeline .bold_timeline_row:nth-child(odd) {background:var(--bold_surface_soft);}
+:root .bold_timeline .bold_timeline_person {position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-right:1px solid var(--bold_line);background:var(--bold_surface);}
+:root .bold_timeline .bold_timeline_person>div {display:flex;flex-direction:column;gap:4px;min-width:0;}
+:root .bold_timeline .bold_timeline_person strong {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500;line-height:1.5;}
+:root .bold_timeline .bold_timeline_person small {font-size:10px;line-height:1.5;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_person .avatar_small,:root .bold_timeline .bold_timeline_empty_avatar {flex:0 0 28px;width:28px;height:28px;}
+:root .bold_timeline .bold_timeline_empty_avatar {display:grid;place-items:center;border:1px solid var(--bold_line);border-radius:50%;background:var(--bold_surface_soft);color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_track {position:relative;min-width:0;background-image:repeating-linear-gradient(to right,var(--bold_line) 0 1px,transparent 1px calc(100%/var(--timeline-days)));}
+:root .bold_timeline .bold_timeline_day_shade {position:absolute;top:0;bottom:0;pointer-events:none;background:color-mix(in srgb,var(--bold_muted) 4%,transparent);}
+:root .bold_timeline .bold_timeline_day_shade.is_today {background:var(--bold_red_tint);}
+:root .bold_timeline .bold_timeline_row_empty {position:absolute;left:16px;top:27px;font-size:11px;line-height:1.5;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_bar {position:absolute;display:flex;align-items:center;gap:4px;height:36px;min-height:36px;min-width:0;margin:0;padding:7px 6px;border:1px solid color-mix(in srgb,var(--timeline-color) 65%,var(--bold_line));border-radius:10px;background:color-mix(in srgb,var(--timeline-color) 24%,var(--bold_surface));outline:1px dashed color-mix(in srgb,var(--timeline-color) 45%,transparent);outline-offset:2px;box-shadow:inset 0 1px color-mix(in srgb,var(--bold_surface) 45%,transparent);color:var(--bold_text);text-align:left;font-family:inherit;font-size:12px;font-weight:500;line-height:1.4;cursor:pointer;transition:background-color 160ms ease,box-shadow 160ms ease;}
+:root .bold_timeline .bold_timeline_bar>span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .bold_timeline .bold_timeline_bar svg {flex-shrink:0;}
+:root .bold_timeline .bold_timeline_bar:hover {background:color-mix(in srgb,var(--timeline-color) 34%,var(--bold_surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--timeline-color) 50%,transparent);}
+:root .bold_timeline .bold_timeline_bar.is_completed>span {text-decoration:line-through;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_bar.continues_before {border-left-style:dashed;}
+:root .bold_timeline .bold_timeline_bar.continues_after {border-right-style:dashed;}
+:root .bold_timeline .bold_timeline_empty_period,:root .bold_timeline .bold_timeline_no_dates {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px;margin:0;font-size:12px;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_empty_period button {min-height:32px;padding:6px 10px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface_soft);color:var(--bold_text);font-size:12px;}
+:root .bold_timeline .bold_timeline_undated {padding:12px;border-top:1px solid var(--bold_line);background:var(--bold_surface);}
+:root .bold_timeline .bold_timeline_undated summary {min-height:24px;font-size:12px;font-weight:500;cursor:pointer;color:var(--bold_text);}
+:root .bold_timeline .bold_timeline_undated summary>span {margin-left:4px;color:var(--bold_muted);font-size:11px;}
+:root .bold_timeline .bold_timeline_undated>div {display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;}
+:root .bold_timeline .bold_timeline_undated button {display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;min-height:34px;padding:6px 10px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface_soft);color:var(--bold_text);font-size:12px;}
+:root .bold_timeline .bold_timeline_undated button>span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .bold_timeline .bold_timeline_undated button>small {font-size:10px;color:var(--bold_muted);white-space:nowrap;}
+:root .bold_timeline :is(button,select,summary,[tabindex]):focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;}
+.bold_v3 .timeline_view_wrapper {padding:0;width:100%;min-width:0;max-width:100%;}
+@media (max-width:767px) {
+    :root .bold_timeline {--timeline-person:132px;--timeline-cell:64px;}
+    :root .bold_timeline .bold_timeline_toolbar {gap:6px 8px;padding:10px;}
+    :root .bold_timeline .bold_timeline_period {flex:1 0 100%;}
+    :root .bold_timeline .bold_timeline_period strong {font-size:11px;}
+    :root .bold_timeline .bold_timeline_scale select {min-height:44px;font-size:12px;}
+    :root .bold_timeline .bold_timeline_corner {padding:8px;}
+    :root .bold_timeline .bold_timeline_corner>div {gap:0;}
+    :root .bold_timeline .bold_timeline_corner button {min-width:36px;min-height:44px;}
+    :root .bold_timeline .bold_timeline_person {gap:6px;padding:10px 8px;}
+    :root .bold_timeline .bold_timeline_person strong {font-size:11px;}
+    :root .bold_timeline .bold_timeline_scroll {max-height:560px;}
+    :root .bold_timeline .bold_timeline_bar {height:40px;min-height:40px;padding:6px;font-size:11px;}
+    :root .bold_timeline .bold_timeline_undated button,:root .bold_timeline .bold_timeline_empty_period button {min-height:44px;}
+}
+@media (prefers-reduced-motion:reduce) {:root .bold_timeline * {transition:none!important;animation:none!important;scroll-behavior:auto!important;}}
+
+/* Month view keeps real weekday alignment and splits long tasks at week boundaries. */
+:root .bold_timeline .bold_timeline_status {display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:var(--bold_muted);}
+:root .bold_timeline .bold_timeline_status select {width:auto;min-height:32px;padding:5px 8px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface_soft);color:var(--bold_text);font-family:inherit;font-size:12px;font-weight:400;box-shadow:none;}
+:root .bold_timeline .bold_timeline_scale {margin-left:0;}
+:root .bold_timeline .bold_timeline_navigation {display:flex;align-items:center;gap:4px;}
+:root .bold_timeline .bold_timeline_navigation button {display:grid;place-items:center;min-width:28px;min-height:28px;padding:3px 6px;border:0;border-radius:0;background:transparent;color:var(--bold_text);font-size:11px;font-weight:500;}
+:root .bold_timeline .bold_timeline_navigation button:hover {background:var(--bold_hover);}
+:root .bold_timeline .bold_timeline_month_label {min-width:114px;padding:5px 8px;border:1px solid var(--bold_line);background:var(--bold_surface_soft);font-size:12px;font-weight:500;line-height:1.5;text-align:center;text-transform:capitalize;white-space:nowrap;}
+:root .bold_timeline .bold_timeline_period strong {text-transform:capitalize;}
+:root .bold_timeline .bold_timeline_month {position:relative;max-width:100%;max-height:calc(100dvh - 210px);overflow:auto;scrollbar-width:thin;background:var(--bold_surface_soft);}
+:root .bold_timeline .bold_month_weekdays {position:sticky;top:0;z-index:4;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:10px 6px;background:var(--bold_surface_soft);}
+:root .bold_timeline .bold_month_weekdays>span {text-align:center;font-size:11px;font-weight:500;line-height:1.5;color:var(--bold_text);}
+:root .bold_timeline .bold_month_weekday_short {display:none;}
+:root .bold_timeline .bold_month_weeks {display:grid;gap:4px;padding:0 6px 6px;}
+:root .bold_timeline .bold_month_week {position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;min-height:var(--month-height);}
+:root .bold_timeline .bold_month_cell {position:relative;min-width:0;min-height:var(--month-height);border:1px solid var(--bold_line);border-radius:6px;background:var(--bold_surface);}
+:root .bold_timeline .bold_month_cell.is_weekend {background:color-mix(in srgb,var(--bold_surface) 94%,var(--bold_muted));}
+:root .bold_timeline .bold_month_cell.is_blank {background:transparent;border-color:transparent;}
+:root .bold_timeline .bold_month_day_number {position:absolute;top:5px;right:7px;display:grid;place-items:center;min-width:20px;height:20px;font-size:11px;line-height:1;color:var(--bold_muted);}
+:root .bold_timeline .bold_month_cell.is_today .bold_month_day_number {border-radius:50%;background:var(--bold_red);color:#fff;}
+:root .bold_timeline .bold_month_task {position:absolute;left:4px;right:4px;z-index:2;display:flex;align-items:center;gap:4px;height:23px;min-height:23px;max-width:100%;padding:4px 6px;border:0;border-radius:6px;background:color-mix(in srgb,var(--timeline-color) 23%,var(--bold_surface));color:var(--bold_text);text-align:left;font-family:inherit;font-size:11px;font-weight:400;line-height:1.3;cursor:pointer;transition:background-color 150ms ease;}
+:root .bold_timeline .bold_month_task>i {flex:0 0 4px;width:4px;height:4px;border-radius:50%;background:var(--timeline-color);}
+:root .bold_timeline .bold_month_task>span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .bold_timeline .bold_month_task svg {flex-shrink:0;}
+:root .bold_timeline .bold_month_task.is_completed>span {text-decoration:line-through;color:var(--bold_muted);}
+:root .bold_timeline .bold_month_task:hover {background:color-mix(in srgb,var(--timeline-color) 35%,var(--bold_surface));}
+:root .bold_timeline .bold_month_task.continues_before {border-top-left-radius:0;border-bottom-left-radius:0;}
+:root .bold_timeline .bold_month_task.continues_after {border-top-right-radius:0;border-bottom-right-radius:0;}
+:root .bold_timeline .bold_month_overflow {position:absolute;bottom:4px;left:4px;right:4px;display:flex;align-items:center;justify-content:flex-start;gap:5px;min-height:24px;padding:3px 5px;border:0;border-radius:4px;background:transparent;color:var(--bold_text);font-size:10px;cursor:pointer;}
+:root .bold_timeline .bold_month_overflow:hover {background:var(--bold_hover);}
+:root .bold_timeline .bold_month_overflow small {font-size:10px;line-height:1.4;}
+:root .bold_timeline .bold_month_dots {display:flex;gap:3px;}
+:root .bold_timeline .bold_month_dots i {width:7px;height:7px;border-radius:3px;}
+:root .bold_month_day_popup {display:grid;gap:6px;overflow-y:auto;padding:10px;border:1px solid var(--bold_line);border-radius:8px;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 10px 30px #0003;}
+:root .bold_month_day_popup header {display:flex;align-items:center;justify-content:space-between;gap:8px;}
+:root .bold_month_day_popup header strong {font-size:12px;font-weight:500;}
+:root .bold_month_day_popup header button {display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:var(--bold_muted);}
+:root .bold_month_day_popup .bold_month_day_task {display:flex;align-items:center;gap:8px;min-height:36px;padding:8px;border:0;border-radius:5px;background:color-mix(in srgb,var(--timeline-color) 18%,var(--bold_surface));color:var(--bold_text);font-family:inherit;font-size:12px;text-align:left;cursor:pointer;}
+:root .bold_month_day_popup .bold_month_day_task i {flex:0 0 6px;width:6px;height:6px;border-radius:50%;background:var(--timeline-color);}
+:root .bold_month_day_popup .bold_month_day_task>span {flex:1;overflow-wrap:anywhere;}
+:root .bold_month_day_popup button:focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;}
+@media (max-width:767px) {
+    :root .bold_timeline .bold_timeline_status {margin-left:0;flex:1;}
+    :root .bold_timeline .bold_timeline_status select {min-height:44px;max-width:116px;}
+    :root .bold_timeline .bold_timeline_toolbar>.bold_timeline_count {flex:1 0 100%;}
+    :root .bold_timeline .bold_timeline_toolbar>.bold_timeline_navigation {margin-left:auto;}
+    :root .bold_timeline .bold_timeline_navigation button {min-width:36px;min-height:44px;}
+    :root .bold_timeline .bold_timeline_month {max-height:560px;}
+    :root .bold_timeline .bold_month_weekdays {padding:8px 4px;gap:3px;}
+    :root .bold_timeline .bold_month_weekday_full {display:none;}
+    :root .bold_timeline .bold_month_weekday_short {display:inline;}
+    :root .bold_timeline .bold_month_weekdays>span {font-size:10px;}
+    :root .bold_timeline .bold_month_weeks {padding:0 4px 4px;gap:3px;}
+    :root .bold_timeline .bold_month_week {gap:3px;}
+    :root .bold_timeline .bold_month_task {left:2px;right:2px;padding:4px 3px;gap:3px;font-size:10px;}
+    :root .bold_timeline .bold_month_task>i {flex-basis:3px;width:3px;height:3px;}
+    :root .bold_timeline .bold_month_task.is_completed svg {display:none;}
+    :root .bold_timeline .bold_month_day_number {right:2px;font-size:10px;}
+    :root .bold_timeline .bold_month_overflow {left:1px;right:1px;min-height:28px;padding:3px 2px;gap:3px;}
+    :root .bold_timeline .bold_month_dots {gap:2px;}
+    :root .bold_timeline .bold_month_dots i {width:4px;height:5px;}
+    :root .bold_month_day_popup .bold_month_day_task,:root .bold_month_day_popup header button {min-height:44px;}
+}

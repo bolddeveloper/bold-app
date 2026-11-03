@@ -1,0 +1,164 @@
+/* Keep the 52px/hour geometry shared with TimeGrid pointer selection. */
+:root :is(.bold_calendar_container,.bold_calendar,.bold_calendar_native_dialog,.bold_calendar_create_menu) {
+    --cal-surface:var(--bold_surface,#fff);--cal-soft:var(--bold_surface_soft,#f2f4f7);
+    --cal-line:var(--bold_line,#c0c5ce);--cal-text:var(--bold_text,#1b1f25);--cal-muted:var(--bold_muted,#535b65);
+    color:var(--cal-text);min-width:0;
+}
+:root .bold_calendar_container {padding:10px;box-sizing:border-box;}
+:root .bold_calendar_switcher {margin:0;padding:5px;gap:6px;border-radius:0;background:var(--cal-surface);}
+:root .bold_calendar_tab_scroll {gap:5px;}
+:root .bold_calendar_source_tabs {gap:4px;}
+:root .bold_calendar_switcher button {min-height:34px;border-radius:0;font-size:12px;padding:6px 11px;font-weight:600;}
+:root .bold_calendar_switcher .bold_calendar_add_tab {width:34px;min-width:34px;padding:0;}
+:root .bold_calendar_fixed_share {gap:5px;padding-left:6px;}
+:root .bold_calendar_fixed_share .team_calendar_sharing label {border-radius:0;min-height:34px;box-sizing:border-box;font-size:12px;padding:5px 8px;}
+:root .bold_calendar {padding:0;color:var(--cal-text);}
+:root .bold_calendar_header_compact {min-height:26px;margin:0;padding:4px 0;box-sizing:border-box;}
+:root .bold_calendar_header_compact p {font-size:11px;gap:6px;min-width:0;overflow-wrap:anywhere;}
+:root .bold_calendar_layout {grid-template-columns:178px minmax(0,1fr);min-height:0;gap:10px;}
+:root .bold_calendar_layout.is_sidebar_hidden {grid-template-columns:minmax(0,1fr);}
+:root .bold_calendar_sidebar {padding:8px;border:1px solid var(--cal-line);background:var(--cal-surface);align-self:start;}
+:root .bold_calendar_sidebar[hidden] {display:none;}
+:root .bold_calendar_mini {display:block;padding:0;}
+:root .bold_calendar_mini_head {gap:3px;margin-bottom:8px;}
+:root .bold_calendar_mini_head strong {font-size:12px;flex:1;}
+:root .bold_calendar_mini_head button {width:26px;height:28px;padding:0;border-radius:0;}
+:root .bold_calendar_mini_grid {gap:1px;}
+:root .bold_calendar_mini_grid>button {width:100%;height:26px;border-radius:50%;font-size:11px;}
+:root .bold_calendar_sources {display:block;margin-top:14px;padding:12px 0 0;border-top:1px solid var(--cal-line);}
+:root .bold_calendar_sources h3 {margin:0 0 8px;font-size:12px;}
+:root .bold_calendar_sources label {align-items:flex-start;gap:6px;font-size:12px;overflow-wrap:anywhere;}
+:root .bold_calendar_sources input {accent-color:var(--bold_red);flex:none;}
+:root .bold_calendar_sources small {display:block;margin-top:8px;font-size:11px;line-height:1.5;color:var(--cal-muted);}
+:root .bold_calendar_main {min-width:0;padding:0;}
+:root .bold_calendar_toolbar {display:flex;flex-wrap:wrap;gap:6px;min-height:46px;margin:0 0 8px;padding:5px;border:1px solid var(--cal-line);background:var(--cal-surface);}
+:root .bold_calendar_move {display:flex;flex:1 1 310px;gap:3px;min-width:0;}
+:root .bold_calendar_move h2 {margin:0 5px;font-size:15px;line-height:1.3;white-space:normal;text-transform:capitalize;overflow-wrap:anywhere;}
+:root .bold_calendar_move button,:root .bold_calendar_controls>button {display:grid;place-items:center;flex:none;width:32px;min-height:32px;height:32px;padding:0;margin:0;border-radius:0;border:1px solid transparent;background:transparent;}
+:root .bold_calendar_move button:nth-child(2) {width:auto;padding:0 8px;border-color:var(--cal-line);font-size:12px;}
+:root .bold_calendar_controls {gap:5px;flex:0 1 auto;min-width:0;}
+:root .bold_calendar_search {display:flex;gap:6px;width:clamp(110px,12vw,170px);padding:0 8px;min-height:32px;box-sizing:border-box;border:1px solid var(--cal-line);border-radius:0;background:var(--cal-soft);}
+:root .bold_calendar_search svg {flex:none;color:var(--cal-muted);}
+:root .bold_calendar_search input {width:100%;min-width:0;min-height:30px;padding:0;background:transparent;border:0;outline:0;box-shadow:none;color:var(--cal-text);font-size:12px;}
+:root .bold_calendar_search:focus-within {border-color:var(--bold_red);}
+:root .bold_calendar_search:focus-within svg {color:var(--bold_red);}
+:root .bold_calendar_views {gap:2px;padding:2px;border-radius:0;border:1px solid var(--cal-line);background:var(--cal-soft);}
+:root .bold_calendar_views button {min-height:28px;padding:5px 9px;border:0;border-radius:0;font-size:12px;color:var(--cal-muted);background:transparent;}
+:root .bold_calendar_views button.is_active {background:var(--bold_red);color:#fff;}
+:root .bold_calendar_create_wrap {flex:none;width:auto;margin:0;padding:0;}
+:root .bold_calendar_create {width:auto;min-height:34px;gap:5px;padding:6px 10px;border-radius:0;border:1px solid var(--bold_red);background:var(--bold_red);color:white;font-size:12px;box-shadow:none;}
+:root .bold_calendar_create svg {color:inherit;}
+:root .bold_calendar_create_menu {padding:5px;border:1px solid var(--cal-line);border-radius:4px;background:var(--cal-surface);box-shadow:0 8px 24px #0003;color:var(--cal-text);overflow:auto;}
+:root .bold_calendar_create_menu:popover-open {display:grid;gap:3px;}
+:root .bold_calendar_create_menu button {display:flex;align-items:center;gap:9px;width:100%;min-height:34px;padding:6px 9px;border:0;border-radius:2px;background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer;}
+:root .bold_calendar_create_menu button:hover {background:var(--cal-soft);}
+:root .bold_calendar :is(button,input,select,textarea):focus-visible,:root .bold_calendar_create_menu button:focus-visible {outline:2px solid var(--bold_red);outline-offset:2px;}
+:root .bold_calendar button:disabled {opacity:.5;cursor:not-allowed;}
+:root .bold_calendar :is(.bold_calendar_move button,.bold_calendar_controls>button):hover {background:var(--cal-soft);color:var(--bold_red);}
+:root .bold_calendar_time_view {border:1px solid var(--cal-line);border-radius:3px;box-shadow:0 2px 6px #00000008;}
+:root :is(.bold_calendar_time_header,.bold_calendar_all_day,.bold_calendar_time_scroll) {grid-template-columns:48px repeat(var(--days),minmax(96px,1fr));min-width:calc(48px + var(--days)*96px);}
+:root .bold_calendar_time_header {min-height:56px;background:var(--cal-soft);}
+:root .bold_calendar_time_header strong {width:28px;height:28px;font-size:17px;}
+:root .bold_calendar_time_header button {border-radius:0;}
+:root .bold_calendar_time_scroll {max-height:calc(100dvh - 270px);min-height:220px;overscroll-behavior:contain;}
+:root .bold_calendar_time_event {border-radius:5px;box-shadow:none;transition:filter 160ms,box-shadow 160ms;}
+:root .bold_calendar_time_event:hover {filter:brightness(1.08);box-shadow:0 2px 8px #0002;}
+:root .bold_calendar_grid.is_month {border-radius:3px;box-shadow:0 2px 6px #00000008;}
+:root .bold_calendar_weekday {padding:9px 4px;background:var(--cal-soft);font-size:11px;}
+:root .bold_calendar_day {min-height:108px;padding:5px;box-sizing:border-box;background:var(--cal-surface);}
+:root .bold_calendar_day.is_blank {background:var(--cal-soft);}
+:root .bold_calendar_day.is_today {background:color-mix(in srgb,var(--bold_red) 4%,var(--cal-surface));}
+:root .bold_calendar_event {border-radius:4px;min-height:25px;margin:3px 0;}
+:root .bold_calendar_agenda {padding:0;display:grid;gap:8px;}
+:root .bold_calendar_agenda>section {display:grid;grid-template-columns:125px minmax(0,1fr);gap:5px 12px;padding:12px;border:1px solid var(--cal-line);border-radius:3px;background:var(--cal-surface);}
+:root .bold_calendar_agenda h3 {grid-column:1;grid-row:1;margin:3px 0;font-size:12px;line-height:1.6;color:var(--cal-muted);text-transform:capitalize;}
+:root .bold_calendar_agenda_event {grid-column:2;min-width:0;margin:0;padding:9px;border:0;border-radius:3px;background:var(--cal-soft);color:var(--cal-text);}
+:root .bold_calendar_agenda_event span {min-width:0;overflow-wrap:anywhere;}
+:root .bold_calendar_agenda_event strong {font-size:13px;}
+:root .bold_calendar_agenda_event small {font-size:12px;color:var(--cal-muted);}
+/* Native and Google editors share one compact surface without changing their save flows. */
+:root .bold_calendar_native_dialog {width:min(540px,calc(100vw - 24px));border-radius:4px;color:var(--cal-text);}
+:root .bold_calendar_editor {border-radius:4px;background:var(--cal-surface);color:var(--cal-text);border:1px solid var(--cal-line);}
+:root .bold_calendar_backdrop .bold_calendar_editor {width:min(540px,calc(100vw - 24px));}
+:root .bold_calendar_native_dialog .bold_calendar_editor {width:100%;max-width:100%;max-height:none;height:auto;box-sizing:border-box;}
+:root .bold_calendar_editor>header {padding:10px 14px;border-bottom:1px solid var(--cal-line);gap:8px;}
+:root .bold_calendar_editor>header h2 {font-size:15px;margin:0;}
+:root .bold_calendar_editor>header button {width:32px;height:32px;border:0;border-radius:2px;background:transparent;color:var(--cal-muted);}
+:root .bold_calendar_editor :is(input:not([type=checkbox]),select,textarea) {border-radius:3px;background:var(--cal-soft);color:var(--cal-text);border-color:var(--cal-line);}
+:root .bold_calendar_editor .bold_calendar_local_form {padding:12px 14px;gap:12px;}
+:root .bold_calendar_local_form fieldset {gap:12px;}
+:root .bold_calendar_local_dates {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+:root .bold_calendar_editor .bold_calendar_quick_title {font-size:19px;min-height:38px;background:transparent;border:0;border-bottom:1px solid var(--cal-line);border-radius:0;padding:5px 0;}
+:root .bold_calendar_quick_type {padding-left:0;}
+:root .bold_calendar_quick_type button {border-radius:3px;padding:5px 10px;font-size:12px;}
+:root .bold_calendar_quick_type button[aria-pressed=true] {background:color-mix(in srgb,var(--bold_red) 12%,var(--cal-surface));color:var(--bold_red);}
+:root .bold_calendar_quick_field {gap:8px;}
+:root .bold_calendar_quick_field>svg {color:var(--cal-muted);}
+:root .bold_calendar_editor .bold_calendar_quick_field>button {font-size:13px;padding:6px;min-height:34px;}
+:root .bold_calendar_editor .bold_calendar_people_trigger {font-size:12px;border-radius:3px;background:var(--cal-soft);}
+:root .bold_calendar_editor .task_text_editor {border-radius:3px;border-color:var(--cal-line);}
+:root .bold_calendar_editor .task_text_editor [contenteditable] {min-height:68px;}
+:root .bold_calendar_editor .bold_date_trigger_btn {border-radius:3px;background:var(--cal-soft);border-color:var(--cal-line);color:var(--cal-text);}
+:root .bold_calendar_editor .task_text_editor .task_editor_toolbar {background:var(--cal-surface);}
+:root .bold_calendar_editor .detail_comment_image_button input[type=file] {width:1px;min-width:0;max-width:1px;height:1px;min-height:0;padding:0;border:0;clip-path:inset(50%);}
+:root .bold_calendar_editor footer {display:flex;justify-content:flex-end;gap:7px;padding:10px 14px;margin:0;border-top:1px solid var(--cal-line);background:var(--cal-surface);}
+:root .bold_calendar_editor footer button {min-height:34px;border-radius:3px;padding:6px 12px;font-size:12px;}
+:root .bold_calendar_editor footer button[type=submit] {background:var(--bold_red);border-color:var(--bold_red);color:#fff;}
+:root .bold_calendar_details {border-radius:4px;background:var(--cal-surface);border-color:var(--cal-line);}
+:root .bold_calendar_detail_body {padding:4px 16px 16px;}
+:root .bold_calendar_detail_title h2 {font-size:19px;}
+:root .bold_calendar_detail_menu {border-radius:3px;}
+:root .bold_calendar :is(button,.bold_calendar_day),:root .bold_calendar_switcher button {transition:background 160ms,color 160ms,border-color 160ms;}
+@media(max-width:1199px) {
+    :root .bold_calendar_move {flex-basis:100%;}
+    :root .bold_calendar_controls {flex:1;}
+    :root .bold_calendar_search {flex:1;width:auto;}
+}
+@media(max-width:899px) {
+    :root .bold_calendar_container {padding:6px;}
+    :root .bold_calendar_layout {display:flex;flex-direction:column;gap:8px;}
+    :root .bold_calendar_sidebar {width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:16px;}
+    :root .bold_calendar_mini,:root .bold_calendar_sources {display:block;}
+    :root .bold_calendar_sources {margin:0;padding:0 0 0 12px;border-top:0;border-left:1px solid var(--cal-line);}
+    :root .bold_calendar_main {width:100%;}
+}
+@media(max-width:560px) {
+    :root .bold_calendar_switcher {flex-wrap:nowrap;}
+    :root .bold_calendar_tab_scroll {flex-basis:0;}
+    :root .bold_calendar_fixed_share {margin-left:auto;}
+    :root .bold_calendar_fixed_share .team_calendar_sharing label>span {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+    :root .bold_calendar_toolbar {gap:5px;}
+    :root .bold_calendar_move h2 {font-size:13px;}
+    :root .bold_calendar_move {flex-wrap:nowrap;}
+    :root .bold_calendar_controls {display:grid;grid-template-columns:minmax(0,1fr) 44px 88px;width:100%;flex-basis:100%;}
+    :root .bold_calendar_views {grid-column:1 / 3;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box;}
+    :root .bold_calendar_views button {padding-inline:3px;}
+    :root .bold_calendar_create_wrap {grid-column:3;margin:0;width:auto;}
+    :root .bold_calendar_create {width:100%;padding-inline:6px;}
+    :root .bold_calendar_search {grid-column:1 / 3;width:100%;min-height:44px;}
+    :root .bold_calendar_controls>button {justify-self:end;}
+    :root .bold_calendar_search input {font-size:16px;min-height:42px;}
+    :root :is(.bold_calendar_time_header,.bold_calendar_all_day,.bold_calendar_time_scroll) {grid-template-columns:44px repeat(var(--days),minmax(104px,1fr));min-width:calc(44px + var(--days)*104px);}
+    :root .bold_calendar_time_scroll {max-height:calc(100dvh - 380px);}
+    :root .bold_calendar_grid.is_month {overflow-x:auto;grid-template-columns:repeat(7,minmax(78px,1fr));}
+    :root .bold_calendar_day {min-height:90px;}
+    :root .bold_calendar_day_top button {opacity:1;}
+    :root .bold_calendar_agenda>section {grid-template-columns:minmax(0,1fr);padding:10px;}
+    :root .bold_calendar_agenda h3 {grid-row:auto;}
+    :root .bold_calendar_agenda_event {grid-column:1;}
+    :root .bold_calendar_sidebar {grid-template-columns:minmax(0,1fr);}
+    :root .bold_calendar_mini {max-width:260px;margin:auto;width:100%;}
+    :root .bold_calendar_sources {padding:10px 0 0;border-left:0;border-top:1px solid var(--cal-line);}
+    :root .bold_calendar_editor :is(input:not([type=checkbox]),select,textarea) {font-size:16px;}
+    :root .bold_calendar_local_dates {grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:560px),(pointer:coarse) {
+    :root .bold_calendar_switcher button,:root .bold_calendar_fixed_share .team_calendar_sharing label,
+    :root .bold_calendar_move button,:root .bold_calendar_controls>button,:root .bold_calendar_views button,
+    :root .bold_calendar_create,:root .bold_calendar_create_menu button,:root .bold_calendar_editor>header button,
+    :root .bold_calendar_editor footer button {min-height:44px;}
+    :root .bold_calendar_move button:not(:nth-child(2)),:root .bold_calendar_controls>button {width:44px;height:44px;}
+}
+@media(prefers-reduced-motion:reduce) {
+    :root .bold_calendar *,:root .bold_calendar_switcher button {transition:none!important;animation:none!important;}
+}

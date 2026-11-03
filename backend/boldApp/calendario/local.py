@@ -158,6 +158,21 @@ def public_event(row, *, editable):
     return {**row.data, "id": str(row.pk), "locked": not editable, "etag": row.updated_at.isoformat()}
 
 
+class LocalAgendaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            start = datetime.fromisoformat(request.query_params["start"].replace("Z", "+00:00"))
+            end = datetime.fromisoformat(request.query_params["end"].replace("Z", "+00:00"))
+            if not start.tzinfo or not end.tzinfo or not start < end <= start + timedelta(days=2):
+                raise ValueError()
+        except (KeyError, TypeError, ValueError):
+            raise ValidationError("Selecciona un rango de hasta dos días.")
+        rows = AppCalendarEvent.objects.filter(calendar__in=accessible(request.user), start_at__lt=end, end_at__gt=start).select_related("calendar").order_by("start_at", "id")
+        return Response({"events": [{**public_event(row, editable=False), "calendar_id": str(row.calendar_id), "calendar_name": row.calendar.name} for row in rows]})
+
+
 class LocalEventsView(APIView):
     permission_classes = [IsAuthenticated]
 

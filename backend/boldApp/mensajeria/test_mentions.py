@@ -160,9 +160,26 @@ class ChannelMentionTests(TestCase):
         self.assertEqual(self.send(' '.join(f'@person{i}@bold.gt' for i in range(21))).status_code, 400)
         self.assertEqual(ChannelMessage.objects.count(), 1, 'validation rolls back the source and index')
 
+    def test_inline_suggestions_allow_empty_or_single_character_and_keep_current_access(self):
+        channel = self.channel()
+        channel.visibility = 'private'
+        channel.save()
+        ChannelAccessRule.objects.create(channel=channel, employee=self.alice.employee, access='write')
+        rule = ChannelAccessRule.objects.create(channel=channel, employee=self.bob.employee, access='read')
+        url = self.url + 'mention-people/'
+        for term in ('', 'b', 'bob'):
+            response = self.client.get(url, {'q': term})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertIn(str(self.bob.employee_id), [row['employee_id'] for row in response.data['results']])
+            self.assertTrue(all(row['employee_id'] in {str(self.alice.employee_id), str(self.bob.employee_id)} for row in response.data['results']))
+        rule.delete()
+        self.assertNotIn(str(self.bob.employee_id), [row['employee_id'] for row in self.client.get(url, {'q': ''}).data['results']])
+        self.assertEqual(self.as_person(self.owner).get(url, {'q': ''}).status_code, 404)
+        self.assertFalse(Notification.objects.exists(), 'opening suggestions never sends a notification')
+
     def test_picker_strict_input_current_mfa_and_pilot(self):
         url = self.url + 'mention-people/'
-        for query in ({}, {'q':'x'}, {'q':'bob', 'employee_id':str(self.owner.employee_id)}):
+        for query in ({}, {'q':'x'*81}, {'q':'bob', 'employee_id':str(self.owner.employee_id)}):
             self.assertEqual(self.client.get(url, query).status_code, 400)
         self.assertEqual(APIClient().get(url, {'q':'bob'}).status_code, 401)
         with override_settings(MESSAGING_PILOT_ENABLED=True, MESSAGING_PILOT_UNIT_IDS=[str(self.it.pk)]):

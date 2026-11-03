@@ -1,0 +1,53 @@
+/* Scoped creation form: server context menus keep their own layout. */
+:root .slack_module .slack_editor.slack_channel_editor {box-sizing:border-box;display:flex;flex-direction:column;width:min(480px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;overflow:hidden;border-radius:5px;}
+:root .slack_module .slack_channel_editor > header {position:static;flex-shrink:0;gap:12px;margin:0;padding:13px 16px;border-bottom:1px solid var(--bold_line);box-shadow:none;}
+:root .slack_module .slack_channel_editor > header > div {min-width:0;}
+:root .slack_module .slack_channel_editor > header h2 {margin:0;font-size:15px;}
+:root .slack_module .slack_channel_editor > header p {margin:4px 0 0;font-size:11px;line-height:1.4;color:var(--bold_muted);overflow-wrap:anywhere;}
+:root .slack_module .slack_channel_editor > header > button {width:30px;height:30px;min-height:30px;min-width:30px;padding:5px;border:0;background:transparent;}
+:root .slack_module .slack_channel_editor > form {display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+:root .slack_module .slack_channel_editor_body {min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;touch-action:pan-y;}
+:root .slack_module .slack_channel_editor_body > fieldset {display:flex;flex-direction:column;gap:12px;margin:0;padding:14px 16px;}
+:root .slack_module .slack_channel_editor label {font-size:12px;line-height:1.4;}
+:root .slack_module .slack_channel_editor :is(input,select,textarea) {box-sizing:border-box;width:100%;min-width:0;min-height:34px;padding:7px 9px;font-size:12px;}
+:root .slack_module .slack_channel_name {display:flex;align-items:center;gap:7px;padding:0 9px;border:1px solid var(--bold_line);background:var(--bold_surface_soft);color:var(--bold_muted);}
+:root .slack_module .slack_channel_name input {border:0;background:transparent;padding-inline:0;box-shadow:none;}
+:root .slack_module .slack_channel_name:focus-within {border-color:var(--bold_red);}
+:root .slack_module .slack_channel_name input:focus-visible {outline:0;box-shadow:none;}
+:root .slack_module .slack_channel_name svg {flex-shrink:0;}
+:root .slack_module .slack_channel_appearance {border:1px solid var(--bold_line);background:var(--bold_surface_soft);}
+:root .slack_module .slack_channel_appearance > summary {display:flex;align-items:center;gap:7px;padding:9px 10px;cursor:pointer;font-size:12px;list-style:none;}
+:root .slack_module .slack_channel_appearance > summary::-webkit-details-marker {display:none;}
+:root .slack_module .slack_channel_appearance > summary > span {flex:1;font-weight:600;}
+:root .slack_module .slack_channel_appearance > summary > small {font-size:10px;color:var(--bold_muted);}
+:root .slack_module .slack_channel_appearance > summary > svg {transition:transform 160ms ease;}
+:root .slack_module .slack_channel_appearance[open] > summary > svg {transform:rotate(180deg);}
+:root .slack_module .slack_channel_appearance > div {display:grid;gap:10px;padding:0 10px 10px;}
+:root .slack_module .slack_channel_editor textarea {min-height:58px;max-height:130px;resize:vertical;}
+:root .slack_module .slack_channel_editor .slack_color_field {display:flex;flex-direction:column;align-items:stretch;gap:7px;}
+:root .slack_module .slack_channel_editor .slack_color_options {grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;}
+:root .slack_module .slack_channel_editor .slack_color_option {min-height:32px;padding:3px;}
+:root .slack_module .slack_channel_editor .slack_color_option > span {width:22px;height:22px;}
+:root .slack_module .slack_channel_editor .slack_color_custom {align-items:center;gap:8px;}
+:root .slack_module .slack_channel_editor .slack_color_custom > label {display:flex;align-items:center;justify-content:space-between;gap:8px;}
+:root .slack_module .slack_channel_editor .slack_color_custom > button {min-height:30px;padding:5px 8px;font-size:11px;}
+:root .slack_module .slack_channel_editor .slack_access_fields.is_compact {display:grid;gap:7px;padding:5px 0 0;margin:0;}
+:root .slack_module .slack_channel_editor .slack_access_fields.is_compact legend {padding:0 0 6px;font-size:12px;}
+:root .slack_module .slack_channel_editor .slack_access_fields.is_compact .slack_access_hint {font-size:11px;line-height:1.4;}
+:root .slack_module .slack_channel_editor .slack_access_fields.is_compact .slack_dropdown_trigger {min-height:34px;padding:7px 9px;font-size:12px;}
+:root .slack_module .slack_channel_access_help {font-size:11px;color:var(--bold_muted);line-height:1.5;}
+:root .slack_module .slack_channel_access_help summary {cursor:pointer;padding:3px 0;}
+:root .slack_module .slack_channel_access_help p {margin:5px 0;}
+:root .slack_module .slack_channel_editor > form > .slack_error {margin:0;padding:8px 16px;font-size:12px;}
+:root .slack_module .slack_channel_editor_footer {display:flex;align-items:center;justify-content:flex-end;flex-shrink:0;gap:7px;padding:10px 16px;border-top:1px solid var(--bold_line);background:var(--bold_surface_soft);}
+:root .slack_module .slack_channel_editor_footer button {min-height:32px;padding:6px 11px;font-size:12px;}
+:root .slack_module .slack_channel_editor :is(summary,button):focus-visible {outline:2px solid var(--slack_thread_accent,var(--bold_red));outline-offset:1px;}
+@media(pointer:coarse) {
+    :root .slack_module .slack_channel_editor :is(input,select),:root .slack_module .slack_channel_editor_footer button,:root .slack_module .slack_channel_editor > header > button {min-height:44px;}
+    :root .slack_module .slack_channel_editor > header > button {width:44px;}
+    :root .slack_module .slack_channel_appearance > summary {min-height:26px;}
+    :root .slack_module .slack_channel_editor .slack_access_fields.is_compact .slack_dropdown_trigger {min-height:44px;}
+    :root .slack_module .slack_channel_editor .slack_color_options {grid-template-columns:repeat(4,minmax(0,1fr));}
+    :root .slack_module .slack_channel_editor .slack_color_option {min-height:44px;}
+}
+@media(prefers-reduced-motion:reduce) {:root .slack_module .slack_channel_appearance > summary > svg {transition:none;}}
