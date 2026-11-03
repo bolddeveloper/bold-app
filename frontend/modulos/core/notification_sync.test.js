@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import {createNotificationSync, NOTIFICATION_HEALTHY_MS, NOTIFICATION_FALLBACK_MS} from "./notification_sync.js";
 
 const settle = async () => {for (let i = 0; i < 12; i++) await Promise.resolve();};
-function fixture() {
+function fixture(canRunBackground) {
     let time = 0, next = 0;
     const timers = new Map(), target = new EventTarget(), documentTarget = new EventTarget();
     const state = {visible: true, calls: [], errors: [], refresh: async () => {}};
     const sync = createNotificationSync({target, documentTarget, now: () => time, random: () => 0,
-        canRun: () => state.visible,
+        canRun: () => state.visible, canRunBackground,
         setTimer: (callback, delay) => {timers.set(++next, {callback, at: time + delay}); return next;},
         clearTimer: id => timers.delete(id),
         onError: error => state.errors.push(error),
@@ -56,10 +56,31 @@ test("hidden tabs do not poll; a missed push recovers on focus even within 15 se
     f.state.visible = false; await f.advance(60 * 60_000); assert.equal(f.state.calls.length, 2);
     f.sync.dispose();
 });
-test("authorized desktop notifications may refresh in background", async () => {
+test("realtime events can refresh a hidden tab independently of Windows permission", async () => {
     const f = fixture(); f.state.visible = false;
     await f.sync.request("notification-event", {event: true, force: true});
     assert.equal(f.state.calls.length, 1); assert.equal(f.state.calls[0].force, true); f.sync.dispose();
+});
+test("hidden tabs recover socket outages and retry background events with backoff", async () => {
+    const f = fixture(() => true);
+    f.state.visible = false;
+    f.sync.connection("disconnected");
+    await f.advance(NOTIFICATION_FALLBACK_MS - 1);
+    f.sync.connection("disconnected");
+    await f.advance(1);
+    assert.deepEqual(f.state.calls, [{reason: "notification-reconcile", force: true}]);
+    f.sync.connection("open");
+    f.state.refresh = async () => {throw Error("Temporary failure");};
+    await f.sync.request("notification-event", {event: true, force: true});
+    f.state.refresh = async () => {};
+    await f.advance(NOTIFICATION_HEALTHY_MS * 2 - 1);
+    assert.equal(f.state.calls.length, 2);
+    await f.advance(1);
+    assert.equal(f.state.calls.length, 3);
+    assert.equal(f.state.calls[2].force, true);
+    await f.advance(NOTIFICATION_HEALTHY_MS);
+    assert.equal(f.state.calls.length, 3);
+    f.sync.dispose();
 });
 test("in-flight event bursts queue a single follow-up without overlapping requests", async () => {
     const f = fixture(); let release;

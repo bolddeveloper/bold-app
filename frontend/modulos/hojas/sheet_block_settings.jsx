@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {ChevronDown, Plus, Trash2, X} from 'lucide-react';
 import {SheetDialog} from './sheets_dialogs.jsx';
+import ColorPicker from '../core/shared/color_picker.jsx';
 import {clone, columnTypes, requiredBlockColumn, taskColumns} from './sheets_model.js';
 
 const hints={text:'Nombres, detalles o notas.',number:'Cantidades que puedes sumar.',currency:'Importes con moneda.',date:'Una fecha del calendario.',responsible:'Una persona del equipo. Recibe la tarea de esta fila.',collaborators:'Varias personas que comparten la misma tarea.',dropdown:'Opciones con nombre y color.',checkbox:'Marcar o desmarcar.',file:'Enlaces, archivos y descripción.',formula:'Un cálculo. Empieza con =.'};
@@ -41,7 +42,7 @@ export function BlockConfiguration({sheet,block,directory,close,save,canAssign})
             <p>{hints[column.type]}{required && ' Este campo mantiene los cálculos o la conexión con tareas.'}</p>
             {column.type==='dropdown' && <div className="sheets_settings_options"><h4>Opciones de la lista</h4>{(column.options || []).map(option=><div key={option.value}>
               <input aria-label="Nombre de opción" placeholder="Nombre de opción" maxLength={160} value={option.label} onChange={event=>columnChange(column.id,{options:column.options.map(item=>item.value===option.value?{...item,label:event.target.value}:item)})}/>
-              <label className="sheets_option_color"><span>Color</span><input type="color" aria-label={`Color de ${option.label || 'opción'}`} value={option.color || '#8a96a8'} onChange={event=>columnChange(column.id,{options:column.options.map(item=>item.value===option.value?{...item,color:event.target.value}:item)})}/></label>
+              <label className="sheets_option_color"><span>Color</span><ColorPicker label={`Color de ${option.label || 'opción'}`} value={option.color || '#8a96a8'} onChange={color=>columnChange(column.id,{options:column.options.map(item=>item.value===option.value?{...item,color}:item)})}/></label>
               <button type="button" aria-label={`Quitar opción ${option.label}`} onClick={()=>columnChange(column.id,{options:column.options.filter(item=>item.value!==option.value)})}><X size={16}/></button>
             </div>)}<button type="button" disabled={column.options?.length>=100} onClick={()=>columnChange(column.id,{options:[...(column.options || []),{value:crypto.randomUUID(),label:'Nueva opción',color:'#8a96a8'}]})}><Plus size={16}/>Añadir opción</button></div>}
             {!required && <button type="button" className="sheets_remove_column" disabled={draft.columns.length===1} onClick={()=>change('columns',draft.columns.filter(item=>item.id!==column.id))}><Trash2 size={16}/>Quitar columna</button>}

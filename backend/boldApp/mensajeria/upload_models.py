@@ -1,4 +1,4 @@
-"""Bounded private upload outbox; only consumed files become messages."""
+"""Private upload metadata; only confirmed Drive files become messages."""
 import uuid
 from django.conf import settings
 from django.db import models
@@ -27,6 +27,7 @@ class MediaUpload(models.Model):
     size_bytes = models.PositiveIntegerField()
     width = models.PositiveIntegerField(null=True)
     height = models.PositiveIntegerField(null=True)
+    # Legacy originals only; new uploads always leave this empty.
     content = models.BinaryField(default=bytes)
     cipher_bytes = models.PositiveIntegerField(default=0)
     drive_id = models.CharField(max_length=200, blank=True)

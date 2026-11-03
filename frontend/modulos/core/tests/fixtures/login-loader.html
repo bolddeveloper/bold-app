@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carga BOLD · Vista previa</title></head>
+<body><div id="root"></div><script type="module">
+import React from "react";
+import {createRoot} from "react-dom/client";
+import {LoginIntro} from "../../login_screen.jsx";
+import "../../../tareas/src/styles.css";
+import "../../login_screen.css";
+import "../../design_v3.css";
+const query=new URLSearchParams(location.search);
+localStorage.setItem("bold_color_theme",query.get("theme")==="dark" ? "dark" : "light");
+function Preview(){
+    const [ready,setReady]=React.useState(null),started=React.useRef(performance.now());
+    const complete=React.useCallback(()=>setReady(Math.round(performance.now()-started.current)),[]);
+    return ready!==null ? React.createElement('main',{id:'entry-done','data-elapsed':ready},React.createElement('h1',null,'Tu espacio está listo'))
+        : React.createElement(LoginIntro,{name:'Equipo',playOnce:query.has('entry'),onComplete:query.has('entry')?complete:undefined});
+}
+createRoot(document.getElementById("root")).render(React.createElement(Preview));
+</script></body></html>

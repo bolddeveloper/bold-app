@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
-import {tmpdir} from "node:os";
-import {join, resolve} from "node:path";
-import {pathToFileURL} from "node:url";
+import {resolve} from "node:path";
+import {JSDOM} from "jsdom";
 import Swal from "sweetalert2";
 import React, {act} from "react";
 import {createRoot} from "react-dom/client";
 import {createServer} from "vite";
 
-const {JSDOM} = await import(pathToFileURL(join(tmpdir(), "bold-ui-check/node_modules/jsdom/lib/api.js")));
 const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
 for (const key of ["window", "document", "HTMLElement", "Event"]) globalThis[key] = dom.window[key];
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,12 +42,11 @@ globalThis.teamRequest = async (url, options = {}) => {
 };
 const server = await createServer({configFile: false, plugins: [{name: "team-ui-fixtures", enforce: "pre", transform(source, id) {
     const path = id.replaceAll("\\", "/");
-    if (path.endsWith("/tareas/src/team.jsx")) return source.replace('import {Eye, EyeOff, Users, CalendarDays, RefreshCw} from "lucide-react";', 'const Eye = () => null, EyeOff = Eye, Users = Eye, CalendarDays = Eye, RefreshCw = Eye;');
     if (path.endsWith("/core/http_client.js")) return "export const http = {request: (...args) => globalThis.teamRequest(...args)};";
     if (path.endsWith("/tareas/src/task_text_editor.jsx")) return "export function TaskText({value}) {return value;}";
     if (path.endsWith("/tareas/src/voice_notes.jsx")) return "export function VoiceNotes() {return null;}";
     if (path.endsWith("/tareas/src/image_gallery.jsx")) return "export function ImageGallery() {return null;}";
-}},], resolve: {dedupe: ["react", "react-dom"]}, optimizeDeps: {noDiscovery: true, entries: [], include: []}, esbuild: {jsx: "automatic"}, server: {middlewareMode: true, hmr: false}, appType: "custom"});
+}},], resolve: {dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]}, optimizeDeps: {noDiscovery: true, entries: [], include: []}, esbuild: {jsx: "automatic"}, server: {middlewareMode: true, hmr: false}, appType: "custom"});
 const root = createRoot(document.getElementById("root"));
 const click = async element => act(async () => element.click());
 const button = text => [...document.querySelectorAll("button")].find(item => item.textContent.endsWith(text));
@@ -61,7 +58,7 @@ try {
         return React.createElement(TeamSharingContext.Provider, {value: sharing},
             React.createElement(SharingEye, {ids: ["task"], label: task.title}),
             React.createElement("div", {className: "bold_calendar"}, React.createElement(TeamCalendarSharing, {assignmentId: "assignment"})),
-            React.createElement(TeamPanel, {sharing, assignmentId: "assignment", enabled: true, CalendarDateField: props => React.createElement("button", {"aria-label": props.ariaLabel, "data-date": props.value, onClick: () => props.onChange("2026-01-01")}, props.value), renderBoard: props => {
+            React.createElement(TeamPanel, {sharing, assignmentId: "assignment", enabled: true, CalendarDateRangeField: props => React.createElement("button", {"aria-label": "Período de reuniones", "data-date": props.start, "data-end": props.end, onClick: () => props.onChange({start:"2026-01-01",end:"2026-01-08"})}, props.start), renderBoard: props => {
                 assert.equal(props.readOnly, true);
                 assert.equal(props.handle_task_select, undefined);
                 if(props.filtered_tasks[0]?.id === "task") {
@@ -104,14 +101,15 @@ try {
     assert.equal(document.querySelector(".team_task_detail"), null);
     assert.equal(requests.some(item => item.url.includes("/tasks/task/")), false, "Equipo must not fetch a removed detail panel");
     await click(button("Reuniones"));
-    const dateField = document.querySelector('[aria-label="Día de reuniones"]');
+    const dateField = document.querySelector('[aria-label="Período de reuniones"]');
     const now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     assert.equal(dateField.dataset.date, today);
+    assert.equal(dateField.dataset.end, today);
     await click(dateField);
-    assert.ok(requests.at(-1).url.includes("date=2026-01-01"));
+    assert.ok(requests.at(-1).url.includes("date=2026-01-01&end_date=2026-01-08"));
     await click(button("Tareas"));
     await click(button("Reuniones"));
-    assert.equal(document.querySelector('[aria-label="Día de reuniones"]').dataset.date, today, "Reopening meetings resets to today");
+    assert.equal(document.querySelector('[aria-label="Período de reuniones"]').dataset.date, today, "Reopening meetings resets to today");
     assert.ok(document.querySelector(".team_meetings").textContent.includes("no comparte su agenda"));
     let resolveOld;
     deferredPerson = new Promise(resolve => {resolveOld = resolve;});

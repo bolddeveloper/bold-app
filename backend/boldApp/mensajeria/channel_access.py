@@ -15,14 +15,21 @@ class ChannelPolicy:
         self.resources = {}
 
     def prime(self, channels):
-        from .models import ChannelAccessRule
+        from .models import ChannelAccessRule, PrivateServerMember
         channels = list(channels)
         rules = dict(ChannelAccessRule.objects.filter(channel_id__in=[row.pk for row in channels],
             employee_id=self.assignment.employee_id).values_list("channel_id", "access"))
+        servers = {server: (access, owner) for server, access, owner in PrivateServerMember.objects.filter(
+            server_id__in=[row.server_id for row in channels if row.server_id], employee_id=self.assignment.employee_id
+        ).values_list("server_id", "access", "server__creator__employee_id")}
+        from .server_icons import prime_icons
+        prime_icons(self, servers=list(servers))
         for row in channels:
             self.resources[("slack_channel", str(row.pk))] = {"id": row.pk, "unit_id": row.unit_id,
                 "creator_id": row.creator_id, "creator__employee_id": row.creator.employee_id,
-                "visibility": row.visibility, "access": rules.get(row.pk)}
+                "visibility": row.visibility, "access": rules.get(row.pk), "server_id": row.server_id,
+                "server_access": servers.get(row.server_id, (None, None))[0],
+                "server__creator__employee_id": servers.get(row.server_id, (None, None))[1]}
 
     def allows(self, code, unit, resource_id=None, *, require_assurance=True):
         permission = self.permissions.get(code)

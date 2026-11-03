@@ -8,6 +8,14 @@ function harness(acknowledge = async () => ({receipts: []})) {
         setTimer: (run, delay) => {const id = ++serial; jobs.set(id, {run, delay}); return id;}, clearTimer: id => jobs.delete(id)});
     return {session, jobs, calls, events, errors, async tick() {const [id, job] = jobs.entries().next().value; jobs.delete(id); await job.run();}};
 }
+
+test("typing events use the shared socket without acknowledging or fetching messages",()=>{
+    const h=harness();
+    const event={event_version:2,event_type:"messaging.typing",payload:{conversation_id:"c",author_id:"peer"}};
+    h.session.receive(event);
+    assert.deepEqual(h.events,[event]);assert.equal(h.calls.length,0);assert.equal(h.jobs.size,0);
+    h.session.dispose();h.session.receive(event);assert.equal(h.events.length,1);
+});
 test("shared socket envelopes acknowledge only peer messages, not presence or own sends", async () => {
     const h = harness();
     h.session.receive({event_version: 2, event_type: "control.ready", payload: {messages: [{id:"x"}]}});

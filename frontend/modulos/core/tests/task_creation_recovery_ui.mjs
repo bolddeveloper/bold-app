@@ -8,6 +8,7 @@ const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
 for (const key of ["window", "document", "navigator", "Node", "DOMParser", "HTMLElement", "Element", "HTMLInputElement", "Event", "MouseEvent", "InputEvent", "sessionStorage"])
     Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true, writable: true});
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.BroadcastChannel = undefined;
 const React = await import("react"), {act} = React, {createRoot} = await import("react-dom/client");
 let stored = null, opens = 0, removed = false, holdNextSave = false, releaseDelayed;
 globalThis.__openTaskDraft = async () => {
@@ -24,12 +25,12 @@ const server = await createServer({configFile: false, plugins: [{name: "isolated
     if (file.endsWith("/tareas/src/task_app.jsx")) {
         const start = source.indexOf("function read_task_creation_draft("), end = source.indexOf("// ─", start);
         assert.ok(start >= 0 && end > start);
-        return `import {useState as use_state,useRef as use_ref,useEffect as use_effect} from 'react';
+        return `import {useState as use_state,useRef as use_ref,useEffect as use_effect,useId as use_id} from 'react';
             import {TaskTextEditor} from './task_text_editor.jsx';
             import {preferredSection} from './section_order.js';
             const is_using_real_backend=()=>false,project_items=[],priority_items=[],render_icon=()=>null;
-            const x_icon=0,columns_icon=0,calendar_days_icon=0,plus_icon=0;
-            const TaskSelect=()=>null,CustomDatePicker=()=>null,TaskIdentityFields=()=>null,CollaboratorsSelector=()=>null,
+            const file_text_icon=0,chevron_down_icon=0,layout_list_icon=0,x_icon=0,columns_icon=0,calendar_days_icon=0,plus_icon=0;
+            const TaskSelect=()=>null,CalendarDateRangeField=()=>null,TaskIdentityFields=()=>null,CollaboratorsSelector=()=>null,
                 PipelineFields=()=>null,RecurrenceFields=()=>null,AttachmentLinks=()=>null;
             const TaskDrawer=({children})=><section>{children}</section>,month_abbrev_es=Array(12).fill('mes'),toISODate=()=>null;
             ${source.slice(start, end)} export {CreateTaskModal};`;

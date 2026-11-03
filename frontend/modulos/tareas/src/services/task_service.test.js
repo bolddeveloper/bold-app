@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { api } from "./tasks_api.js";
-import { loadTaskData, saveTaskDraft } from "./task_service.js";
+import { loadTaskData, saveTaskDraft, saveSubtasks } from "./task_service.js";
 import { createContextCache } from "../../../core/context_cache.js";
 const statuses = [{ id: "s1", unitId: "u1", label: "Pendiente", isFinal: false }, { id: "s2", unitId: "u2", label: "Destino", isFinal: false }];
 const data = { statuses, tasks: [], followers: [] };
@@ -110,6 +110,25 @@ test("task creation creates the project atomically and persists subtasks separat
         assert.equal(calls.length, 2); assert.equal(calls[0].project, "p"); assert.equal(calls[0].section, "section");
         assert.equal(calls[1].parent_task, "task-1"); assert.equal(calls[1].project, undefined);
     } finally { Object.assign(api, original); }
+});
+
+test("subtask details persist on creation and editing without resetting their workflow", async () => {
+    const original = {createTask:api.createTask,updateTask:api.updateTask};
+    const creates=[],updates=[];
+    api.createTask=async body=>{creates.push(body);return {id:"child"};};
+    api.updateTask=async(id,body)=>updates.push({id,body});
+    const child={id:"draft",title:"Preparar piezas",description:"Revisar referencias",assignee_id:"person",priority:"Alta",start_date:"2026-11-02",due_date:"2026-11-06",completed:false};
+    try {
+        await saveSubtasks({id:"parent",unitId:"u1"},[child],data);
+        assert.deepEqual(creates,[{title:"Preparar piezas",unit:"u1",status:"s1",priority:"high",description:"Revisar referencias",assignee_assignment:"person",start_date:"2026-11-02",due_date:"2026-11-06",parent_task:"parent"}]);
+        assert.equal(child.id,"child");
+        const existing={...child,unitId:"u1",statusId:"custom-status"};
+        await saveSubtasks({id:"parent",unitId:"u1"},[child],{...data,tasks:[{...existing,parentTaskId:"parent"}]});
+        assert.equal(updates.length,0,"Untouched details do not send another patch");
+        await saveSubtasks({id:"parent",unitId:"u1"},[{...child,description:"",assignee_id:"",start_date:null,due_date:null,priority:"Baja"}],{...data,tasks:[{...existing,parentTaskId:"parent"}]});
+        assert.deepEqual(updates,[{id:"child",body:{description:"",assignee_assignment:null,start_date:null,due_date:null,priority:"low"}}]);
+        assert.equal(updates[0].body.status,undefined,"Editing details keeps the current workflow stage");
+    } finally {Object.assign(api,original);}
 });
 test("unit handoff uses move before the ordinary patch and retains project links", async () => {
     const original = { moveTask: api.moveTask, updateTask: api.updateTask };

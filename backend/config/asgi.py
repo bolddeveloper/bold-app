@@ -10,11 +10,14 @@ import os
 import django
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import OriginValidator
-from django.core.asgi import get_asgi_application
 
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
+from boldApp.core.memory_uploads import MemoryOnlyASGIHandler
+from boldApp.core.daphne_memory import install_memory_requests
+
+install_memory_requests()
 
 # Se importa despues de django.setup() porque routing.py importa modelos
 # (a traves de consumers.py) que necesitan las apps ya cargadas.
@@ -38,7 +41,7 @@ websocket_urlpatterns += [path("ws/pages/<uuid:page_id>/", PageConsumer.as_asgi(
 # al backend, y la validacion debe mirar la misma lista de
 # origenes que ya usa CORS, no ALLOWED_HOSTS (que describe al propio backend).
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
+    "http": MemoryOnlyASGIHandler(),
     "websocket": OriginValidator(
         URLRouter(websocket_urlpatterns),
         settings.CORS_ALLOWED_ORIGINS if settings.CORS_ALLOWED_ORIGINS else ["*"],

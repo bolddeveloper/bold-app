@@ -18,29 +18,6 @@ class MessagingCapacityFull(APIException):
         'No se creó un nuevo intento ni se subió un archivo. Revisa la capacidad antes de iniciar otro envío; no descartes tu borrador.')
 
 
-class TemporaryCapacityFull(APIException):
-    status_code = 429
-    default_detail = 'La cola temporal de archivos está llena. Espera a que termine una transferencia antes de añadir otra.'
-    wait = 60
-
-
-def check_temporary_capacity(account, extra_bytes, *, check_records=True):
-    """Caller holds MediaUploadQuota, before allocating outbox OR phone bytes.
-
-    Expired phone bytes still occupy the database until cleanup actually removes
-    them. A phone draft and its staged copy temporarily count separately.
-    """
-    uploads = MediaUpload.objects
-    phones = PhoneImage.objects
-    if check_records:
-        _check_records(account, *legacy_media())
-    total = uploads.aggregate(total=Sum('cipher_bytes'))['total'] or 0
-    own = uploads.filter(account=account).aggregate(total=Sum('cipher_bytes'))['total'] or 0
-    if (total + _bytes(phones) + extra_bytes > settings.MESSAGING_UPLOAD_QUEUE_BYTES or
-            own + _bytes(phones.filter(transfer__account=account)) + extra_bytes > settings.MESSAGING_UPLOAD_ACCOUNT_BYTES):
-        raise TemporaryCapacityFull()
-
-
 def legacy_media():
     # New media share their upload UUID. Counting both would double charge an
     # attachment at publication, while ignoring legacy files would undercount.

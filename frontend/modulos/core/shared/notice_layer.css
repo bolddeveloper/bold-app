@@ -2,3 +2,33 @@
 .bold_notice_layer > * { pointer-events: auto; }
 .swal2-container.bold_floating_toast[popover] { margin: 0; border: 0; max-width: none; max-height: none; background: transparent; color: inherit; z-index: 2147483647; }
 .bold_notice_layer::backdrop, .bold_floating_toast::backdrop { background: transparent; pointer-events: none; }
+
+.swal2-container .swal2-popup.swal2-toast.task_notice_toast {
+    width: min(360px, calc(100vw - 24px));
+    gap: 12px;
+    padding: 14px 16px 17px;
+    border: 1px solid var(--bold_line);
+    border-radius: 0;
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.task_notice_toast.swal2-toast .swal2-title {
+    margin: 0;
+    color: var(--bold_text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.task_notice_toast .swal2-timer-progress-bar-container { height: 3px; }
+.task_notice_toast.swal2-toast .swal2-timer-progress-bar { background: var(--bold_red); }
+
+@media (prefers-reduced-motion: reduce) {
+    .task_notice_toast.swal2-toast,
+    .task_notice_toast .task_action_spinner,
+    .task_notice_toast .task_action_spinner::before,
+    .task_notice_toast .task_action_spinner::after { animation: none; }
+}

@@ -20,7 +20,7 @@ from .channel_tasks import TaskReferences
 from .channel_unread import channel_states, thread_counts, unread_messages
 from .channel_notifications import notify_channel_message, mark_channel_notices_read, mark_unfollowed_notices_read
 from .media import BoundedUpload, MAX_BYTES, media_data, private_media_response
-from .models import DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
+from .models import PrivateServer, DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
 from .serializers import StrictInputSerializer, StagedMessageInput, EditMessageSerializer
 from .views import PrivateChatView, Conflict
 from .channel_search import channel_matches
@@ -29,10 +29,13 @@ from .personal_data import prime_saved, saved_data
 from .thread_following import prime_thread_states, message_thread_state, thread_states
 from .mentions import prime_channel_mentions, channel_mentions, sync_channel_mentions
 from .reactions import prime_reactions, reaction_data
+from .thread_lifecycle import require_thread_reply, thread_permissions
 
 
 class CreateChannel(StrictInputSerializer):
     unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    server_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    category_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     name = serializers.CharField(max_length=80)
     description = serializers.CharField(max_length=500, allow_blank=True, default="")
     color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", max_length=7, allow_blank=True, default="")
@@ -60,8 +63,11 @@ class SendChannelMessage(StagedMessageInput):
     task_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     page_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     upload_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    thread_title = serializers.CharField(max_length=120, required=False)
 
     def validate(self, data):
+        if data.get("thread_title") and data["parent_id"]:
+            raise serializers.ValidationError("Un hilo comienza en un mensaje del canal, no en otra respuesta.")
         if data["page_id"] and (data["task_id"] or data['upload_id']):
             raise serializers.ValidationError("Comparte la página por separado de las tareas y archivos.")
         if not data["body"] and data["task_id"] is None and data["page_id"] is None and not data['upload_id']:
@@ -102,9 +108,11 @@ def channel_data(channel, policy):
         policy.channel_states = {}
     if str(channel.pk) not in policy.channel_states:
         policy.channel_states.update(channel_states([channel], policy.assignment.employee_id))
+    from .server_views import server_data
     return {"id": str(channel.pk), "name": channel.name, "description": channel.description, "color": channel.color,
+            "server": server_data(channel.server, policy.assignment, policy) if channel.server_id else None,
             "department": department_data(channel.unit), "archived_at": channel.archived_at,
-            "visibility": channel.visibility,
+            "visibility": channel.visibility, "category_id": str(channel.category_id) if channel.category_id else None,
             "version": channel.version, "activity_version": channel.activity_version,
             "created_at": channel.created_at, "updated_at": channel.updated_at,
             "can_manage": policy.allows("slack.channel.manage", channel.unit, channel.pk),
@@ -119,6 +127,8 @@ def channel_message_data(message, actor_id, policy):
     account = getattr(message.author, "user_account", None)
     if message.task_id and not hasattr(policy, "task_references"):
         policy.task_references = TaskReferences(policy.assignment, policy.request)
+    parent = message.parent if message.parent_id else None
+    reply_open = not parent or not (parent.thread_closed_at or parent.thread_locked or parent.thread_deleted_at)
     return {**saved_data(message, "channel_message", actor_id), **message_thread_state(message, actor_id, policy),
             "id": str(message.pk), "channel_id": str(message.channel_id), "client_id": str(message.client_id),
             "sequence": message.sequence, "body": message.body, "automation_kind":message.automation_kind,
@@ -130,9 +140,14 @@ def channel_message_data(message, actor_id, policy):
                        "avatar_url": account.avatar_url if account else None},
             "department": {"name": message.department_name, "color": message.department_color},
             "created_at": message.created_at, "edited_at": message.edited_at, "version": message.version,
+            "thread_title": message.thread_title, "thread_started_at": message.thread_started_at,
+            "thread_starter_id": str(message.thread_starter_id) if message.thread_starter_id else None,
+            "thread_closed_at": message.thread_closed_at, "thread_locked": message.thread_locked, "thread_deleted_at": message.thread_deleted_at,
+            **(thread_permissions(message, policy) if not message.parent_id else {}),
+            "pinned_at": message.pinned_at,
             "editable_until": message.editable_until, "reply_count": getattr(message, "reply_count", 0),
             "unread_reply_count": getattr(policy, "thread_counts", {}).get(str(message.pk), 0),
-            "can_edit": not message.automation_kind and not message.channel.archived_at and message.author_id == actor_id and timezone.now() < message.editable_until
+            "can_edit": reply_open and not message.automation_kind and not message.channel.archived_at and message.author_id == actor_id and timezone.now() < message.editable_until
                         and policy.allows("slack.message.update", message.channel.unit, message.channel_id)}
 
 
@@ -143,7 +158,7 @@ class SlackView(PrivateChatView):
         return self._channel_policy
 
     def channel(self, channel_id, *, lock=False):
-        rows = DepartmentChannel.objects.select_related("unit", "creator")
+        rows = DepartmentChannel.objects.select_related("unit", "creator", "server__creator")
         if lock:
             rows = rows.select_for_update(of=("self",))
         channel = get_object_or_404(rows, pk=channel_id)
@@ -161,26 +176,35 @@ class SlackView(PrivateChatView):
 class DepartmentListView(SlackView):
     def get(self, request):
         policy = self.policy()
-        units = OrganizationalUnit.objects.order_by("name", "id")[:200]
-        return Response({"can_create_independent": policy.allows("slack.channel.read", None) and policy.allows("slack.channel.create", None), "results": [{**department_data(unit), "can_create": policy.allows("slack.channel.create", unit)}
+        units = list(OrganizationalUnit.objects.order_by("name", "id")[:200])
+        from .server_icons import prime_icons, icon_data
+        prime_icons(policy, units=[unit.pk for unit in units])
+        return Response({"can_create_independent": policy.allows("slack.channel.read", None) and policy.allows("slack.channel.create", None), "results": [{**department_data(unit), **icon_data(policy, unit=unit), "can_create": policy.allows("slack.channel.create", unit)}
             for unit in units if policy.allows("slack.channel.read", unit)]})
 
 
 class ChannelListView(SlackView):
     def get(self, request):
         from .channel_acl import readable_channels
-        rows = readable_channels(DepartmentChannel.objects.select_related("unit", "creator"), self.actor(), request.assignment.position.unit_id)
+        rows = readable_channels(DepartmentChannel.objects.select_related("unit", "creator", "server__creator"), self.actor(), request.assignment.position.unit_id)
         if request.query_params.get("archived") != "true":
             rows = rows.filter(archived_at__isnull=True)
         unit = request.query_params.get("unit")
         if unit == "independent":
-            rows = rows.filter(unit__isnull=True)
+            rows = rows.filter(unit__isnull=True, server__isnull=True)
         elif unit:
             try:
                 unit = serializers.UUIDField().run_validation(unit)
             except serializers.ValidationError:
                 raise ValidationError("Departamento no válido.")
             rows = rows.filter(unit_id=unit)
+        server_id = request.query_params.get("server")
+        if server_id:
+            try:
+                server_id = serializers.UUIDField().run_validation(server_id)
+            except serializers.ValidationError:
+                raise ValidationError("Servidor no válido.")
+            rows = rows.filter(server_id=server_id)
         policy = self.policy()
         candidates = list(rows)
         policy.prime(candidates)
@@ -203,6 +227,14 @@ class ChannelListView(SlackView):
         form = CreateChannel(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
+        server = None
+        if values["server_id"]:
+            if values["unit_id"] or values["members"]:
+                raise ValidationError("El canal hereda las invitaciones de su servidor, sin departamento adicional.")
+            server = get_object_or_404(PrivateServer.objects.select_for_update().select_related("creator"), pk=values["server_id"])
+            if server.creator.employee_id != self.actor() or not server.members.filter(employee_id=self.actor(), access="write").exists():
+                raise NotFound("No puedes crear canales en este servidor.")
+            values["visibility"] = "private"
         unit = get_object_or_404(OrganizationalUnit.objects.select_for_update(), pk=values["unit_id"]) if values["unit_id"] else None
         self.policy().require("slack.channel.read", unit)
         self.policy().require("slack.channel.create", unit)
@@ -210,20 +242,23 @@ class ChannelListView(SlackView):
         member_form = AccessMember(data=values["members"], many=True)
         member_form.is_valid(raise_exception=True)
         members = member_form.validated_data
-        if values["visibility"] == "private" and not any(row["employee_id"] == self.actor() for row in members):
+        if not server and values["visibility"] == "private" and not any(row["employee_id"] == self.actor() for row in members):
             members.append({"employee_id": self.actor(), "access": "write"})
         if len(members) > 200:
             raise ValidationError({"members": "El límite es de 200 personas, incluido el creador."})
-        validate_access(values["visibility"], members, values["unit_id"])
+        if not server:
+            validate_access(values["visibility"], members, values["unit_id"])
         if unit is None:
             # Serialize the independent namespace across active departments,
             # including its bounded count; NULL cannot be locked as a unit.
             Permission.objects.select_for_update().get(code="slack.channel.create")
-        if DepartmentChannel.objects.filter(unit=unit).count() >= 200:
+        if DepartmentChannel.objects.filter(unit=unit, server=server).count() >= 200:
             raise ValidationError("Este grupo alcanzó el límite inicial de 200 canales, incluidos los archivados.")
+        from .models import ChannelCategory
+        category = get_object_or_404(ChannelCategory, pk=values["category_id"], unit=unit, server=server) if values["category_id"] else None
         try:
             with transaction.atomic():
-                channel = DepartmentChannel.objects.create(unit=unit, name=values["name"], description=values["description"], color=values["color"], visibility=values["visibility"], creator=request.assignment)
+                channel = DepartmentChannel.objects.create(unit=unit, server=server, category=category, name=values["name"], description=values["description"], color=values["color"], visibility=values["visibility"], creator=request.assignment)
                 ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=channel, **row) for row in members])
         except IntegrityError:
             raise Conflict("Ya existe un canal con ese nombre en este grupo, posiblemente archivado.")
@@ -271,14 +306,14 @@ class ChannelMessageListView(SlackView):
 
     def get(self, request, channel_id):
         channel = self.channel(channel_id)
-        rows = channel.messages.select_related("author__user_account", "channel__unit", "media").annotate(reply_count=Count("replies"))
+        rows = channel.messages.select_related("author__user_account", "channel__unit", "media", "parent").annotate(reply_count=Count("replies"))
         parent_id = request.query_params.get("parent")
         if parent_id:
             try:
                 parent_id = serializers.UUIDField().run_validation(parent_id)
             except serializers.ValidationError:
                 raise ValidationError("Hilo no válido.")
-            get_object_or_404(channel.messages, pk=parent_id, parent__isnull=True)
+            thread_source = get_object_or_404(channel.messages.select_related("author__user_account", "channel__unit", "media").annotate(reply_count=Count("replies")), pk=parent_id, parent__isnull=True)
             rows = rows.filter(parent_id=parent_id)
         else:
             rows = rows.filter(parent__isnull=True)
@@ -299,6 +334,7 @@ class ChannelMessageListView(SlackView):
         response.data["server_now"] = timezone.now()
         if parent_id:
             response.data["thread"] = thread_states([parent_id], self.actor())[str(parent_id)]
+            response.data["thread_source"] = channel_message_data(thread_source, self.actor(), self.policy())
         return response
 
     @transaction.atomic
@@ -318,6 +354,8 @@ class ChannelMessageListView(SlackView):
             staged,prepared=prepared_upload(request,'channel',channel,values['client_id'],values['upload_id'])
         parent = get_object_or_404(channel.messages, pk=values["parent_id"], parent__isnull=True) if values["parent_id"] else None
         payload = {"body": values["body"], "parent": str(parent.pk) if parent else None}
+        if values.get("thread_title"):
+            payload["thread_title"] = values["thread_title"]
         if values["task_id"] is not None:
             # Keep the historical digest for text-only retries unchanged.
             payload["task"] = str(values["task_id"])
@@ -332,6 +370,7 @@ class ChannelMessageListView(SlackView):
             if old.payload_digest != digest:
                 raise Conflict("Este envío ya existe con otro contenido. No se ha duplicado.")
             return Response({"message": channel_message_data(old, self.actor(), self.policy())})
+        require_thread_reply(parent)
         if values["task_id"] is not None:
             TaskReferences(request.assignment, request).require(values["task_id"])
         if values["page_id"] is not None and not page_card(values["page_id"], channel, self.policy()).get("available"):
@@ -340,7 +379,13 @@ class ChannelMessageListView(SlackView):
         channel.activity_version += 1
         message = ChannelMessage.objects.create(channel=channel, author_id=self.actor(), author_assignment=request.assignment,
             department_name=department["name"], department_color=department["color"], sequence=channel.activity_version,
-            body=values["body"], task_id=values["task_id"], page_id=values["page_id"], parent=parent, client_id=values["client_id"], payload_digest=digest)
+            body=values["body"], task_id=values["task_id"], page_id=values["page_id"], parent=parent, client_id=values["client_id"], payload_digest=digest,
+            **({"thread_title": values["thread_title"], "thread_started_at": timezone.now(), "thread_starter_id": self.actor()} if values.get("thread_title") else {}))
+        if parent and not parent.thread_started_at:
+            parent.thread_started_at = message.created_at
+            parent.thread_starter_id = self.actor()
+            parent.version += 1
+            parent.save(update_fields=["thread_started_at", "thread_starter", "version"])
         sync_channel_mentions(message, self.policy())
         if prepared:
             from .upload_outbox import attach
@@ -366,6 +411,7 @@ class ChannelMessageDetailView(SlackView):
             raise Conflict("El canal está archivado.")
         self.policy().require("slack.message.update", channel.unit, channel.pk)
         message = get_object_or_404(channel.messages.select_related("author__user_account", "channel__unit", "media"), pk=message_id)
+        require_thread_reply(message.parent if message.parent_id else None)
         from rest_framework.exceptions import PermissionDenied
         if message.automation_kind:
             raise PermissionDenied('Los mensajes automáticos conservan el resultado registrado. Pausa o revisa su regla antes de futuras ejecuciones.')

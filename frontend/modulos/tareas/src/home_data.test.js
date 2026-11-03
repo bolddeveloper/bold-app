@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { buildHomeData } from "./home_data.js";
-import { defaultHomeLayout, normalizeHomeLayout, placeHomeWidgets, reorderHomeWidgets, widgetColumnSpan } from "./home_layout.js";
 const now = new Date(2026, 8, 7);
 const tasks = [{ id: 1, assignee_id: "a", section: "todo", due: now }, { id: 2, assignee_id: "a", section: "in_progress", due: new Date(2026, 8, 8) }, { id: 3, assignee_id: "b", section: "completed", completed: true, due: null }];
 const data = buildHomeData(tasks, [{ id: "p" }], task => task.due, "a", now);
@@ -33,42 +32,17 @@ const createdWithoutProject = buildHomeData([
     { id: "created", created_by_assignment: "a", assignee_id: "", collaborator_ids: [], completed: false },
 ], [], () => null, "a", now);
 assert.deepEqual(createdWithoutProject.assigned.map(item => item.task.id), ["created"]);
-assert.deepEqual(defaultHomeLayout().map(widget => widget.type), ["status", "projects", "tasks", "activity", "deadlines", "shortcuts"]);
-assert.deepEqual(normalizeHomeLayout([{ id: "a", type: "metrics", width: 9, metrics: ["today", "today", "bad"] }]), [{ id: "a", type: "metrics", size: "large", variant: "compact", metrics: ["today"], shortcuts: undefined }]);
-assert.equal(normalizeHomeLayout([{ id: "a", type: "status", width: 2, variant: "compact" }])[0].variant, "compact");
-assert.equal(normalizeHomeLayout([{ id: "a", type: "status", size: "small", title: "Mi resumen" }])[0].title, "Mi resumen");
-assert.equal(normalizeHomeLayout([{ id: "a", type: "deadlines", width: 2, variant: "visual" }])[0].variant, "compact");
-assert.equal(normalizeHomeLayout([{ id: "a", type: "activity", width: 2, height: 219 }])[0].size, "medium");
-assert.equal(normalizeHomeLayout([{ id: "a", type: "activity", width: 2, height: 219 }])[0].height, undefined);
-const order = [{ id: "a" }, { id: "b" }, { id: "c" }];
-assert.deepEqual(reorderHomeWidgets(order, "a", "c", true).map(item => item.id), ["b", "c", "a"]);
-assert.deepEqual(reorderHomeWidgets(order, "c", "a").map(item => item.id), ["c", "a", "b"]);
-assert.equal(reorderHomeWidgets(order, "a", "a"), order);
-assert.equal(reorderHomeWidgets(order, "a", "b"), order);
-assert.deepEqual(normalizeHomeLayout([]), []);
-assert.equal(normalizeHomeLayout([{ id: "a", type: "unknown" }]).length, 6);
-assert.deepEqual(defaultHomeLayout().map(widget => widgetColumnSpan(widget, 12)), [3, 4, 5, 3, 4, 6]);
-const reference = placeHomeWidgets(defaultHomeLayout(), {}, 12);
-assert.deepEqual([reference.positions.home_status.column, reference.positions.home_projects.column, reference.positions.home_tasks.column, reference.positions.home_activity.column, reference.positions.home_deadlines.column, reference.positions.home_shortcuts.column, reference.positions.home_shortcuts.span], [0, 3, 7, 0, 3, 7, 5]);
-const compactRows = placeHomeWidgets(defaultHomeLayout(), { home_status: 180, home_projects: 292, home_tasks: 180, home_activity: 180, home_deadlines: 180, home_shortcuts: 190 }, 12);
-assert.deepEqual([compactRows.positions.home_status.height, compactRows.positions.home_activity.top, compactRows.height], [292, 306, 496]);
-const moved = ["status", "tasks", "projects", "shortcuts", "activity", "deadlines"].map(type => defaultHomeLayout().find(widget => widget.type === type));
-for (const widgets of [defaultHomeLayout(), moved, [...moved].reverse()]) for (const columns of [6, 12]) {
-    const placed = placeHomeWidgets(widgets, {}, columns);
-    const rows = new Map();
-    for (const position of Object.values(placed.positions)) {
-        assert.equal(position.height, 280);
-        if (!rows.has(position.top)) rows.set(position.top, []);
-        rows.get(position.top).push(position);
-    }
-    for (const row of rows.values()) {
-        row.sort((a, b) => a.column - b.column);
-        assert.equal(row[0].column, 0);
-        for (let i = 1; i < row.length; i++) assert.equal(row[i].column, row[i - 1].column + row[i - 1].span);
-        assert.equal(row.at(-1).column + row.at(-1).span, columns);
-    }
-    assert.equal(placed.height, rows.size * 294 - 14);
-}
-const mobileLayout = placeHomeWidgets(defaultHomeLayout().slice(0, 2), { home_status: 310, home_projects: 220 }, 1);
-assert.equal(mobileLayout.positions.home_projects.top, 324);
-console.log("Home checks passed");
+const normalized = buildHomeData([
+ {id:"done-status",assignee_id:"a",statusCategory:"completed",project_id:"p",due:new Date(2026,8,7,14)},
+ {id:"invalid",assignee_id:"a",due:new Date("invalid")},
+ {id:"later",assignee_id:"a",due:new Date(2026,8,10)},
+ {id:"sooner",assignee_id:"a",due:new Date(2026,8,8)},
+], [{id:"p"}], task=>task.due,"a",now);
+assert.equal(normalized.assigned.length,3);
+assert.equal(normalized.statusCounts.completed,1);
+assert.deepEqual(normalized.upcoming.map(row=>row.task.id),["sooner","later"]);
+assert.equal(normalized.undated[0].task.id,"invalid");
+assert.equal(normalized.weekly[0].total,1);
+assert.equal(normalized.weekly[0].completed,1);
+assert.equal(normalized.projects[0].completed,1);
+console.log("Home data checks passed");

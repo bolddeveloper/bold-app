@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.throttling import AnonRateThrottle
@@ -33,6 +33,11 @@ TTL = timedelta(minutes=10)
 MAX_IMAGES = 10
 MAX_TOTAL = 20 * 1024 * 1024
 MAX_NORMALIZED = 2 * 1024 * 1024
+
+
+class PhoneDrivePending(APIException):
+    status_code = 503
+    default_detail = 'Drive no confirmó la imagen. El archivo sigue en tu teléfono; vuelve a enviarlo con este mismo intento.'
 
 
 def digest(value):
@@ -77,7 +82,7 @@ def rows():
 def manifest(row):
     return {"id": str(row.pk), "expires_at": row.expires_at, "paired": bool(row.device_hash),
         "pairing_code": row.pairing_code, "approved": row.approved, "sealed": row.sealed, "max_images": row.max_images,
-        "images": [{"id": str(image.pk), "size": image.size_bytes} for image in row.images.only("id", "size_bytes").order_by("created_at", "id")]}
+        "images": [{"id": str(image.pk), "size": image.size_bytes} for image in row.images.filter(upload__state='ready').only("id", "size_bytes").order_by("created_at", "id")]}
 
 
 @shared_task
@@ -175,17 +180,17 @@ class PhoneDownloadView(PhoneOwnerView):
     def get(self, request, identity, image_id):
         row = self.owned(identity)
         image = get_object_or_404(row.images, pk=image_id)
-        response = HttpResponse(bytes(image.content), content_type="image/webp")
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Content-Security-Policy"] = "default-src 'none'; sandbox"
-        return response
+        if not image.upload_id or image.upload.state != 'ready':
+            raise Conflict('La imagen aún no está disponible en Drive. Reintenta la transferencia desde el teléfono.')
+        from .media import private_media_response
+        return private_media_response(image.upload)
 
 
 class PhoneSealView(PhoneOwnerView):
     @transaction.atomic
     def post(self, request, identity):
         row = self.owned(identity, lock=True)
-        if not row.approved or not row.images.exists():
+        if not row.approved or not row.images.filter(upload__state='ready').exists():
             raise ValidationError("Todavía no hay imágenes para recibir.")
         row.sealed = True
         row.save(update_fields=["sealed"])
@@ -250,7 +255,6 @@ class PhoneUploadView(PhonePublicView):
         row = self.capability(request, identity, "device_hash")
         return Response({"approved": row.approved, "sealed": row.sealed, "count": row.images.count(), "expires_at": row.expires_at})
 
-    @transaction.atomic
     def post(self, request, identity):
         # Authenticate before touching a container lock, then revalidate the
         # capability/approval after the reservation locks (replacement may win).
@@ -270,24 +274,42 @@ class PhoneUploadView(PhonePublicView):
         if prepared["size_bytes"] > MAX_NORMALIZED:
             raise ValidationError("La imagen preparada supera 2 MB. Reduce su tamaño.")
         container = row.conversation or row.channel
-        type(container).objects.select_for_update().get(pk=container.pk)
-        MediaUploadQuota.objects.get_or_create(pk=1)
-        MediaUploadQuota.objects.select_for_update().get(pk=1)
-        row = self.capability(request, identity, "device_hash")
-        if not row.approved:
-            raise PermissionDenied("Primero aprueba la vinculación en el ordenador.")
-        if row.sealed:
-            raise Conflict("El ordenador está recibiendo las imágenes. Genera otro QR para añadir más.")
-        existing = row.images.filter(client_id=client_id).first()
-        if existing:
-            if existing.digest != prepared["digest"]:
+        from .upload_outbox import enqueue, claim, perform, rows as uploads
+        with transaction.atomic():
+            type(container).objects.select_for_update().get(pk=container.pk)
+            MediaUploadQuota.objects.get_or_create(pk=1)
+            MediaUploadQuota.objects.select_for_update().get(pk=1)
+            row = self.capability(request, identity, "device_hash")
+            if not row.approved:
+                raise PermissionDenied("Primero aprueba la vinculación en el ordenador.")
+            if row.sealed:
+                raise Conflict("El ordenador está recibiendo las imágenes. Genera otro QR para añadir más.")
+            image = row.images.filter(client_id=client_id).first()
+            if image and image.digest != prepared['digest']:
                 raise Conflict("El reintento no coincide con la imagen original.")
-            return Response({"id": str(existing.pk)}, status=200)
-        sizes = list(row.images.values_list("size_bytes", flat=True))
-        if len(sizes) >= row.max_images or sum(sizes) + prepared["size_bytes"] > MAX_TOTAL:
-            raise ValidationError(f"Esta cola admite {row.max_images} imágenes del teléfono y hasta 20 MB preparados.")
-        from .upload_capacity import check_temporary_capacity
-        check_temporary_capacity(row.account, prepared['size_bytes'])
-        image = PhoneImage.objects.create(transfer=row, client_id=client_id,
-            content=prepared["content"], digest=prepared["digest"], size_bytes=prepared["size_bytes"])
-        return Response({"id": str(image.pk)}, status=201)
+            if not image:
+                sizes = list(row.images.values_list("size_bytes", flat=True))
+                if len(sizes) >= row.max_images or sum(sizes) + prepared["size_bytes"] > MAX_TOTAL:
+                    raise ValidationError(f"Esta cola admite {row.max_images} imágenes del teléfono y hasta 20 MB preparados.")
+            owner = SimpleNamespace(user=row.account, auth=row.session, assignment=row.assignment)
+            upload, _ = enqueue(owner, 'channel' if row.channel_id else 'chat', container,
+                uuid.uuid5(row.pk, str(client_id)), prepared)
+            upload.expires_at = min(upload.expires_at, row.expires_at)
+            upload.save(update_fields=['expires_at'])
+            created = image is None
+            if image is None:
+                from .upload_capacity import check_capacity
+                check_capacity(row.account,metadata_only=True)
+                image = PhoneImage.objects.create(transfer=row, client_id=client_id, upload=upload,
+                    content=b'', digest=prepared['digest'], size_bytes=prepared['size_bytes'])
+            elif image.upload_id != upload.pk:
+                raise Conflict('La preparación anterior necesita revisión antes de reintentarse.')
+            lease = claim(upload.pk)
+        if lease:
+            perform(upload.pk, prepared['content'], lease=lease)
+        if uploads().get(pk=upload.pk).state != 'ready':
+            raise PhoneDrivePending()
+        latest=self.capability(request,identity,'device_hash',lock=False)
+        if latest.sealed or not latest.approved:
+            raise Conflict('La recepción terminó en el ordenador. Comprueba el borrador antes de repetir la transferencia.')
+        return Response({"id": str(image.pk)}, status=201 if created else 200)

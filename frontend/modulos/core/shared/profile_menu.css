@@ -91,6 +91,35 @@
 .bold_profile_submenu [role="alert"] { color: var(--bold_red); }
 .bold_presence_durations { z-index: 2303; }
 
+/* Menú flotante con la misma paleta que Perfil. */
+:root .bold_profile_popover.bold_profile_quick {width:min(270px,calc(100vw - 24px));border-radius:0;padding:4px;box-sizing:border-box;box-shadow:0 8px 24px #0003;}
+:root .bold_profile_quick :is(.bold_profile_departments,.bold_profile_submenu) {width:min(228px,calc(100vw - 24px));padding:4px;gap:0;border-radius:0;}
+:root .bold_profile_quick .bold_presence_durations {width:min(184px,calc(100vw - 24px));}
+:root .bold_profile_quick_identity {display:flex;align-items:center;gap:8px;padding:6px;margin-bottom:3px;border-bottom:1px solid var(--bold_line);}
+:root .bold_profile_quick_identity .bold_profile_avatar {width:36px;height:36px;font-size:13px;border:1px solid var(--bold_line);}
+:root .bold_profile_quick_identity>div {min-width:0;flex:1;}
+:root .bold_profile_quick_identity h2 {font-size:14px;line-height:1.25;font-weight:650;margin:0;overflow-wrap:anywhere;}
+:root .bold_profile_quick_identity :is(p,small) {display:block;font-size:11px;line-height:1.35;margin:0;color:var(--bold_muted);overflow-wrap:anywhere;}
+:root .bold_profile_quick .bold_profile_quick_close {display:grid;place-items:center;align-self:flex-start;flex:none;width:28px;height:28px;min-height:28px;padding:0;}
+:root .bold_profile_quick_actions {display:grid;}
+:root .bold_profile_quick button {border:0;border-radius:0;box-shadow:none;background:transparent;color:var(--bold_text);cursor:pointer;}
+:root .bold_profile_quick :is(.bold_profile_action,.bold_profile_departments>button,.bold_profile_submenu button) {display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:32px;margin:0;padding:5px 8px;box-sizing:border-box;font-size:12px;font-weight:500;text-align:start;}
+:root .bold_profile_quick .bold_profile_action>svg {flex:none;color:var(--bold_muted);}
+:root .bold_profile_quick button:not(:disabled):is(:hover,:focus-visible,[aria-expanded="true"],[aria-pressed="true"]) {background:var(--bold_surface_soft);}
+:root .bold_profile_quick button:is([aria-expanded="true"],[aria-pressed="true"]) {box-shadow:inset 2px 0 var(--bold_red);}
+:root .bold_profile_quick button:focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;}
+:root .bold_profile_quick .bold_profile_logout {border-top:1px solid var(--bold_line);margin-top:3px;color:var(--bold_red);}
+:root .bold_profile_quick .bold_profile_logout>svg {color:inherit;}
+:root .bold_profile_quick :is(.bold_profile_departments,.bold_profile_submenu)>header {padding:0 4px 3px;gap:4px;margin:0 0 2px;border-bottom:1px solid var(--bold_line);}
+:root .bold_profile_quick :is(.bold_profile_departments,.bold_profile_submenu) header h3 {font-size:12px;}
+:root .bold_profile_quick :is(.bold_profile_departments,.bold_profile_submenu) header button {width:28px;height:28px;min-height:28px;padding:0;justify-content:center;color:var(--bold_muted);}
+:root .bold_profile_quick .bold_profile_departments>button {justify-content:space-between;}
+:root .bold_profile_quick .bold_profile_departments>button>span {gap:1px;}
+:root .bold_profile_quick .bold_profile_departments>button[aria-pressed="true"]>svg {color:var(--bold_red);}
+@media (pointer: coarse) {
+    :root .bold_profile_quick :is(.bold_profile_action,.bold_profile_departments>button,.bold_profile_submenu button) {min-height:44px;}
+    :root .bold_profile_quick :is(.bold_profile_quick_close, .bold_profile_departments header button, .bold_profile_submenu header button) {width:40px;height:40px;}
+}
 
 @media (prefers-reduced-motion: reduce) {
     .bold_profile_popover, .bold_profile_departments { animation: none; }

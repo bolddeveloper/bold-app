@@ -17,9 +17,9 @@ function stopped(row){
 }
 
 export function uploadStageLabel(value){
-    return {checking:'Comprobando el intento anterior…',preparing:'Protegiendo el archivo en la cola…',
-        queued:'Archivo protegido. Esperando turno para subir a Drive…',uploading:'Subiendo el archivo a Drive…',
-        retry:'Drive no respondió. El servidor conserva el archivo y reintentará…',ready:'Archivo listo en Drive…',
+    return {checking:'Comprobando el intento anterior…',preparing:'Preparando el archivo para Drive…',
+        queued:'El archivo sigue en tu dispositivo. Preparando la subida a Drive…',uploading:'Subiendo el archivo a Drive…',
+        retry:'Drive no respondió. El archivo sigue en tu dispositivo; vuelve a pulsar Enviar.',ready:'Archivo listo en Drive…',
         publishing:'Publicando el mensaje…',attached:'Mensaje confirmado.'}[value?.state] || 'Comprobando la subida…';
 }
 
@@ -38,7 +38,7 @@ export function createStagedMediaSender(client,{events=globalThis.window,setTime
             function accept(row){
                 checked(row,initial.client_id);onStage?.({...row,kind,container_id:container});
                 if(['ready','attached'].includes(row.state))finish(null,row);
-                else if(['failed','cancelled','expired'].includes(row.state))finish(stopped(row));
+                else if(['failed','cancelled','expired'].includes(row.state) || row.requires_file)finish(stopped(row));
             }
             async function read(){
                 wakeTimer=null;if(ended)return;if(busy){dirty=true;return;}
@@ -87,13 +87,11 @@ export function createStagedMediaSender(client,{events=globalThis.window,setTime
         if(lookup?.message_id)return confirmed(lookup.message_id);
         if(!Array.isArray(lookup?.results) || lookup.results.length>1)throw Error('Consulta de subida no válida.');
         let row=lookup.results[0];
-        if(!row){
+        if(row)checked(row,values.client_id);
+        if(row && (['cancelled','expired'].includes(row.state) || row.state==='failed' && !row.can_retry))throw stopped(row);
+        if(!row || row.requires_file || row.state==='failed' && row.can_retry){
             stage('preparing');const data=new FormData();data.set('client_id',values.client_id);data.set('file',file,file.name || 'adjunto');
-            row=await request(collection,{method:'POST',body:data,timeoutMs:45000});
-        }else{
-            checked(row,values.client_id);
-            // Only a new explicit send authorizes another cycle, never a push/timer.
-            if(row.state==='failed' && row.can_retry)row=await request(collection+row.id+'/',{method:'POST',body:{action:'retry'}});
+            row=await request(collection,{method:'POST',body:data,timeoutMs:120000});
         }
         signal?.throwIfAborted();checked(row,values.client_id);
         if(row.state==='failed' && !row.can_retry)throw stopped(row);

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Moon, Sun } from "lucide-react";
 import { BoldSelect } from "./shared/bold_select.jsx";
 import {startupGreeting} from "./startup_greeting.js";
+import {LoginBackground} from "./login_background.jsx";
+import {useMediaQuery} from "./shared/use_media_query.js";
 
 const themeKey = "bold_color_theme";
 const emailKey = "bold_remembered_email";
@@ -13,11 +15,22 @@ function readTheme() {
 }
 function readEmail() { try { return localStorage.getItem(emailKey) || ""; } catch { return ""; } }
 
-export function LoginIntro({name = ""}) {
+// Eight 560 ms placements, staggered by 180 ms, followed by a settled hold.
+export const LOGIN_INTRO_DURATION_MS = 2100;
+
+export function LoginIntro({name = "", playOnce = false, onComplete}) {
     const [dark] = useState(readTheme);
-    const variant = dark ? "blanco" : "rojo";
+    const reduced=useMediaQuery("(prefers-reduced-motion: reduce)");
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        if (!onComplete) return;
+        if (reduced) { onComplete(); return; }
+        if (!loaded) return;
+        const timer = window.setTimeout(onComplete, LOGIN_INTRO_DURATION_MS);
+        return () => window.clearTimeout(timer);
+    }, [loaded, reduced, onComplete]);
     return <main className={`core_login_intro ${dark ? "theme_dark" : ""}`} aria-label="Preparando tu espacio de trabajo">
-        <img src={`/auth/bold-carga-animada-oscuro-${variant}.svg`} alt="" aria-hidden="true" />
+        <img src={`/auth/bold-building-loader.svg${reduced ? "#still" : playOnce ? "#entry" : ""}`} alt="" aria-hidden="true" style={{colorScheme:dark ? "dark" : "light"}} onLoad={()=>setLoaded(true)} onError={()=>onComplete?.()}/>
         <span className="core_login_intro_status" role="status">{startupGreeting(name)}</span>
     </main>;
 }
@@ -45,6 +58,7 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
         onLogin(event);
     }
     return <main className={`core_auth_page ${dark ? "theme_dark" : ""}`}>
+        <LoginBackground dark={dark}/>
         <div className="core_auth_layout">
             <section className="core_auth_brand" aria-label="Bold">
                 <div className="core_auth_brand_art" aria-hidden="true"><img src="/auth/bold-loader.svg" alt="" /></div>
@@ -59,7 +73,7 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
             <section className="core_auth_content" aria-labelledby="core_auth_heading">
                 <button className="core_auth_theme" type="button" aria-label={dark ? "Activar modo claro" : "Activar modo oscuro"} onClick={() => setDark(!dark)}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button>
                 <div className="core_auth_form_wrap">
-                    <div className="core_auth_mobile_logo"><img src="/logo-bold.svg" alt="Bold" /></div>
+                    <div className="core_auth_mobile_logo"><svg viewBox="0 0 40 40" role="img" aria-label="BOLD"><circle cx="20" cy="20" r="13" fill="none" stroke="#e73535" strokeWidth="5"/></svg></div>
                     <p className="core_auth_section">{title}</p>
                     <h2 id="core_auth_heading">{account ? "Selecciona tu cargo" : passwordChangeRequired ? "Cambia tu contraseña" : mfaEnrollmentRequired ? "Protege tu cuenta" : invitationToken ? "Activa tu cuenta" : resetToken ? "Crea una contraseña nueva" : mfaChallenge ? "Verificación en dos pasos" : recoveryHelp ? "Recupera tu cuenta" : "Bienvenido de nuevo"}</h2>
                     <p className="core_auth_subtitle">{account ? "Elige la asignación con la que quieres continuar." : passwordChangeRequired ? "Debes reemplazar la contraseña temporal antes de continuar." : mfaEnrollmentRequired ? "Configura una aplicación autenticadora para completar el acceso." : invitationToken ? "Define tu contraseña para aceptar la invitación corporativa." : resetToken ? "El enlace se puede utilizar una sola vez." : mfaChallenge ? "Ingresa el código de tu aplicación autenticadora." : recoveryHelp ? "Enviaremos un enlace de un solo uso si la cuenta existe." : "Ingresa a tu cuenta para continuar."}</p>
@@ -108,7 +122,7 @@ export function LoginScreen({ title, error, busy, account, assignments, active, 
                         <button className="core_auth_submit" type="submit" disabled={busy}>Enviar instrucciones</button>
                         {recoveryMessage && <span role="status">{recoveryMessage}</span>}
                         <button type="button" className="core_auth_text_button" onClick={() => setRecoveryHelp(false)}>Volver al inicio de sesión</button>
-                    </form> : !account ? <form key="login" className="core_auth_form" onSubmit={handleSubmit}>
+                    </form> : !account ? <form key="login" className="core_auth_form core_auth_login_form" onSubmit={handleSubmit}>
                         <label htmlFor="core_auth_email">Correo electrónico</label>
                         <input id="core_auth_email" name="email" type="email" autoComplete="username" placeholder="nombre@bold.gt" defaultValue={savedEmail} required disabled={busy} />
                         <label htmlFor="core_auth_password">Contraseña</label>

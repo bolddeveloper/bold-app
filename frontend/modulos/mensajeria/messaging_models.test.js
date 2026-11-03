@@ -103,5 +103,7 @@ test("buscador de menciones de Chat usa conversación verificada y consulta acot
     assert.equal(calls[0][1].signal,'current');
     assert.throws(()=>api.mentionPeople('../../outside','Persona'));
     assert.throws(()=>api.mentionPeople(conversation,'x'));
+    await api.mentionPeople(conversation,'');
+    assert.match(calls.at(-1)[0],/mention-people\/\?q=$/);
     assert.throws(()=>api.mentionPeople(conversation,'x'.repeat(81)));
 });

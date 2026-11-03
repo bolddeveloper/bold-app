@@ -331,8 +331,6 @@ def _messaging_limit(name, default):
         raise ImproperlyConfigured(f'{name} debe ser un entero positivo.')
     return int(raw)
 
-MESSAGING_UPLOAD_ACCOUNT_BYTES = _messaging_limit('MESSAGING_UPLOAD_ACCOUNT_BYTES', 32 * 1024 * 1024)
-MESSAGING_UPLOAD_QUEUE_BYTES = _messaging_limit('MESSAGING_UPLOAD_QUEUE_BYTES', 128 * 1024 * 1024)
 MESSAGING_STORAGE_ACCOUNT_BYTES = _messaging_limit('MESSAGING_STORAGE_ACCOUNT_BYTES', 256 * 1024 * 1024)
 MESSAGING_STORAGE_TOTAL_BYTES = _messaging_limit('MESSAGING_STORAGE_TOTAL_BYTES', 2 * 1024 * 1024 * 1024)
 MESSAGING_UPLOAD_ACCOUNT_MAX_RECORDS = _messaging_limit('MESSAGING_UPLOAD_ACCOUNT_MAX_RECORDS', 20000)
@@ -378,3 +376,4 @@ GOOGLE_WORKSPACE_EDITORS_ENABLED = os.environ.get("GOOGLE_WORKSPACE_EDITORS_ENAB
 
 # Rich-text images arrive as base64 JSON, rather than multipart file fields.
 DATA_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_HANDLERS = ['boldApp.core.memory_uploads.MemoryOnlyUploadHandler']

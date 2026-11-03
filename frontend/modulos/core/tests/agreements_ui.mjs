@@ -20,10 +20,16 @@ const {default:React}=await import('react'),{createRoot}=await import('react-dom
 const load=file=>server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll('\\','/')}`);
 const {agreementApi}=await load('../mensajeria/agreement_api.js');
 const {default:MessageAgreements,PageMessageOrigins}=await load('../mensajeria/message_agreements.jsx');
-let reads=0,fail=true,hold=false,release,lateSignal;const calls=[];
+let reads=0,fail=true,hold=false,release,lateSignal,catalogFail=false,heldCatalog;const calls=[],catalogCalls=[];
 const destination={id:id(8),name:'Acuerdos del equipo',department:'IT',visibility:'public'};
+const designDestination={id:id(7),name:'Diseño',department:'Diseño',visibility:'department'};
 agreementApi.review=async(kind,container,ids)=>{reads++;return {results:ids.map((message_id,index)=>({message_id,source_version:1,text:index ? 'Entrega viernes':'<script>Solo texto</script>'}))};};
-agreementApi.destinations=async()=>({results:[destination],next:null});agreementApi.destination=async()=>destination;
+agreementApi.destinations=async(q,cursor,options)=>{
+    catalogCalls.push({q,cursor,signal:options.signal});
+    if(q==='lento')return new Promise(resolve=>heldCatalog={resolve,signal:options.signal});
+    if(catalogFail)throw {status:500};
+    return {results:q==='sin coincidencias' ? []:q==='diseño' ? cursor ? [designDestination,destination]:[designDestination]:[destination],next:q==='diseño' && !cursor ? 'next':null};
+};agreementApi.destination=async()=>destination;
 agreementApi.create=async(kind,container,attempt,options)=>{calls.push(structuredClone(attempt));assert.equal(snapshot.payload.attempt.client_id,attempt.client_id);if(hold){lateSignal=options.signal;return new Promise(resolve=>release=resolve);}if(fail)throw {status:500};return {created:false,page:{available:true,id:id(9),channel_id:id(8),title:attempt.title}};};
 const root=createRoot(document.getElementById('root')),settle=()=>new Promise(resolve=>setTimeout(resolve,20));
 async function until(predicate){const end=Date.now()+7000;while(!predicate() && Date.now()<end)await settle();assert.ok(predicate(),'agreement UI state');}
@@ -35,6 +41,19 @@ try{
     button('Preparar página de acuerdos').focus();button('Preparar página de acuerdos').click();await until(()=>document.querySelectorAll('.agreement_candidates input').length===2);
     for(const node of document.querySelectorAll('.agreement_candidates input')){node.click();await settle();}
     button('Revisar 2 mensajes').click();await until(()=>field('Canal de destino')?.options.length===2);assert.equal(reads,1);
+    assert.equal(catalogCalls.length,1,'the review lists permitted destinations automatically');
+    const query=value=>{const node=field('Buscar canal de destino');Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));};
+    const enter=()=>field('Buscar canal de destino').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    query('  diseño  ');await settle();assert.equal(catalogCalls.length,1,'typing does not request the catalog');enter();
+    await until(()=>field('Canal de destino').textContent.includes('#Diseño'));assert.equal(catalogCalls.at(-1).q,'diseño');assert.equal(calls.length,0,'Enter searches instead of submitting the agreement');
+    button('Más canales').click();await until(()=>field('Canal de destino').options.length===3);assert.equal(catalogCalls.at(-1).cursor,'next');assert.equal(catalogCalls.at(-1).q,'diseño');
+    query('sin coincidencias');await settle();button('Buscar canales').click();await until(()=>document.body.textContent.includes('No hay canales disponibles para esta búsqueda'));
+    assert.equal(field('Canal de destino').options.length,1);assert.equal(calls.length,0);
+    catalogFail=true;query('error');await settle();enter();await until(()=>document.querySelector('[role="alert"]')?.textContent.includes('No se pudieron buscar canales'));
+    catalogFail=false;query('lento');await settle();enter();await until(()=>heldCatalog);
+    assert.equal(button('Buscando canales…').disabled,true);query('nuevo');await settle();assert.equal(heldCatalog.signal.aborted,true);enter();await until(()=>field('Canal de destino').options.length===2);
+    heldCatalog.resolve({results:[designDestination],next:null});await settle();assert.equal(field('Canal de destino').textContent.includes('#Diseño'),false,'aborted searches cannot replace newer results');
+    query('');await settle();button('Buscar canales').click();await until(()=>field('Canal de destino').options.length===2);
     field('Canal de destino').value=id(8);field('Canal de destino').dispatchEvent(new Event('change',{bubbles:true}));await settle();
     assert.equal(button('Crear página de acuerdos').disabled,true,'private copying needs explicit approval');
     assert.equal(document.querySelector('script'),null,'source is displayed literally');

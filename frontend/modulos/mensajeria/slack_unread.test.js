@@ -19,6 +19,7 @@ test("hidden Slack events recover on focus; unrelated events and disposed identi
     visible=true;await sync.recover();assert.equal(calls,1);
     await sync.receive({...event,event_type:"messaging.created"});assert.equal(calls,1);
     await sync.receive({...event,payload:{channel_id:id,kind:"page.changed"}});assert.equal(calls,1,"document saves never trigger unread-summary requests");
+    await sync.receive({...event,payload:{kind:'channel.categories_changed',scope:id}});assert.equal(calls,1,'category changes never reload unread badges');
     sync.dispose();await sync.invalidate();await sync.receive(event);assert.equal(calls,1);
 });
 

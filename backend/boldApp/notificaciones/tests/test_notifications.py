@@ -116,6 +116,26 @@ class NotificationModuleTests(TransactionTestCase):
         self.assertIn("Necesito tu revisión @ana@bold.gt & equipo", notification.body)
         self.assertNotIn("<", notification.body)
         self.assertEqual(notification.route["comment_id"], response.data["id"])
+        self.actor.avatar_url = "https://example.com/actor-avatar.png"
+        self.actor.save(update_fields=["avatar_url"])
+        listed = self.recipient_client.get("/api/v2/notifications/").data["results"][0]
+        self.assertEqual(listed["actor_name"], self.actor.employee.full_name)
+        self.assertEqual(listed["actor_avatar_url"], self.actor.avatar_url)
+        self.assertEqual(listed["type"], "comment.mentioned")
+
+    def test_dismiss_one_preserves_task_and_other_recipients(self):
+        task = self.create_task("Aviso individual")
+        notification = Notification.objects.get(recipient_assignment=self.recipient_assignment)
+        other = Notification.objects.create(recipient_assignment=self.recipient_assignment, title="Conservar", type="system")
+        path = f"/api/v2/notifications/{notification.pk}/dismiss/"
+        self.assertEqual(self.actor_client.post(path).status_code, 404)
+        self.assertEqual(self.recipient_client.post(path).status_code, 204)
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.dismissed_at)
+        self.assertEqual(str(notification.task_id), task["id"])
+        self.assertEqual(self.recipient_client.get(f"/api/v2/tasks/{task['id']}/").status_code, 200)
+        self.assertEqual([row["id"] for row in self.recipient_client.get("/api/v2/notifications/").data["results"]], [str(other.pk)])
+        self.assertEqual(self.recipient_client.post(path).status_code, 404)
 
     def test_project_creation_notifies_its_owner(self):
         response = self.actor_client.post("/api/v2/projects/", {

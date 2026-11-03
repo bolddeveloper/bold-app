@@ -90,6 +90,8 @@ class ChannelAccessView(SlackView):
         channel = get_object_or_404(rows, pk=channel_id)
         if not self.policy().allows("slack.channel.access", channel.unit, channel.pk):
             raise NotFound("No puedes administrar el acceso de este canal.")
+        if channel.server_id:
+            raise ValidationError("Este canal hereda las invitaciones de su servidor. Adminístralas desde el servidor.")
         return channel
 
     def get(self, request, channel_id):
@@ -129,7 +131,7 @@ class ChannelManagementView(SlackView):
     def get(self, request):
         # This catalog exposes access settings, never message bodies, previews,
         # files, activity counters or unread state to an uninvited manager.
-        rows = DepartmentChannel.objects.select_related("unit", "creator").order_by("name", "id")
+        rows = DepartmentChannel.objects.filter(server__isnull=True).select_related("unit", "creator").order_by("name", "id")
         policy = self.policy()
         candidates = list(rows)
         policy.prime(candidates)

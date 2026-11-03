@@ -1,0 +1,13 @@
+:root div.bold_project_overflow {display:grid;gap:2px;box-sizing:border-box;min-width:210px;width:210px;max-width:calc(100vw - 24px);margin:0;padding:5px;border:1px solid var(--bold_line);border-radius:4px;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 8px 24px #0003;overflow:auto;overscroll-behavior:contain;animation:bold_project_menu_enter 140ms ease-out;}
+:root div.bold_project_overflow button {display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-width:0;min-height:32px;padding:7px 8px;border:0;border-radius:3px;background:transparent;color:var(--bold_text);text-align:left;font:inherit;font-size:12px;font-weight:500;line-height:1.4;cursor:pointer;box-shadow:none;transition:background-color 130ms ease;}
+:root div.bold_project_overflow button span {min-width:0;color:inherit;font-size:12px;font-weight:500;line-height:1.4;overflow-wrap:anywhere;}
+:root div.bold_project_overflow button svg {flex:0 0 15px;color:var(--bold_muted);}
+:root div.bold_project_overflow button:hover {background:var(--bold_hover);box-shadow:none;}
+:root div.bold_project_overflow button:focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;background:var(--bold_hover);}
+:root div.bold_project_overflow .danger_menu_item {border-top:1px solid var(--bold_line);margin-top:3px;padding-top:9px;color:var(--bold_red_dark);}
+html.theme_dark .bold_project_overflow .danger_menu_item {color:#f16c68;}
+:root div.bold_project_overflow .danger_menu_item svg {color:inherit;}
+:root div.bold_project_overflow .danger_menu_item:only-child {border-top:0;margin-top:0;padding-top:7px;}
+@keyframes bold_project_menu_enter {from {opacity:0;translate:0 -3px;} to {opacity:1;translate:none;}}
+@media(max-width:1023px),(pointer:coarse) {:root div.bold_project_overflow button {min-height:44px;padding:10px 8px;}}
+@media(prefers-reduced-motion:reduce) {:root div.bold_project_overflow {animation:none;} :root div.bold_project_overflow button {transition:none;}}

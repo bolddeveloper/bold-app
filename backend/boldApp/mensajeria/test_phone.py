@@ -39,6 +39,15 @@ class PhoneTransferTests(TransactionTestCase):
         self.base = "/api/v2/messaging/phone-transfers/"
         self.mobile = APIClient()
         self.device = secrets.token_urlsafe(32)
+        from boldApp.workspace.models import ImageStorageRoot
+        from .test_upload_outbox import SyntheticDrive
+        self.storage=ImageStorageRoot.objects.create(user=self.alice.employee.user_account,subject='fixture',client_id='fixture',
+            google_email='fixture@example.invalid',folder_id='fixture_root',folder_name='BOLD',active=True)
+        self.drive=SyntheticDrive()
+        for target in ('boldApp.mensajeria.upload_provider.google','boldApp.workspace.service.google'):
+            current=patch(target,side_effect=self.drive);current.start();self.addCleanup(current.stop)
+        for target in ('boldApp.mensajeria.upload_provider.storage_user','boldApp.workspace.image_storage.storage_user'):
+            current=patch(target,return_value=self.alice.employee.user_account);current.start();self.addCleanup(current.stop)
 
     def create(self, **target):
         result = self.client.post(self.base, target or {"conversation_id":self.conversation}, format="json")
@@ -64,6 +73,20 @@ class PhoneTransferTests(TransactionTestCase):
     def ready(self):
         self.create(); code = self.pair()
         self.assertEqual(self.client.post(self.url + "approve/", {"pairing_code":code}, format="json").status_code, 200)
+
+    def test_drive_failure_preserves_only_metadata_and_phone_can_retry_same_file(self):
+        from .models import MediaUpload
+        self.ready();nonce=uuid.uuid4();self.drive.unavailable=True
+        result=self.upload(nonce)
+        self.assertEqual(result.status_code,503,result.data)
+        self.assertEqual(bytes(PhoneImage.objects.get().content),b'')
+        self.assertEqual(bytes(MediaUpload.objects.get().content),b'')
+        self.assertEqual(self.client.get(self.url).data['images'],[])
+        self.drive.unavailable=False
+        retried=self.upload(nonce)
+        self.assertEqual(retried.status_code,200,retried.data)
+        self.assertEqual(len(self.client.get(self.url).data['images']),1)
+        self.assertEqual(PhoneImage.objects.count(),1)
 
     def test_approval_draft_only_download_idempotence_and_seal(self):
         self.create(); code = self.pair()
@@ -157,7 +180,7 @@ class PhoneTransferTests(TransactionTestCase):
         self.assertEqual(self.upload().status_code,201)
         self.assertEqual(self.upload().status_code,400)
 
-    def test_phone_pixels_reach_private_drive_only_on_explicit_send(self):
+    def test_phone_pixels_are_in_private_drive_before_message_publication(self):
         from boldApp.workspace.models import ImageStorageRoot
         from .models import MessageMedia
         from .channel_validation import LocalDrive
@@ -167,8 +190,6 @@ class PhoneTransferTests(TransactionTestCase):
         pixels=self.client.get(self.url+"images/"+image_id+"/").content
         self.assertEqual(DirectMessage.objects.count(),0)
         self.assertEqual(MessageMedia.objects.count(),0)
-        ImageStorageRoot.objects.create(user=self.alice.employee.user_account, subject="fixture", client_id="fixture",
-            google_email="fixture@bold.gt",folder_id="fixture_root",folder_name="BOLD APP",active=True)
         drive=LocalDrive()
         from .upload_outbox import perform
         nonce=str(uuid.uuid4());base=self.root+self.conversation+'/'
@@ -176,7 +197,7 @@ class PhoneTransferTests(TransactionTestCase):
                 patch("boldApp.mensajeria.upload_provider.google",side_effect=drive.google):
             queued=self.client.post(base+'uploads/',{'client_id':nonce,'file':SimpleUploadedFile('phone.webp',pixels,content_type='image/webp')},format='multipart')
             self.assertEqual(queued.status_code,202,queued.data)
-            self.assertFalse(drive.files,'preparing does not synchronously upload or publish')
+            self.assertTrue(drive.files,'the private file is in Drive before message publication')
             self.assertTrue(perform(queued.data['id']))
             self.assertEqual(DirectMessage.objects.count(),0)
             result=self.client.post(base+'messages/',{'body':'Desde teléfono','client_id':nonce,'upload_id':queued.data['id']},format='json')

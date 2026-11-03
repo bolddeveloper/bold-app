@@ -30,6 +30,8 @@ export default define_config({
         include: ["@casualoffice/sheets/sheets", "@casualoffice/sheets/chrome", "@casualoffice/sheets/styles", "@univerjs/sheets-data-validation/facade", "@univerjs/sheets-table-ui"]
     },
     server: {
+        // Wait for complete editor writes before invalidating a module's transform.
+        watch: { awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 20 } },
         port: 5174,
         strictPort: true,
         proxy: {

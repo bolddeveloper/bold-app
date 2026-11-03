@@ -51,7 +51,9 @@ class DeploymentContractTests(SimpleTestCase):
         self.assertEqual(len(entries),len(environment),'Duplicate environment keys require review.')
         example=dict(line.split('=',1) for line in (ROOT/'deploy/oracle/.env.oracle.example').read_text(encoding='utf-8').splitlines()
             if line and not line.startswith('#') and '=' in line)
-        defaults=messaging_defaults();self.assertEqual(len(defaults),10)
+        defaults=messaging_defaults();self.assertEqual(len(defaults),8)
+        for retired in ('MESSAGING_UPLOAD_ACCOUNT_BYTES','MESSAGING_UPLOAD_QUEUE_BYTES'):
+            self.assertNotIn(retired,environment);self.assertNotIn(retired,example)
         for name,default in defaults.items():
             with self.subTest(setting=name):
                 self.assertEqual(environment.get(name),'${'+name+':-'+str(default)+'}')

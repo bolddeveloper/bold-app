@@ -6728,7 +6728,7 @@ button {
 }
 
 .task_row.task_row_multi_selected {
-    background: #fff0f1 !important;
+    background: color-mix(in srgb, var(--bold_red) 12%, var(--bold_surface)) !important;
     box-shadow: inset 3px 0 0 var(--bold_red);
 }
 

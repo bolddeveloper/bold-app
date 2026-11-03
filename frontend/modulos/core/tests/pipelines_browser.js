@@ -120,8 +120,8 @@ async page=>{
  await page.getByRole('button',{name:'Crear pipeline',exact:true}).click();
  await page.getByRole('dialog',{name:'Crear pipeline'}).getByLabel('Nombre del pipeline').fill('Nuevo flujo');
  await page.getByRole('button',{name:'Guardar pipeline',exact:true}).click();await page.getByRole('dialog',{name:'Crear pipeline'}).waitFor({state:'detached'});
- await page.waitForFunction(()=>document.querySelector('.pipeline_toolbar_actions strong')?.textContent==='Nuevo flujo');
- await page.reload();await page.waitForFunction(()=>document.querySelector('.pipeline_toolbar_actions strong')?.textContent==='Nuevo flujo');
+ await page.waitForFunction(()=>document.querySelector('.pipeline_current strong')?.textContent==='Nuevo flujo');
+ await page.reload();await page.waitForFunction(()=>document.querySelector('.pipeline_current strong')?.textContent==='Nuevo flujo');
  await page.locator('#scope').click();if(await page.getByRole('tab',{name:'Equipo',exact:true}).count())throw new Error('Equipo appeared in projects');
  await page.screenshot({path:'output/playwright/pipeline-board.png'});
 }

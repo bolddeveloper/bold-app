@@ -33,3 +33,6 @@ export function invitePeople(members, people) {
     if(rows.size>200) throw Error("El departamento supera el límite de 200 personas. No se añadió ninguna; selecciona personas individualmente.");
     return [...rows.values()];
 }
+
+export const channelServerKey = row => row?.server?.id ? `server:${row.server.id}` : row?.department?.id || 'independent';
+export const channelServerFilters = key => key?.startsWith('server:') ? {server:key.slice(7)} : key ? {unit:key} : {};

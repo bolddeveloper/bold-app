@@ -5,32 +5,38 @@
     color: var(--bold_text);
 }
 
-.bold_shortcut_preferences > h2 { margin: 0 0 16px; }
-.bold_shortcut_preferences > h3 { margin: 32px 0 12px; }
 .bold_shortcut_preferences > p { color: var(--bold_muted); line-height: 1.6; }
 
 /* Lista editable: acción, combinación y controles. */
 .bold_shortcut_list {
     display: grid;
-    margin: 24px 0;
+    margin: 14px 0;
     border: 1px solid var(--bold_line);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 0;
 }
 
 .bold_shortcut_row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(145px, 1fr) minmax(168px, 1fr) auto;
     align-items: center;
-    gap: 16px;
-    padding: 14px 16px;
+    gap: 10px;
+    padding: 6px 10px;
     background: var(--bold_surface);
+    border-inline-start: 2px solid transparent;
+    transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .bold_shortcut_row + .bold_shortcut_row { border-top: 1px solid var(--bold_line); }
 .bold_shortcut_row > strong { min-width: 0; overflow-wrap: anywhere; }
-.bold_shortcut_row > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.bold_shortcut_row input { min-width: 0; width: 100%; box-sizing: border-box; }
+.bold_shortcut_row[data-recording] { border-inline-start-color: var(--bold_red); background: var(--bold_surface_soft); }
+.bold_shortcut_actions, .bold_shortcut_keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.bold_shortcut_capture { display: grid; gap: 4px; }
+.bold_profile_module .bold_shortcut_capture input { min-width: 0; padding: 7px 8px; border-color: var(--bold_red); font-size: 13px; }
+.bold_shortcut_footer { align-items: center; }
+.bold_shortcut_reference { margin-top: 16px; border-block: 1px solid var(--bold_line); }
+.bold_shortcut_reference summary { padding: 10px 0; cursor: pointer; font-weight: 600; }
+.bold_shortcut_reference summary svg { vertical-align: middle; margin-inline: 4px 8px; }
+.bold_shortcut_reference > p { color: var(--bold_muted); }
 
 /* Combinaciones y referencia de atajos existentes. */
 .bold_shortcut_preferences kbd {
@@ -38,9 +44,9 @@
     width: fit-content;
     max-width: 100%;
     box-sizing: border-box;
-    padding: 6px 10px;
+    padding: 2px 6px;
     border: 1px solid var(--bold_line);
-    border-radius: 6px;
+    border-radius: 0;
     background: var(--bold_surface_soft);
     color: var(--bold_text);
     font: 13px ui-monospace, monospace;
@@ -55,7 +61,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
-    padding: 14px 0;
+    padding: 8px 0;
     border-bottom: 1px solid var(--bold_line);
 }
 .bold_shortcut_existing dt { min-width: 0; }
@@ -63,5 +69,7 @@
 
 /* Adaptación al ancho del panel, incluyendo el espacio ocupado por el sidebar. */
 @container (max-width: 640px) {
-    .bold_shortcut_row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .bold_shortcut_row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .bold_shortcut_actions { grid-column: 1 / -1; }
 }
+@media (prefers-reduced-motion: reduce) { .bold_shortcut_row { transition: none; } }

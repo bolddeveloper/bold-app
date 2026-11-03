@@ -1,0 +1,80 @@
+:root .slack_module {--slack_thread_accent:color-mix(in srgb,var(--bold_red) 60%,var(--bold_text));}
+:root .slack_module .slack_main {container-type:inline-size;}
+:root .slack_module .slack_conversation_split {display:flex;flex:1;min-height:0;min-width:0;overflow:hidden;}
+:root .slack_module .slack_active_conversation {display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;}
+:root .slack_module .slack_thread_open > .slack_active_conversation {flex:0 0 clamp(330px,38%,430px);border-left:1px solid var(--bold_line);animation:slack_thread_enter 200ms ease-out;}
+:root .slack_module .slack_channel_context {display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden;}
+:root .slack_module .slack_channel_context > header {display:flex;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--bold_line);min-height:40px;}
+:root .slack_module .slack_channel_context > header strong {font-size:12px;flex:1;}
+:root .slack_module .slack_channel_context > header button {font-size:11px;min-height:28px;border:0;background:transparent;}
+:root .slack_module .slack_channel_context .slack_avatar {display:grid;place-items:center;}
+:root .slack_module .slack_thread_source {background:color-mix(in srgb,var(--bold_red) 5%,var(--bold_surface));}
+:root .slack_module .slack_return_composer {justify-content:flex-start;flex-wrap:wrap;gap:8px;margin:8px 10px;min-height:44px;background:var(--bold_surface_soft);color:var(--bold_muted);}
+:root .slack_module .slack_return_composer small {margin-left:auto;font-size:10px;}
+:root .slack_module .slack_thread_context {align-items:flex-start;flex-shrink:0;max-height:40%;overflow:auto;padding:10px 12px;background:var(--bold_surface_soft);border-bottom:1px solid var(--bold_line);}
+:root .slack_module .slack_thread_context > div {min-width:0;flex:1;}
+:root .slack_module .slack_thread_author {display:flex;align-items:center;gap:6px;margin-top:8px;}
+:root .slack_module .slack_thread_author .slack_avatar {display:grid;place-items:center;width:22px;min-height:22px;height:22px;flex-basis:22px;font-size:9px;}
+:root .slack_module .slack_thread_context strong {display:block;font-size:13px;overflow-wrap:anywhere;}
+:root .slack_module .slack_thread_context p {font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:95px;overflow:auto;margin:7px 0;}
+:root .slack_module .slack_thread_name {display:flex;align-items:flex-end;gap:7px;margin:8px 0;}
+:root .slack_module .slack_thread_name label {flex:1;min-width:0;font-size:11px;}
+:root .slack_module .slack_thread_name small {font-weight:400;}
+:root .slack_module .slack_thread_name input {min-height:32px;padding:6px 8px;font-size:12px;}
+:root .slack_module .slack_thread_name button {flex-shrink:0;}
+:root .slack_module .slack_thread_started {display:flex;align-items:center;gap:6px;min-width:0;padding:7px 0;font-size:11px;color:var(--bold_muted);border-top:1px solid var(--bold_line);margin-top:5px;}
+:root .slack_module .slack_thread_started > span {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .slack_module .slack_thread_started button {flex-shrink:0;min-height:26px;background:transparent;border:0;color:var(--slack_thread_accent);}
+:root .slack_module .slack_pinned_label {display:block;color:var(--slack_thread_accent);font-size:10px;margin-top:4px;}
+:root .slack_module .slack_channel_catalog {padding:0;border:1px solid var(--bold_line);border-radius:6px;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 12px 36px #0004;overflow:auto;white-space:normal;}
+:root .slack_module .slack_channel_catalog[hidden] {display:none;}
+:root .slack_module .slack_channel_catalog:popover-open {display:flex;flex-direction:column;gap:0;animation:slack_thread_enter 160ms ease-out;}
+:root .slack_module .slack_channel_catalog > header {display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--bold_line);flex-shrink:0;}
+:root .slack_module .slack_channel_catalog > header > div {display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+:root .slack_module .slack_channel_catalog h3 {margin:0;font-size:14px;}
+:root .slack_module .slack_channel_catalog header small {font-size:11px;overflow:hidden;text-overflow:ellipsis;}
+:root .slack_module .slack_channel_catalog > header button {min-width:28px;min-height:28px;border:0;background:transparent;padding:4px;}
+:root .slack_module .slack_thread_search {display:flex;gap:7px;padding:10px 12px;flex-shrink:0;}
+:root .slack_module .slack_thread_search label {display:flex;align-items:center;gap:6px;flex:1;min-width:0;border:1px solid var(--bold_line);border-radius:4px;padding:0 7px;}
+:root .slack_module .slack_thread_search input {border:0;background:transparent;padding:5px 0;min-height:32px;font-size:12px;}
+:root .slack_module .slack_thread_search label:focus-within {border-color:var(--bold_red);}
+:root .slack_module .slack_thread_search input:focus-visible {outline:0;box-shadow:none;}
+:root .slack_module .slack_thread_create {display:grid;gap:8px;padding:0 12px 12px;}
+:root .slack_module .slack_thread_create button {justify-self:end;}
+:root .slack_module .slack_catalog_rows {overflow:auto;min-height:0;display:grid;gap:7px;padding:8px;scrollbar-width:thin;overscroll-behavior:contain;}
+:root .slack_module .slack_catalog_card {display:flex;align-items:stretch;flex-direction:column;gap:5px;min-width:0;width:100%;padding:10px;text-align:left;border:1px solid var(--bold_line);border-radius:5px;background:var(--bold_surface_soft);white-space:normal;}
+:root .slack_module .slack_catalog_card:hover:not(:disabled) {border-color:var(--bold_red);background:var(--bold_hover);}
+:root .slack_module .slack_catalog_card > header,:root .slack_module .slack_channel_context .slack_message_card > header {display:flex;align-items:center;gap:6px;font-size:12px;}
+:root .slack_module .slack_catalog_card > header strong {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .slack_module .slack_catalog_card time {margin-left:auto;flex-shrink:0;font-size:10px;color:var(--bold_muted);}
+:root .slack_module .slack_catalog_card > strong {font-size:13px;overflow-wrap:anywhere;}
+:root .slack_module .slack_catalog_avatar {display:grid;place-items:center;flex:0 0 25px;width:25px;height:25px;border-radius:50%;overflow:hidden;background:var(--bold_hover);font-size:10px;}
+:root .slack_module .slack_catalog_avatar img {width:100%;height:100%;object-fit:cover;}
+:root .slack_module .slack_channel_context .slack_catalog_avatar {display:none;}
+:root .slack_module .slack_pin_excerpt {display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;}
+:root .slack_module .slack_catalog_card small {font-size:10px;font-weight:400;}
+:root .slack_module .slack_channel_catalog > p {padding:10px 12px;font-size:12px;}
+:root .slack_module .slack_catalog_empty {color:var(--bold_muted);}
+:root .slack_module .slack_message_toolbar {position:absolute;top:-14px;right:25px;z-index:2;display:flex;gap:1px;padding:2px;border:1px solid var(--bold_line);border-radius:5px;background:var(--bold_surface);box-shadow:0 2px 8px #0002;}
+:root .slack_module .slack_message_toolbar > button {width:27px;min-height:27px;padding:4px;border:0;background:transparent;font-size:16px;}
+:root .slack_module .slack_message_toolbar > button > span {display:none;}
+:root .slack_module .slack_message_more {top:-12px;right:-5px;background:var(--bold_surface);border:1px solid var(--bold_line);border-radius:4px;width:30px;min-height:30px;z-index:2;}
+@media(hover:hover) and (pointer:fine){
+:root .slack_module .slack_message_toolbar {opacity:0;pointer-events:none;transform:translateY(3px);transition:opacity 150ms ease,transform 150ms ease;}
+:root .slack_module .slack_message:is(:hover,:focus-within) .slack_message_toolbar,:root .slack_module .slack_message:has(.slack_message_more[aria-expanded=true]) .slack_message_toolbar {opacity:1;pointer-events:auto;transform:none;}
+}
+@container(max-width:740px){
+:root .slack_module .slack_thread_open > .slack_channel_context {display:none;}
+:root .slack_module .slack_thread_open > .slack_active_conversation {flex:1;border-left:0;}
+}
+@media(max-width:767px){
+:root .slack_module .slack_thread_open > .slack_channel_context {display:none;}
+:root .slack_module .slack_thread_open > .slack_active_conversation {flex:1;border:0;}
+:root .slack_module .slack_message_toolbar {display:none;}
+:root .slack_module .slack_message_more {top:0;right:0;width:36px;min-height:36px;}
+:root .slack_module .slack_catalog_trigger {min-height:44px;min-width:36px;}
+:root .slack_module .slack_catalog_card {min-height:74px;}
+:root .slack_module .slack_thread_context {max-height:35%;}
+}
+@keyframes slack_thread_enter {from{opacity:0;transform:translateX(8px);}to{opacity:1;transform:none;}}
+@media(prefers-reduced-motion:reduce){:root .slack_module :is(.slack_active_conversation,.slack_channel_catalog) {animation:none;} :root .slack_module .slack_message_toolbar {transition:none;}}

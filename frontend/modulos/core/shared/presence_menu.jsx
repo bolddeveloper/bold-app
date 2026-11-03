@@ -25,7 +25,7 @@ export function useProfileSubmenuPosition(panel, trigger, dependency) {
     return position;
 }
 
-export default function PresenceMenu({trigger, close, configure, dark}) {
+export default function PresenceMenu({trigger, close, configure}) {
     const panel = useRef(null), durationPanel = useRef(null), durationTrigger = useRef(null), timer = useRef(null), alive = useRef(true), saving = useRef(false);
     const [draft, setDraft] = useState(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [duration, setDuration] = useState(null), [notice, setNotice] = useState("");
     const position = useProfileSubmenuPosition(panel, trigger, `${!!draft}:${error}:${notice}:${busy}`);
@@ -47,7 +47,7 @@ export default function PresenceMenu({trigger, close, configure, dark}) {
         } catch (problem) {if (alive.current) setError(problem.message);}
         finally {saving.current = false; if (alive.current) setBusy(false);}
     }
-    return <aside ref={panel} className={`bold_profile_submenu ${dark ? "theme_dark" : ""}`} style={position} aria-label="Elegir disponibilidad" onKeyDown={event => {if (event.key === "Escape") {event.stopPropagation(); duration ? setDuration(null) : close(); trigger.current?.focus();}}}>
+    return <aside ref={panel} className="bold_profile_submenu" style={position} aria-label="Elegir disponibilidad" onKeyDown={event => {if (event.key === "Escape") {event.stopPropagation(); duration ? setDuration(null) : close(); trigger.current?.focus();}}}>
         <header><h3>Mi disponibilidad</h3><button type="button" aria-label="Cerrar disponibilidad" onClick={close}><X size={17}/></button></header>
         {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
         {!draft ? <p role="status">{error ? "Cierra y vuelve a abrir para reintentar." : "Cargando estado…"}</p> : <>
@@ -58,7 +58,7 @@ export default function PresenceMenu({trigger, close, configure, dark}) {
                     <button type="button" disabled={busy} aria-pressed={draft.status === status} aria-expanded={timed ? duration === status : undefined} onMouseEnter={event => timed ? openDuration(event, status) : setDuration(null)} onClick={event => timed ? openDuration(event, status) : choose(status)} onKeyDown={event => {if (timed && event.key === "ArrowRight") {event.preventDefault(); openDuration(event, status); requestAnimationFrame(() => durationPanel.current?.querySelector("button")?.focus());}}}>
                         <span className={`bold_presence_dot bold_presence_${status}`} aria-hidden="true"/><span>{label}</span>{timed ? <ChevronRight size={16}/> : draft.status === status && <Check size={16}/>}
                     </button>
-                    {duration === status && <aside ref={durationPanel} className={`bold_profile_submenu bold_presence_durations ${dark ? "theme_dark" : ""}`} style={durationPosition} aria-label={`Duración de ${label}`} onMouseEnter={keep} onMouseLeave={leave}>
+                    {duration === status && <aside ref={durationPanel} className="bold_profile_submenu bold_presence_durations" style={durationPosition} aria-label={`Duración de ${label}`} onMouseEnter={keep} onMouseLeave={leave}>
                         <header><h3>{label} durante…</h3><button type="button" aria-label="Volver a estados" onClick={() => {setDuration(null); durationTrigger.current?.focus();}}><X size={17}/></button></header>
                         {error && <p role="alert">{error}</p>}
                         {presenceDurations.map(([minutes, text]) => <button type="button" disabled={busy} key={minutes} onClick={() => choose(status, minutes)}>{text}</button>)}

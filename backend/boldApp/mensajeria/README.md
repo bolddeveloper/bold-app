@@ -1,5 +1,15 @@
 # Mensajería directa de BOLD
 
+## Almacenamiento de archivos — actualización del 2 de noviembre de 2026
+
+Las nuevas imágenes, iconos, audios y documentos de Chat y Slack se guardan en Drive, incluido el envío de imágenes desde el teléfono. El backend conserva referencias, permisos, tamaños y huellas de integridad; procesa los bytes únicamente en memoria durante la petición. No crea archivos temporales ni guarda contenido nuevo en la base de datos. Las peticiones HTTP tienen un límite global de 32 MiB; siguen vigentes los límites menores de cada módulo.
+
+El archivo se sube a Drive antes de publicar el mensaje. Si Drive falla, el archivo permanece en el dispositivo y el usuario reintenta expresamente con el mismo identificador. El trabajador solo concilia metadatos de un archivo ya reservado en Drive y limpia preparaciones descartadas mediante su Papelera recuperable. No dispone de una copia local para reenviar. Los límites `MESSAGING_STORAGE_*` siguen controlando archivos e intentos; se retiraron los presupuestos de la antigua cola de bytes.
+
+Los originales históricos todavía presentes en la base de datos quedan fuera de la caducidad y limpieza automáticas hasta trasladarlos. Antes de migrarlos, hacer respaldo y reconectar Almacenamiento de imágenes. `python manage.py migrate_messaging_files_to_drive` solo informa del inventario; `--apply` copia y verifica cada original en Drive antes de vaciar sus bytes locales. No publica mensajes ni cambia permisos. Una conexión fallida conserva los originales. La migración de esquema `0038` añade la referencia de Drive de las imágenes del teléfono sin borrar las columnas antiguas.
+
+Esta actualización está preparada localmente. Su validación utiliza Drive simulado; no implica despliegue ni traslado de los archivos históricos de producción.
+
 Mensajería permite conversaciones persistentes de texto en tiempo real entre dos empleados. Cada empleado puede abrirlas desde el avatar de un compañero en Equipo o desde Mensajería. Cambiar de cargo no cambia la identidad de los participantes ni crea otro chat.
 
 ## Privacidad y requisitos

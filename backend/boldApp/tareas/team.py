@@ -208,7 +208,14 @@ class TeamMeetingsView(TeamView):
 
     def get(self, request, employee_id):
         from boldApp.calendario.models import AppCalendar, AppCalendarEvent
-        response = self.google_meetings(request, employee_id)
+        try:
+            day = date.fromisoformat(request.query_params.get("date", ""))
+            last = date.fromisoformat(request.query_params.get("end_date", day.isoformat()))
+        except ValueError:
+            raise serializers.ValidationError("Selecciona fechas válidas.")
+        if last < day or (last - day).days > 30 or last == date.max:
+            raise serializers.ValidationError("Selecciona un período de 1 a 31 días, con el fin después del inicio.")
+        response = self.google_meetings(request, employee_id, day, last)
         calendars = AppCalendar.objects.filter(team_shares__user__employee_id=employee_id).filter(
             Q(owner__employee_id=employee_id) | Q(members__user__employee_id=employee_id, members__role="manager")
         ).distinct()
@@ -216,25 +223,24 @@ class TeamMeetingsView(TeamView):
             return response
         zone_name = response.data.get("time_zone", "America/Guatemala")
         try:
-            day = date.fromisoformat(request.query_params.get("date", ""))
             zone = ZoneInfo(zone_name)
-        except (ValueError, ZoneInfoNotFoundError):
+        except ZoneInfoNotFoundError:
             raise serializers.ValidationError("Selecciona una fecha válida.")
         start = datetime.combine(day, time.min, tzinfo=zone)
-        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=zone)
+        end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=zone)
         meetings = list(response.data.get("meetings", []))
         for row in AppCalendarEvent.objects.filter(calendar__in=calendars, start_at__lt=end, end_at__gt=start).select_related("calendar"):
             data = row.data
             if data.get("status") == "cancelled":
                 continue
             # All-day dates are calendar dates, independent of the viewer's time zone.
-            if data.get("start", {}).get("date") and not (data["start"]["date"] <= day.isoformat() < data["end"]["date"]):
+            if data.get("start", {}).get("date") and not (data["start"]["date"] <= last.isoformat() and data["end"]["date"] > day.isoformat()):
                 continue
             meetings.append({"id": f"bold:{row.pk}", "title": "Ocupado" if data.get("visibility") in ("private", "confidential") else data.get("summary") or "Evento",
                 "start": row.start_at.isoformat(), "end": row.end_at.isoformat(), "all_day": bool(data.get("start", {}).get("date")), "calendar": row.calendar.name})
         return Response({"state": "shared", "time_zone": zone_name, "meetings": sorted(meetings, key=lambda row: row["start"])})
 
-    def google_meetings(self, request, employee_id):
+    def google_meetings(self, request, employee_id, day, last):
         from boldApp.calendario.models import CalendarDraft
         from boldApp.calendario.presence import meeting_window
         from boldApp.calendario.service import event_path, google_request
@@ -248,13 +254,12 @@ class TeamMeetingsView(TeamView):
         if not connection:
             return Response({"state": "disconnected", "meetings": []})
         try:
-            day = date.fromisoformat(request.query_params.get("date", ""))
             zone = ZoneInfo(connection.time_zone)
-        except (ValueError, ZoneInfoNotFoundError):
+        except ZoneInfoNotFoundError:
             raise serializers.ValidationError("Selecciona una fecha válida.")
         start = datetime.combine(day, time.min, tzinfo=zone)
-        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=zone)
-        key = f"team-meetings:{employee_id}:{day}:{connection.updated_at.isoformat()}"
+        end = datetime.combine(last + timedelta(days=1), time.min, tzinfo=zone)
+        key = f"team-meetings:{employee_id}:{day}:{last}:{connection.updated_at.isoformat()}"
         meetings = cache.get(key)
         if meetings is None:
             drafts = set(CalendarDraft.objects.filter(owner=assignment.employee.user_account).values_list("event_id", flat=True))

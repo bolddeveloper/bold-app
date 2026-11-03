@@ -57,8 +57,8 @@ class UploadDiscardTests(TransactionTestCase):
         self.assertEqual(DirectMessage.objects.get(pk=message).body,'Edición posterior')
 
     def test_inflight_provider_cannot_revive_a_stop_and_cleanup_uses_recoverable_trash(self):
+        self.drive.after_upload=lambda:self.assertEqual(self.discard(MediaUpload.objects.get().client_id).data['outcome'],'cancelled')
         result=self.queue();row=MediaUpload.objects.get(pk=result.data['id'])
-        self.drive.after_upload=lambda:self.assertEqual(self.discard(row.client_id).data['outcome'],'cancelled')
         self.assertFalse(perform(row.pk));row.refresh_from_db();self.assertEqual(row.state,'cancelled')
         self.assertFalse(reconcile(row.pk),'lease of old worker must elapse before cleanup')
         MediaUpload.objects.filter(pk=row.pk).update(lease_until=timezone.now()-timedelta(seconds=1))

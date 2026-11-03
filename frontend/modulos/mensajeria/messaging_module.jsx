@@ -1,5 +1,6 @@
-import {lazy, Suspense, useCallback, useEffect, useRef, useState} from "react";
-import {ArrowLeft, AtSign, ChevronDown, Forward, Hash, ImagePlus, ListChecks, LoaderCircle, LockKeyhole, MessageCircle, PanelLeftClose, PanelLeftOpen, Pencil, RefreshCw, Search, Send, Settings2, Smile, Users, X} from "lucide-react";
+import {useFileTransfer,FileDropHint} from "../core/shared/use_file_transfer.jsx";
+import {lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from "react";
+import {ArrowLeft, AtSign, Bookmark, ChevronDown, History, Mail, Forward, Hash, ImagePlus, ListChecks, LoaderCircle, LockKeyhole, MessageCircle, PanelLeftClose, PanelLeftOpen, Pencil, RefreshCw, Search, Send, Settings2, Smile, Users, X} from "lucide-react";
 import {useCore} from "../core/core_provider.jsx";
 import {useShell} from "../core/app_shell.jsx";
 import "./channel_controls.css";
@@ -9,6 +10,10 @@ import {presenceLabel} from "../core/shared/presence.js";
 import {messagingApi} from "./messaging_api.js";
 import {applyReceipts, canEditMessage, dayLabel, deliveryState, enterSends, initials, mergeMessages, messageError, normalizeQuery, reconcileMessages} from "./messaging_models.js";
 import "./messaging.css";
+import "./messaging_workspace_v3.css";
+import "./chat_panels_v3.css";
+import {ChatEmojiPicker, ChatEnterPreferences} from "./chat_composer_dialogs.jsx";
+import ComposerOptions from "./composer_options.jsx";
 import {MediaDraft, MessageMedia, VoiceRecorder} from "./message_media.jsx";
 import {mediaPreview} from "./media_helpers.js";
 import {captureComposer,restoreComposer} from "./composer_draft.js";
@@ -27,16 +32,15 @@ const ChatImageEditor = lazy(() => import("./image_editor.jsx"));
 const ForwardMessageDialog = lazy(() => import("./forward_message_dialog.jsx"));
 const HistorySearch = lazy(() => import("./history_search.jsx"));
 const ResourceLibrary = lazy(() => import("./resource_library.jsx"));
-import SaveResource from "./save_resource.jsx";
-import ReadingReminder,{ReadingReminderBanner} from './reading_reminder.jsx';
-import MessageReactions from './message_reactions.jsx';
-import MessageTasks from './message_tasks.jsx';
+import {ReadingReminderBanner} from './reading_reminder.jsx';
+import ChatMessageActions from './chat_message_actions.jsx';
 import MessageAgreements from './message_agreements.jsx';
 import {applyReactions} from './reaction_model.js';
 import {hasChatAttention} from '../core/reading_attention.js';
 import MentionPicker from "./mention_picker.jsx";
 import MentionText from "./mention_text.jsx";
-import {insertMention} from "./mention_model.js";
+import {chatMentionAtCaret,insertMention} from "./mention_model.js";
+import ChatMentionSuggestions from "./chat_mention_suggestions.jsx";
 
 function Avatar({person, status}) {
     return <span className="messaging_avatar" aria-hidden="true"><AvatarImage url={person.avatar_url} initials={initials(person.name)}/>{status && <span className={`bold_presence_dot bold_presence_${status}`}/>}</span>;
@@ -53,6 +57,7 @@ export function DeliveryMark({message}) {
 
 export default function MessagingModule() {
     const [historyOpen,setHistoryOpen]=useState(false);
+    const [enterPreferencesOpen,setEnterPreferencesOpen]=useState(false);
     const [libraryOpen,setLibraryOpen]=useState(null);
     const [phoneTarget, setPhoneTarget] = useState(null);
     const core = useCore(), shell = useShell();
@@ -60,10 +65,23 @@ export default function MessagingModule() {
     const identity=`${core.account?.id || ""}:${core.activeAssignment?.id || ""}:${core.authorizationRevision || 0}`;
     const liveIdentity=useRef(identity);liveIdentity.current=identity;
     const [mentionPicker,setMentionPicker]=useState(null),mentionLive=useRef(null);
+    const [inlineMention,setInlineMention]=useState(null),[inlineActive,setInlineActive]=useState(undefined),inlinePanel=useRef(null),inlineListId=useId();
     const [conversations, setConversations] = useState([]), [listNext, setListNext] = useState(null);
     const [conversation, setConversation] = useState(null), [messages, setMessages] = useState([]), [older, setOlder] = useState(null);
+    const [peerTyping,setPeerTyping]=useState(false), typingAt=useRef(0);
+    useEffect(()=>{
+        setPeerTyping(false);typingAt.current=0;let timer;
+        const receive=event=>{
+            const envelope=event.detail;
+            if(envelope.payload?.conversation_id!==conversation?.id)return;
+            if(envelope.event_type==="messaging.typing") {setPeerTyping(true);clearTimeout(timer);timer=setTimeout(()=>setPeerTyping(false),6000);}
+            if(envelope.event_type==="messaging.message.created") {clearTimeout(timer);setPeerTyping(false);}
+        };
+        window.addEventListener("bold:messaging-event",receive);
+        return ()=>{clearTimeout(timer);window.removeEventListener("bold:messaging-event",receive);};
+    },[conversation?.id]);
     const [query, setQuery] = useState(""), [newChat, setNewChat] = useState(false), [contactOpen, setContactOpen] = useState(false);
-    const [drafts, setDrafts] = useState({}), [edit, setEdit] = useState(null), [emojiOpen, setEmojiOpen] = useState(false);
+    const [drafts, setDrafts] = useState({}), [edit, setEdit] = useState(null), [emojiOpen, setEmojiOpen] = useState(false), [recentEmojis, setRecentEmojis] = useState([]);
     const [loading, setLoading] = useState(false), [refreshing, setRefreshing] = useState(false), [sendingRequest, setSending] = useState(false), [listLoading, setListLoading] = useState(false);
     const [discarding,setDiscarding]=useState(false),sending=sendingRequest || discarding;
     const [error, setError] = useState(""), [notice, setNotice] = useState(""), [now, setNow] = useState(Date.now());
@@ -96,7 +114,7 @@ export default function MessagingModule() {
     const unreadCount = id => hasChatAttention(core.messaging?.unread,id);
     const receipts = useRef(new Map()), refreshRef = useRef(null);
     const activeId = useRef(null), mounted = useRef(false), busy = useRef(false), read = useRef(null), listRead = useRef(null), writes = useRef(null);
-    const retry = useRef(new Map()), offset = useRef(0), viewport = useRef(null), composer = useRef(null), editField = useRef(null), scrollBottom = useRef(false);
+    const retry = useRef(new Map()), offset = useRef(0), viewport = useRef(null), composer = useRef(null), emojiTrigger = useRef(null), editField = useRef(null), scrollBottom = useRef(false);
     const queuedImages = imageQueues[conversation?.id] || [];
     const selectedImage = queuedImages.find(item => item.id === selectedImages[conversation?.id]) || queuedImages[0];
     const editCache=useRef(new Map());
@@ -137,16 +155,12 @@ export default function MessagingModule() {
         pending:review.attempts,revalidate:true,checkpoint:async()=>{
             if(!await forwardRecoveryLive.current.flush())throw Error('No se pudo proteger el reenvío. No cierres esta vista: reintenta la protección antes de enviarlo.');
         }});
-    useEffect(() => {
-        const field = (edit ? editField : composer).current;
-        if (field) {field.style.height = "auto"; field.style.height = `${Math.min(112, Math.max(40, field.scrollHeight))}px`;}
-    }, [edit?.body, edit?.id, drafts, selectedImage?.caption, selectedImage?.id, conversation?.id, loading]);
     const real = is_using_real_backend();
     useEffect(()=>{
-        activeId.current=null;setConversation(null);setMessages([]);setDrafts({});setMediaDrafts({});queueStore.current={};setImageQueues({});editCache.current.clear();retry.current.clear();setEdit(null);setMentionPicker(null);forwardReviews.current.clear();setForwardSource(null);
+        activeId.current=null;setConversation(null);setMessages([]);setDrafts({});setMediaDrafts({});queueStore.current={};setImageQueues({});editCache.current.clear();retry.current.clear();setEdit(null);setMentionPicker(null);setInlineMention(null);forwardReviews.current.clear();setForwardSource(null);
         return()=>{read.current?.abort();writes.current?.abort();};
     },[core.account?.id,core.activeAssignment?.id,core.authorizationRevision]);
-    useEffect(()=>{if(core.securityUncertain)setMentionPicker(null);},[core.securityUncertain]);
+    useEffect(()=>{if(core.securityUncertain){setMentionPicker(null);setInlineMention(null);}},[core.securityUncertain]);
     const merge = (current, incoming) => applyReceipts(mergeMessages(current, incoming), [...receipts.current.values()]);
     const errorFor = err => { if (mounted.current && err.name !== "AbortError") setError(messageError(err)); };
     const clock = page => { if (page.server_now) offset.current = Date.parse(page.server_now) - Date.now(); setNow(Date.now() + offset.current); };
@@ -203,6 +217,7 @@ export default function MessagingModule() {
     }
     function changeComposer(value) {
         if (busy.current) return;
+        if(real && conversation?.id && value.trim() && !edit && Date.now()-typingAt.current>4000) {typingAt.current=Date.now();messagingApi.typing(conversation.id).catch(()=>{});}
         if (edit) setEdit(current => ({...current, body: value}));
         else if (selectedImage) updateQueue(conversation.id, rows => captionQueuedImage(rows, selectedImage.id, value));
         else setDrafts(current => ({...current, [conversation.id]: value}));
@@ -230,7 +245,7 @@ export default function MessagingModule() {
     async function selectConversation(id, employee = null) {
         if (busy.current) return;
         read.current?.abort();
-        exitSelection(); setForwardSource(null); setMentionPicker(null);
+        exitSelection(); setForwardSource(null); setMentionPicker(null); setInlineMention(null); setEnterPreferencesOpen(false);
         const controller = new AbortController(); read.current = controller;
         activeId.current = null; setConversation(null); setMessages([]); setOlder(null); setLoading(true); setRefreshing(false); setEdit(null); setEmojiOpen(false); setContactOpen(false); setError(""); setNotice("");
         try {
@@ -311,7 +326,7 @@ export default function MessagingModule() {
     }, [conversation?.id]);
     useEffect(() => {if (edit) editField.current?.focus();}, [edit?.id]);
     useEffect(() => {
-        if (!conversation || !core.messaging || mentionPicker || libraryOpen || historyOpen) return;
+        if (!conversation || !core.messaging || mentionPicker || libraryOpen || historyOpen || emojiOpen || enterPreferencesOpen || phoneTarget) return;
         const incoming = messages.filter(message => message.author_id !== actorId);
         core.messaging.markDelivered(conversation.id, incoming.filter(row => !row.delivered_at).map(row => row.id));
         let observer;
@@ -333,7 +348,7 @@ export default function MessagingModule() {
         }
         observe(); window.addEventListener("focus", observe); document.addEventListener("visibilitychange", observe);
         return () => {observer?.disconnect(); window.removeEventListener("focus", observe); document.removeEventListener("visibilitychange", observe);};
-    }, [messages, conversation?.id, actorId, core.messaging?.markDelivered, core.messaging?.markRead,!!mentionPicker,!!libraryOpen,!!historyOpen]);
+    }, [messages, conversation?.id, actorId, core.messaging?.markDelivered, core.messaging?.markRead,!!mentionPicker,!!libraryOpen,!!historyOpen,emojiOpen,enterPreferencesOpen,!!phoneTarget]);
 
     async function refresh(previous = false, reconcile = false) {
         if (refreshing || loading) return;
@@ -435,9 +450,9 @@ export default function MessagingModule() {
     const peer = conversation?.peer;
     const presence = core.presence?.rows?.find(row => row.employee_id === peer?.employee_id);
     const statusText = presence ? presenceLabel(presence) : "Disponibilidad sin confirmar";
-    const roster = [...new Map([...(core.presence?.rows || []), ...(core.directory || []).map(row => ({employee_id: row.personId || row.employee, name: row.name || row.employee_name, avatar_url: row.avatar_url}))].filter(row => row.employee_id && row.employee_id !== actorId).map(row => [row.employee_id, row])).values()];
+    const roster = [...new Map([...(core.presence?.rows || []), ...(core.directory || []).map(row => ({employee_id: row.personId || row.employee, name: row.name || row.employee_name, email:row.email || row.employee_email || '', avatar_url: row.avatar_url}))].filter(row => row.employee_id && row.employee_id !== actorId).map(row => [row.employee_id, row])).values()];
     const eligible = new Set((core.directory || []).filter(row => row.chat_enabled === true).map(row => String(row.personId || row.employee)));
-    const filteredPeople = roster.filter(row => eligible.has(String(row.employee_id)) && normalizeQuery(row.name).includes(normalizeQuery(query)));
+    const filteredPeople = roster.filter(row => normalizeQuery(`${row.name} ${row.email || ''}`).includes(normalizeQuery(query)));
     const filteredChats = conversations.filter(row => normalizeQuery(`${row.peer.name} ${row.peer.departments.join(" ")}`).includes(normalizeQuery(query)));
     const draft = conversation ? selectedImage?.caption ?? retry.current.get(conversation.id)?.body ?? drafts[conversation.id] ?? "" : "";
     const editExpired = edit && !canEditMessage(edit, actorId, now);
@@ -445,25 +460,59 @@ export default function MessagingModule() {
     const mentionKey=`${identity}:${conversation?.id || ''}:${edit?.id || 'draft'}:${edit?.version || ''}:${selectedImage?.id || 'text'}`;
     const mentionBlocked=sending || loading || recording || !!imageEditing || !!composerRecovery.blocked || !!editExpired || !!pendingAttempt || !!selectedImage?.attempted || !peer?.available || !!core.securityUncertain;
     mentionLive.current={key:mentionKey,body:edit ? edit.body:draft,blocked:mentionBlocked};
+    const inlineOpen=inlineMention?.key===mentionKey && !mentionBlocked && !mentionPicker;
+    useEffect(()=>{if(mentionBlocked)setInlineMention(null);},[mentionBlocked]);
+    function findInlineMention(field){
+        const match=!mentionBlocked && chatMentionAtCaret(field.value,field.selectionStart,field.selectionEnd);
+        setInlineMention(match ? {...match,key:mentionKey}:null);
+    }
+    function denyMention(err){
+        setMentionPicker(null);setInlineMention(null);read.current?.abort();activeId.current=null;setConversation(null);setMessages([]);setEdit(null);setDrafts({});setMediaDrafts({});queueStore.current={};setImageQueues({});editCache.current.clear();retry.current.clear();errorFor(err);
+    }
+    function chooseMention(person,target){
+        const current=mentionLive.current;
+        if(!mounted.current || !activeId.current || current.key!==target.key || current.blocked){setMentionPicker(null);setInlineMention(null);return;}
+        try{const value=insertMention(current.body,person,target.start,target.end),key=current.key;
+            changeComposer(value.text);setMentionPicker(null);setInlineMention(null);requestAnimationFrame(()=>{if(mentionLive.current?.key!==key)return;const field=(edit ? editField:composer).current;field?.focus();field?.setSelectionRange(value.caret,value.caret);});
+        }catch(err){setMentionPicker(null);setInlineMention(null);setError(err.message);}
+    }
 
+
+    useLayoutEffect(() => {
+        const field = (edit ? editField : composer).current;
+        if (!field) return;
+        const fit = () => {
+            field.style.height = "";
+            if (field.value) {field.style.height = "auto"; field.style.height = `${Math.min(112, field.scrollHeight)}px`;}
+        };
+        fit();
+        window.addEventListener("resize", fit);
+        window.visualViewport?.addEventListener("resize", fit);
+        return () => {window.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("resize", fit);};
+    }, [draft, edit?.body, edit?.id, conversation?.id, loading]);
+
+    const fileTransfer=useFileTransfer({field:composer,context:`${identity}:${conversation?.id}`,disabled:mentionBlocked || !!edit || !!imageEditing || !!mentionPicker || !!libraryOpen || !!historyOpen || !!phoneTarget || !!forwardSource || !!enterPreferencesOpen,onFiles:chooseFiles});
     if (!real) return <section className="messaging_module"><h1>Chat</h1><p>Los chats privados requieren iniciar sesión con el servidor de BOLD. No se muestran conversaciones simuladas.</p></section>;
     return <section className={`messaging_module ${conversation || loading ? "messaging_has_chat" : ""} ${collapsed && !newChat ? "messaging_compact" : ""} ${selecting ? "messaging_selecting" : ""}`} style={viewportHeight ? {"--chat_vh": `${viewportHeight}px`} : undefined} aria-label="Mensajería privada" onKeyDown={event => {if (event.key === "Escape" && selecting && !forwardSource) {event.preventDefault(); exitSelection();}}}>
-        <aside className="messaging_sidebar" aria-label="Conversaciones" inert={libraryOpen || historyOpen || mentionPicker ? true:undefined}>
+        <aside className="messaging_sidebar" aria-label="Conversaciones" inert={libraryOpen || historyOpen || mentionPicker || enterPreferencesOpen || phoneTarget ? true:undefined}>
             <header className="messaging_list_header"><div><h1>Chat</h1><p>Conversaciones directas</p></div><div className="messaging_list_tools"><button type="button" aria-label="Ir a Slack" title="Ir a Slack" disabled={sending || recording} onClick={()=>shell.set_active_module("slack")}><Hash size={20} aria-hidden="true"/></button><button type="button" className="messaging_collapse" aria-label={collapsed ? "Desplegar conversaciones" : "Plegar conversaciones"} title={collapsed ? "Desplegar conversaciones" : "Solo avatares"} aria-expanded={!collapsed} aria-controls="messaging_conversations_list" onClick={() => {compact(!collapsed); setNewChat(false);}}>{collapsed ? <PanelLeftOpen size={19} aria-hidden="true"/> : <PanelLeftClose size={19} aria-hidden="true"/>}</button><button type="button" aria-label={newChat ? "Ver conversaciones" : "Nuevo chat"} title={newChat ? "Ver conversaciones" : "Nuevo chat"} aria-pressed={newChat} onClick={() => {setNewChat(value => !value); setQuery("");}}><MessageCircle size={20} aria-hidden="true"/></button></div></header>
             <label className="messaging_search"><Search size={17} aria-hidden="true"/><input type="search" placeholder={newChat ? "Buscar empleado…" : "Buscar conversación…"} aria-label={newChat ? "Buscar empleado" : "Buscar conversación"} value={query} onChange={event => setQuery(event.target.value)}/></label>
-            <button type="button" className="messaging_more" disabled={sending || recording} onClick={()=>setHistoryOpen(true)}>Buscar en el historial</button>
-            <button type="button" className="messaging_more" disabled={sending || recording} onClick={()=>setHistoryOpen("saved")}>Mis guardados</button>
-            <button type="button" className="messaging_more" disabled={sending || recording} onClick={()=>setHistoryOpen('unread')}>Marcados como no leídos</button>
+            <div className="messaging_quick_actions" role="group" aria-label="Consultar mensajes">
+                <button type="button" aria-label="Buscar en el historial" title="Buscar en el historial" disabled={sending || recording} onClick={()=>setHistoryOpen(true)}><History size={16} aria-hidden="true"/><span>Historial</span></button>
+                <button type="button" aria-label="Mis guardados" title="Mis guardados" disabled={sending || recording} onClick={()=>setHistoryOpen("saved")}><Bookmark size={16} aria-hidden="true"/><span>Guardados</span></button>
+                <button type="button" aria-label="Marcados como no leídos" title="Marcados como no leídos" disabled={sending || recording} onClick={()=>setHistoryOpen('unread')}><Mail size={16} aria-hidden="true"/><span>Sin leer</span></button>
+            </div>
             <div className="messaging_chat_list" id="messaging_conversations_list">
-                {newChat ? <><h2>Iniciar una conversación</h2>{filteredPeople.map(person => <button key={person.employee_id} type="button" className="messaging_chat_row" disabled={sending} onClick={() => selectConversation(null, person.employee_id)}><Avatar person={person}/><span className="messaging_row_copy"><strong>{person.name}</strong><small>Chat privado · Piloto IT</small></span></button>)}{!filteredPeople.length && <p className="messaging_hint">No hay empleados de IT con este nombre.</p>}</> : <>{filteredChats.map(row => <button key={row.id} type="button" className="messaging_chat_row" title={row.peer.name + (unreadCount(row.id) ? " · Mensajes sin leer" : "")} aria-label={row.peer.name + (unreadCount(row.id) ? ", mensajes sin leer" : "")} aria-current={conversation?.id === row.id ? "true" : undefined} disabled={sending} onClick={() => selectConversation(row.id)}><Avatar person={row.peer}/><span className="messaging_row_copy"><strong>{row.peer.name}</strong><small>{row.preview || "Aún sin mensajes"}</small></span>{unreadCount(row.id) > 0 && <span className="chat_unread_dot" aria-hidden="true"/>}</button>)}{!listLoading && !filteredChats.length && <div className="messaging_list_empty"><Users size={28} aria-hidden="true"/><h2>{query ? "Sin coincidencias" : "Tu equipo, más cerca"}</h2><p>Abre un chat nuevo o selecciona la tarjeta de un compañero en el panel Equipo.</p><button type="button" onClick={() => {setNewChat(true); setQuery("");}}>Nuevo chat</button></div>}{listNext && <button type="button" className="messaging_more" disabled={listLoading} onClick={() => loadList(listNext)}>Más conversaciones <ChevronDown size={16} aria-hidden="true"/></button>}</>}
+                {newChat ? <><h2>Iniciar una conversación</h2>{filteredPeople.map(person => {const allowed=eligible.has(String(person.employee_id));return <button key={person.employee_id} type="button" className={`messaging_chat_row ${allowed ? '':'messaging_chat_unavailable'}`} disabled={sending || !allowed} onClick={() => selectConversation(null, person.employee_id)}><Avatar person={person}/><span className="messaging_row_copy"><strong>{person.name}</strong><small>{allowed ? person.email || 'Chat privado · BOLD':'Chat no habilitado'}</small></span></button>;})}{!filteredPeople.length && <p className="messaging_hint">{query.trim() ? 'No hay coincidencias. Prueba con nombre o correo.':'No hay otros empleados en el directorio actual.'}</p>}{filteredPeople.some(person=>!eligible.has(String(person.employee_id))) && <p className="messaging_hint">Solo puedes iniciar chats con personas habilitadas. Los demás perfiles se muestran bloqueados.</p>}</> : <>{filteredChats.map(row => <button key={row.id} type="button" className="messaging_chat_row" title={row.peer.name + (unreadCount(row.id) ? " · Mensajes sin leer" : "")} aria-label={row.peer.name + (unreadCount(row.id) ? ", mensajes sin leer" : "")} aria-current={conversation?.id === row.id ? "true" : undefined} disabled={sending} onClick={() => selectConversation(row.id)}><Avatar person={row.peer}/><span className="messaging_row_copy"><strong>{row.peer.name}</strong><small>{row.preview || "Aún sin mensajes"}</small></span>{unreadCount(row.id) > 0 && <span className="chat_unread_dot" aria-hidden="true"/>}</button>)}{!listLoading && !filteredChats.length && <div className="messaging_list_empty"><Users size={28} aria-hidden="true"/><h2>{query ? "Sin coincidencias" : "Tu equipo, más cerca"}</h2><p>Abre un chat nuevo o selecciona la tarjeta de un compañero en el panel Equipo.</p><button type="button" onClick={() => {setNewChat(true); setQuery("");}}>Nuevo chat</button></div>}{listNext && <button type="button" className="messaging_more" disabled={listLoading} onClick={() => loadList(listNext)}>Más conversaciones <ChevronDown size={16} aria-hidden="true"/></button>}</>}
                 {listLoading && <p role="status" className="messaging_hint">Cargando conversaciones…</p>}
             </div>
             <footer><LockKeyhole size={15} aria-hidden="true"/><span>Solo los dos participantes pueden acceder desde BOLD.</span></footer>
         </aside>
-        <div className="messaging_conversation" inert={libraryOpen || historyOpen || mentionPicker ? true:undefined}>
+        <div className="messaging_conversation bold_file_drop_target" {...fileTransfer.bindings} inert={libraryOpen || historyOpen || mentionPicker || enterPreferencesOpen || phoneTarget ? true:undefined}>
+            {fileTransfer.dragging && <FileDropHint/>}
             {conversation ? <><header className="messaging_chat_header">
                 <button type="button" className="messaging_back" aria-label="Volver a conversaciones" disabled={sending} onClick={() => {read.current?.abort(); exitSelection(); activeId.current = null; setConversation(null); setEdit(null); setLoading(false); setRefreshing(false); setError("");}}><ArrowLeft size={20} aria-hidden="true"/></button>
-                <button type="button" className="messaging_peer" aria-expanded={contactOpen} aria-label={`Información de ${peer.name}`} onClick={() => setContactOpen(value => !value)}><Avatar person={peer} status={presence?.status}/><span><strong>{peer.name}</strong><small>{peer.available ? statusText : "Cuenta no disponible"}</small></span></button>
+                <button type="button" className="messaging_peer" aria-expanded={contactOpen} aria-label={`Información de ${peer.name}`} onClick={() => setContactOpen(value => !value)}><Avatar person={peer} status={presence?.status}/><span><strong>{peer.name}</strong><small>{peer.available && peerTyping ? <span className="messaging_typing" role="status"><svg className="bold_chat_typing" viewBox="0 0 36 12" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="30" cy="6" r="3"/></svg>Escribiendo…</span> : peer.available ? statusText : "Cuenta no disponible"}</small></span></button>
                 <button ref={selectionTrigger} type="button" aria-label="Seleccionar mensajes para reenviar" title="Seleccionar varios mensajes" aria-pressed={selecting} disabled={sending || loading || recording || !!imageEditing || !!queuedImages.length} onClick={() => selecting ? exitSelection() : startSelection()}><ListChecks size={20} aria-hidden="true"/></button>
                 <MessageAgreements key={`${identity}:${conversation.id}`} kind="chat" containerId={conversation.id} messages={messages} more={older} loadingMessages={refreshing || loading} onMore={()=>refresh(true)} disabled={sending || loading || recording || selecting} onOpenPage={target=>shell.open_channel(target)}/>
                 <button type="button" aria-label="Actualizar conversación" title="Actualizar conversación" disabled={refreshing || loading || sending} onClick={() => refresh()}><RefreshCw className={refreshing ? "messaging_spin" : ""} size={19} aria-hidden="true"/></button>
@@ -484,13 +533,10 @@ export default function MessagingModule() {
                             {selecting && canForward(message) && <label className="messaging_message_select"><input type="checkbox" checked={selectedForwardIds.has(message.id)} aria-label={`Seleccionar mensaje ${index + 1} de ${author.name}`} onChange={() => toggleSelectedMessage(message)}/></label>}
                             <article className={`messaging_message ${mine ? "messaging_mine" : ""} ${animatedIds.has(message.id) ? "messaging_arriving" : ""}`} onAnimationEnd={() => setAnimatedIds(current => {const next = new Set(current); next.delete(message.id); return next;})} aria-label={`Mensaje de ${author.name}`}>
                                 <Avatar person={author}/><div className="messaging_bubble">
-                                    <header><strong>{author.name}</strong><span className="messaging_message_actions">
-                                        {!selecting && <SaveResource kind="chat" sourceId={message.id} initialSaved={message.saved} documentId={message.saved_document_id} compact disabled={sending || recording || loading}/>}
-                                        {!selecting && <ReadingReminder kind="chat" sourceId={message.id} scopeKey={'chat:'+conversation.id} compact disabled={sending || recording || loading}/>}
-                                        {!selecting && canForward(message) && <button type="button" aria-label={message.media ? "Reenviar imagen" : "Reenviar mensaje"} title="Reenviar a otro chat" disabled={sending || recording || loading || forwardRecovery.blocked} onClick={() => beginForward([message])}><Forward size={16} aria-hidden="true"/></button>}{!selecting && canEditMessage(message, actorId, now) && <button type="button" aria-label="Editar mi mensaje" title="Editar durante los primeros diez minutos" disabled={sending || recording} onClick={() => {setEdit({...message}); setEmojiOpen(false); setError("");}}><Pencil size={14} aria-hidden="true"/></button>}</span></header>
+                                    <header><strong>{author.name}</strong></header>
                                     {message.media && <MessageMedia message={message} author={author}/>}
                                     {message.body && <MessageText body={message.body} mentions={message.mentions}/>}
-                                    {!selecting && <div className="messaging_message_tools"><MessageReactions kind="chat" containerId={conversation.id} message={message} disabled={sending || recording || loading}/><MessageTasks kind="chat" containerId={conversation.id} message={message} disabled={sending || recording || loading}/></div>}
+                                    {!selecting && <ChatMessageActions key={`${identity}:${message.id}`} message={message} containerId={conversation.id} disabled={sending || recording || loading} forwardDisabled={!!forwardRecovery.blocked} canForward={canForward(message)} canEdit={canEditMessage(message,actorId,now)} onForward={()=>beginForward([message])} onEdit={()=>{setEdit({...message});setEmojiOpen(false);setError("");}}/>}
                                     <footer data-receipt-id={mine ? undefined : message.id}><time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString("es")}>{new Date(message.created_at).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit"})}</time>{message.edited_at && <span>editado</span>}{mine && <DeliveryMark message={message}/>}</footer>
                                 </div>
                             </article>
@@ -507,33 +553,28 @@ export default function MessagingModule() {
                 {!forwardSource && !forwardRecovery.recovery && forwardReviews.current.get(conversation?.id)?.batch.pending.length>0 && <section className="messaging_hint" aria-label="Reenvío pendiente"><button type="button" disabled={sending || recording || forwardRecovery.blocked} onClick={()=>setForwardSource({id:conversation.id,peerId:peer.employee_id})}>Revisar reenvío pendiente</button><span> Se conserva separado del borrador del chat.</span></section>}
                 {!edit && (selectedImage?.attempted || retry.current.get(conversation.id)?.file) && <UploadDiscard filename={(selectedImage?.attempted ? selectedImage.file:retry.current.get(conversation.id).file).name} disabled={sending || recording || loading || !!composerRecovery.blocked || !!core.securityUncertain} onDiscard={discardPreparation}/>}
                 {pendingAttempt && <p className="messaging_hint" role="status">Hay un envío sin confirmar. Pulsa Enviar para comprobarlo sin crear otro mensaje.</p>}
-                <form inert={composerRecovery.blocked ? true:undefined} className={`messaging_composer ${!edit && queuedImages.length ? "messaging_preparing_images" : ""}`} onSubmit={submit} onPaste={event => {const files = [...(event.clipboardData?.files || [])]; if (files.length) {event.preventDefault(); chooseFiles(files);}}} onDragOver={event => {if ([...(event.dataTransfer?.types || [])].includes("Files")) event.preventDefault();}} onDrop={event => {if (event.dataTransfer.files.length) {event.preventDefault(); chooseFiles(event.dataTransfer.files);}}}>
+                <form inert={composerRecovery.blocked ? true:undefined} className={`messaging_composer ${!edit && queuedImages.length ? "messaging_preparing_images" : ""}`} onSubmit={submit}>
                     {!edit && queuedImages.length > 0 && <ImageQueue key={conversation.id} items={queuedImages} activeId={selectedImage?.id} disabled={sending || loading} onSelect={id => {setSelectedImages(current => ({...current, [conversation.id]: id})); setEmojiOpen(false);}} onEdit={item => setImageEditing({file: item.file, imageId: item.id, conversationId: conversation.id})} onRemove={removeImage} onClear={clearImages} onAdd={() => imageInput.current?.click()}/>}
                     {uploadProgress && <p className="messaging_queue_progress" role="status" aria-live="polite">Enviando imagen {uploadProgress.current} de {uploadProgress.total}…</p>}
                     {!edit && mediaDrafts[conversation.id] && <MediaDraft file={mediaDrafts[conversation.id]} disabled={sending || pendingAttempt} onRemove={() => setMediaDrafts(current => {const next = {...current}; delete next[conversation.id]; return next;})}/>}
                     {edit && <div className="messaging_edit_notice"><span>{editExpired ? "El plazo de edición terminó o el mensaje cambió. Copia tu texto antes de cancelar." : "Editando tu mensaje · el plazo original de diez minutos se mantiene"}</span><button type="button" aria-label="Cancelar edición" disabled={sending} onClick={() => {editCache.current.delete(conversation.id);setEdit(null);}}><X size={18} aria-hidden="true"/></button></div>}
                     <label className="messaging_sr" htmlFor="messaging_input">{edit ? "Editar mensaje" : selectedImage ? "Descripción de la imagen seleccionada (opcional)" : "Escribir mensaje"}</label>
-                    <textarea id="messaging_input" ref={edit ? editField : composer} rows={1} maxLength={5000} aria-describedby="messaging_input_hint" placeholder={peer.available ? selectedImage && !edit ? "Descripción de esta imagen (opcional)…" : "Escribe un mensaje…" : "No se pueden enviar mensajes a esta cuenta"} value={edit ? edit.body : draft} disabled={sending || loading || !peer.available || !edit && (!!selectedImage?.attempted || pendingAttempt)} onChange={event => changeComposer(event.target.value)} onKeyDown={event => {if (enterSends({...event, isComposing: event.nativeEvent.isComposing}, enterBehavior)) {event.preventDefault(); if (!editExpired) submit(event);}}}/>
-                    {emojiOpen && <div className="messaging_emojis" role="group" aria-label="Insertar emoji">{[["😀", "Sonrisa"], ["👍", "Pulgar arriba"], ["❤️", "Corazón"], ["🎉", "Celebración"], ["👀", "Ojos"], ["✅", "Listo"], ["🙏", "Gracias"], ["🚀", "Cohete"]].map(([emoji, name]) => <button type="button" key={emoji} aria-label={name} onClick={() => {changeComposer(((edit ? edit.body : draft) + emoji).slice(0,5000)); setEmojiOpen(false); (edit ? editField : composer).current?.focus();}}>{emoji}</button>)}</div>}
-                    <div className="messaging_composer_actions"><button type="button" aria-label="Insertar emoji" aria-expanded={emojiOpen} disabled={sending || recording || !peer.available || !edit && (!!selectedImage?.attempted || pendingAttempt)} onClick={() => setEmojiOpen(value => !value)}><Smile size={20} aria-hidden="true"/></button>
-                    <button type="button" aria-label="Mencionar a una persona" disabled={mentionBlocked} onClick={()=>{const field=(edit ? editField:composer).current,value=edit ? edit.body:draft;setEmojiOpen(false);setMentionPicker({key:mentionKey,start:field?.selectionStart ?? value.length,end:field?.selectionEnd ?? value.length});}}><AtSign size={20} aria-hidden="true"/></button>
+                    <textarea id="messaging_input" ref={edit ? editField : composer} rows={1} maxLength={5000} aria-describedby="messaging_input_hint" aria-autocomplete="list" aria-controls={inlineOpen ? inlineListId:undefined} aria-activedescendant={inlineOpen ? inlineActive:undefined} placeholder={peer.available ? selectedImage && !edit ? "Descripción de esta imagen (opcional)…" : "Escribe un mensaje…" : "No se pueden enviar mensajes a esta cuenta"} value={edit ? edit.body : draft} disabled={sending || loading || !peer.available || !edit && (!!selectedImage?.attempted || pendingAttempt)} onChange={event => {changeComposer(event.target.value);if(event.nativeEvent.isComposing)setInlineMention(null);else findInlineMention(event.currentTarget);}} onCompositionEnd={event=>findInlineMention(event.currentTarget)} onClick={event=>findInlineMention(event.currentTarget)} onKeyUp={event=>{if(["ArrowLeft","ArrowRight","Home","End"].includes(event.key))findInlineMention(event.currentTarget);}} onBlur={event=>{if(!inlinePanel.current?.contains(event.relatedTarget))setInlineMention(null);}} onKeyDown={event => {if (enterSends({...event, isComposing: event.nativeEvent.isComposing}, enterBehavior)) {event.preventDefault(); if (!editExpired) submit(event);}}}/>
+
+                    <div className="messaging_composer_actions"><ComposerOptions key={`options:${conversation.id}`} disabled={sending || loading || recording || !peer.available}>
+                    <button type="button" aria-label="Mencionar a una persona" disabled={mentionBlocked} onClick={()=>{const field=(edit ? editField:composer).current,value=edit ? edit.body:draft;setEmojiOpen(false);setInlineMention(null);setMentionPicker({key:mentionKey,start:field?.selectionStart ?? value.length,end:field?.selectionEnd ?? value.length});}}><AtSign size={20} aria-hidden="true"/><span>Mencionar persona</span></button>
                     <input className="messaging_sr" type="file" accept="image/jpeg,image/png,image/webp" multiple ref={imageInput} tabIndex={-1} aria-label="Seleccionar imagen para Chat" disabled={sending || loading || !!edit || recording || pendingAttempt} onChange={event => {chooseImages(event.target.files); event.target.value = "";}}/>
                     <input className="messaging_sr" type="file" accept={DOCUMENT_ACCEPT} ref={documentInput} tabIndex={-1} aria-label="Seleccionar documento para Chat" disabled={sending || loading || !!composerRecovery.blocked || !!edit || recording || pendingAttempt} onChange={event=>{chooseFiles(event.target.files);event.target.value='';}}/>
-                    {!edit && <button type="button" aria-label="Adjuntar documento" title={DOCUMENT_HINT} disabled={sending || loading || !!composerRecovery.blocked || recording || pendingAttempt || !peer.available || !!mediaDrafts[conversation.id] || !!queuedImages.length} onClick={()=>documentInput.current?.click()}><Paperclip size={20} aria-hidden="true"/></button>}
-                    {!edit && <><button type="button" aria-label="Adjuntar imagen" disabled={sending || loading || recording || pendingAttempt || !peer.available} onClick={() => imageInput.current?.click()}><ImagePlus size={20} aria-hidden="true"/></button><button type="button" className="phone_transfer_launch" aria-label="Añadir desde el teléfono" title="Añadir desde el teléfono" disabled={sending || loading || recording || !peer.available || !!mediaDrafts[conversation.id] || queuedImages.length >= 10} onClick={() => setPhoneTarget(conversation.id)}><Smartphone size={20} aria-hidden="true"/></button><VoiceRecorder key={conversation.id} disabled={sending || loading || !!mediaDrafts[conversation.id] || !!queuedImages.length || !peer.available} onRecording={setRecording} onError={setError} onReady={file => setMediaDrafts(current => ({...current, [conversation.id]: file}))}/></>}
-                    <button type="button" aria-label="Configurar mensajería" title="Configurar Enter" disabled={recording || sending} onClick={() => shell.open_profile(false, "messaging")}><Settings2 size={18} aria-hidden="true"/></button><small id="messaging_input_hint">{(edit ? edit.body : draft).length.toLocaleString("es")}/5.000 · {enterBehavior === "newline" ? "Enter: salto · Ctrl/⌘+Enter: enviar" : enterBehavior === "send" ? "Enter envía · Mayús+Enter: salto" : "Cargando preferencia de Enter…"}</small><button type="submit" className="messaging_send" aria-label={sending ? discarding ? "Descartando preparación" : "Guardando mensaje" : edit ? "Guardar mensaje" : queuedImages.length ? `Enviar ${queuedImages.length} imágenes` : "Enviar mensaje"} disabled={sending || loading || recording || !peer.available || !!imageEditing || editExpired || (!(edit ? edit.body : draft).trim() && !(edit?.media || !edit && (mediaDrafts[conversation.id] || queuedImages.length)))}>{sending ? <LoaderCircle size={17} className="messaging_spin" aria-hidden="true"/> : <Send size={17} aria-hidden="true"/>}<span className="messaging_send_label">{sending ? discarding ? "Descartando…" : "Enviando…" : edit ? "Guardar" : queuedImages.length ? `Enviar ${queuedImages.length}` : "Enviar"}</span></button></div>
+                    {!edit && <button type="button" aria-label="Adjuntar documento" title={DOCUMENT_HINT} disabled={sending || loading || !!composerRecovery.blocked || recording || pendingAttempt || !peer.available || !!mediaDrafts[conversation.id] || !!queuedImages.length} onClick={()=>documentInput.current?.click()}><Paperclip size={20} aria-hidden="true"/><span>Documento</span></button>}
+                    {!edit && <><button type="button" aria-label="Adjuntar imagen" disabled={sending || loading || recording || pendingAttempt || !peer.available} onClick={() => imageInput.current?.click()}><ImagePlus size={20} aria-hidden="true"/><span>Imagen</span></button><button type="button" className="phone_transfer_launch" aria-label="Añadir desde el teléfono" title="Añadir desde el teléfono" disabled={sending || loading || recording || !peer.available || !!mediaDrafts[conversation.id] || queuedImages.length >= 10} onClick={() => setPhoneTarget(conversation.id)}><Smartphone size={20} aria-hidden="true"/><span>Desde el teléfono</span></button></>}
+                    <button type="button" aria-label="Configurar mensajería" title="Configurar Enter" disabled={recording || sending} onClick={() => setEnterPreferencesOpen(true)}><Settings2 size={18} aria-hidden="true"/><span>Preferencia de Enter</span></button></ComposerOptions>{!edit && <VoiceRecorder key={conversation.id} disabled={sending || loading || !!mediaDrafts[conversation.id] || !!queuedImages.length || !peer.available} onRecording={setRecording} onError={setError} onReady={file => setMediaDrafts(current => ({...current, [conversation.id]: file}))}/>}<button ref={emojiTrigger} type="button" aria-label="Insertar emoji" title="Emojis" aria-haspopup="dialog" aria-expanded={emojiOpen} disabled={sending || loading || recording || !peer.available || !edit && (!!selectedImage?.attempted || pendingAttempt)} onClick={() => setEmojiOpen(value => !value)}><Smile size={20} aria-hidden="true"/></button><small id="messaging_input_hint">{(edit ? edit.body : draft).length.toLocaleString("es")}/5.000 · {enterBehavior === "newline" ? "Enter: salto · Ctrl/⌘+Enter: enviar" : enterBehavior === "send" ? "Enter envía · Mayús+Enter: salto" : "Cargando preferencia de Enter…"}</small><button type="submit" className="messaging_send" aria-label={sending ? discarding ? "Descartando preparación" : "Guardando mensaje" : edit ? "Guardar mensaje" : queuedImages.length ? `Enviar ${queuedImages.length} imágenes` : "Enviar mensaje"} disabled={sending || loading || recording || !peer.available || !!imageEditing || editExpired || (!(edit ? edit.body : draft).trim() && !(edit?.media || !edit && (mediaDrafts[conversation.id] || queuedImages.length)))}>{sending ? <LoaderCircle size={17} className="messaging_spin" aria-hidden="true"/> : <Send size={17} aria-hidden="true"/>}<span className="messaging_send_label">{sending ? discarding ? "Descartando…" : "Enviando…" : edit ? "Guardar" : queuedImages.length ? `Enviar ${queuedImages.length}` : "Enviar"}</span></button></div>
                 </form>
             </> : <div className="messaging_empty"><MessageCircle size={44} aria-hidden="true"/><h2>{loading ? "Abriendo conversación…" : "Un espacio para conversar"}</h2><p>Elige un compañero para iniciar un chat privado.</p><button type="button" aria-label="Actualizar conversaciones" disabled={listLoading} onClick={() => loadList()}><RefreshCw size={17} aria-hidden="true"/> Actualizar</button>{error && <div className="messaging_error" role="alert">{error}</div>}</div>}
         </div>
-        {mentionPicker && conversation && <MentionPicker key={`${identity}:${conversation.id}`} conversationId={conversation.id} onClose={()=>setMentionPicker(null)} onDenied={err=>{
-            setMentionPicker(null);read.current?.abort();activeId.current=null;setConversation(null);setMessages([]);setEdit(null);setDrafts({});setMediaDrafts({});queueStore.current={};setImageQueues({});editCache.current.clear();retry.current.clear();errorFor(err);
-        }} onSelect={person=>{
-            const current=mentionLive.current;
-            if(!mounted.current || !activeId.current || current.key!==mentionPicker.key || current.blocked){setMentionPicker(null);return;}
-            try{const value=insertMention(current.body,person,mentionPicker.start,mentionPicker.end),key=current.key;
-                changeComposer(value.text);setMentionPicker(null);requestAnimationFrame(()=>{if(mentionLive.current?.key!==key)return;const field=(edit ? editField:composer).current;field?.focus();field?.setSelectionRange(value.caret,value.caret);});
-            }catch(err){setMentionPicker(null);setError(err.message);}
-        }}/>}
+        {emojiOpen && conversation && <ChatEmojiPicker anchorRef={emojiTrigger} recent={recentEmojis} onClose={() => setEmojiOpen(false)} onSelect={emoji => {setRecentEmojis(current => [emoji,...current.filter(value => value!==emoji)].slice(0,24)); changeComposer(((edit ? edit.body : draft) + emoji).slice(0,5000)); setEmojiOpen(false); requestAnimationFrame(() => (edit ? editField : composer).current?.focus());}}/>}
+        {enterPreferencesOpen && conversation && <ChatEnterPreferences onClose={() => {setEnterPreferencesOpen(false); requestAnimationFrame(() => (edit ? editField : composer).current?.focus());}}/>}
+        {inlineOpen && conversation && <ChatMentionSuggestions key={`${mentionKey}:${inlineMention.start}`} conversationId={conversation.id} anchorRef={edit ? editField:composer} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,inlineMention)}/>}
+        {mentionPicker && conversation && <MentionPicker key={`${identity}:${conversation.id}`} conversationId={conversation.id} onClose={()=>setMentionPicker(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,mentionPicker)}/>}
         {imageEditing && <Suspense fallback={<p role="status">Abriendo editor de imagen…</p>}><ChatImageEditor file={imageEditing.file} onCancel={() => setImageEditing(null)} onSave={file => {try {updateQueue(imageEditing.conversationId, rows => replaceQueuedImage(rows, imageEditing.imageId, file));} catch (err) {setError(err.message);} setImageEditing(null);}}/></Suspense>}
         {review && <Suspense fallback={<p role="status">Abriendo reenvío…</p>}><ForwardMessageDialog key={`${identity}:${forwardSource.id}`} review={review} api={messagingApi} checkpoint={async()=>{if(!await forwardRecovery.flush())throw Error('No se pudo proteger el reenvío; conservamos los intentos para revisarlos.');}} people={roster.filter(row => eligible.has(String(row.employee_id)) && row.employee_id !== forwardSource.peerId)} forward={review.forward} onClose={() => setForwardSource(null)} onSelectMore={rows => {forwardReviews.current.delete(forwardSource.id);startSelection(rows);}} onDiscarded={result=>{forwardReviews.current.delete(forwardSource.id);exitSelection();setNotice(`Reenvío cerrado: ${result.cancelled} ${result.cancelled===1 ? 'pendiente descartado':'pendientes descartados'}. Mensajes ya publicados conservados: ${result.published}.`);}} onComplete={(result, person) => {forwardReviews.current.delete(forwardSource.id);exitSelection(); setNotice(`${result.confirmed === 1 ? "Mensaje reenviado" : `${result.confirmed} mensajes reenviados`} a ${person.name}.`);}} onSent={(result, person, source) => {
             selectForwardRows(selectedForwardRows.current.filter(row => row.id !== source.id));

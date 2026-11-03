@@ -28,6 +28,27 @@ class LocalCalendarTests(TestCase):
         self.root = f"/api/v2/calendar/local/{self.calendar.pk}/"
         self.event = {"summary": "Grabación", "start": {"dateTime": "2026-10-19T09:00:00-06:00"}, "end": {"dateTime": "2026-10-19T10:00:00-06:00"}}
 
+    def test_home_agenda_only_contains_accessible_calendars_and_revocation_is_immediate(self):
+        private = AppCalendar.objects.create(name="No compartir", owner=self.member)
+        private_root = f"/api/v2/calendar/local/{private.pk}/"
+        self.member_client.post(private_root + "events/", self.event, format="json")
+        created = self.client.post(self.root + "events/", self.event, format="json")
+        params = {"start": "2026-10-19T00:00:00-06:00", "end": "2026-10-20T00:00:00-06:00"}
+        url = "/api/v2/calendar/local/agenda/"
+        with patch("boldApp.workspace.service.google") as google:
+            rows = self.client.get(url, params).data["events"]
+            self.assertEqual([row["id"] for row in rows], [created.data["id"]])
+            self.assertEqual(rows[0]["calendar_name"], self.calendar.name)
+            self.assertTrue(rows[0]["locked"])
+            CalendarMember.objects.create(calendar=self.calendar, user=self.member, role="reader")
+            self.assertEqual(len(self.member_client.get(url, params).data["events"]), 2)
+            self.calendar.members.filter(user=self.member).delete()
+            self.assertEqual(len(self.member_client.get(url, params).data["events"]), 1)
+            google.assert_not_called()
+        self.assertEqual(self.client.get(url, {**params, "end": "2026-10-25T00:00:00Z"}).status_code, 400)
+        self.assertEqual(self.client.get(url, {**params, "start": "2026-10-19T00:00:00"}).status_code, 400)
+        self.assertEqual(APIClient().get(url, params).status_code, 401)
+
     def test_private_sharing_roles_revocation_and_no_google_calls(self):
         with patch("boldApp.workspace.service.google") as google:
             self.assertEqual(self.member_client.get("/api/v2/calendar/local/").data, {"calendars": []})

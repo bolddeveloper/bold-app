@@ -31,14 +31,15 @@ export async function playNotificationSound(settings = defaultNotificationSettin
 }
 
 export async function showDesktopNotification(row, settings) {
-    if (!settings.desktop_enabled || !globalThis.Notification || Notification.permission !== "granted") return;
+    if (!settings.desktop_enabled || !globalThis.Notification || Notification.permission !== "granted") return false;
     const title = row.actor_is_owner === true ? "BOLD · Propietario" : "BOLD";
     const options = {body: "Tienes actividad pendiente. Abre BOLD para revisarla.", tag: `bold-${row.id}`, icon: "/logo-bold.svg",
         silent: globalThis.document?.hidden !== true || !settings.enabled || !settings.volume};
     const registration = await globalThis.navigator?.serviceWorker?.getRegistration("/");
-    if (registration?.active) return registration.showNotification(title, options);
+    if (registration?.active) { await registration.showNotification(title, options); return true; }
     const notice = new Notification(title, options);
     notice.onclick = () => {window.focus(); notice.close();};
+    return true;
 }
 
 export function containsNewUnreadNotification(previous, next) {

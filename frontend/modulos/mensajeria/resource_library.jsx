@@ -1,17 +1,19 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Download,FolderOpen,RefreshCw,X} from 'lucide-react';
+import {Download,FolderOpen,RefreshCw,SlidersHorizontal,X} from 'lucide-react';
 import {useCore} from '../core/core_provider.jsx';
 import {useDialog} from '../core/shared/use_dialog.js';
+import {CalendarDateRangeField} from '../core/shared/date_picker.jsx';
 import {historyError} from './history_api.js';
 import {mediaDownloadName,resourceApi,resourceFilters,resourceHint,resourceHref} from './resource_api.js';
 import {MessageMedia} from './message_media.jsx';
 import './history_search.css';
 import './resource_library.css';
+import './chat_panels_v3.css';
 import {DOCUMENT_DOWNLOAD_WARNING} from './document_files.js';
 
 const date=value=>new Date(value).toLocaleString('es',{dateStyle:'medium',timeStyle:'short'});
-const empty=()=>({rows:[],next:null,trail:[null],page:0,ready:false,snapshot:null});
+const empty=()=>({rows:[],next:null,ready:false});
 const initial={q:'',kind:'all',author:'',from:'',to:''};
 
 function ResourceCard({row,kind,container,onContext}){
@@ -66,36 +68,43 @@ export default function ResourceLibrary({kind,container,title,parent=null,onClos
         return()=>{alive.current=false;request.current?.abort();window.removeEventListener('bold:permissions-invalidated',revoke);window.removeEventListener(kind==='chat' ? 'bold:messaging-event':'bold:slack-event',hint);window.removeEventListener('bold:messaging-reconnect',hint);};
     },[]);
     useEffect(()=>{if(!allowed || origin.current!==identity){request.current?.abort();setView(empty());setAuthors([]);callbacks.current.onClose();}},[allowed,identity]);
-    async function load(cursor=null,page=0){
+    async function load(cursor=null,selectedFilters=filters){
         request.current?.abort();const abort=new AbortController();request.current=abort;
         const expected=identity;setBusy(true);setError('');
         try{
-            const values=resourceFilters({...filters,...(parent ? {parent}:{})});
+            const values=resourceFilters({...selectedFilters,...(parent ? {parent}:{})});
             const result=await resourceApi.list(kind,container,values,cursor,{signal:abort.signal});
             if(!alive.current || abort.signal.aborted || current.current!==expected)return;
-            setView(old=>({rows:result.results,next:result.next_cursor,ready:true,snapshot:result.snapshot_at,page,trail:page===0 ? [result.first_cursor || null]:[...old.trail.slice(0,page),cursor]}));
+            setView(old=>({rows:cursor ? [...new Map([...old.rows,...result.results].map(row=>[row.id,row])).values()]:result.results,next:result.next_cursor,ready:true}));
             setAuthors(old=>[...new Map([...old,...result.results.map(row=>row.author)].map(row=>[row.employee_id,row])).values()]);
             setChanged(false);
-        }catch(err){if(alive.current && !abort.signal.aborted && current.current===expected){setView(empty());if([401,403,404].includes(err.status))setAuthors([]);setError(err.status ? historyError(err):err.message);}}
+        }catch(err){if(alive.current && !abort.signal.aborted && current.current===expected){if(!cursor || [401,403,404].includes(err.status))setView(empty());if([401,403,404].includes(err.status))setAuthors([]);setError(err.status ? historyError(err):err.message);}}
         finally{if(alive.current && !abort.signal.aborted && current.current===expected)setBusy(false);}
     }
     useEffect(()=>{if(allowed)load();},[]);
     function change(key,value){request.current?.abort();setBusy(false);setError('');setView(empty());setFilters(old=>({...old,[key]:value}));}
+    const activeFilters=[filters.kind!=='all',!!filters.author,!!filters.from,!!filters.to].filter(Boolean).length;
     const people=[...new Map([...(core.presence?.rows || []),...(core.directory || []).map(row=>({employee_id:row.personId || row.employee,name:row.name || row.employee_name})),...authors].filter(row=>row.employee_id).map(row=>[row.employee_id,row])).values()].sort((a,b)=>(a.name || '').localeCompare(b.name || '','es'));
+    const months=new Map();
+    for(const row of view.rows){
+        const month=new Date(row.created_at).toLocaleDateString('es',{month:'long',year:'numeric'});
+        if(!months.has(month))months.set(month,[]);
+        months.get(month).push(row);
+    }
     if(!allowed || origin.current!==identity)return null;
     return createPortal(<div className="history_search_scrim resource_library_scrim"><section className="history_search_dialog resource_library" role="dialog" aria-modal="true" aria-labelledby="resource_library_title" aria-busy={busy}>
-        <header><div><h2 id="resource_library_title">Archivos y enlaces</h2><p>{title}{parent ? ' · Este hilo':' · Historial completo'}</p></div><button type="button" aria-label="Cerrar biblioteca" onClick={onClose}><X size={20} aria-hidden="true"/></button></header>
+        <header><div><h2 id="resource_library_title">Archivos y enlaces</h2><p>{title}{parent ? ' · Este hilo':kind==='chat' ? ' · Compartidos en este chat':' · Historial completo'}</p></div><button type="button" aria-label="Cerrar biblioteca" onClick={onClose}><X size={20} aria-hidden="true"/></button></header>
         <div className="resource_library_body">
-        <p>Todo el historial conservado, sin marcar mensajes como leídos. Los archivos se cargan al abrirlos o descargarlos; los documentos se descargan sin vista previa.</p>
-        <form onSubmit={event=>{event.preventDefault();load();}}><label>Buscar recurso<input type="search" maxLength={160} value={filters.q} onChange={event=>change('q',event.target.value)} placeholder="Nombre, enlace o palabras del mensaje"/></label>
-            <div className="history_search_filters"><label>Tipo<select value={filters.kind} onChange={event=>change('kind',event.target.value)}><option value="all">Todos los recursos</option><option value="image">Imágenes</option><option value="audio">Notas de voz</option><option value="document">Documentos</option><option value="file">Todos los archivos</option><option value="link">Enlaces</option></select></label><label>Enviado por<select value={filters.author} onChange={event=>change('author',event.target.value)}><option value="">Cualquier persona</option>{people.map(person=><option key={person.employee_id} value={person.employee_id}>{person.name}</option>)}</select></label><label>Desde<input type="date" value={filters.from} onChange={event=>change('from',event.target.value)}/></label><label>Hasta<input type="date" value={filters.to} onChange={event=>change('to',event.target.value)}/></label></div>
-            <div className="resource_actions"><button type="submit" disabled={busy}><RefreshCw size={16} aria-hidden="true"/>{busy ? 'Consultando…':'Aplicar filtros / actualizar'}</button><button type="button" disabled={busy} onClick={()=>{request.current?.abort();setView(empty());setFilters(initial);setError('');}}>Limpiar filtros</button></div>
+        <p>Consulta tus archivos y enlaces sin marcar mensajes como leídos. Los archivos se cargan solo al abrirlos o descargarlos.</p>
+        <form onSubmit={event=>{event.preventDefault();load();}}><div className="history_search_query"><label>Buscar recurso<input type="search" maxLength={160} value={filters.q} onChange={event=>change('q',event.target.value)} placeholder="Nombre, enlace o palabras del mensaje"/></label><button type="submit" aria-label="Aplicar filtros / actualizar" disabled={busy}><RefreshCw size={16} aria-hidden="true"/>{busy ? "Consultando…":"Buscar"}</button></div>
+            <details className="history_search_advanced"><summary><SlidersHorizontal size={15} aria-hidden="true"/>Filtros de archivos{activeFilters>0 && <span aria-label={`${activeFilters} filtros activos`}>{activeFilters}</span>}</summary><div className="history_search_advanced_body"><div className="history_search_filters"><label>Tipo<select value={filters.kind} onChange={event=>change('kind',event.target.value)}><option value="all">Todos los recursos</option><option value="image">Imágenes</option><option value="audio">Notas de voz</option><option value="document">Documentos</option><option value="file">Todos los archivos</option><option value="link">Enlaces</option></select></label><label>Enviado por<select value={filters.author} onChange={event=>change('author',event.target.value)}><option value="">Cualquier persona</option>{people.map(person=><option key={person.employee_id} value={person.employee_id}>{person.name}</option>)}</select></label><div className="history_date_range"><span>Desde / hasta (incluido)</span><CalendarDateRangeField start={filters.from} end={filters.to} onChange={({start,end})=>{change('from',start);change('to',end);}}/></div></div>
+            <div className="history_search_advanced_actions"><button type="button" disabled={busy} onClick={()=>{setFilters(initial);load(null,initial);}}>Limpiar filtros</button></div></div></details>
         </form>
         {changed && <p role="status">La conversación cambió. Actualiza la biblioteca para ver los recursos actuales; no se hacen consultas periódicas.</p>}
         {error && <p role="alert" className="history_search_error">{error} Puedes reintentar con «Aplicar filtros / actualizar».</p>}
         <div className="history_search_content">
-            <p role="status">{busy ? 'Consultando el historial de recursos…':view.ready ? view.rows.length ? `${view.rows.length} ${view.rows.length===1 ? 'mensaje':'mensajes'} con recursos en esta página · más recientes primero`:'No hay recursos con estos filtros. Prueba con otro tipo, fecha o persona.':'Aplica los filtros para consultar los recursos.'}</p>
-            {view.ready && <><ol className="resource_results">{view.rows.map(row=><li key={`${identity}:${view.snapshot}:${view.page}:${row.id}`}><ResourceCard row={row} kind={kind} container={container} onContext={target=>callbacks.current.onContext(target)}/></li>)}</ol><nav aria-label="Páginas de recursos">{view.page>0 && <button type="button" disabled={busy} onClick={()=>load(view.trail[view.page-1],view.page-1)}>Recursos anteriores</button>}{view.next && <button type="button" disabled={busy} onClick={()=>load(view.next,view.page+1)}>Siguientes recursos</button>}</nav></>}
+            <p role="status">{busy ? 'Consultando el historial de recursos…':view.ready ? view.rows.length ? `${view.rows.length} ${view.rows.length===1 ? 'mensaje':'mensajes'} con recursos · más recientes primero`:filters.q || activeFilters ? 'No hay recursos con estos filtros. Prueba con otro tipo, fecha o persona.':'Todavía no hay archivos ni enlaces compartidos aquí.':'Aplica los filtros para consultar los recursos.'}</p>
+            {view.ready && <><div className="resource_results">{[...months].map(([month,rows])=><section className="resource_month" key={month} aria-label={month}><h3>{month}</h3><ol>{rows.map(row=><li key={`${identity}:${row.id}`}><ResourceCard row={row} kind={kind} container={container} onContext={target=>callbacks.current.onContext(target)}/></li>)}</ol></section>)}</div>{view.next && <nav aria-label="Historial de recursos"><button type="button" disabled={busy} onClick={()=>load(view.next)}>{busy ? 'Cargando…':'Cargar anteriores'}</button></nav>}</>}
             {!busy && view.ready && !view.rows.length && <FolderOpen size={28} aria-hidden="true"/>}
         </div>
         </div>

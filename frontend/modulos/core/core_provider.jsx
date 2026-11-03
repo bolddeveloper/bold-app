@@ -31,6 +31,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const generation = useRef(0);
     const permissionCache = useRef(null);
     const enteredFromLogin = useRef(false);
+    const finishSessionEntrance = useCallback(() => { enteredFromLogin.current = false; }, []);
     const notificationController = useRef(null);
     const messagingController = useRef(null);
     const [messagingConnection, setMessagingConnection] = useState("disconnected");
@@ -42,6 +43,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const [notificationPreferences, setNotificationPreferences] = useState({assignmentId: null, settings: defaultNotificationSettings});
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
     const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
+    const dismissNotification = useCallback(id => notificationController.current?.dismiss(id) || Promise.resolve(), []);
     const clearNotifications = useCallback(() => {
         notificationController.current?.dispose(); notificationController.current = null;
         setNotificationSnapshot({ assignmentId: null, rows: [], error: "" });
@@ -272,6 +274,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         http.request("/api/v2/auth/notification-settings/", {signal: soundController.signal}).then(value => {if (mounted && !settingsLoaded) {soundSettings = value; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: value}); entrySound.update(previousRows, soundSettings);}}).catch(() => {});
         const changeSound = event => {soundSettings = event.detail; settingsLoaded = true; setNotificationPreferences({assignmentId, settings: soundSettings}); entrySound.update(previousRows, soundSettings);};
         window.addEventListener("bold:notification-sound-changed", changeSound);
+        const online = () => navigator.onLine !== false;
         const store = createSessionNotifications({initialRows: cachedRows, onChange: rows => {
             if (mounted) {
                 if (settingsLoaded && containsNewUnreadNotification(previousRows, rows)) {
@@ -295,13 +298,10 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             onError: error => {if (mounted && [401, 403].includes(error.status)) window.dispatchEvent(new Event("bold:unauthorized"));},
         });
         messagingController.current = chat;
-        const sync = createNotificationSync({onError: report, refresh: (reason, background) =>
-            store.refresh({reason, force: background, immediate: reason === "notification-bootstrap"})});
-        const reconcile = (reason, desktopEvent = false) => {
-            const force = desktopEvent && settingsLoaded && soundSettings.desktop_enabled
-                && globalThis.Notification?.permission === "granted" && navigator.onLine !== false;
-            return sync.request(reason, {force, event: desktopEvent || reason === "notification-event"});
-        };
+        // The scheduler gates reads; a second visibility check could stall an in-flight batch.
+        const sync = createNotificationSync({onError: report, canRunBackground: online, refresh: reason =>
+            store.refresh({reason, force: true, immediate: reason === "notification-bootstrap"})});
+        const reconcile = reason => sync.request(reason, {force: online(), event: reason === "notification-event"});
         // Retry exhausted receipt batches only on real connectivity events,
         // never from the notification coordinator's existing periodic timer.
         const recoverChat = () => chat.recover();
@@ -309,7 +309,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         window.addEventListener("bold:permissions-revision", invalidate);
         window.addEventListener("online", recoverChat);
         realtime.connect({ assignmentId, getTicket: coreApi.websocketTicket,
-            onNotification: envelope => reconcile("notification-event", envelope.event_type === "notification.created"),
+            onNotification: () => reconcile("notification-event"),
             onConnected: () => reconcile("notification-connected"),
             onReconnect: () => {reconcile("notification-reconnect"); chat.recover(); window.dispatchEvent(new Event("bold:messaging-reconnect"));},
             onMessaging: envelope => {
@@ -472,7 +472,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         onAssignmentChange={setActiveAssignment} onLogout={logout}
     />;
     if (state.sessionStatus !== "ready") return null;
-    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", settings: notificationPreferences.assignmentId === active ? notificationPreferences.settings : defaultNotificationSettings, getRows: notificationRows, setRead: setNotificationRead, clear: () => notificationController.current?.clear() || Promise.resolve() };
+    const notifications = { rows: notificationSnapshot.assignmentId === active && !state.securityUncertain ? notificationSnapshot.rows : [], error: notificationSnapshot.assignmentId === active ? notificationSnapshot.error : "", settings: notificationPreferences.assignmentId === active ? notificationPreferences.settings : defaultNotificationSettings, getRows: notificationRows, setRead: setNotificationRead, dismiss: dismissNotification, clear: () => notificationController.current?.clear() || Promise.resolve() };
     function updateProfile(profile) {
         const current = getCoreState(), employeeId = current.account?.employee;
         const initials = profile.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("");
@@ -482,7 +482,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const unread = chatAllowed && unreadChats.assignmentId === state.activeAssignment?.id ? unreadChats : {total: 0, byEmployee: {}, byConversation: {}};
     const slackUnread=chatAllowed && unreadChannels.assignmentId===state.activeAssignment?.id ? unreadChannels : {total:0,byChannel:{},ready:false};
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, finishSessionEntrance, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

@@ -4,7 +4,7 @@ import {pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,itPilotRe
 
 test("las cinco mejoras generales publicadas incluyen qué probar sin abrir el piloto",()=>{
     assert.equal(multitaskingReleaseNotes.length,5);
-    assert.deepEqual(releaseNotes.slice(0,5),multitaskingReleaseNotes);
+    assert.deepEqual(releaseNotes.filter(note => multitaskingReleaseNotes.includes(note)),multitaskingReleaseNotes);
     for(const note of multitaskingReleaseNotes){
         assert.equal(getReleaseNotes({chat_enabled:false}).some(row=>row.id===note.id),true);
         assert.equal(note.date,"2026-10-30");
@@ -21,7 +21,7 @@ test("las siete novedades del 30 de octubre solo se ofrecen a la asignación pil
         assert.deepEqual(getReleaseNotes(assignment),releaseNotes);
     }
     const notes=getReleaseNotes({id:"it",chat_enabled:true});
-    assert.deepEqual(notes,[...itPilotReleaseNotes,...releaseNotes]);
+    assert.deepEqual(notes,[...itPilotReleaseNotes,...releaseNotes].sort((a,b)=>b.date.localeCompare(a.date)));
     assert.equal(new Set(notes.map(note=>note.id)).size,notes.length);
     for(const note of itPilotReleaseNotes){
         assert.equal(note.date,"2026-10-30");assert.equal(note.category,"Piloto IT");

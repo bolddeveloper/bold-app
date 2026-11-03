@@ -132,18 +132,22 @@ export function TeamCalendarSharing({assignmentId}) {
     </div>;
 }
 
-export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarDateField}) {
+export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarDateRangeField}) {
     const directory = useTeamQuery(enabled ? "directory/" : null, assignmentId);
     const [search, setSearch] = useState("");
     const needle = search.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
     const departments = (directory.value?.departments || []).map(unit => ({...unit, people: unit.people.filter(item => item.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().includes(needle))})).filter(unit => unit.people.length);
-    const [person, setPerson] = useState(null), [view, setView] = useState("tasks"), [day, setDay] = useState(today);
+    const [person, setPerson] = useState(null), [view, setView] = useState("tasks"), [period, setPeriod] = useState(() => ({start:today(),end:today()}));
     useEffect(() => {
         if (view !== "meetings") return;
         let currentDay = today(), timer;
         const refreshDay = () => {
             const nextDay = today();
-            if (nextDay !== currentDay) {currentDay = nextDay; setDay(nextDay);}
+            if (nextDay !== currentDay) {
+                const previousDay = currentDay;
+                currentDay = nextDay;
+                setPeriod(previous => previous.start === previousDay && previous.end === previousDay ? {start:nextDay,end:nextDay} : previous);
+            }
             window.clearTimeout(timer);
             const midnight = new Date();
             midnight.setHours(24, 0, 0, 50);
@@ -154,7 +158,7 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
         document.addEventListener("visibilitychange", refreshDay);
         return () => {window.clearTimeout(timer); window.removeEventListener("focus", refreshDay); document.removeEventListener("visibilitychange", refreshDay);};
     }, [view]);
-    const content = useTeamQuery(enabled && person ? `${person.id}/${view === "tasks" ? "board/" : `meetings/?date=${day}`}` : null, assignmentId);
+    const content = useTeamQuery(enabled && person ? `${person.id}/${view === "tasks" ? "board/" : `meetings/?date=${period.start}&end_date=${period.end}`}` : null, assignmentId);
     useEffect(() => {setPerson(null); setView("tasks");}, [assignmentId]);
     useEffect(() => {
         if (person && directory.value && !directory.value.departments.some(unit => unit.people.some(item => item.id === person.id))) setPerson(null);
@@ -162,12 +166,15 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
     const tasks = (content.value?.tasks || []).map(dto => ({...normalizeTask(dto), section: dto.stage || dto.section, ...(dto.stage_name ? {status:dto.stage_name,status_color:dto.stage_color} : {}), assignee_name: dto.assignee_name}));
     const meetingMessage = {hidden: "Esta persona no comparte su agenda.", disconnected: "Agenda no disponible. No indica que la persona esté libre.", unavailable: "No se pudo consultar la agenda completa."};
     const summary = view === "tasks" ? (content.value ? `${tasks.length} tareas compartidas` : "Consultando tareas compartidas…")
-        : content.value?.state === "shared" ? `${content.value.meetings.length} reuniones del día`
+        : content.value?.state === "shared" ? `${content.value.meetings.length} reuniones del período`
         : content.value?.state === "hidden" ? "Agenda no compartida" : "Agenda no disponible";
     return <div className="team_panel">
         <aside className="team_directory" aria-label="Personas por departamento">
+            <header className="team_directory_header">
             <h2><Users size={18} aria-hidden="true"/> Equipo</h2>
             <label className="team_people_search"><Search size={15} aria-hidden="true"/><input type="search" aria-label="Buscar persona en Equipo" placeholder="Buscar persona" value={search} onChange={event => setSearch(event.target.value)}/></label>
+            </header>
+            <div className="team_directory_groups">
             <QueryNotice query={directory}/>
             {!enabled && <p>Conecta con BOLD para consultar el equipo.</p>}
             {needle && !departments.length && !directory.loading && <p role="status">No hay coincidencias. Prueba otro nombre.</p>}
@@ -178,17 +185,18 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
                     <span className="team_person_initial" aria-hidden="true">{item.name.slice(0, 1)}</span>{item.name}
                 </button>) : <p>Sin integrantes activos</p>}</div>
             </details>)}
+            </div>
         </aside>
         <section className="team_workspace" aria-label="Trabajo compartido">
             {person ? <>
                 <div className="team_profile_bar">
-                <header className="team_profile_header"><div><h2>{person.name}</h2><p>Solo lectura · {summary}</p></div>
+                <header className="team_profile_header"><span className="team_person_initial" aria-hidden="true">{person.name.slice(0, 1)}</span><div><h2>{person.name}</h2><p>Solo lectura · {summary}</p></div>
                     <button type="button" aria-label="Actualizar perfil" onClick={content.retry}><RefreshCw size={17} aria-hidden="true"/></button>
                 </header>
                 <nav className="team_profile_tabs" aria-label="Contenido de la persona">
-                    <button type="button" aria-pressed={view === "tasks"} onClick={() => {setView("tasks");}}>Tareas</button>
-                    <button type="button" aria-pressed={view === "meetings"} onClick={() => {setDay(today()); setView("meetings");}}>Reuniones</button>
-                    {view === "meetings" && <div className="team_meeting_date"><span>Día</span><CalendarDateField ariaLabel="Día de reuniones" required value={day} onChange={setDay}/></div>}
+                    <button type="button" aria-pressed={view === "tasks"} onClick={() => {setView("tasks");}}><Users size={14} aria-hidden="true"/> Tareas</button>
+                    <button type="button" aria-pressed={view === "meetings"} onClick={() => {setPeriod({start:today(),end:today()}); setView("meetings");}}><CalendarDays size={14} aria-hidden="true"/> Reuniones</button>
+                    {view === "meetings" && <div className="team_meeting_date"><span>Período</span><CalendarDateRangeField required start={period.start} end={period.end} onChange={setPeriod}/><small>Máx. 31 días</small></div>}
                 </nav>
                 </div>
                 <QueryNotice query={content}/>
@@ -202,8 +210,9 @@ export default function TeamPanel({assignmentId, enabled, renderBoard, CalendarD
                 </div>}
                 {content.value && view === "meetings" && <div className="team_meetings">
                     {content.value.state !== "shared" ? <p>{meetingMessage[content.value.state]}</p>
-                        : !content.value.meetings.length ? <p>Sin reuniones programadas para este día.</p>
+                        : !content.value.meetings.length ? <p>Sin reuniones programadas para este período.</p>
                         : content.value.meetings.map(meeting => <article key={meeting.id}><CalendarDays size={20} aria-hidden="true"/><div><h3>{meeting.title}</h3><p>
+                            <span className="team_meeting_day">{(meeting.all_day ? new Date(`${meeting.start.slice(0,10)}T12:00:00`) : new Date(meeting.start)).toLocaleDateString("es", {weekday:"short",day:"numeric",month:"short",...(meeting.all_day ? {} : {timeZone:content.value.time_zone})})}</span>
                             {meeting.all_day ? "Todo el día" : <>{new Date(meeting.start).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})} – {new Date(meeting.end).toLocaleTimeString("es", {hour: "2-digit", minute: "2-digit", timeZone: content.value.time_zone})}</>}{meeting.calendar && ` · ${meeting.calendar}`}
                         </p></div></article>)}
                 </div>}

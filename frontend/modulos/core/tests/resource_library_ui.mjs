@@ -14,6 +14,7 @@ const load=file=>server.ssrLoadModule(`/@fs/${path.resolve(file).replaceAll('\\'
 const {resourceApi}=await load('../mensajeria/resource_api.js'),{default:ResourceLibrary}=await load('../mensajeria/resource_library.jsx');
 const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002';
 const row={id:a,source_id:b,target:{kind:'chat',conversation_id:a,message_id:b},author:{employee_id:b,name:'Persona antigua'},created_at:'2026-10-01T10:00:00Z',excerpt:'Texto <script>literal</script>',media:null,links:[{href:'https://bold.gt/help',label:'Sitio enviado'},{href:'javascript:alert(1)',label:'No permitido'}]};
+const earlier={...row,id:'00000000-0000-4000-8000-000000000003',created_at:'2026-09-30T10:00:00Z',excerpt:'Referencia anterior',links:[]};
 let calls=[],pending=null,closed=0,opened=[],fail=false,mediaCalls=0,withMedia=false,mediaPending=null;
 const revoked=[],downloads=[];
 URL.createObjectURL=()=>`blob:resource-${mediaCalls}`;URL.revokeObjectURL=value=>revoked.push(value);
@@ -21,8 +22,8 @@ dom.window.HTMLAnchorElement.prototype.click=function(){downloads.push({href:thi
 resourceApi.media=async(kind,container,message,options)=>{mediaCalls++;if(mediaPending)return new Promise(resolve=>{mediaPending={resolve,signal:options.signal};});return new Blob(['synthetic-bytes'],{type:'image/webp'});};
 resourceApi.list=async(kind,container,filters,cursor,options)=>{
     calls.push({kind,container,filters:structuredClone(filters),cursor,signal:options.signal});
-    if(pending)return new Promise(resolve=>{pending=resolve;});if(fail)throw {status:403};
-    return {results:filters.q==='empty' ? []:[{...row,excerpt:cursor==='next' ? 'Recurso siguiente':row.excerpt,...(withMedia ? {media:{id:b,kind:'image',mime_type:'image/webp',filename:'captura.png',size_bytes:1234,width:50,height:50}}:{})}],first_cursor:'first',next_cursor:cursor==='next' ? null:'next',snapshot_at:'2026-10-29T10:00:00Z'};
+    if(pending)return new Promise(resolve=>{pending=resolve;});if(fail)throw {status:typeof fail==='number' ? fail:403};
+    return {results:filters.q==='empty' ? []:cursor==='next' ? [earlier,{...row,id:'00000000-0000-4000-8000-000000000004',created_at:'2026-09-29T10:00:00Z',excerpt:'Recurso siguiente'}]:[{...row,...(withMedia ? {media:{id:b,kind:'image',mime_type:'image/webp',filename:'captura.png',size_bytes:1234,width:50,height:50}}:{})},earlier],first_cursor:'first',next_cursor:cursor==='next' ? null:'next',snapshot_at:'2026-10-29T10:00:00Z'};
 };
 const root=createRoot(document.getElementById('root')),settle=()=>new Promise(resolve=>setTimeout(resolve,25));
 async function waitFor(predicate){const end=Date.now()+5000;while(!predicate() && Date.now()<end)await settle();assert.ok(predicate(),'expected library state');}
@@ -33,15 +34,33 @@ const submit=()=>document.querySelector('form').dispatchEvent(new Event('submit'
 const mount=(key='first')=>root.render(React.createElement(ResourceLibrary,{key,kind:'chat',container:a,title:'Colega',onClose:()=>closed++,onContext:target=>opened.push(target)}));
 try{
     document.getElementById('trigger').focus();mount();await waitFor(()=>document.querySelector('.resource_card'));
+    assert.equal(calls.length,1,'opening the selected chat loads its resources without requiring a search');
+    assert.equal(calls[0].container,a);assert.equal(calls[0].filters.author,'');assert.equal(calls[0].filters.q,'');
+    assert.deepEqual([...document.querySelectorAll('.resource_month>h3')].map(e=>e.textContent),['octubre de 2026','septiembre de 2026']);
+    assert.equal(document.querySelector('details.history_search_advanced').open,false);
+    document.querySelector('details.history_search_advanced').open=true;
+    button('Elegir inicio y fin').click();await waitFor(()=>document.querySelector('.bold_date_presets'));
+    button('1 semana').click();await settle();document.querySelector('.bold_date_apply').click();await waitFor(()=>!document.querySelector('.bold_date_picker'));
+    assert.equal(calls.length,1,'choosing a range does not issue additional searches');
+    submit();await waitFor(()=>calls.length===2 && document.querySelector('.resource_card'));
+    assert.equal(new Date(calls.at(-1).filters.before)-new Date(calls.at(-1).filters.after),8*86400000,'the resource range includes the whole final day');
+    button('Elegir inicio y fin').click();await waitFor(()=>document.querySelector('.bold_date_clear'));document.querySelector('.bold_date_clear').click();await settle();
+    submit();await waitFor(()=>calls.length===3 && document.querySelector('.resource_card'));assert.equal(calls.at(-1).filters.after,undefined);assert.equal(calls.at(-1).filters.before,undefined);
+    assert.equal(document.querySelector('input[type="date"]'),null);
     assert.equal(document.querySelector('.resource_library_scrim').parentElement,document.body,'the modal uses viewport space, not a short nested module');
     assert.equal(mediaCalls,0);assert.equal(document.querySelectorAll('script').length,0);assert.match(document.querySelector('.resource_card').textContent,/<script>/);
     assert.equal(document.querySelectorAll('.resource_links a').length,1);assert.equal(document.querySelector('.resource_links a').getAttribute('rel'),'noopener noreferrer');
     assert.equal(field('Enviado por').querySelector(`option[value="${b}"]`).textContent,'Persona antigua','historical author is available even without directory');
-    button('Siguientes recursos').click();await waitFor(()=>document.querySelector('.resource_card')?.textContent.includes('Recurso siguiente'));
-    assert.equal(calls.at(-1).cursor,'next');button('Recursos anteriores').click();await waitFor(()=>calls.at(-1).cursor==='first');
+    fail=500;button('Cargar anteriores').click();await waitFor(()=>document.querySelector('[role="alert"]'));
+    assert.equal(document.querySelectorAll('.resource_card').length,2,'a failed older-page request retains the loaded resources');fail=false;
+    button('Cargar anteriores').click();await waitFor(()=>document.body.textContent.includes('Recurso siguiente'));
+    assert.equal(calls.at(-1).cursor,'next');assert.equal(calls.at(-1).container,a);
+    assert.equal(document.querySelectorAll('.resource_card').length,3,'older resources append without duplicates or replacing newer messages');
+    assert.equal(document.querySelectorAll('.resource_month').length,2);assert.equal(button('Cargar anteriores'),undefined);
     const count=calls.length;change(field('Buscar recurso'),'empty');await settle();assert.equal(calls.length,count,'typing does not issue requests');assert.equal(document.querySelectorAll('.resource_card').length,0);
     submit();await waitFor(()=>document.body.textContent.includes('No hay recursos con estos filtros'));assert.equal(calls.at(-1).filters.q,'empty');
-    button('Limpiar filtros').click();await settle();submit();await waitFor(()=>document.querySelector('.resource_card'));
+    const resetCalls=calls.length;button('Limpiar filtros').click();await waitFor(()=>document.querySelector('.resource_card'));
+    assert.equal(calls.length,resetCalls+1,'clearing filters restores this chat automatically with a single request');
     const before=calls.length;window.dispatchEvent(new CustomEvent('bold:messaging-event',{detail:{event_type:'messaging.message.created',payload:{conversation_id:a}}}));await settle();
     assert.match(document.body.textContent,/La conversación cambió/);assert.equal(calls.length,before,'real-time hints never create per-message polling');
     button('Ver mensaje en contexto').click();assert.equal(opened[0].message_id,b);

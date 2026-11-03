@@ -198,7 +198,10 @@ class HistorySearchTests(TestCase):
         result = self.as_person(self.bob).get(endpoint)
         self.assertEqual(result.status_code, 200, result.data)
         self.assertEqual(result.data["anchor_id"], str(anchor.pk))
-        self.assertEqual([row["id"] for row in result.data["results"]], [str(row.pk) for row in rows[5:36]])
+        # Coarse system clocks can give adjacent inserts the same timestamp.
+        ordered = sorted(rows, key=lambda row: (row.created_at, row.pk))
+        index = ordered.index(anchor)
+        self.assertEqual([row["id"] for row in result.data["results"]], [str(row.pk) for row in ordered[index-15:index+16]])
         self.assertTrue(result.data["has_before"])
         self.assertTrue(result.data["has_after"])
         self.assertFalse(self.chat.messages.filter(read_at__isnull=False).exists())

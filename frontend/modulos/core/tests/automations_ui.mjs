@@ -67,9 +67,13 @@ const mount=async()=>{root=createRoot(document.getElementById('root'));root.rend
 const unmount=async()=>{root.unmount();await tick();};
 try{
     await mount();button('Nueva regla').click();await wait(()=>document.querySelector('form'));submit();await wait(()=>document.querySelector('[role=alert]'));assert.equal(writes.length,0);assert.equal(document.activeElement,document.querySelector('[role=alert]'));
-    input('kind','reminder');await tick();input('name','Recordatorio protegido');input('body','Texto privado de revisión');input('next_at',localSchedule(Date.now()+900000));await tick();consent();await tick();submit();
+    input('kind','reminder');await tick();input('name','Recordatorio protegido');input('body','Texto privado de revisión');
+    input('next_at-time','09:35');await tick();document.querySelector('[aria-label="Fecha de primera ejecución"]').click();await wait(()=>document.querySelector('.bold_date_picker'));
+    button('Mañana').click();await tick();button('Aplicar').click();await wait(()=>!document.querySelector('.bold_date_picker'));assert.equal(document.getElementById('auto-next_at-time').value,'09:35','changing the date preserves the reviewed local time');
+    const reviewedDate=new Date();reviewedDate.setDate(reviewedDate.getDate()+1);reviewedDate.setHours(9,35,0,0);
+    await tick();consent();await tick();submit();
     await wait(()=>document.querySelector('[aria-label="Operación sin confirmar"]') && button('Reintentar el mismo intento') && !button('Reintentar el mismo intento').disabled);
-    assert.equal(rows.size,1);assert.equal([...rows.values()][0].active,false);assert.equal(writes.length,1);assert.equal(dirty,true);
+    assert.equal(rows.size,1);assert.equal([...rows.values()][0].active,false);assert.equal(writes.length,1);assert.equal(dirty,true);assert.equal(writes[0].values.next_at,reviewedDate.toISOString(),'the shared calendar keeps the existing local-to-UTC contract');
     assert.equal(await protectPrivateWork(),true);assert.ok(records.size);assert.equal(JSON.stringify([...records.values()]).includes('Texto privado de revisión'),false);
     const createToken=writes[0].values.client_id;await unmount();await mount();await wait(()=>button('Recuperar revisión de automatización'));
     assert.equal(writes.length,1,'mount/recovery prompt never sends');button('Recuperar revisión de automatización').click();await wait(()=>button('Reintentar el mismo intento') && !button('Reintentar el mismo intento').disabled);
@@ -89,7 +93,7 @@ try{
     input('kind','recurring_page');await tick();button('Cargar plantillas del canal').click();await wait(()=>document.querySelector('#auto-template_id option[value="'+templateId+'"]'));input('template_id',templateId);await wait(()=>document.querySelector('[aria-label="Contenido de plantilla"]'));
     assert.equal(document.querySelector('script'),null);assert.ok(document.body.textContent.includes('Texto <script>literal</script>'));
     input('name','Página recurrente');input('interval_days','7');await tick();button('Dentro de cinco minutos').click();await tick();
-    assert.equal(document.getElementById('auto-next_at').value,localSchedule(Date.now()+300000));
+    assert.equal(document.getElementById('auto-next_at-time').value,localSchedule(Date.now()+300000).slice(11,16));assert.equal(document.querySelector('[aria-label="Fecha de primera ejecución"]').getAttribute('aria-expanded'),'false');
     assert.equal(document.getElementById('auto-share_confirmed').checked,false,'schedule presets require renewed consent');
     consent();await tick();submit();await wait(()=>writes.at(-1).values.kind==='recurring_page' && button('Revisar y activar'));
     assert.equal(writes.at(-1).values.template_version,1);assert.equal(writes.at(-1).values.body,undefined);
