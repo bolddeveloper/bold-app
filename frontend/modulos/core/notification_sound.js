@@ -31,9 +31,10 @@ export async function playNotificationSound(settings = defaultNotificationSettin
 }
 
 export function showDesktopNotification(row, settings) {
-    if (!settings.desktop_enabled || !globalThis.Notification || Notification.permission !== "granted") return;
+    if (!settings.desktop_enabled || !globalThis.Notification || Notification.permission !== "granted") return false;
     const notice = new Notification(row.title || "BOLD", {body: row.body || "Tienes una nueva notificación.", tag: `bold-${row.id}`, icon: "/logo-bold.svg", silent: true});
     notice.onclick = () => {window.focus(); notice.close();};
+    return true;
 }
 
 export function containsNewUnreadNotification(previous, next) {

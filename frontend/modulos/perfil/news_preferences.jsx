@@ -7,6 +7,7 @@ import "./news.css";
 
 const icons = {keyboard: Keyboard, bell: Bell, profile: UserRound, update: Layers};
 const dateLabel = date => new Date(`${date}T12:00:00`).toLocaleDateString("es", {day: "numeric", month: "long", year: "numeric"});
+const notesPerPage = 6;
 
 export function NoteViewer({index, select, close}) {
     const note = releaseNotes[index], body = useRef(null), Icon = icons[note.icon] || Newspaper;
@@ -23,13 +24,26 @@ export function NoteViewer({index, select, close}) {
 
 export default function NewsPreferences() {
     const [selected, setSelected] = useState(null);
+    const [page, setPage] = useState(0);
+    const heading = useRef(null);
+    const start = page * notesPerPage;
+    const pages = Math.ceil(releaseNotes.length / notesPerPage);
+    function changePage(next) {
+        setPage(next);
+        heading.current.focus();
+    }
     return <section className="bold_news"><div inert={selected !== null ? true : undefined}>
-        <header className="bold_news_heading"><div><h2>Novedades de BOLD</h2><p>Funciones nuevas, mejoras y correcciones de la demo.</p></div><span className="bold_news_badge">Notas de parche</span></header>
-        {[...new Set(releaseNotes.map(note => note.date))].map(date => <section className="bold_news_group" key={date}><h3><time dateTime={date}>{dateLabel(date)}</time></h3><div className="bold_news_cards">{releaseNotes.filter(note => note.date === date).map(note => {
+        <header className="bold_news_heading"><div><h2 ref={heading} tabIndex={-1}>Novedades de BOLD</h2><p>Funciones nuevas, mejoras y correcciones de la demo.</p></div><span className="bold_news_badge">{releaseNotes.length} notas</span></header>
+        <div className="bold_news_cards" key={page}>{releaseNotes.slice(start, start + notesPerPage).map((note, offset) => {
             const Icon = icons[note.icon] || Newspaper;
-            return <button type="button" className="bold_news_card" key={note.id} onClick={() => setSelected(releaseNotes.indexOf(note))} aria-label={`Leer notas de parche: ${note.title}`}>
-                <span className={`bold_news_thumbnail is_${note.icon}`} aria-hidden="true"><span>BOLD</span><Icon size={52}/></span><span className="bold_news_card_text"><span className="bold_news_category">{note.category}</span><strong>{note.title}</strong><span>{note.summary}</span><span className="bold_news_read">Leer notas de parche<ArrowRight size={16}/></span></span>
+            return <button type="button" className="bold_news_card" key={note.id} onClick={() => setSelected(start + offset)} aria-label={`Leer notas de parche: ${note.title}`}>
+                <span className={`bold_news_thumbnail is_${note.icon}`} aria-hidden="true"><Icon size={22}/></span><span className="bold_news_card_text"><span className="bold_news_meta"><span className="bold_news_category">{note.category}</span><time dateTime={note.date}>{dateLabel(note.date)}</time></span><strong>{note.title}</strong><span className="bold_news_summary">{note.summary}</span><span className="bold_news_read">Leer nota<ArrowRight size={16}/></span></span>
             </button>;
-        })}</div></section>)}
+        })}</div>
+        {pages > 1 && <nav className="bold_news_pagination" aria-label="Páginas de novedades">
+            <button type="button" disabled={page === 0} onClick={() => changePage(page - 1)}><ChevronLeft size={16}/>Anterior</button>
+            <span role="status">Página {page + 1} de {pages}</span>
+            <button type="button" disabled={page === pages - 1} onClick={() => changePage(page + 1)}>Siguiente<ChevronRight size={16}/></button>
+        </nav>}
     </div>{selected !== null && <NoteViewer index={selected} select={setSelected} close={() => setSelected(null)}/>}</section>;
 }

@@ -15,3 +15,10 @@
 
 - Utilizar la skill `ui-ux-pro-max` en módulos futuros y revisiones visuales o de interacción, preservando la identidad y los componentes de BOLD. Aplicar recomendaciones verificadas y pertinentes, no rediseños automáticos.
 - La creación del mapa de Graphify queda pospuesta hasta una solicitud expresa del usuario. No generar mapas ni activar hooks durante otras tareas.
+
+# Almacenamiento de imágenes y archivos
+
+- Las imágenes, iconos y adjuntos se almacenan en Drive. El backend conserva referencias, metadatos y permisos; nunca archivos ni Base64 como almacenamiento temporal o permanente, ni en base de datos ni en disco.
+- Durante una petición se permite procesar el archivo en memoria, con límites de tamaño. Los borradores y los archivos para reintentar permanecen en el dispositivo; no introducir colas del servidor que conserven sus bytes.
+- Si Drive no confirma la subida, conservar el archivo en el dispositivo y permitir un reintento explícito con el mismo identificador. No usar almacenamiento local del backend como alternativa.
+- Antes de migrar contenido antiguo, hacer respaldo. Sustituir sus bytes por una referencia solo después de comprobar que Drive conserva el archivo; no borrar datos de Oracle.
