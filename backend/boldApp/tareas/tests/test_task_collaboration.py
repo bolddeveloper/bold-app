@@ -10,6 +10,18 @@ from boldApp.tareas.models import Project, ProjectMember, Section, Task, TaskFol
 
 
 class TaskCollaborationTests(TestCase):
+    def test_daily_progress_counts_only_visible_root_tasks_and_validates_interval(self):
+        self.task.due_date = timezone.localdate()
+        self.task.save()
+        client = self.client_for(self.responsible)
+        day = self.task.due_date.isoformat()
+        response = client.get(f"/api/v2/tasks/daily-progress/?start={day}&end={day}")
+        self.assertEqual(response.status_code,200,response.data)
+        self.assertEqual(response.data,[{"date":day,"total":1,"completed":0}])
+        self.assertEqual(self.client_for(self.cross).get(f"/api/v2/tasks/daily-progress/?start={day}&end={day}").data[0]["total"],0)
+        self.assertEqual(client.get("/api/v2/tasks/daily-progress/?start=2026-01-01&end=2026-12-31").status_code,400)
+        self.assertEqual(client.get("/api/v2/tasks/daily-progress/?start=bad&end=bad").status_code,400)
+
     def setUp(self):
         self.unit = OrganizationalUnit.objects.create(name="Equipo", sensitivity_level="low", unit_type="department")
         self.other_unit = OrganizationalUnit.objects.create(name="Otro equipo", sensitivity_level="low", unit_type="department")

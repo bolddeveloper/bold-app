@@ -1,0 +1,31 @@
+:root .slack_module .slack_thread_action_card{position:relative;min-width:0;}
+:root .slack_module .slack_thread_action_card>.slack_catalog_card{width:100%;padding-right:40px;}
+:root .slack_module .slack_thread_more{display:grid;place-items:center;width:28px;height:28px;min-height:28px;padding:0;background:transparent;border:0;color:var(--bold_muted);}
+:root .slack_module .slack_thread_action_card>.slack_thread_more{position:absolute;right:7px;top:9px;}
+:root .slack_module .slack_thread_more:hover{color:var(--bold_text);background:color-mix(in srgb,var(--bold_text) 8%,transparent);}
+:root .slack_module .slack_thread_menu{box-sizing:border-box;border:1px solid var(--bold_line);background:var(--bold_surface);color:var(--bold_text);box-shadow:0 12px 35px #0004;padding:7px;overflow:auto;font-size:12px;z-index:20;}
+:root .slack_module .slack_thread_menu::backdrop{background:transparent;}
+:root .slack_module .slack_thread_menu>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 7px 7px;border-bottom:1px solid var(--bold_line);margin-bottom:4px;}
+:root .slack_module .slack_thread_menu button{display:flex;align-items:center;gap:9px;width:100%;min-height:32px;padding:7px 9px;border:0;background:transparent;color:var(--bold_text);text-align:left;font:inherit;cursor:pointer;}
+:root .slack_module .slack_thread_menu>header button{width:28px;min-height:28px;padding:5px;}
+:root .slack_module .slack_thread_menu button>span{flex:1;}
+:root .slack_module .slack_thread_menu button:hover:not(:disabled){background:color-mix(in srgb,var(--bold_text) 8%,transparent);}
+:root .slack_module .slack_thread_menu button:focus-visible,:root .slack_module .slack_thread_more:focus-visible{outline:2px solid var(--slack_thread_accent,var(--bold_red));outline-offset:-2px;}
+:root .slack_module .slack_thread_menu button:disabled{opacity:.45;cursor:default;}
+:root .slack_module .slack_thread_menu .is_danger{color:var(--slack_thread_accent,var(--bold_red));}
+:root .slack_module .slack_thread_menu .is_danger:hover:not(:disabled){background:color-mix(in srgb,var(--bold_red) 12%,transparent);}
+:root .slack_module .slack_thread_menu hr{border:0;border-top:1px solid var(--bold_line);margin:5px 4px;}
+:root .slack_module .slack_thread_menu p{font-size:11px;line-height:1.5;color:var(--bold_muted);padding:5px 9px;margin:4px 0;}
+:root .slack_module .slack_thread_menu p[role=alert]{color:var(--slack_thread_accent,var(--bold_red));}
+:root .slack_module .slack_thread_menu label{display:grid;gap:6px;padding:8px 4px;font-size:12px;}
+:root .slack_module .slack_thread_menu input{width:100%;box-sizing:border-box;min-width:0;padding:8px;border:1px solid var(--bold_line);background:var(--bold_bg);color:var(--bold_text);font:inherit;}
+:root .slack_module .slack_thread_menu input:focus-visible{outline:2px solid var(--slack_thread_accent,var(--bold_red));outline-offset:1px;}
+:root .slack_module .slack_thread_menu .slack_primary{background:var(--bold_red);color:white;justify-content:center;}
+:root .slack_module .slack_thread_action_status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+:root .slack_module .slack_thread_filters{display:flex;gap:5px;flex-wrap:wrap;padding:0 12px 8px;}
+:root .slack_module .slack_thread_filters button{background:transparent;border:1px solid var(--bold_line);color:var(--bold_muted);padding:5px 7px;font:inherit;font-size:11px;}
+:root .slack_module .slack_thread_filters button[aria-pressed=true]{border-color:var(--slack_thread_accent);color:var(--slack_thread_accent);background:color-mix(in srgb,var(--bold_red) 8%,transparent);}
+:root .slack_module .slack_thread_readonly{padding:9px 12px;border-block:1px solid var(--bold_line);font-size:12px;line-height:1.5;color:var(--bold_muted);}
+:root .slack_module .slack_thread_readonly strong{color:var(--bold_text);}
+:root .slack_module .slack_thread_context>.slack_thread_action_header{flex:0 0 auto;}
+@media(pointer:coarse){:root .slack_module .slack_thread_menu button{min-height:40px;}:root .slack_module .slack_thread_more{width:36px;height:36px;}}

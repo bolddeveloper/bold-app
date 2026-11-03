@@ -8,7 +8,7 @@ from django.test import TransactionTestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from . import test_upload_outbox as base
 from .models import MediaUpload, DirectMessage, MessageMedia
-from .upload_outbox import cipher, perform
+from .upload_outbox import perform
 
 
 @skipUnless(connection.vendor=='postgresql','Requires isolated PostgreSQL row locks')
@@ -45,20 +45,22 @@ class UploadConcurrencyTests(TransactionTestCase):
         return self.client_for_thread().post(self.url,{'client_id':str(token),
             'file':SimpleUploadedFile('revision.txt',b'Documento privado de prueba',content_type='text/plain')},format='multipart').status_code
 
-    def test_same_request_reserves_exactly_one_row_without_network(self):
+    def test_same_request_reserves_exactly_one_row_and_one_file(self):
         token=uuid.uuid4()
         self.assertEqual(sorted(self.parallel(lambda:self.queued(token),lambda:self.queued(token))),[200,202])
-        self.assertEqual(MediaUpload.objects.count(),1);self.assertEqual(self.drive.calls,[])
+        self.assertEqual(MediaUpload.objects.count(),1)
+        self.assertFalse(MediaUpload.objects.get().content)
+        self.assertEqual(sum(item['metadata']['mimeType']=='text/plain' for item in self.drive.files.values()),1)
 
-    def test_concurrent_reservations_cannot_exceed_the_ciphertext_budget(self):
-        capacity=len(cipher().encrypt(b'Documento privado de prueba'))
-        with override_settings(MESSAGING_UPLOAD_QUEUE_BYTES=capacity):
+    def test_concurrent_reservations_cannot_exceed_the_drive_budget(self):
+        capacity=len(b'Documento privado de prueba')
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=capacity):
             result=self.parallel(lambda:self.queued(uuid.uuid4()),lambda:self.queued(uuid.uuid4()))
-        self.assertEqual(sorted(result),[202,429]);self.assertEqual(MediaUpload.objects.count(),1)
+        self.assertEqual(sorted(result),[202,507]);self.assertEqual(MediaUpload.objects.count(),1)
 
     def test_two_workers_and_two_publications_do_not_duplicate_file_or_message(self):
         response=self.queue();identity=response.data['id']
-        self.assertEqual(sorted(self.parallel(lambda:perform(identity),lambda:perform(identity))),[False,True])
+        self.assertEqual(sorted(self.parallel(lambda:perform(identity),lambda:perform(identity))),[True,True])
         row=MediaUpload.objects.get(pk=identity)
         files=[item for item in self.drive.files.values() if item['metadata']['mimeType']=='text/plain']
         self.assertEqual(len(files),1)
@@ -87,7 +89,8 @@ class UploadConcurrencyTests(TransactionTestCase):
         result=self.parallel(lambda:self.queued(nonce),discard)
         self.assertIn(result[0],(200,202));self.assertEqual(result[1],200)
         row=MediaUpload.objects.get();self.assertEqual(row.state,'cancelled');self.assertFalse(perform(row.pk))
-        self.assertEqual(self.drive.calls,[]);self.assertEqual(row.cipher_bytes,0)
+        self.assertEqual(bytes(row.content),b'');self.assertEqual(row.cipher_bytes,0)
+        self.assertLessEqual(sum(item['metadata']['mimeType']=='text/plain' for item in self.drive.files.values()),1)
 
     def test_nonce_discard_and_publication_have_one_serialized_outcome(self):
         row=self.make_ready()
@@ -127,7 +130,7 @@ class UploadConcurrencyTests(TransactionTestCase):
                 'revision.txt',b'Documento privado de prueba',content_type='text/plain')},format='multipart').status_code
         with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=len(b'Documento privado de prueba')):
             self.assertEqual(sorted(self.parallel(lambda:self.queued(uuid.uuid4()),queue_bob)),[202,507])
-        self.assertEqual(MediaUpload.objects.count(),1);self.assertEqual(self.drive.calls,[])
+        self.assertEqual(MediaUpload.objects.count(),1);self.assertFalse(MediaUpload.objects.get().content)
 
     def phone_fixture(self):
         import io,secrets
@@ -151,16 +154,18 @@ class UploadConcurrencyTests(TransactionTestCase):
         return client.post(f'/api/v2/messaging/phone-transfers/{row.pk}/mobile/',{
             'client_id':str(uuid.uuid4()),'file':SimpleUploadedFile('photo.png',pixels,content_type='image/png')},format='multipart').status_code
 
-    def test_phone_and_outbox_cannot_overbook_shared_temporary_bytes(self):
+    def test_phone_and_outbox_cannot_overbook_shared_drive_bytes(self):
         from .models import PhoneImage
         from .media import prepare
         row,token,pixels=self.phone_fixture()
         phone_bytes=prepare(SimpleUploadedFile('photo.png',pixels,content_type='image/png'))['size_bytes']
-        staged_bytes=len(cipher().encrypt(b'Documento privado de prueba'))
-        with override_settings(MESSAGING_UPLOAD_QUEUE_BYTES=max(phone_bytes,staged_bytes)):
+        staged_bytes=len(b'Documento privado de prueba')
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=max(phone_bytes,staged_bytes)):
             result=self.parallel(lambda:self.queued(uuid.uuid4()),lambda:self.phone_upload(row,token,pixels))
-        self.assertIn(tuple(result),((202,429),(429,201)))
-        self.assertEqual(MediaUpload.objects.count()+PhoneImage.objects.count(),1)
+        self.assertIn(tuple(result),((202,507),(507,201)))
+        self.assertEqual(MediaUpload.objects.count(),1)
+        self.assertEqual(PhoneImage.objects.count(),int(result[1]==201))
+        self.assertFalse(any(MediaUpload.objects.values_list('content',flat=True)))
 
     def test_replacing_qr_and_uploading_while_staging_do_not_deadlock_or_keep_old_image(self):
         from .models import PhoneTransfer,PhoneImage
@@ -169,7 +174,7 @@ class UploadConcurrencyTests(TransactionTestCase):
             return self.client_for_thread().post('/api/v2/messaging/phone-transfers/',
                 {'conversation_id':self.conversation},format='json').status_code
         result=self.parallel(lambda:self.queued(uuid.uuid4()),lambda:self.phone_upload(row,token,pixels),replace)
-        self.assertEqual(result[0],202);self.assertIn(result[1],(201,404));self.assertEqual(result[2],201)
+        self.assertEqual(result[0],202);self.assertIn(result[1],(201,404,409));self.assertEqual(result[2],201)
         self.assertEqual(PhoneTransfer.objects.count(),1)
         self.assertFalse(PhoneTransfer.objects.filter(pk=row.pk).exists())
         self.assertEqual(PhoneImage.objects.count(),0)

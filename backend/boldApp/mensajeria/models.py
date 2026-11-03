@@ -4,7 +4,7 @@ from django.db import models
 from django.conf import settings
 
 from boldApp.core.models.mixins import UUIDPrimaryKeyModel
-from .channel_models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState, ChannelThreadSubscription  # noqa: F401
+from .channel_models import PrivateServer, PrivateServerMember, ServerIcon, ChannelCategory, DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch, ChannelMessage, ChannelReadState, ChannelMedia, ChannelSubscription, ChannelThreadReadState, ChannelThreadSubscription  # noqa: F401
 from .phone_models import PhoneTransfer, PhoneImage  # noqa: F401
 from .page_models import ChannelPage, PageRevision, PageTemplate, PageCollaboration, PageUpdateReceipt, PageStructureReceipt, PageLink  # noqa: F401
 from .page_discussion_models import PageDiscussion, PageDiscussionComment, PageDiscussionReceipt  # noqa: F401

@@ -4,10 +4,12 @@ from .profile import ProfileView
 from .notification_settings import NotificationSettingsView
 from .presence import PresenceSettingsView, PresenceDirectoryView
 from .shortcut_settings import ShortcutSettingsView
+from .interface_settings import InterfaceSettingsView
 
 from .views import InvitationConfirmView, LoginView, LogoutView, MFADisableView, MFALoginVerifyView, MFAStepUpView, PasswordChangeView, RecoveryConfirmView, RecoveryRequestView, SessionListView, SessionView, TOTPConfirmView, TOTPSetupView, WebSocketTicketView
 
 urlpatterns = [
+    path("interface-settings/", InterfaceSettingsView.as_view(), name="interface-settings"),
     path("presence/", PresenceSettingsView.as_view(), name="presence-settings"),
     path("presence/directory/", PresenceDirectoryView.as_view(), name="presence-directory"),
     path("shortcut-settings/", ShortcutSettingsView.as_view(), name="shortcut-settings"),

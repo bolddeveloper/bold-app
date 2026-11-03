@@ -22,6 +22,17 @@ from .models import DirectConversation, DirectMessage
 
 @override_settings(MESSAGING_PILOT_ENABLED=False)
 class RealtimeChatTests(TransactionTestCase):
+    def test_typing_is_ephemeral_and_only_conversation_participants_can_publish_or_receive(self):
+        from .typing import typing_event
+        self.assertEqual(self.post(0,"typing/",{}).status_code,204)
+        self.assertEqual(self.post(2,"typing/",{}).status_code,404)
+        event={"conversation_id":str(self.conversation.pk),"author_id":str(self.people[0][0].employee_id)}
+        envelope=typing_event(self.people[1][0].employee_id,event)
+        self.assertEqual(envelope["event_type"],"messaging.typing")
+        self.assertNotIn("messages",envelope["payload"])
+        self.assertIsNone(typing_event(self.people[2][0].employee_id,event))
+        self.assertEqual(DirectMessage.objects.count(),0)
+
     def setUp(self):
         cache.clear()
         unit = OrganizationalUnit.objects.create(name="Prueba", sensitivity_level="low", unit_type="department")

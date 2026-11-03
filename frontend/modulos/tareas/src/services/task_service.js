@@ -68,10 +68,16 @@ export async function saveSubtasks(parent, drafts, data) {
         const unit = old?.unitId || parent.unitId;
         const status = data.statuses.find(item => (!item.unitId || item.unitId === unit) && item.isFinal === !!draft.completed);
         if (!status) throw new Error("Falta un estado compatible para la subtarea.");
+        const details = Object.fromEntries(["description", "start_date", "due_date", "priority", "assignee_id"]
+            .filter(field => draft[field] !== undefined && (!old || (draft[field] ?? "") !== (old[field] ?? "")))
+            .map(field => [field, draft[field]]));
+        const payload = taskPayload(details, data.statuses, { unitId: unit });
         if (old) {
-            if (old.title !== draft.title || old.completed !== draft.completed) await api.updateTask(old.id, { title: draft.title, status: status.id });
+            if (old.title !== draft.title) payload.title = draft.title;
+            if (Boolean(old.completed) !== Boolean(draft.completed)) payload.status = status.id;
+            if (Object.keys(payload).length) await api.updateTask(old.id, payload);
         } else {
-            const created = await api.createTask({ title: draft.title, unit, status: status.id, priority: "medium", parent_task: parent.id });
+            const created = await api.createTask({ title: draft.title, unit, status: status.id, priority: "medium", ...payload, parent_task: parent.id });
             draft.id = created.id;
         }
     }

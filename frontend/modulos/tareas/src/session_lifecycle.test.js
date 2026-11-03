@@ -10,6 +10,24 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 const options = { coordinatorOptions: { delayMs: 0 } };
 const refresh = store => store.refresh({ immediate: true });
 
+test("dismiss one notification survives stale refresh, preserves siblings and reports failures", async () => {
+    const stale = deferred(); let reads = 0, fail = false;
+    const rows = [{id:"one",is_read:false},{id:"two",is_read:false}];
+    const store = createSessionNotifications({...options, initialRows:rows, client:{
+        list:() => ++reads === 1 ? stale.promise : Promise.resolve([rows[1]]),
+        request:async path => {assert.match(path,/\/dismiss\/$/); if(fail) throw new Error("Sin conexión");},
+    }});
+    try {
+        const loading = refresh(store); await tick();
+        await store.dismiss("one"); assert.deepEqual(store.getRows(),[rows[1]]);
+        stale.resolve(rows); await loading; assert.deepEqual(store.getRows(),[rows[1]]);
+        fail = true; await assert.rejects(store.dismiss("two"),/Sin conexión/);
+        assert.deepEqual(store.getRows(),[rows[1]]);
+        await store.invalidate({uncertain:true});
+        await assert.rejects(store.dismiss("two"),{name:"AbortError"});
+    } finally {store.dispose();}
+});
+
 test("cached notifications appear immediately and disappear when authorization becomes uncertain", async () => {
     const store = createSessionNotifications({...options, initialRows: [{id: "cached", is_read: false}], client: {list: async () => []}});
     assert.equal(store.getRows()[0].id, "cached");

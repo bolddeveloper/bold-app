@@ -4,6 +4,7 @@ import { confirmGoogleConnection } from "../core/google_cache.js";
 const root = "/api/v2/calendar/";
 const eventUrl = id => `${root}events/${encodeURIComponent(id)}/`;
 export const localCalendarsApi = {
+    agenda: (start, end, options) => http.request(`${root}local/agenda/?${new URLSearchParams({start, end})}`, options),
     list: options => http.request(`${root}local/`, options),
     create: name => http.request(`${root}local/`, {method: "POST", body: {name}}),
     rename: (id, name) => http.request(`${root}local/${id}/`, {method: "PATCH", body: {name}}),

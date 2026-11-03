@@ -2,7 +2,7 @@ import {useEffect, useState, useSyncExternalStore} from "react";
 import {createGoogleCache} from "../google_cache.js";
 import {getCoreState, subscribeCore} from "../core_store.js";
 import {http} from "../http_client.js";
-import {isStoredImageUrl} from "./media_urls.js";
+import {isStoredImageUrl,isServerIconUrl} from "./media_urls.js";
 
 const cache = createGoogleCache({name: "bold-private-images", ttl: Infinity, maxBytes: 256 * 1024 * 1024, maxEntries: 4000});
 const pending = new Map();
@@ -47,7 +47,7 @@ async function loadImage(scope, src) {
 export function CachedImage({src, ...props}) {
     const context = useSyncExternalStore(subscribeImages, () => `${imageScope()}|${generation}`);
     const scope = context.split("|")[0];
-    const stored = isStoredImageUrl(src), key = `${context}:${src}`;
+    const stored = isStoredImageUrl(src) || isServerIconUrl(src), key = `${context}:${src}`;
     const [image, setImage] = useState(null);
     useEffect(() => {
         if (!stored || !scope) return;

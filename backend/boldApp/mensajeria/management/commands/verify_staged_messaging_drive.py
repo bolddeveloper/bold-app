@@ -1,11 +1,10 @@
 """Opt-in, real-provider acceptance fenced to the approved local test setup.
 
-Only synthetic content; no fixture substitution for Google requests. Controlled
-lost-response/worker interruption is labelled separately from a real outage.
+Only synthetic content; no fixture substitution for Google requests.
+Worker interruption is covered separately by the isolated protocol tests.
 The private journal preserves bytes/nonces across reruns; no permanent deletion.
 """
 import base64
-from datetime import timedelta
 import hashlib
 import io
 import json
@@ -14,14 +13,11 @@ import shutil
 import subprocess
 import uuid
 import zipfile
-from unittest.mock import patch
 
 import requests
 from PIL import Image,ImageDraw
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand,CommandError
-from django.db import connection as database
-from django.utils import timezone
 from .bootstrap_messaging_staging import checked_profile,CLIENT,PROJECT
 
 BASE='http://127.0.0.1:5193'
@@ -83,10 +79,6 @@ def synthetic_samples():
             content=pdf if extension=='pdf' else b'Columna,Valor\nPrueba,2\n'
         samples.append((extension,'staging-document.'+extension,mime,content))
     return samples
-
-
-class InjectedWorkerInterruption(BaseException):
-    pass
 
 
 class Command(BaseCommand):
@@ -233,47 +225,27 @@ class Command(BaseCommand):
     def case(self,index,case):
         from ...models import MediaUpload,DirectMessage,ChannelMessage
         from ...media import prepare
-        from ...upload_outbox import perform
-        from boldApp.workspace.service import GoogleUnavailable
         content=base64.b64decode(case['content'],validate=True)
         expected=prepare(SimpleUploadedFile(case['name'],content,content_type=case['mime']))
         author=case['author'];url=self.scope_url(case['scope']);nonce=str(uuid.UUID(case['client_id']))
         queued=self.checked_response(self.clients[author].post(url+'uploads/',data={'client_id':nonce},
-            files={'file':(case['name'],content,case['mime'])},timeout=50),{200,202},case['label']+' reservar')
+            files={'file':(case['name'],content,case['mime'])},timeout=120),{200,202},case['label']+' reservar')
         row=MediaUpload.objects.get(pk=queued.json()['id'],root=self.storage,account=self.accounts[author])
         model=DirectMessage if case['scope']=='chat' else ChannelMessage
         where={'conversation_id':self.journal['conversation']} if case['scope']=='chat' else {'channel_id':self.journal['channel']}
         if queued.status_code==202:
-            require(row.state=='queued' and not row.drive_id and not model.objects.filter(**where,
-                author_id=self.accounts[author].employee_id,client_id=nonce).exists(),'la reserva publicó antes del trabajador')
+            require(not model.objects.filter(**where,author_id=self.accounts[author].employee_id,client_id=nonce).exists(),
+                'la preparación publicó un mensaje sin confirmación')
         self.checked_response(self.clients[1-author].get(url+'uploads/'+str(row.pk)+'/',timeout=15),{404},'preparación privada')
-        if row.state not in ('ready','attached'):
-            real=self.google
-            def fault(user,method,path,**kwargs):
-                require(not database.in_atomic_block,'petición externa bajo transacción')
-                result=real(user,method,path,**kwargs)
-                if method=='POST' and path=='/files' and kwargs.get('files') and index in (0,1) and not case.get('fault_injected'):
-                    case['fault_injected']=True;self.write_journal()
-                    if index==0:raise InjectedWorkerInterruption()
-                    raise GoogleUnavailable()
-                return result
-            try:
-                with patch('boldApp.mensajeria.upload_provider.google',side_effect=fault):perform(row.pk)
-            except InjectedWorkerInterruption:
-                row.refresh_from_db();require(row.state=='uploading' and bool(row.drive_id),'interrupción no retuvo la reserva remota')
-                # Controlled test clock/lease expiry, not an unplanned real outage.
-                MediaUpload.objects.filter(pk=row.pk).update(lease_until=timezone.now()-timedelta(seconds=1))
-                case['expired_lease_simulated']=True;self.write_journal()
-                perform(row.pk)
-            row.refresh_from_db()
-        require(row.state in ('ready','attached'),case['label']+' trabajador '+row.state+'/'+row.error_code)
+        require(row.state in ('ready','attached') and not row.content and row.cipher_bytes==0,
+            case['label']+' Drive sin copia local: '+row.state+'/'+row.error_code)
         remote_id=row.drive_id;attempts=row.attempts
         # Fresh actual HTTP sessions imitate resuming after connection loss.
         if index==0:self.clients=self.login()
         lookup=self.checked_response(self.clients[author].get(url+'uploads/',params={'client_id':nonce},timeout=20),{200},'recuperación por nonce')
         require(lookup.json()['results'][0]['id']==str(row.pk),'se perdió la reserva al reconectar')
         duplicate=self.checked_response(self.clients[author].post(url+'uploads/',data={'client_id':nonce},
-            files={'file':(case['name'],content,case['mime'])},timeout=50),{200},'reserva idempotente')
+            files={'file':(case['name'],content,case['mime'])},timeout=120),{200},'reserva idempotente')
         require(duplicate.json()['id']==str(row.pk),'reserva duplicada')
         data={'client_id':nonce,'body':'Aceptación sintética '+case['label'],'upload_id':str(row.pk)}
         if case['scope']=='thread':data['parent_id']=self.journal['parent']
@@ -304,8 +276,7 @@ class Command(BaseCommand):
         require(message['id'] in [item['source_id'] for item in library.json()['results']],'archivo ausente en biblioteca')
         outcome={'kind':case['label'],'scope':case['scope'],'worker_attempts':row.attempts,'upload_idempotent':True,
             'message_idempotent':True,'peer_download':200,'anonymous':401,'private_acl':True,'sha256':row.digest,
-            'controlled_worker_interruption':bool(case.get('expired_lease_simulated')),
-            'controlled_lost_response':index==1 and bool(case.get('fault_injected'))}
+            'backend_file_copy':False,'controlled_worker_interruption':False,'controlled_lost_response':False}
         self.stdout.write(json.dumps(outcome));self.stdout.flush()
         return outcome
 

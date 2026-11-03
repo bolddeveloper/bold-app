@@ -83,6 +83,6 @@ export default function PhoneUploadPage({link}) {
             <button type="button" disabled={busy || ended || !files.some(item => !item.sent)} onClick={upload}>{busy ? "Transfiriendo…" : "Transferir imágenes al ordenador"}</button></>}
         {notice && <p role="status" aria-live="polite">{notice}</p>}{error && <p role="alert">{error}</p>}
         {error && code && !approved && Date.now() < Date.parse(expires) && <button type="button" disabled={busy} onClick={() => {setError(""); setEnded(false);}}>Volver a comprobar aprobación</button>}
-        <small>Vínculo de hasta diez minutos. Las copias temporales se eliminan al finalizar o tras caducar; no se publican en Drive.</small>
+        <small>Vínculo de hasta diez minutos. Las imágenes se guardan de forma privada en Drive; todavía no se envían al chat. Si falla la subida, conserva las fotos y reintenta.</small>
     </section></main>;
 }

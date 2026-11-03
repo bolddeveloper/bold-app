@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOLD · Prueba de arrastre</title></head>
+<body class="bold_v3" style="margin:0"><div id="root"></div><script type="module">
+import React from "react";
+import {createRoot} from "react-dom/client";
+import {TaskMotion} from "../../../tareas/src/task_motion.jsx";
+import "../../../tareas/src/styles.css";
+import "../../design_v3.css";
+import "../../../tareas/src/task_workspace_v3.css";
+import "../../motion_v3.css";
+const h=React.createElement,query=new URLSearchParams(location.search),board=query.get('view')==='board';
+document.documentElement.classList.toggle('theme_dark',query.get('theme')==='dark');
+const initial=[{id:'proposal',title:'Preparar propuesta',section:'a'},{id:'review',title:'Revisar entregables',section:'a'},{id:'assets',title:'Confirmar materiales',section:'b'}];
+function Preview(){
+    const [tasks,setTasks]=React.useState(initial),[dragged,setDragged]=React.useState(null),[moves,setMoves]=React.useState(0);
+    const simulate=type=>{
+        const card=document.querySelector('[data-task-id="proposal"]'),target=document.querySelector('[data-section-id="b"]');
+        if(type==='start'){card.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:new DataTransfer()}));target.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true}));}
+        else if(type==='drop')target.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true}));
+        else card.dispatchEvent(new DragEvent('dragend',{bubbles:true}));
+    };
+    return h('main',{className:'bold_tasks',style:{padding:24,minHeight:'100vh',boxSizing:'border-box'}},
+        h('h1',{style:{fontSize:18}},'Movimiento entre secciones · Datos ficticios'),
+        h('output',{'data-moves':moves,style:{display:'block',marginBottom:20}},`${moves} movimientos`),
+        h('div',{style:{display:'flex',gap:8,marginBottom:16}},
+            h('button',{onClick:()=>simulate('start')},'Mostrar destino'),h('button',{onClick:()=>simulate('drop')},'Soltar'),h('button',{onClick:()=>simulate('cancel')},'Cancelar')),
+        h(TaskMotion,{className:board?'board_view':'task_table_card list_view',motionKey:tasks.map(t=>`${t.id}:${t.section}`).join('|'),style:{padding:8,maxWidth:1000}},
+            ['a','b'].map(section=>h('section',{key:section,className:board?'board_column':`task_group${dragged?' task_group_drop_ready':''}`,'data-section-id':section,
+                onDragOver:e=>e.preventDefault(),onDrop:e=>{e.preventDefault();if(dragged&&tasks.find(t=>t.id===dragged)?.section!==section){setTasks(rows=>rows.map(t=>t.id===dragged?{...t,section}:t));setMoves(n=>n+1);}setDragged(null);}},
+                h('header',{className:board?'':'task_group_header'},`Sección ${section.toUpperCase()}`),
+                tasks.filter(t=>t.section===section).map(task=>h('article',{key:task.id,className:board?'board_card':'task_row','data-task-id':task.id,draggable:true,
+                    style:{padding:16,minHeight:72,gridTemplateColumns:'1fr',cursor:'grab'},onDragStart:e=>{e.dataTransfer.setData('text/plain',task.id);setDragged(task.id);},onDragEnd:()=>setDragged(null)},task.title))))),
+        query.has('samples') && h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:20,marginTop:24,maxWidth:1000}},
+            h('article',{'data-sample':'drive',className:`drive_card${dragged?' is_drop':''}`,style:{padding:20,minHeight:90}},'Carpeta de Drive'),
+            h('section',{'data-sample':'sheet',className:`sheets_block${dragged?' is_drop_target':''}`,style:{padding:20,minHeight:90}},'Bloque de Sheets'),
+            h('div',{className:`home_widget_slot${dragged?' is_drop_target':''}`},h('article',{'data-sample':'widget',className:'home_widget',style:{padding:20,minHeight:90}},'Widget de Inicio')),
+            h('section',{'data-sample':'section',className:'task_group','data-section-drop':dragged?'before':undefined,style:{padding:20,minHeight:90}},'Orden de secciones'),
+            h('table',{className:'drive_table',style:{width:'100%',borderCollapse:'collapse'}},h('tbody',null,h('tr',{'data-sample':'drive-row',className:dragged?'is_drop':''},h('td',{style:{padding:20,height:90}},'Fila de Drive')))),
+            h('div',{className:'sheets_table_scroll'},h('table',{style:{width:'100%',borderCollapse:'collapse'}},h('tbody',null,h('tr',{'data-sample':'sheet-row',className:dragged?'is_drop_target':''},h('td',{style:{padding:20,height:90}},'Fila de Sheets'))))))
+    );
+}
+createRoot(document.getElementById('root')).render(h(Preview));
+</script></body></html>

@@ -1,9 +1,73 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {channelPage, channelError, followError, createChannelApi, createChannelRefresh, mergeChannelMessage, mergeChannelMessages} from "./channel_api.js";
+import {channelPage, channelError, followError, createChannelApi, createChannelRefresh, mergeChannelMessage, mergeChannelMessages,threadPreferenceMessage} from "./channel_api.js";
+import {channelLinkTarget,threadLink} from './channel_links.js';
 
 const channel = "00000000-0000-4000-8000-000000000001", parent = "00000000-0000-4000-8000-000000000002";
+
+test('server order reads and updates only the authenticated account preferences',async()=>{
+    const calls=[],order=['independent',channel],api=createChannelApi({request:async(path,options)=>{calls.push({path,options});return {slack_server_order:order};}});
+    assert.deepEqual(await api.serverOrder(),order);
+    await api.saveServerOrder(order);
+    assert.deepEqual(calls.map(call=>call.path),['/api/v2/auth/interface-settings/','/api/v2/auth/interface-settings/']);
+    assert.deepEqual(calls[1].options,{method:'PATCH',body:{slack_server_order:order}});
+});
+
+test('thread menus use scoped routes and preserve all independently versioned personal settings',async()=>{
+    const calls=[],api=createChannelApi({request:async(...args)=>calls.push(args)});
+    await api.manageThread(channel,parent,{action:'lock',version:1});
+    await api.threadPreferences(channel,parent,{favorite:true,version:0,client_id:parent});
+    await api.readThread(channel,parent);
+    await api.threads(channel,'',null,undefined,{favorite:'true'});
+    assert.match(calls[0][0],/thread-settings\/$/);assert.equal(calls[0][1].method,'PATCH');
+    assert.match(calls[1][0],/thread-preferences\/$/);assert.equal(calls[1][1].body.favorite,true);
+    assert.match(calls[2][0],/thread-read\/$/);assert.match(calls[3][0],/favorite=true$/);
+    assert.throws(()=>api.manageThread(channel,'../bad',{}));
+    assert.throws(()=>channelPage(`/api/v2/messaging/channels/${channel}/threads/`,`/api/v2/messaging/channels/${channel}/threads/?cursor=abc&favorite=true`,{}));
+    const current=threadPreferenceMessage({id:parent,version:2},{favorite:true,left:true,notifications:'none',muted_forever:true,state_version:3});
+    const merged=mergeChannelMessage(current,threadPreferenceMessage({id:parent,version:4},{favorite:false,left:false,notifications:'all',state_version:2}));
+    assert.equal(merged.version,4);assert.equal(merged.thread_favorite,true);assert.equal(merged.thread_left,true);assert.equal(merged.thread_notifications,'none');assert.equal(merged.thread_muted_forever,true);
+});
+
+test('copied thread links open their authorized channel and preserve existing page links',()=>{
+    const link=threadLink(channel,parent,'https://app.example/path?other=private#unrelated');
+    assert.equal(link,`https://app.example/path?slack_channel=${channel}&slack_thread=${parent}`);
+    assert.deepEqual(channelLinkTarget(new URL(link).search),{channel_id:channel,parent_id:parent});
+    assert.deepEqual(channelLinkTarget(`?slack_channel=${channel}&slack_page=${parent}`),{channel_id:channel,page_id:parent});
+    assert.equal(channelLinkTarget('?slack_channel=bad&slack_thread=bad'),null);
+    assert.throws(()=>threadLink(channel,'../private','https://app.example/'));
+});
+
+test('category creation and moves stay in their explicit server scope',async()=>{
+    const calls=[],api=createChannelApi({request:async(...args)=>{calls.push(args);return {};}});
+    const scope={server:channel};
+    await api.categories(scope);await api.createCategory(scope,{name:'App BOLD',client_id:parent});
+    await api.moveCategory(scope,parent,{version:1,before_id:null});
+    await api.moveChannelCategory(scope,channel,{version:2,category_id:parent});
+    await api.updateCategory(scope,parent,{version:3,name:'Nuevo nombre'});
+    await api.deleteCategory(scope,parent,{version:4});
+    assert.equal(calls[0][0],`/api/v2/messaging/channel-categories/?server=${channel}`);
+    assert.equal(calls[1][1].body.client_id,parent);
+    assert.equal(calls[2][0],`/api/v2/messaging/channel-categories/${parent}/position/?server=${channel}`);
+    assert.deepEqual(calls[3],[`/api/v2/messaging/channels/${channel}/category/?server=${channel}`,{method:'PUT',body:{version:2,category_id:parent}}]);
+    assert.deepEqual(calls[4],[`/api/v2/messaging/channel-categories/${parent}/?server=${channel}`,{method:'PATCH',body:{version:3,name:'Nuevo nombre'}}]);
+    assert.deepEqual(calls[5],[`/api/v2/messaging/channel-categories/${parent}/?server=${channel}`,{method:'DELETE',body:{version:4}}]);
+    assert.throws(()=>api.deleteCategory(scope,'../outside',{version:4}));
+});
+
+test('thread and shared-pin APIs retain the channel and search context',async()=>{
+    const calls=[],api=createChannelApi({request:async(...args)=>{calls.push(args);return {};}});
+    const root=`/api/v2/messaging/channels/${channel}/`;
+    await api.threads(channel,'Diseño');await api.pins(channel);
+    await api.startThread(channel,parent,'Revisión');await api.pin(channel,parent,true);
+    assert.equal(calls[0][0],root+'threads/?q=Dise%C3%B1o');
+    assert.equal(calls[1][0],root+'pins/');
+    assert.deepEqual(calls[2],[root+`messages/${parent}/thread/`,{method:'PUT',body:{title:'Revisión'}}]);
+    assert.deepEqual(calls[3],[root+`messages/${parent}/pin/`,{method:'PUT',body:{pinned:true}}]);
+    assert.throws(()=>api.threads(parent,'Actual',root+'threads/?q=Actual&cursor=abc'));
+    assert.throws(()=>api.threads(channel,'Actual',root+'threads/?q=Otro&cursor=abc'));
+});
 
 test("channel pagination retains its thread/archive context and cannot follow another resource", () => {
     const collection = `/api/v2/messaging/channels/${channel}/messages/`;
@@ -17,6 +81,7 @@ test("channel pagination retains its thread/archive context and cannot follow an
 test("channel errors describe the actual fields without borrowing private-chat media instructions", () => {
     assert.equal(channelError({status:400,fields:['Documento no admitido: el PDF está incompleto.']}),'Documento no admitido: el PDF está incompleto.');
     assert.equal(channelError({status:400,fields:{name:["Usa un nombre más corto."]}}),"Usa un nombre más corto.");
+    assert.equal(channelError({status:400,fields:{image:["La imagen debe ser WebP."]}}),"La imagen debe ser WebP.");
     assert.match(channelError({status:404}),/canal o hilo/);
     assert.match(channelError({status:0}),/sin duplicarlo/);
     assert.equal(channelError({status:400,fields:{members:["Falta una persona invitada."]}}),"Falta una persona invitada.");
@@ -120,7 +185,10 @@ test('mention discovery stays inside the authenticated channel and uses an expli
     const calls=[],api=createChannelApi({request:async(...args)=>calls.push(args)});
     await api.mentionPeople(channel,' Persona & correo ',{signal:'current'});
     assert.deepEqual(calls[0],[`/api/v2/messaging/channels/${channel}/mention-people/?q=Persona+%26+correo`,{signal:'current'}]);
-    assert.throws(()=>api.mentionPeople(channel,'x'));assert.throws(()=>api.mentionPeople(channel,'x'.repeat(81)));
+    await api.mentionPeople(channel,'');await api.mentionPeople(channel,'x');
+    assert.equal(calls[1][0],`/api/v2/messaging/channels/${channel}/mention-people/?q=`);
+    assert.equal(calls[2][0],`/api/v2/messaging/channels/${channel}/mention-people/?q=x`);
+    assert.throws(()=>api.mentionPeople(channel,null));assert.throws(()=>api.mentionPeople(channel,'x'.repeat(81)));
     assert.throws(()=>api.mentionPeople('../../private','persona'));
-    assert.equal(calls.length,1);
+    assert.equal(calls.length,3);
 });

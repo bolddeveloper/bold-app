@@ -8,6 +8,10 @@ export function isStoredImageUrl(value) {
     } catch { return false; }
 }
 
+export function isServerIconUrl(value) {
+    return typeof value === 'string' && /^\/api\/v2\/messaging\/server-icons\/(department|private)\/[0-9a-f-]{36}\/image\/\?v=\d+$/.test(value);
+}
+
 // Resolve protected images at the API boundary so avatars and rich text share the selected assignment.
 export function resolveImageUrls(value, baseUrl, assignment) {
     if (typeof value === "string") return value.replace(/(?:https?:\/\/[^\s"'<>]+)?\/api\/v2\/media\/images\/[0-9a-f-]{36}\/(?:\?assignment=[0-9a-f-]+)?/g, matched => {

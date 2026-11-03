@@ -5,7 +5,7 @@ import os from "node:os";
 import {JSDOM} from "jsdom";
 import {createServer} from "vite";
 const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
-for (const key of ["window", "document", "navigator", "Node", "DOMParser", "FileReader", "File", "HTMLElement", "MutationObserver", "Element", "HTMLInputElement", "Event", "MouseEvent"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
+for (const key of ["window", "document", "navigator", "Node", "DOMParser", "FileReader", "File", "HTMLElement", "MutationObserver", "Element", "HTMLInputElement", "Event", "MouseEvent", "BroadcastChannel"]) Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
 const React = await import("react"), {createRoot} = await import("react-dom/client");
 const server = await createServer({configFile: false, plugins: [{name: "isolated-comments", enforce: "pre", transform(_, id) {
     const file = id.replaceAll("\\", "/");
@@ -13,6 +13,7 @@ const server = await createServer({configFile: false, plugins: [{name: "isolated
     if (file.endsWith("/tareas/src/image_gallery.jsx")) return "export const ImageGallery = () => null;";
 }}], resolve: {dedupe: ["react", "react-dom", "lucide-react"]}, esbuild: {jsx: "automatic", jsxImportSource: "react"}, cacheDir: path.join(os.tmpdir(), "bold-comment-editor-ui"), optimizeDeps: {noDiscovery: true, include: [], entries: []}, server: {middlewareMode: true, hmr: false}, appType: "custom"});
 const root = createRoot(document.getElementById("root")), settle = () => new Promise(resolve => setTimeout(resolve, 40));
+const waitFor = async check => {const until=Date.now()+4000;while(!check() && Date.now()<until)await settle();assert.ok(check());};
 let value = "", received = [], release;
 document.execCommand = (command, _, argument) => {
     const selection = window.getSelection(), range = selection.getRangeAt(0); range.deleteContents();
@@ -30,10 +31,10 @@ try {
     const {TaskTextEditor} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/task_text_editor.jsx").replaceAll("\\", "/")}`);
     const render = disabled => root.render(React.createElement(TaskTextEditor, {value, label: "Comentario", onChange: next => {value = next;}, disabled,
         onFiles: async event => {received.push([...event.target.files]); await new Promise(resolve => {release = resolve;});}}));
-    render(false); await settle();
+    render(false); await waitFor(()=>document.querySelector('[role="textbox"][data-ready="true"]'));
     const editor = document.querySelector('[role="textbox"]'); editor.focus();
     const range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); window.getSelection().addRange(range);
-    transferEvent("paste", {files: [], getData: () => "https://example.com/demo"}, editor); await settle();
+    transferEvent("paste", {files: [], getData: () => "https://example.com/demo"}, editor); await waitFor(()=>editor.querySelector('a'));
     assert.equal(editor.querySelector("a").getAttribute("href"), "https://example.com/demo");
     const image = new File(["image"], "sample.png", {type: "image/png"});
     transferEvent("paste", {files: [image]}, editor);
@@ -41,7 +42,7 @@ try {
     assert.equal(received.length, 1); assert.equal(received[0][0], image);
     assert.equal(document.querySelector('input[type="file"]').disabled, true);
     release(); await settle();
-    transferEvent("drop", {files: [image], types: ["Files"]}, editor); await settle(); assert.equal(received.length, 2);
+    transferEvent("drop", {files: [image], types: ["Files"]}, document.querySelector('.task_editor_toolbar')); await settle(); assert.equal(received.length, 2,'dropping outside the editable body uses the same validated image handler');
     release(); await settle();
     transferEvent("paste", {files: [new File(["x"], "unsafe.svg", {type: "image/svg+xml"})]}, editor); await settle();
     assert.match(document.querySelector('[role="alert"]').textContent, /PNG/); assert.equal(received.length, 2);
@@ -53,6 +54,22 @@ try {
     [...document.querySelectorAll("button")].find(button => button.textContent === "Insertar").click(); await settle();
     assert.ok([...editor.querySelectorAll("a")].some(a => a.textContent === "Guía" && a.getAttribute("href") === "https://example.com/long"));
     render(true); await settle(); transferEvent("paste", {files: [image]}, editor); await settle(); assert.equal(received.length, 2);
+    const {updateCore}=await server.ssrLoadModule(path.resolve('core_store.js'));
+    updateCore({directory:Array.from({length:6},(_,index)=>({id:`person-${index}`,name:`Persona ${index}`,email:`person${index}@example.test`}))});
+    let sent=0,scrolled;
+    HTMLElement.prototype.scrollIntoView=function(){scrolled=this.id;};
+    root.render(React.createElement(TaskTextEditor,{value:'',label:'Comentario',compact:true,onChange:next=>{value=next;},onSubmit:()=>sent++}));await settle();
+    const mentionEditor=document.querySelector('[role="textbox"]');mentionEditor.focus();mentionEditor.textContent='Hola @';
+    const mentionRange=document.createRange();mentionRange.selectNodeContents(mentionEditor);mentionRange.collapse(false);
+    window.getSelection().removeAllRanges();window.getSelection().addRange(mentionRange);
+    mentionEditor.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+    const options=[...document.querySelectorAll('.task_mention_options [role="option"]')];assert.equal(options.length,6);
+    assert.equal(document.querySelectorAll('.task_mention_avatar').length,6);
+    mentionEditor.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));await settle();
+    assert.equal(options.at(-1).getAttribute('aria-selected'),'true');assert.equal(scrolled,options.at(-1).id);
+    mentionEditor.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await settle();
+    assert.equal(document.querySelector('.task_mention_menu'),null);assert.match(value,/@person5@example\.test/);assert.equal(sent,0);
+    updateCore({directory:[]});
     const {CommentItem, TaskActionsContext} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/comment_item.jsx").replaceAll("\\", "/")}`);
     let allowed = true;
     const renderComment = () => root.render(React.createElement(TaskActionsContext.Provider, {value: {canManageComment: () => allowed}},
@@ -67,5 +84,5 @@ try {
     assert.equal(document.querySelector('[aria-label="Eliminar comentario"]'), null);
     assert.equal(document.querySelector('[role="textbox"]'), null);
     assert.match(document.querySelector("article").textContent, /Mi texto/);
-    console.log("Comment UI: editor links/images and author-only actions, including permission loss during editing, passed.");
+    console.log("Comment UI: links, images, mention keyboard selection without sending and author-only actions passed.");
 } finally {root.unmount(); await server.close(); dom.window.close();}

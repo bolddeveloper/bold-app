@@ -1,4 +1,6 @@
-import { AvatarImage } from "./shared/avatar_image.jsx";
+import {HeaderNewsPanel} from "./header_news.jsx";
+import {NoteViewer} from "../perfil/news_preferences.jsx";
+import {NotificationPanel} from "./notification_panel.jsx";
 import "./shared/bold_dialog.css";
 import {useKeyboardShortcuts} from "./use_keyboard_shortcuts.js";
 import {confirmBold} from "./shared/bold_dialog.js";
@@ -8,14 +10,16 @@ import { ResponsiveOverlay } from "./shared/responsive_overlay.jsx";
 import { useMediaQuery } from "./shared/use_media_query.js";
 import { useDialog } from "./shared/use_dialog.js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useReducer, createElement } from "react";
-import { FileText as docs_icon, FolderOpen as drive_icon, ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, UsersRound as users_icon, CircleHelp as circle_help_icon, Newspaper as newspaper_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MessageSquarePlus as message_square_plus_icon, Moon as moon_icon, Settings as settings_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
+import { FileText as docs_icon, FolderOpen as drive_icon, ArrowLeft as arrow_left_icon, BarChart3 as bar_chart_icon, Table2 as sheets_icon, Bell as bell_icon, CalendarDays as calendar_icon, Check as check_icon, ChevronDown as chevron_down_icon, UsersRound as users_icon, CircleHelp as circle_help_icon, Newspaper as newspaper_icon, Home as home_icon, Inbox as inbox_icon, KeyRound as key_round_icon, Menu as menu_icon, MoreHorizontal as more_icon, PanelLeftClose as sidebar_toggle_icon, MessageCircle as chat_icon, Hash as channels_icon, Lightbulb as ideas_icon, Moon as moon_icon, Settings as settings_icon, Search as search_icon, ShieldCheck as shield_check_icon, Sun as sun_icon, X as x_icon } from "lucide-react";
 import { useCore } from "./core_provider.jsx";
 import { shouldLeaveRestrictedShellModule } from "./core_models.js";
 import { searchNavigation } from "./global_search.js";
 import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
 import { startNotificationBellReminder } from "./notification_bell.js";
-const icon_map = { messaging: message_square_plus_icon, brands: users_icon, profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, suggestions: message_square_plus_icon, administration: shield_check_icon, permissions: key_round_icon };
-icon_map.slack = users_icon;
+import {InterfaceWelcome} from "./interface_welcome.jsx";
+import {channelLinkTarget} from '../mensajeria/channel_links.js';
+const icon_map = { messaging: chat_icon, profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, sheets: sheets_icon, suggestions: ideas_icon, administration: shield_check_icon, permissions: key_round_icon };
+icon_map.slack = channels_icon;
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
 export const useShell = () => useContext(ShellContext);
@@ -25,7 +29,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
         let saved;
         try { saved = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
         const query=new URLSearchParams(window.location.search);
-        if(query.has("slack_channel") && query.has("slack_page") && isShellModuleAllowed("slack",navigation))return "slack";
+        if(channelLinkTarget(query) && isShellModuleAllowed("slack",navigation))return "slack";
         return entranceModule(navigation, saved);
     });
     useEffect(() => {
@@ -38,9 +42,8 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const [profile_tab, set_profile_tab] = useState("account");
     const [chat_target, set_chat_target] = useState(null);
     const [slack_target,set_slack_target]=useState(()=>{
-        const query=new URLSearchParams(window.location.search),channel_id=query.get("slack_channel"),page_id=query.get("slack_page");
-        const valid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || "");
-        return valid(channel_id) && valid(page_id) ? {channel_id,page_id,requestId:crypto.randomUUID()}:null;
+        const target=channelLinkTarget(window.location.search);
+        return target ? {...target,requestId:crypto.randomUUID()}:null;
     });
     const slack_dirty=useRef(false);
     const set_slack_dirty=value=>{slack_dirty.current=value;};
@@ -125,7 +128,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     }, [active_module, navigation]);
     return <ShellContext.Provider value={{ set_slack_dirty, slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current || slack_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
-export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, children }) {
+export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, welcomeConnection, children }) {
     const shell = useShell();
     const core = useCore();
     useEffect(() => {
@@ -138,8 +141,10 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
     }, [shell.active_module, core.activeAssignment?.id]);
     const newsKey = `bold_news_read:${core.account?.id || core.activeAssignment?.personId || "demo"}`;
     const [unreadNews, setUnreadNews] = useState(false);
+    const [newsAnchor, setNewsAnchor] = useState(null), [newsNote, setNewsNote] = useState(null);
+    useEffect(() => {setNewsAnchor(null); setNewsNote(null);}, [core.activeAssignment?.id, shell.active_module]);
     useEffect(() => {
-        const reading = shell.active_module === "profile" && shell.profile_tab === "news";
+        const reading = Boolean(newsAnchor) || newsNote !== null || shell.active_module === "profile" && shell.profile_tab === "news";
         const update = () => {
             try {
                 if (reading && latestNewsId) localStorage.setItem(newsKey, latestNewsId);
@@ -149,9 +154,11 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         update();
         window.addEventListener("storage", update);
         return () => window.removeEventListener("storage", update);
-    }, [newsKey, latestNewsId, shell.active_module, shell.profile_tab]);
+    }, [newsKey, latestNewsId, shell.active_module, shell.profile_tab, newsAnchor, newsNote]);
     const [profileAnchor, setProfileAnchor] = useState(null);
     const [membersOpen, setMembersOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {try {return localStorage.getItem("bold_sidebar_collapsed") !== "false";} catch {return true;}});
+    const toggleSidebar = () => setSidebarCollapsed(value => {try {localStorage.setItem("bold_sidebar_collapsed", String(!value));} catch {} return !value;});
     useDialog(membersOpen, ".team_members_panel", () => setMembersOpen(false));
     useEffect(() => setMembersOpen(false), [core.activeAssignment?.id, shell.chat_target]);
     const reading=core.messaging?.unread?.reading?.items || [],markedChats=reading.filter(row=>row.target.kind==='chat').length,markedSlack=reading.filter(row=>row.target.kind==='channel').length;
@@ -170,23 +177,26 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         });
     }, [core.activeAssignment?.id, hasUnreadNotifications, bellInterval]);
     useEffect(() => setProfileAnchor(null), [shell.active_module]);
-    const profileActions = {onQuickProfile: event => {const anchor = event.currentTarget; setProfileAnchor(old => old === anchor ? null : anchor); globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", {detail: "profile"}));}, onOpenProfile: shell.open_profile};
+    const profileActions = {newsOpen: Boolean(newsAnchor), onOpenNews: event => {const anchor = event.currentTarget; topBarProps.handle_close_notifications(); setProfileAnchor(null); setMembersOpen(false); setNewsAnchor(old => old === anchor ? null : anchor);}, onQuickProfile: event => {const anchor = event.currentTarget; setProfileAnchor(old => old === anchor ? null : anchor); globalThis.dispatchEvent?.(new CustomEvent("bold:sidebar-popover", {detail: "profile"}));}, onOpenProfile: shell.open_profile};
     const compact = useMediaQuery("(max-width: 1023px)");
     useDialog(compact && shell.is_sidebar_open, ".sidebar_shell", () => shell.set_is_sidebar_open(false));
     useDialog(compact && topBarProps.is_notifications_open, ".notifications_panel", topBarProps.handle_close_notifications);
     const identity = { current_user: core.activeAssignment, profileAvatar: core.account?.avatar_url };
     const handle_toggle_notifications = () => {
+        setNewsAnchor(null);
         if (!topBarProps.is_notifications_open) setBellPulse(value => value + 1);
         topBarProps.handle_toggle_notifications();
     };
     useKeyboardShortcuts(core.activeAssignment?.id, shell, {handle_toggle_notifications});
-    return <div className={`app_shell ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
-        <Sidebar {...profileActions} {...sidebarProps} {...shell} {...identity} compact={compact} onLogout={core.logout} onManageMfa={core.mfa.open} mfaEnabled={core.mfa.enabled} />
+    return <div className={`app_shell bold_v3 ${sidebarCollapsed && !compact ? "bold_sidebar_collapsed" : ""} ${shell.is_dark_mode ? "theme_dark" : ""} ${shell.is_sidebar_open ? "app_shell_with_mobile_sidebar" : ""} ${core.sessionEntrance ? "app_shell_session_enter" : ""}`}>
+        <InterfaceWelcome account={core.account?.id} dark={shell.is_dark_mode} onTheme={shell.set_is_dark_mode} connectionContent={welcomeConnection}/>
+        <Sidebar {...profileActions} {...sidebarProps} {...shell} {...identity} collapsed={sidebarCollapsed && !compact} toggleCollapsed={toggleSidebar} compact={compact} onLogout={core.logout} onManageMfa={core.mfa.open} mfaEnabled={core.mfa.enabled} />
         {shell.is_sidebar_open ? <button className="mobile_sidebar_overlay" type="button" aria-label="Cerrar navegacion" onClick={() => shell.set_is_sidebar_open(false)}></button> : null}
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
-            {render_mobile_header({ ...profileActions, ...membersActions, ...mobileHeaderProps, ...shell, ...identity, ...topBarProps, bellPulse, bellReminder, handle_toggle_notifications })}
-            <TopBar {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} bellPulse={bellPulse} bellReminder={bellReminder} handle_toggle_notifications={handle_toggle_notifications} />
+            <TopBar {...mobileHeaderProps} {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} compact={compact} bellPulse={bellPulse} bellReminder={bellReminder} handle_toggle_notifications={handle_toggle_notifications} />
+            {newsAnchor && <ResponsiveOverlay query="(max-width: 1023px)"><div className="news_surface task_tool_anchor"><HeaderNewsPanel anchor={newsAnchor} onClose={() => setNewsAnchor(null)} onViewAll={() => {setNewsAnchor(null); shell.open_profile(false, "news");}} onSelect={index => {setNewsAnchor(null); setNewsNote(index);}}/></div></ResponsiveOverlay>}
+            {newsNote !== null && <NoteViewer index={newsNote} select={setNewsNote} close={() => setNewsNote(null)}/>}
             {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{<NotificationsPanel {...topBarProps}/>}</div></ResponsiveOverlay>}
             {children}
         </main>
@@ -227,13 +237,15 @@ function render_navigation_item(item, active_module, handle_module_change, optio
             data-tour={`nav-${item.id}`}
             aria-expanded={is_expandable ? is_expanded : undefined}
             aria-controls={options.controls_id}
-            aria-label={item.unread ? `${item.label}, mensajes sin leer` : undefined}
+            aria-label={item.unread ? `${item.label}, mensajes sin leer` : item.label}
+            title={item.label}
+            aria-current={is_active ? "page" : undefined}
             onClick={handle_click}
         >
             <span className="navigation_icon">
-                {is_expandable && is_active ? render_icon(check_icon, 16) : render_icon(item_icon, 17)}
+                {render_icon(item_icon, 18)}
             </span>
-            <span>{item.label}</span>
+            <span className="navigation_label">{item.label}</span>
             {item.unread && <span className="chat_unread_dot" aria-hidden="true"/>}
             {is_expandable ? (
                 <span className={`navigation_chevron ${is_expanded ? "navigation_chevron_open" : ""}`}>
@@ -252,7 +264,10 @@ function Sidebar(props) {
     return (
         <aside className={`sidebar_shell ${is_sidebar_open ? "sidebar_shell_open" : ""}`} data-tour="sidebar" inert={props.compact && !is_sidebar_open ? true : undefined} role={props.compact ? "dialog" : undefined} aria-modal={props.compact && is_sidebar_open ? true : undefined} aria-label="Navegación">
             <div className="sidebar_header">
-                {render_logo()}
+                <div className="bold_sidebar_brand">
+                    <svg className="bold_sidebar_mark" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="10.5" fill="none" stroke="currentColor" strokeWidth="4"/></svg>
+                    {render_logo()}
+                </div>
                 <button
                     className="sidebar_close_button"
                     type="button"
@@ -263,16 +278,16 @@ function Sidebar(props) {
                 </button>
             </div>
 
-            <div className="sidebar_scroll_area">
+            <div className="sidebar_scroll_area" id="bold_sidebar_navigation">
                 {groups.map(group => {
                     const items = navigation_items.filter(item => (item.group || "work") === group.id);
                     if (!items.length) return null;
                     return <div className="sidebar_section" key={group.id}>
                     {group.label && <p className="sidebar_label">{group.label}</p>}
-                    <nav className="navigation_list" aria-label="Principal">
+                    <nav className="navigation_list" aria-label={group.label || "Principal"}>
                         {items.map((item) => {
                             const slot = navigationSlots[item.id];
-                            if (!slot) return render_navigation_item(item, active_module, handle_module_change);
+                            if (!slot || props.collapsed) return render_navigation_item(item, active_module, handle_module_change, slot && props.collapsed ? {on_click: () => {props.toggleCollapsed(); slot.onToggle();}} : {});
                             return <div className={`tasks_navigation_group ${slot.open ? "tasks_navigation_group_open" : "tasks_navigation_group_closed"}`} key={item.id}>
                                 {render_navigation_item(item, active_module, handle_module_change, { controls_id: slot.id, is_expandable: true, is_expanded: slot.open, on_click: slot.onToggle })}
                                 {slot.content}
@@ -282,6 +297,7 @@ function Sidebar(props) {
                 </div>; })}
             </div>
 
+            <div className="bold_sidebar_bottom">
             <div className="sidebar_footer profile_footer_controls" data-tour="profile">
                 <button className="profile_identity_button" aria-label="Abrir ajustes rápidos del perfil" onClick={props.onQuickProfile}>
                     <ProfileAvatar className="profile_avatar" url={props.profileAvatar} initials={current_user.initials}/>
@@ -289,79 +305,28 @@ function Sidebar(props) {
                 </button>
                 <button className="profile_menu_button" type="button" aria-label="Ajustes del perfil" onClick={() => props.onOpenProfile()}>{render_icon(settings_icon, 19)}</button>
             </div>
+            {!props.compact && <button className="bold_sidebar_toggle navigation_item" type="button" onClick={props.toggleCollapsed} aria-expanded={!props.collapsed} aria-controls="bold_sidebar_navigation" aria-label={props.collapsed ? "Expandir navegación" : "Contraer navegación"} title={props.collapsed ? "Expandir navegación" : "Contraer navegación"}>
+                <span className="navigation_icon">{render_icon(sidebar_toggle_icon,18)}</span>
+                <span className="navigation_label">{props.collapsed ? "Expandir" : "Contraer"}</span>
+            </button>}
+            </div>
         </aside>
     );
 }
 
 
-// Renders the "Notificaciones" dropdown panel opened from the bell button.
 function NotificationsPanel(props) {
-    const core = useCore();
-    const shell = useShell();
-    const [clearing, setClearing] = useState(false), [clearError, setClearError] = useState("");
-    async function clear() {
-        setClearing(true); setClearError("");
-        try {await core.notifications.clear();} catch (problem) {setClearError(problem.message);} finally {setClearing(false);}
-    }
-    const {
-        handle_close_notifications,
-        handle_mark_notifications_read,
-        handle_notification_select,
-        notifications
-    } = props;
-
-    return (
-        <div className="task_tool_panel notifications_panel" role="dialog" aria-label="Notificaciones">
-            <header className="notifications_panel_header">
-                <h3>Notificaciones</h3><button type="button" className="icon_button" aria-label="Cerrar notificaciones" onClick={handle_close_notifications}>{render_icon(x_icon, 20)}</button>
-                <button className="link_button" type="button" onClick={() => {handle_close_notifications(); shell.open_profile(false, "notifications");}}>Configurar notificaciones</button>
-                <button className="link_button" type="button" onClick={handle_mark_notifications_read}>
-                    Marcar como leidas
-                </button>
-            </header>
-            {clearError && <p role="alert">{clearError}</p>}
-            <div className="notification_list">
-                {notifications.map((notification_item) => {
-                    const actor = notification_item.actor;
-                    const notification_icon = notification_item.icon || bell_icon;
-
-                    return (
-                        <button
-                            type="button"
-                            className={`notification_item ${notification_item.is_read ? "" : "notification_item_unread"}`}
-                            key={notification_item.id}
-                            onClick={() => handle_notification_select?.(notification_item)}
-                        >
-                            <span className="notification_avatar" style={{ backgroundColor: actor ? actor.color : "#7c8b9a" }}>
-                                {actor ? <AvatarImage url={actor.avatar_url} initials={actor.initials} /> : render_icon(notification_icon, 14)}
-                            </span>
-                            <div className="notification_body">
-                                <p className="notification_title">{notification_item.title}</p>
-                                <p className="notification_text">{notification_item.body}</p>
-                                <span className="notification_time">{notification_item.time_label}</span>
-                            </div>
-                        </button>
-                    );
-                })}
-                {!notifications.length && <p className="notification_empty">No tienes notificaciones por ahora.</p>}
-            </div>
-            <footer className="modal_footer">
-                <button className="link_button" type="button" disabled={clearing || !notifications.length} onClick={clear}>{clearing ? "Limpiando…" : "Limpiar notificaciones"}</button>
-                <button className="link_button" type="button" onClick={handle_close_notifications}>
-                    Cerrar notificaciones
-                </button>
-            </footer>
-        </div>
-    );
+    const core = useCore(), shell = useShell();
+    return <NotificationPanel notifications={props.notifications} error={core.notifications.error}
+        onClose={props.handle_close_notifications} onSelect={props.handle_notification_select} onReply={props.handle_notification_reply} onInbox={props.handle_open_inbox}
+        onRead={(id, read) => core.notifications.setRead(id, read)} onDismiss={id => core.notifications.dismiss(id)}
+        onReadAll={() => Promise.all(props.notifications.filter(item => !item.is_read).map(item => core.notifications.setRead(item.id, true)))} onClear={() => core.notifications.clear()}
+        onSettings={() => {props.handle_close_notifications(); shell.open_profile(false, "notifications");}} />;
 }
 
 
-// Renders the desktop top bar with search and user state.
-function TopBar(props) {
-    const { current_user,
-        handle_close_notifications,
-        handle_mark_notifications_read,
-        handle_toggle_notifications,
+export function TopBar(props) {
+    const { compact, handle_toggle_notifications,
         is_dark_mode,
         is_notifications_open,
         notifications,
@@ -370,7 +335,7 @@ function TopBar(props) {
         set_is_dark_mode
     } = props;
     const [open, setOpen] = useState(false), [activeIndex, setActiveIndex] = useState(0);
-    const searchRef = useRef(null);
+    const searchRef = useRef(null), mobileActionsRef = useRef(null);
     const results = useMemo(() => searchNavigation(props.navigation_items, search_query), [props.navigation_items, search_query]);
     const has_unread_notifications = notifications.some((notification_item) => !notification_item.is_read);
     useEffect(() => { setActiveIndex(0); setOpen(Boolean(search_query.trim())); }, [search_query]);
@@ -380,6 +345,15 @@ function TopBar(props) {
         document.addEventListener("pointerdown", close);
         return () => document.removeEventListener("pointerdown", close);
     }, [open]);
+    useEffect(() => {
+        if (!compact) return undefined;
+        const close = event => { if (!mobileActionsRef.current?.contains(event.target)) closeMobileActions(); };
+        document.addEventListener("pointerdown", close);
+        return () => document.removeEventListener("pointerdown", close);
+    }, [compact]);
+    function closeMobileActions() {
+        if (mobileActionsRef.current) mobileActionsRef.current.open = false;
+    }
     function choose(result) {
         if (!result) return;
         if (!props.navigation_items?.some(item => item.id === result.module)) return;
@@ -395,7 +369,8 @@ function TopBar(props) {
     }
 
     return (
-        <header className="top_bar">
+        <header className={`top_bar${compact ? " top_bar_compact" : ""}`} data-tour={compact ? "mobile-header" : undefined}>
+            {compact && <button className="mobile_menu_button" data-tour="mobile-menu" type="button" aria-label={props.detailOpen ? "Volver" : "Abrir navegacion"} onClick={() => props.detailOpen ? props.onBack() : props.set_is_sidebar_open(true)}>{render_icon(props.detailOpen ? arrow_left_icon : menu_icon, 22)}</button>}
             <div className="global_search" ref={searchRef}>
             <label className="search_box" data-tour="search" htmlFor="task_search">
                 {render_icon(search_icon, 18)}
@@ -403,7 +378,8 @@ function TopBar(props) {
                     id="task_search"
                     type="search"
                     value={search_query}
-                    placeholder="Buscar módulos, vistas y herramientas"
+                    placeholder={compact ? "Buscar…" : "Buscar en BOLD…"}
+                    aria-label="Buscar en BOLD"
                     autoComplete="off"
                     role="combobox"
                     aria-autocomplete="list"
@@ -420,10 +396,10 @@ function TopBar(props) {
             </div>}
             </div>
             <div className="top_bar_actions">
-                <button className="theme_toggle_button tour_help_button" data-tour="help" type="button" aria-label="Abrir tutorial de este módulo" title={["permissions", "administration"].includes(props.active_module) ? "Este módulo tendrá una guía en video" : "Tutorial de esta vista"} disabled={["permissions", "administration"].includes(props.active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>
+                {!compact && <><button className="theme_toggle_button tour_help_button" data-tour="help" type="button" aria-label="Abrir tutorial de este módulo" title={["permissions", "administration"].includes(props.active_module) ? "Este módulo tendrá una guía en video" : "Tutorial de esta vista"} disabled={["permissions", "administration"].includes(props.active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>
                     <span className="theme_toggle_icon">{render_icon(circle_help_icon, 18)}</span>
                 </button>
-                <button className={`theme_toggle_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}><span className="theme_toggle_icon">{render_icon(newspaper_icon, 18)}</span></button>
+                <button className={`theme_toggle_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} aria-expanded={props.newsOpen} aria-controls="header_news_panel" onClick={props.onOpenNews}><span className="theme_toggle_icon">{render_icon(newspaper_icon, 18)}</span></button></>}
                 <button
                     className="theme_toggle_button"
                     data-tour="theme"
@@ -437,9 +413,11 @@ function TopBar(props) {
                 <div className="task_tool_anchor">
                     <button
                         className={`bell_button ${is_notifications_open ? "bell_button_active" : ""}${has_unread_notifications ? " bell_has_unread" : ""}`}
-                        data-tour="notifications"
+                        data-tour={compact ? "mobile-notifications" : "notifications"}
                         type="button"
                         aria-label="Notificaciones"
+                        aria-expanded={is_notifications_open}
+                        title="Notificaciones"
                         onClick={handle_toggle_notifications}
                     >
                         <span key={props.bellPulse} className={props.bellPulse ? `notification_bell_arrival${props.bellReminder ? " notification_bell_reminder" : ""}` : undefined}>{render_icon(bell_icon, 18)}</span>
@@ -447,50 +425,16 @@ function TopBar(props) {
                     </button>
 
                 </div>
-                <button className="theme_toggle_button chat_members_button" type="button" aria-label={props.unreadChats ? "Mostrar lista de miembros, mensajes sin leer" : "Mostrar lista de miembros"} title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 19)}{props.unreadChats && <span className="chat_unread_dot" aria-hidden="true"/>}</button>
+                {!compact && <button className="theme_toggle_button chat_members_button" type="button" aria-label={props.unreadChats ? "Mostrar lista de miembros, mensajes sin leer" : "Mostrar lista de miembros"} title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 19)}{props.unreadChats && <span className="chat_unread_dot" aria-hidden="true"/>}</button>}
+                {compact && <details className="header_mobile_actions" ref={mobileActionsRef} onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) closeMobileActions();}} onKeyDown={event => {if (event.key === "Escape") {event.preventDefault();closeMobileActions();mobileActionsRef.current?.querySelector("summary")?.focus();}}}>
+                    <summary className="mobile_more_button" data-tour="mobile-help" aria-label="Más opciones" title="Más opciones">{render_icon(more_icon, 20)}{(props.unreadNews || props.unreadChats) && <span className="header_more_dot" aria-hidden="true"/>}</summary>
+                    <div className="header_mobile_menu">
+                        <button type="button" disabled={["permissions", "administration"].includes(props.active_module)} onClick={() => {closeMobileActions();globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"));}}>{render_icon(circle_help_icon, 18)}<span>Ayuda de esta vista</span></button>
+                        <button type="button" aria-controls="header_news_panel" onClick={() => {const anchor = mobileActionsRef.current.querySelector("summary");anchor.focus();closeMobileActions();props.onOpenNews({currentTarget:anchor});}}>{render_icon(newspaper_icon, 18)}<span>Novedades</span>{props.unreadNews && <i aria-label="Sin leer"/>}</button>
+                        <button type="button" onClick={() => {mobileActionsRef.current.querySelector("summary").focus();closeMobileActions();props.toggleMembers();}}>{render_icon(users_icon, 18)}<span>Equipo</span>{props.unreadChats && <i aria-label="Mensajes sin leer"/>}</button>
+                    </div>
+                </details>}
             </div>
         </header>
     );
 }
-
-
-// Renders the compact mobile header used above the active module.
-function render_mobile_header(props) {
-    const { current_user, navigation_items,
-        active_module,
-        detailOpen,
-        onBack, onMore,
-        set_is_sidebar_open
-    } = props;
-
-    const active_item = navigation_items.find((item) => item.id === active_module);
-    const title = props.detailTitle || active_item?.label || "Bold";
-
-    return (
-        <header className={`mobile_header${active_module === "messaging" ? " mobile_header_messaging" : ""}`} data-tour="mobile-header">
-            <div className="mobile_header_row">
-                <button
-                    className="mobile_menu_button"
-                    data-tour="mobile-menu"
-                    type="button"
-                    aria-label={detailOpen ? "Volver" : "Abrir navegacion"}
-                    onClick={() => detailOpen ? onBack() : set_is_sidebar_open(true)}
-                >
-                    {detailOpen ? render_icon(arrow_left_icon, 24) : render_icon(menu_icon, 24)}
-                </button>
-                {detailOpen ? <h1>{title}</h1> : active_item?.brand ? render_logo() : <h1>{title}</h1>}
-                <div className="mobile_tour_actions">
-                    <button className="mobile_more_button tour_help_button" data-tour="mobile-help" type="button" aria-label="Abrir tutorial de este módulo" title="Tutorial de esta vista" disabled={["permissions", "administration"].includes(active_module)} onClick={() => globalThis.dispatchEvent?.(new CustomEvent("bold:onboarding:start"))}>{render_icon(circle_help_icon, 22)}</button>
-                    <button className={`mobile_more_button${props.unreadNews ? " news_unread" : ""}`} type="button" aria-label={props.unreadNews ? "Novedades sin leer" : "Novedades"} title={props.unreadNews ? "Hay novedades nuevas" : "Novedades"} onClick={() => props.onOpenProfile(false, "news")}>{render_icon(newspaper_icon, 22)}</button>
-                <button className="mobile_more_button chat_members_button" type="button" aria-label={props.unreadChats ? "Mostrar lista de miembros, mensajes sin leer" : "Mostrar lista de miembros"} title="Mostrar lista de miembros" aria-expanded={props.membersOpen} onClick={props.toggleMembers}>{render_icon(users_icon, 22)}{props.unreadChats && <span className="chat_unread_dot" aria-hidden="true"/>}</button>
-                <button className={`mobile_more_button${props.notifications.some(item => !item.is_read) ? " bell_has_unread" : ""}`} data-tour="mobile-notifications" type="button" aria-label="Notificaciones" aria-expanded={props.is_notifications_open} onClick={props.handle_toggle_notifications}>
-                    <span key={props.bellPulse} className={props.bellPulse ? `notification_bell_arrival${props.bellReminder ? " notification_bell_reminder" : ""}` : undefined}>{render_icon(bell_icon, 22)}</span>
-                    {props.notifications.some(item => !item.is_read) && <span className="bell_unread_dot" />}
-                </button>
-                </div>
-            </div>
-        </header>
-    );
-}
-
-

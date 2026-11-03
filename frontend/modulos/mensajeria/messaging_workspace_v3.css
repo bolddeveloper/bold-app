@@ -1,0 +1,233 @@
+/* Chat uses the same workspace geometry and colors as the rest of BOLD. */
+:root .messaging_module {
+    --chat_canvas:var(--bold_canvas);--chat_received:var(--bold_surface);--chat_ink:var(--bold_text);
+    --chat_sent:color-mix(in srgb,var(--bold_red) 11%,var(--bold_surface));--chat_sent_ink:var(--bold_text);
+    --chat_meta:var(--bold_muted);--chat_sent_meta:var(--bold_muted);--chat_muted:var(--bold_muted);
+    --chat_link:var(--bold_red_dark);--chat_sent_link:var(--bold_red_dark);--chat_read:var(--bold_red);
+    --chat_sent_read:var(--bold_red);--chat_sent_accent:var(--bold_red);--chat_sent_wave:var(--bold_muted);
+    --chat_wave:color-mix(in srgb,var(--bold_text) 40%,transparent);
+    --chat_pattern:color-mix(in srgb,var(--bold_text) 5%,transparent);
+    grid-template-columns:276px minmax(0,1fr);height:calc(var(--chat_vh,100dvh) - 64px);
+    margin:6px;min-height:0;border:1px solid var(--bold_line);border-radius:0;box-shadow:none;
+}
+:root .messaging_module button {min-height:34px;padding:6px 10px;border-radius:4px;font-size:12px;gap:6px;transition:background-color .16s,border-color .16s,transform .16s;}
+:root .messaging_module button:active:not(:disabled) {transform:translateY(1px);}
+:root .messaging_module button:focus-visible {outline:2px solid var(--bold_red);outline-offset:2px;}
+:root .messaging_module .messaging_sidebar {box-shadow:none;}
+:root .messaging_module .messaging_list_header {padding:12px 10px;gap:6px;min-height:66px;}
+:root .messaging_module h1 {font-size:19px;}
+:root .messaging_module .messaging_list_header p {font-size:11px;margin:2px 0 0;}
+:root .messaging_module .messaging_list_tools {gap:0;}
+:root .messaging_module .messaging_list_tools button {width:32px;min-height:34px;padding:6px;}
+:root .messaging_module .messaging_search {margin:0 10px 8px;padding:0 10px;border-radius:4px;}
+:root .messaging_module .messaging_search input {min-height:36px;font-size:13px;}
+:root .messaging_module .messaging_search:focus-within {outline:0;border-color:var(--bold_red);box-shadow:0 0 0 2px color-mix(in srgb,var(--bold_red) 12%,transparent);}
+:root .messaging_module .messaging_quick_actions {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:0 10px 10px;border-bottom:1px solid var(--bold_line);}
+:root .messaging_module .messaging_quick_actions button {flex-direction:column;gap:4px;padding:7px 2px;border-color:transparent;background:transparent;font-size:10px;}
+:root .messaging_module .messaging_quick_actions button:hover:not(:disabled) {color:var(--bold_red);background:var(--bold_surface_soft);}
+:root .messaging_module .messaging_chat_list {padding:8px 6px;scrollbar-width:thin;}
+:root .messaging_module .messaging_chat_row {min-height:64px;grid-template-columns:36px minmax(0,1fr);gap:9px;padding:9px 7px;border-radius:4px;box-shadow:none;}
+:root .messaging_module .messaging_chat_row[aria-current=true] {background:color-mix(in srgb,var(--bold_red) 9%,var(--bold_surface));border-left:2px solid var(--bold_red);}
+:root .messaging_module .messaging_chat_row.messaging_chat_unavailable {opacity:1;color:var(--bold_muted);background:transparent;cursor:not-allowed;}
+:root .messaging_module .messaging_row_copy {gap:2px;}
+:root .messaging_module .messaging_row_copy strong {font-size:13px;}
+:root .messaging_module .messaging_row_copy small {font-size:11px;}
+:root .messaging_module .messaging_avatar {width:34px;height:34px;flex-basis:34px;}
+:root .messaging_module .messaging_sidebar > footer {padding:10px;font-size:10px;gap:6px;}
+:root .messaging_module .messaging_list_empty {padding:24px 12px;}
+:root .messaging_module .messaging_list_empty h2 {font-size:15px;}
+:root .messaging_module .messaging_list_empty p {font-size:12px;}
+:root .messaging_module .messaging_conversation::before {
+    mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='240' fill='none' stroke='black' stroke-width='1.2'%3E%3Ccircle cx='35' cy='42' r='15' stroke-width='4'/%3E%3Ccircle cx='237' cy='182' r='21'/%3E%3Cpath d='M90 37h22m-11-11v22M174 49l22-17m-7 0h7v7M65 171l10-14 12 6 18-24m-7 0h7v7M174 111h30m-24 10h18m-12 10h6M26 111h16v13H26zM136 208l8-8 8 8-8 8z'/%3E%3Ctext x='172' y='210' font-family='sans-serif' font-size='10' stroke='none' fill='black' letter-spacing='2'%3EBOLD%3C/text%3E%3C/svg%3E");
+    mask-size:280px 240px;
+}
+:root .messaging_module .messaging_chat_header {min-height:60px;padding:8px 14px;gap:6px;flex-shrink:0;}
+:root .messaging_module .messaging_chat_header > button:not(.messaging_peer) {width:34px;min-width:34px;padding:5px;border-color:transparent;background:transparent;}
+:root .messaging_module .messaging_chat_header .messaging_peer {gap:10px;padding:0;}
+:root .messaging_module .messaging_peer strong {font-size:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+:root .messaging_module .messaging_peer > span:last-child {gap:1px;}
+:root .messaging_module .messaging_peer small {font-size:11px;min-height:17px;}
+:root .messaging_module .messaging_typing {display:inline-flex;align-items:center;gap:6px;color:var(--bold_red);}
+:root .messaging_module .bold_chat_typing {width:24px;height:10px;fill:currentColor;overflow:visible;}
+:root .messaging_module .bold_chat_typing circle {animation:messaging_typing_dot 1.15s ease-in-out infinite;transform-box:fill-box;transform-origin:center;}
+:root .messaging_module .bold_chat_typing circle:nth-child(2) {animation-delay:.14s;}
+:root .messaging_module .bold_chat_typing circle:nth-child(3) {animation-delay:.28s;}
+:root .messaging_module .messaging_stage_note {padding:5px 14px;font-size:10px;align-items:center;border-bottom:1px solid var(--bold_line);}
+:root .messaging_module .messaging_stage_note svg {margin:0;}
+:root .messaging_module .messaging_contact {top:60px;right:10px;padding:14px;border-radius:4px;}
+:root .messaging_module .messaging_log {padding:8px 18px 12px;scrollbar-width:thin;}
+:root .messaging_module .messaging_message_group {max-width:none;}
+:root .messaging_module .messaging_day {font-size:10px;margin:12px 0;gap:16px;}
+:root .messaging_module .messaging_message {gap:7px;margin:7px 0;}
+:root .messaging_module .messaging_message > .messaging_avatar {width:26px;height:26px;flex-basis:26px;font-size:10px;}
+:root .messaging_module .messaging_bubble,
+:root .messaging_module .messaging_bubble:not(:has(.messaging_media)) {border:1px solid color-mix(in srgb,var(--bold_line) 70%,transparent);border-radius:6px;padding:6px 10px;max-width:min(78%,720px);box-shadow:0 1px 2px #00000009;background:var(--chat_received);}
+:root .messaging_module .messaging_mine .messaging_bubble {background:var(--chat_sent);border-color:color-mix(in srgb,var(--bold_red) 20%,var(--bold_line));}
+:root .messaging_module .messaging_bubble {position:relative;}
+:root .messaging_module .messaging_bubble > header {gap:8px;min-height:18px;padding-right:22px;}
+:root .messaging_module .messaging_bubble header strong {font-size:11px;}
+:root .messaging_module .messaging_message_actions {gap:0;}
+:root .messaging_module .messaging_bubble header button {min-height:28px;width:28px;padding:5px;color:var(--chat_muted);border-radius:4px;}
+:root .messaging_module .messaging_bubble header button:hover:not(:disabled) {color:var(--bold_red);background:color-mix(in srgb,var(--bold_red) 10%,transparent);}
+:root .messaging_module .messaging_text {font-size:13px;line-height:1.55;}
+:root .messaging_module .messaging_text a {color:var(--chat_link);}
+:root .messaging_module .messaging_bubble > footer {font-size:10px;gap:4px;color:var(--chat_meta);}
+:root .messaging_module .messaging_feedback:empty {padding:0;min-height:0;}
+:root .messaging_module .messaging_feedback:not(:empty) {padding:4px 14px;font-size:11px;}
+:root .messaging_module .messaging_composer {
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;
+    max-width:none;width:calc(100% - 20px);margin:4px 10px 10px;padding:5px 6px;
+    border:1px solid var(--bold_line);border-radius:6px;background:var(--bold_surface);box-shadow:0 2px 6px #0000000c;
+}
+:root .messaging_module .messaging_composer:focus-within {outline:0;border-color:var(--bold_red);box-shadow:0 0 0 2px color-mix(in srgb,var(--bold_red) 10%,transparent);}
+:root .messaging_module .messaging_composer textarea {grid-column:1;grid-row:auto;height:38px;min-height:38px;max-height:112px;padding:9px 6px;font-size:13px;line-height:20px;border-radius:0;}
+:root .messaging_module .messaging_composer_actions {grid-column:2;grid-row:auto;width:auto;gap:3px;flex-wrap:nowrap;min-width:0;}
+:root .messaging_module .messaging_composer_actions > button {width:36px;min-height:36px;padding:7px;border:0;background:transparent;}
+:root .messaging_module .messaging_composer_actions > .messaging_send {margin:0;background:var(--bold_red);color:white;border-radius:4px;}
+:root .messaging_module .messaging_send_label {display:none;}
+:root .messaging_module .messaging_composer_actions > small {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+:root .messaging_module .messaging_composer > :is(.messaging_media_draft,.messaging_image_queue,.messaging_edit_notice,.messaging_queue_progress) {grid-column:1 / -1;}
+:root .messaging_module .messaging_composer.messaging_preparing_images {display:flex;}
+:root .messaging_module .messaging_composer:has(.messaging_recording) {grid-template-columns:minmax(0,1fr);}
+:root .messaging_module .messaging_composer:has(.messaging_recording) .messaging_composer_actions {grid-column:1 / -1;width:100%;}
+:root .messaging_module .messaging_emojis {bottom:58px;left:6px;right:6px;border-radius:4px;z-index:2;}
+:root .messaging_module .messaging_emojis button {width:38px;min-height:38px;padding:5px;font-size:20px;}
+:root .messaging_module .messaging_audio {--audio_accent:var(--bold_red);grid-template-columns:36px minmax(0,1fr) 36px 32px;gap:6px;}
+:root .messaging_module .messaging_audio button {min-width:36px;min-height:36px;border-radius:50%;}
+:root .messaging_module .messaging_audio .messaging_audio_play {background:color-mix(in srgb,var(--bold_red) 12%,transparent);color:var(--audio_accent);}
+:root .messaging_module .messaging_audio.is_playing .messaging_audio_play {background:var(--bold_red);color:white;}
+:root .messaging_module .messaging_audio_avatar {width:32px;height:32px;}
+:root .messaging_module .messaging_audio_meta {display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:10px;font-variant-numeric:tabular-nums;}
+:root .messaging_module .messaging_audio_activity {display:inline-flex;align-items:center;gap:2px;height:10px;color:var(--bold_red);}
+:root .messaging_module .messaging_audio_activity i {width:2px;height:4px;background:currentColor;}
+:root .messaging_module .messaging_audio.is_playing .messaging_audio_activity i {animation:messaging_audio_meter .7s ease-in-out infinite alternate;}
+:root .messaging_module .messaging_audio_activity i:nth-child(2) {animation-delay:.2s!important;}
+:root .messaging_module .messaging_audio_activity i:nth-child(3) {animation-delay:.4s!important;}
+:root .messaging_module .messaging_bubble:has(.messaging_media_audio) {width:360px;max-width:100%;display:flex;flex-direction:column;align-items:stretch;}
+:root .messaging_module .messaging_bubble:has(.messaging_media_audio) > footer {align-self:flex-end;}
+:root .messaging_module .messaging_media_draft {padding:7px;margin:0;border:1px solid var(--bold_line);border-radius:4px;background:var(--bold_surface_soft);}
+:root .messaging_module .messaging_media_draft .messaging_audio {flex:1;min-width:min(220px,100%);width:auto;}
+:root .messaging_module .messaging_recording {display:flex;align-items:center;gap:8px;min-width:0;flex:1;padding:4px 6px;border-radius:4px;background:color-mix(in srgb,var(--bold_red) 8%,var(--bold_surface));color:var(--bold_text);}
+:root .messaging_module .messaging_recording > span {flex:1;font-size:12px;font-variant-numeric:tabular-nums;}
+:root .messaging_module .messaging_recording button {min-height:34px;width:34px;padding:6px;border:0;background:transparent;}
+:root .messaging_module .messaging_recording_meter {width:25px;height:18px;flex-shrink:0;stroke:currentColor;stroke-width:3;stroke-linecap:round;}
+:root .messaging_module .is_recording .messaging_recording_meter path {transform-origin:center;animation:messaging_audio_meter .65s ease-in-out infinite alternate;}
+:root .messaging_module .messaging_recording_meter path:nth-child(2) {animation-delay:.18s;}
+:root .messaging_module .messaging_recording_meter path:nth-child(3) {animation-delay:.35s;}
+:root .messaging_module .messaging_empty {padding:24px;gap:10px;}
+:root .messaging_module .messaging_empty h2 {font-size:20px;}
+:root .messaging_module .messaging_empty p {font-size:13px;}
+:root .messaging_module.messaging_compact {grid-template-columns:68px minmax(0,1fr);}
+:root .messaging_module.messaging_compact .messaging_list_header {padding:8px 4px;}
+:root .messaging_module.messaging_compact .messaging_quick_actions {grid-template-columns:1fr;padding:6px;}
+:root .messaging_module.messaging_compact .messaging_quick_actions button {min-height:36px;}
+:root .messaging_module.messaging_compact .messaging_quick_actions button span {display:none;}
+:root .messaging_module.messaging_compact .messaging_chat_row {min-height:52px;padding:6px 2px;}
+:root .messaging_module :is(.messaging_dialog_scrim,.slack_mention_scrim,.phone_transfer_scrim) {position:fixed;inset:0;z-index:1800;display:grid;place-items:center;padding:12px;background:#080a10a6;}
+:root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) {box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:16px;border:1px solid var(--bold_line);border-radius:6px;background:var(--bold_surface);color:var(--bold_text);box-shadow:0 16px 64px #0005;}
+:root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) > header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+:root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) h2 {font-size:16px;margin:0;}
+:root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) > header button {width:34px;padding:6px;border:0;background:transparent;}
+:root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) p {font-size:12px;line-height:1.5;color:var(--bold_muted);}
+:root .messaging_module .messaging_emoji_dialog {display:flex;flex-direction:column;gap:10px;padding:12px;overflow:hidden;animation:messaging_options_in 160ms ease-out;}
+:root .messaging_module .messaging_emoji_dialog::backdrop {background:transparent;}
+:root .messaging_module .messaging_emoji_dialog > header {margin:0;}
+:root .messaging_module .messaging_emoji_search {display:flex;align-items:center;flex-shrink:0;gap:8px;padding:0 12px;background:transparent;border:1px solid var(--bold_line);border-radius:20px;}
+:root .messaging_module .messaging_emoji_search:focus-within {border-color:var(--bold_red);}
+:root .messaging_module .messaging_emoji_search input {width:100%;min-width:0;height:36px;font:inherit;font-size:13px;border:0;outline:0;box-shadow:none;background:transparent;}
+:root .messaging_module .messaging_emoji_categories {display:flex;justify-content:space-between;flex-shrink:0;gap:4px;}
+:root .messaging_module .messaging_emoji_categories button {display:grid;place-items:center;width:44px;min-height:40px;padding:6px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--bold_muted);}
+:root .messaging_module .messaging_emoji_categories button[aria-pressed=true] {background:transparent;color:var(--bold_red);border-bottom-color:var(--bold_red);}
+:root .messaging_module .messaging_emoji_group_title {margin:2px 0 0;font-size:12px;font-weight:600;color:var(--bold_muted);}
+:root .messaging_module .messaging_emoji_grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:2px;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px;}
+:root .messaging_module .messaging_emoji_grid button {min-width:0;min-height:42px;padding:4px;border:0;background:transparent;font-family:'Segoe UI Emoji',sans-serif;font-size:27px;}
+:root .messaging_module .messaging_emoji_dialog button:hover {background:transparent;}
+:root .messaging_module .messaging_emoji_grid button:hover {transform:scale(1.12);}
+:root .messaging_module .messaging_emoji_dialog button:focus-visible {outline:2px solid var(--bold_red);outline-offset:-2px;}
+:root .messaging_module .messaging_composer_actions > button[aria-label="Insertar emoji"][aria-expanded=true] {color:var(--bold_red);background:transparent;}
+:root .messaging_module .messaging_compact_dialog > footer {margin-top:10px;padding-top:10px;border-top:1px solid var(--bold_line);font-size:10px;color:var(--bold_muted);}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_preferences > h2 {display:none;}
+:root .messaging_module .messaging_preferences_dialog fieldset {min-width:0;display:grid;gap:8px;margin:12px 0;padding:0;border:0;}
+:root .messaging_module .messaging_preferences_dialog legend {font-size:11px;margin-bottom:8px;color:var(--bold_muted);}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_choice {display:flex;align-items:center;gap:10px;margin:0;padding:12px;border:1px solid var(--bold_line);border-radius:4px;background:var(--bold_surface_soft);cursor:pointer;}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_choice:has(:checked) {border-color:var(--bold_red);background:color-mix(in srgb,var(--bold_red) 7%,var(--bold_surface));}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_choice input {width:16px;height:16px;accent-color:var(--bold_red);flex-shrink:0;}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_choice span {display:grid;gap:4px;font-size:13px;}
+:root .messaging_module .messaging_preferences_dialog .bold_messaging_choice small {font-size:11px;font-weight:400;}
+:root .messaging_module .messaging_preferences_dialog .bold_profile_buttons {display:flex;justify-content:flex-end;margin:0;}
+:root .messaging_module .messaging_preferences_dialog .bold_profile_primary {background:var(--bold_red);color:#fff;border-color:var(--bold_red);}
+:root .messaging_module .slack_mention_picker .slack_task_search {margin:12px 0;gap:6px;}
+:root .messaging_module .slack_mention_picker .slack_task_search label {font-size:11px;}
+:root .messaging_module .slack_mention_picker input {min-height:36px;border-radius:4px;padding:8px;background:var(--bold_surface_soft);font-size:13px;}
+:root .messaging_module .slack_mention_picker input:focus {outline:0;box-shadow:none;border-color:var(--bold_red);}
+:root .messaging_module .slack_mention_picker .slack_task_results {gap:4px;margin:8px 0;}
+:root .messaging_module .slack_mention_picker .slack_task_results button {min-height:52px;padding:8px;border-radius:4px;background:var(--bold_surface_soft);}
+:root .messaging_module .slack_mention_picker .slack_task_results span {gap:2px;}
+:root .messaging_module .slack_mention_picker .slack_task_results strong {font-size:13px;}
+:root .messaging_module .phone_transfer_dialog {--phone-text:var(--bold_text);--phone-muted:var(--bold_muted);}
+:root .messaging_module .phone_transfer_dialog > button {min-height:36px;padding:8px 12px;border-radius:4px;background:var(--bold_red);color:#fff;border-color:var(--bold_red);}
+:root .messaging_module .phone_transfer_dialog [role=note] {padding:10px;border:1px solid var(--bold_line);background:var(--bold_surface_soft);border-radius:4px;}
+:root .messaging_module .phone_transfer_dialog small {font-size:11px;color:var(--bold_muted);}
+:root .messaging_module .phone_transfer_qr {max-width:220px;border-radius:4px;}
+:root .messaging_module .phone_transfer_pair {margin:12px 0;padding:12px;border-color:var(--bold_line);border-radius:4px;}
+:root .messaging_module .messaging_image_queue {min-height:0;gap:8px;}
+:root .messaging_module .messaging_queue_preview {min-height:100px;flex:1;}
+:root .messaging_module .messaging_queue_preview img {max-height:min(44dvh,420px);}
+:root .messaging_module .messaging_queue_strip {gap:5px;}
+:root .messaging_module .messaging_queue_detail {font-size:11px;}
+:root .messaging_module .messaging_media_draft .messaging_document {flex:1;display:grid;grid-template-columns:24px minmax(0,1fr);padding:8px;border-radius:4px;gap:4px 8px;font-size:12px;}
+:root .messaging_module .messaging_media_draft .messaging_document svg {grid-row:1 / 3;}
+:root .messaging_module .messaging_media_draft .messaging_document small {grid-column:2;font-size:10px;}
+html.theme_dark .messaging_module {--chat_link:#ff8585;--chat_sent_link:#ff8585;}
+@keyframes messaging_typing_dot {0%,70%,100% {transform:translateY(0);opacity:.4;}35% {transform:translateY(-2px);opacity:1;}}
+@keyframes messaging_audio_meter {from {transform:scaleY(.5);}to {transform:scaleY(1.5);}}
+@keyframes messaging_options_in {from {opacity:0;transform:translateY(4px);}to {opacity:1;transform:translateY(0);}}
+@media (max-width:1023px) and (min-width:768px) {:root .messaging_module {grid-template-columns:240px minmax(0,1fr);}}
+@media (max-width:767px), (max-height:550px) and (orientation:landscape) {
+    :root .messaging_module,:root .messaging_module.messaging_compact {grid-template-columns:minmax(0,1fr);margin:0;height:calc(var(--chat_vh,100dvh) - 52px);border:0;min-height:0;}
+    :root .messaging_module button {min-height:44px;}
+    :root .messaging_module .messaging_list_tools button {width:44px;min-height:44px;}
+    :root .messaging_module .messaging_list_header,:root .messaging_module.messaging_compact .messaging_list_header {padding:8px 12px;}
+    :root .messaging_module .messaging_quick_actions,:root .messaging_module.messaging_compact .messaging_quick_actions {grid-template-columns:repeat(3,minmax(0,1fr));padding:0 12px 8px;}
+    :root .messaging_module.messaging_compact .messaging_quick_actions button span {display:inline;}
+    :root .messaging_module .messaging_chat_header {padding:6px;gap:2px;min-height:58px;}
+    :root .messaging_module .messaging_chat_header > button:not(.messaging_peer) {width:44px;min-width:44px;min-height:44px;}
+    :root .messaging_module .messaging_chat_header .messaging_peer {gap:6px;}
+    :root .messaging_module .messaging_chat_header .messaging_peer .messaging_avatar {width:28px;height:28px;flex-basis:28px;}
+    :root .messaging_module .messaging_peer strong {font-size:12px;}
+    :root .messaging_module .messaging_peer small {font-size:10px;}
+    :root .messaging_module .messaging_stage_note {font-size:10px;padding:4px 10px;}
+    :root .messaging_module .messaging_log {padding:4px 8px 8px;}
+    :root .messaging_module .messaging_message > .messaging_avatar {display:none;}
+    :root .messaging_module .messaging_bubble,:root .messaging_module .messaging_bubble:not(:has(.messaging_media)) {max-width:94%;padding:6px 8px;}
+    :root .messaging_module .messaging_bubble > header {gap:2px;}
+    :root .messaging_module .messaging_message_actions {margin-left:auto;}
+    :root .messaging_module .messaging_bubble header button {width:44px;min-height:44px;}
+    :root .messaging_module .messaging_message_menu button {min-height:44px;}
+    :root .messaging_module .messaging_message_menu_trigger {width:44px;min-height:44px;top:-6px;right:-6px;}
+    :root .messaging_module .messaging_bubble > header {padding-right:30px;}
+    :root .messaging_module .messaging_composer {width:calc(100% - 12px);margin:3px 6px max(6px,env(safe-area-inset-bottom));gap:2px;padding:3px;}
+    :root .messaging_module .messaging_composer textarea {min-height:44px;height:44px;padding:12px 6px;font-size:16px;}
+    :root .messaging_module .messaging_search input {font-size:16px;}
+    :root .messaging_module .messaging_composer_actions {gap:0;}
+    :root .messaging_module .messaging_composer_actions > button {width:44px;min-height:44px;padding:10px;}
+    :root .messaging_module .messaging_composer_options button {min-height:44px;}
+    :root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) {padding:12px;}
+    :root .messaging_module :is(.messaging_compact_dialog,.slack_mention_picker,.phone_transfer_dialog) > header button {min-width:44px;min-height:44px;}
+    :root .messaging_module :is(.messaging_emoji_search,.slack_mention_picker) input {font-size:16px;min-height:44px;}
+    :root .messaging_module .messaging_recording {gap:3px;padding:3px;}
+    :root .messaging_module .messaging_recording > span {font-size:11px;}
+    :root .messaging_module .messaging_recording button {width:40px;min-height:44px;}
+    :root .messaging_module .messaging_audio {grid-template-columns:44px minmax(0,1fr) 44px 28px;gap:4px;}
+    :root .messaging_module .messaging_audio button {min-width:44px;min-height:44px;}
+    :root .messaging_module .messaging_audio_avatar {width:28px;height:28px;}
+    :root .messaging_module .messaging_contact {top:58px;}
+}
+@media (prefers-reduced-motion:reduce) {
+    :root .messaging_module .messaging_message_menu_trigger {transition:none;}
+    :root .messaging_module,:root .messaging_module button {transition:none;}
+    :root .messaging_module .bold_chat_typing circle,:root .messaging_module .messaging_audio_activity i,
+    :root .messaging_module .messaging_recording_meter path,:root .messaging_composer_options:popover-open,
+    :root .messaging_module :is(.messaging_emoji_dialog,.messaging_mention_suggestions,.messaging_message_menu) {animation:none;}
+    :root .messaging_module .messaging_emoji_grid button:hover {transform:none;}
+}

@@ -7,6 +7,7 @@ export function createSessionNotifications({ client = http, onChange = () => {},
     let controller = new AbortController();
     const mutations = new Map();
     const committed = new Map();
+    const dismissed = new Map();
     const publish = next => { rows = next; if (!disposed) onChange(rows); };
     const valid = version => !disposed && !uncertain && epoch === version;
     const abort = () => new DOMException("Contexto de notificaciones cancelado", "AbortError");
@@ -17,8 +18,9 @@ export function createSessionNotifications({ client = http, onChange = () => {},
             const next = await client.list("notifications", {}, { signal: controller.signal });
             if (!valid(version)) return;
             const visible = new Set(next.map(row => String(row.id)));
+            for (const [id, revisionAtDismiss] of dismissed) if (!visible.has(id) || revisionAtDismiss <= revision) dismissed.delete(id);
             for (const [id, commit] of committed) if (!visible.has(id) || commit.revision <= revision) committed.delete(id);
-            publish(next.map(row => {
+            publish(next.filter(row => !dismissed.has(String(row.id))).map(row => {
                 const id = String(row.id), mutation = mutations.get(id), commit = committed.get(id);
                 // A stale list can still deliver new notifications, without
                 // undoing a write that completed after that list started.
@@ -30,7 +32,7 @@ export function createSessionNotifications({ client = http, onChange = () => {},
     const refresh = options => disposed || uncertain ? Promise.resolve() : coordinator.request(options);
     function invalidate({ uncertain: pending = false } = {}) {
         epoch++; uncertain = pending; controller.abort(); controller = new AbortController();
-        mutations.clear(); committed.clear(); publish([]);
+        mutations.clear(); committed.clear(); dismissed.clear(); publish([]);
         return refresh({ reason: "permissions", security: true });
     }
     function setRead(id, desired) {
@@ -66,16 +68,27 @@ export function createSessionNotifications({ client = http, onChange = () => {},
         })();
         return mutation.promise;
     }
+    async function dismiss(id) {
+        if (disposed || uncertain) throw abort();
+        const version = epoch, key = String(id);
+        await mutations.get(key)?.promise;
+        if (!valid(version)) throw abort();
+        await client.request(`/api/v2/notifications/${id}/dismiss/`, {method: "POST", signal: controller.signal});
+        if (!valid(version)) throw abort();
+        dismissed.set(key, ++writeRevision);
+        committed.delete(key);
+        publish(rows.filter(row => String(row.id) !== key));
+    }
     async function clear() {
         if (disposed || uncertain) throw abort();
         await Promise.allSettled([...mutations.values()].map(item => item.promise));
         const version = epoch;
         await client.request("/api/v2/notifications/clear/", {method: "POST", signal: controller.signal});
         if (!valid(version)) throw abort();
-        epoch++; controller.abort(); controller = new AbortController(); committed.clear(); publish([]);
+        epoch++; controller.abort(); controller = new AbortController(); committed.clear(); dismissed.clear(); publish([]);
         await refresh({reason: "notification-clear", immediate: true});
     }
-    return { getRows: () => rows, refresh, invalidate, setRead, clear,
-        dispose() { disposed = true; epoch++; controller.abort(); coordinator.dispose(); mutations.clear(); committed.clear(); rows = []; },
+    return { getRows: () => rows, refresh, invalidate, setRead, dismiss, clear,
+        dispose() { disposed = true; epoch++; controller.abort(); coordinator.dispose(); mutations.clear(); committed.clear(); dismissed.clear(); rows = []; },
     };
 }

@@ -8,9 +8,64 @@ from django.db.models.functions import Lower
 from boldApp.core.models.mixins import UUIDPrimaryKeyModel
 
 
+class PrivateServer(UUIDPrimaryKeyModel):
+    name = models.CharField(max_length=80)
+    color = models.CharField(max_length=7, default="#ed3033", validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$")])
+    creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "messaging_private_servers"
+        ordering = ["name", "id"]
+
+
+class PrivateServerMember(models.Model):
+    server = models.ForeignKey(PrivateServer, on_delete=models.CASCADE, related_name="members")
+    employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.CASCADE)
+    access = models.CharField(max_length=8, choices=[("read", "Solo lectura"), ("write", "Leer y participar")])
+
+    class Meta:
+        db_table = "messaging_private_server_members"
+        constraints = [models.UniqueConstraint(fields=["server", "employee"], name="unique_private_server_member")]
+
+
+class ServerIcon(models.Model):
+    unit = models.OneToOneField("boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, null=True, blank=True, related_name="slack_icon")
+    server = models.OneToOneField(PrivateServer, on_delete=models.PROTECT, null=True, blank=True, related_name="slack_icon")
+    # Protected Drive reference. New writes never store Base64 image bytes.
+    image = models.TextField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        db_table = "messaging_server_icons"
+        constraints = [models.CheckConstraint(condition=models.Q(unit__isnull=False, server__isnull=True) | models.Q(unit__isnull=True, server__isnull=False), name="slack_icon_one_server")]
+
+
+class ChannelCategory(UUIDPrimaryKeyModel):
+    unit = models.ForeignKey("boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, null=True, blank=True)
+    server = models.ForeignKey(PrivateServer, on_delete=models.PROTECT, null=True, blank=True)
+    name = models.CharField(max_length=80)
+    position = models.PositiveIntegerField(default=0)
+    version = models.PositiveIntegerField(default=1)
+    creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "messaging_channel_categories"
+        ordering = ["position", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("name"), "unit", name="unique_unit_category_name"),
+            models.UniqueConstraint(Lower("name"), "server", name="unique_server_category_name"),
+            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True, server__isnull=True), name="unique_independent_category"),
+            models.CheckConstraint(condition=models.Q(unit__isnull=True) | models.Q(server__isnull=True), name="category_one_server_scope"),
+        ]
+
+
 class DepartmentChannel(UUIDPrimaryKeyModel):
     VISIBILITIES = [("public", "Todos los empleados"), ("department", "Departamento e invitados"), ("private", "Solo personas invitadas")]
     unit = models.ForeignKey("boldApp_core.OrganizationalUnit", on_delete=models.PROTECT, related_name="communication_channels", null=True, blank=True)
+    server = models.ForeignKey(PrivateServer, on_delete=models.PROTECT, related_name="channels", null=True, blank=True)
+    category = models.ForeignKey(ChannelCategory, on_delete=models.PROTECT, related_name="channels", null=True, blank=True)
     visibility = models.CharField(max_length=12, choices=VISIBILITIES, default="public")
     name = models.CharField(max_length=80)
     description = models.CharField(max_length=500, blank=True)
@@ -27,7 +82,9 @@ class DepartmentChannel(UUIDPrimaryKeyModel):
         ordering = ["name", "id"]
         constraints = [
             models.UniqueConstraint(Lower("name"), "unit", name="unique_department_channel_name"),
-            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True), name="unique_independent_channel_name"),
+            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True, server__isnull=True), name="unique_independent_channel_name"),
+            models.UniqueConstraint(Lower("name"), "server", name="unique_private_server_channel"),
+            models.CheckConstraint(condition=models.Q(server__isnull=True) | models.Q(unit__isnull=True, visibility="private"), name="private_server_channel_boundary"),
             models.CheckConstraint(condition=~models.Q(visibility="department") | models.Q(unit__isnull=False), name="department_channel_has_unit"),
         ]
         indexes = [models.Index(fields=["unit", "archived_at"], name="slack_department_channels")]
@@ -71,6 +128,14 @@ class ChannelMessage(UUIDPrimaryKeyModel):
     task_id = models.UUIDField(null=True, blank=True)
     page_id = models.UUIDField(null=True, blank=True)
     parent = models.ForeignKey("self", on_delete=models.PROTECT, related_name="replies", null=True, blank=True)
+    thread_title = models.CharField(max_length=120, blank=True, default="")
+    thread_started_at = models.DateTimeField(null=True, blank=True)
+    thread_starter = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="started_channel_threads")
+    thread_closed_at = models.DateTimeField(null=True, blank=True)
+    thread_locked = models.BooleanField(default=False)
+    thread_deleted_at = models.DateTimeField(null=True, blank=True)
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    pinned_by = models.ForeignKey("boldApp_core.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="pinned_channel_messages")
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
@@ -148,6 +213,13 @@ class ChannelThreadSubscription(models.Model):
     parent = models.ForeignKey(ChannelMessage, on_delete=models.CASCADE, related_name="thread_subscriptions")
     employee = models.ForeignKey("boldApp_core.Employee", on_delete=models.CASCADE)
     following = models.BooleanField(default=False)
+    favorite = models.BooleanField(default=False)
+    left = models.BooleanField(default=False)
+    notification_level = models.CharField(max_length=10, default="inherit", choices=[("inherit", "Heredar seguimiento"), ("all", "Todos"), ("mentions", "Menciones"), ("none", "Ninguna")])
+    muted_until = models.DateTimeField(null=True, blank=True)
+    muted_forever = models.BooleanField(default=False)
+    last_client_id = models.UUIDField(null=True, blank=True)
+    last_digest = models.CharField(max_length=64, blank=True, default="")
     revision = models.PositiveBigIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 

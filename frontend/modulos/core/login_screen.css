@@ -12,54 +12,35 @@
 }
 
 .core_login_intro {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    background: #fff;
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    padding:24px;
+    box-sizing:border-box;
+    overflow:hidden;
+    background:#f3f2ef;
 }
-
-.core_login_intro.theme_dark {
-    background: #181c21;
-}
-
+.core_login_intro.theme_dark {background:#101112;}
 .core_login_intro img {
-    display: block;
-    width: min(72vmin, 680px);
-    height: auto;
+    display:block;
+    width:min(82vw,440px,70dvh);
+    height:auto;
+    aspect-ratio:320 / 280;
 }
-
-/* Adaptación de pantalla: (max-width: 767px) */
-@media (max-width: 767px) {
-
-    .core_login_intro img {
-        width: min(86vw, 500px);
-    }
-}
-
 .core_login_intro_status {
-    position: absolute;
-    left: 50%;
-    bottom: max(24px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    color: #a32c27;
-    font-size: 14px;
-    white-space: nowrap;
+    max-width:360px;
+    color:#656565;
+    font-size:13px;
+    line-height:1.5;
+    text-align:center;
+    overflow-wrap:anywhere;
 }
-
-.core_login_intro.theme_dark .core_login_intro_status {
-    color: #f1f3f6;
-}
-
-/* Accesibilidad: movimiento reducido */
-@media (prefers-reduced-motion: reduce) {
-
-    .core_login_intro img {
-        display: none;
-    }
-}
+.core_login_intro.theme_dark .core_login_intro_status {color:#b2b2b0;}
 
 .core_auth_page.theme_dark {
     --bold_text: #f1f3f6;

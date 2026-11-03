@@ -1,0 +1,25 @@
+import React,{useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import Inbox from '../../../tareas/src/inbox_module.jsx';
+import {TaskActionsContext} from '../../../tareas/src/comment_item.jsx';
+import {NotificationPanel} from '../../notification_panel.jsx';
+import {updateCore} from '../../core_store.js';
+import '../../../tareas/src/styles.css';
+import '../../../tareas/src/tasks_mobile.css';
+import '../../../tareas/src/tasks_tablet.css';
+import '../../app_shell.css';
+import '../../design_v3.css';
+import '../../workspace_v3.css';
+const people=[{id:'alex',name:'Alex López',email:'alex@example.test',initials:'AL'},{id:'maria',name:'María Pérez',email:'maria@example.test',initials:'MP'}],now=Date.now();
+updateCore({directory:people,sessionStatus:'authenticated',securityUncertain:false});
+document.documentElement.classList.toggle('theme_dark',new URLSearchParams(location.search).get('theme')!=='light');
+function Preview(){
+    const [rows,setRows]=useState([{id:'mention',task:'one',project:'p',title:'Te mencionó en una tarea',actor_name:'Alex López',actor_assignment:'alex',type:'comment.mentioned',body:'¿Podemos revisar la propuesta antes de enviarla?',created_at:new Date(now-180000).toISOString()}, {id:'assignment',task:'two',project:'p',title:'Te asignó una tarea',actor_name:'María Pérez',type:'task.assigned',body:'Preparar las piezas de la campaña.',created_at:new Date(now-3600000).toISOString()}, {id:'comment',task:'one',title:'Nuevo comentario',actor_name:'María Pérez',type:'comment.created',body:'Ya están listos los cambios de diseño.',created_at:new Date(now-86400000).toISOString(),is_read:true}]);
+    const [tasks,setTasks]=useState([{id:'one',title:'Revisar propuesta de campaña',project_id:'p',priority:'Alta',due_label:'4 nov 2026',comments:[{id:'c',author_name:'Alex López',body:'Te comparto la propuesta. ¿Qué te parece?',created_at:new Date(now-240000).toISOString()}]},{id:'two',title:'Preparar piezas',priority:'Media',comments:[]}]);
+    const [tab,setTab]=useState('activity'),[query,setQuery]=useState(''),[filters,setFilters]=useState({state:'all',type:'all',project_id:'all',sort:'recent'}),[selected,setSelected]=useState(null),[checked,setChecked]=useState([]),[saved,setSaved]=useState([]),[archived,setArchived]=useState([]),[detail,setDetail]=useState(false),[bell,setBell]=useState(false),[action,setAction]=useState('');
+    const mark=(id,is_read)=>setRows(items=>items.map(item=>item.id===id?{...item,is_read}:item)),open=item=>{setSelected(item.id);setDetail(true);setBell(false);mark(item.id,true);};
+    return <TaskActionsContext.Provider value={{localComments:[]}}><div className="bold_v3" style={{display:'block',minHeight:'100dvh'}}><header style={{height:52,padding:'0 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--bold_line)'}}><strong>BOLD · Datos de prueba</strong><button onClick={()=>setBell(value=>!value)}>Notificaciones</button></header><Inbox notifications={rows} tasks={tasks} projects={[{id:'p',label:'Campaña'}]} directory={people} inbox_tab={tab} set_inbox_tab={setTab} inbox_query={query} set_inbox_query={setQuery} inbox_filters={filters} set_inbox_filters={setFilters} selected_inbox_id={selected} inbox_selected_ids={checked} set_inbox_selected_ids={setChecked} saved_inbox_ids={saved} archived_inbox_ids={archived} inbox_detail_open={detail} close_inbox_detail={()=>setDetail(false)}
+        handle_inbox_activity_select={id=>open(rows.find(item=>item.id===id))} handle_toggle_inbox_saved={id=>setSaved(items=>items.includes(id)?items.filter(value=>value!==id):[...items,id])} handle_toggle_inbox_archive={id=>setArchived(items=>items.includes(id)?items.filter(value=>value!==id):[...items,id])} handle_toggle_inbox_read={id=>mark(id,!rows.find(item=>item.id===id).is_read)} handle_inbox_bulk_read_state={(read,ids)=>ids.forEach(id=>mark(id,read))} handle_inbox_bulk_save={ids=>{setSaved(items=>[...new Set([...items,...ids])]);setChecked([]);}} handle_inbox_bulk_archive={ids=>{setArchived(items=>[...new Set([...items,...ids])]);setChecked([]);}} handle_mark_notifications_read={()=>setRows(items=>items.map(item=>({...item,is_read:true})))} onSettings={()=>setAction('Configuración')} onOpenContext={item=>setAction(`Abrir ${item.taskId}`)} onReply={async(id,body)=>{setTasks(items=>items.map(item=>item.id===id?{...item,comments:[...item.comments,{id:crypto.randomUUID(),author_name:'Tú',body,created_at:new Date().toISOString()}]}:item));return true;}}/>
+        {bell&&<div className="notification_surface" style={{position:'fixed',right:12,top:52,zIndex:16000}}><NotificationPanel notifications={rows} onClose={()=>setBell(false)} onSelect={open} onReply={open} onInbox={()=>setBell(false)} onRead={mark} onReadAll={()=>setRows(items=>items.map(item=>({...item,is_read:true})))} onDismiss={id=>setRows(items=>items.filter(item=>item.id!==id))} onClear={()=>setRows([])} onSettings={()=>setAction('Configuración')}/></div>}<output>{action}</output></div></TaskActionsContext.Provider>;
+}
+createRoot(document.getElementById('root')).render(<Preview/>);

@@ -8,7 +8,7 @@ import "./news.css";
 const icons = {keyboard: Keyboard, bell: Bell, profile: UserRound, update: Layers};
 const dateLabel = date => new Date(`${date}T12:00:00`).toLocaleDateString("es", {day: "numeric", month: "long", year: "numeric"});
 
-function NoteViewer({index, select, close}) {
+export function NoteViewer({index, select, close}) {
     const note = releaseNotes[index], body = useRef(null), Icon = icons[note.icon] || Newspaper;
     useDialog(true, ".bold_news_dialog", close);
     useEffect(() => {body.current.scrollTop = 0;}, [note.id]);

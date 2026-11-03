@@ -16,6 +16,10 @@ from .upload_outbox import renew, StaleLease
 FIELDS = 'id,mimeType,parents,appProperties,trashed,size,sha256Checksum,md5Checksum'
 
 
+class FileRequired(Exception):
+    pass
+
+
 def call(row,user,method,path,**options):
     renew(row)
     return google(user,method,path,**options)
@@ -90,6 +94,23 @@ def folder(row,user,path):
 
 def upload(row,content):
     user=storage_user(row.root)
+    if content is None:
+        if not row.drive_id or not row.folder_id:
+            raise FileRequired()
+        value=metadata(row,user,row.drive_id)
+        marker=('bold_media_upload',str(row.pk))
+        if value is None:
+            raise FileRequired()
+        if (not matches(value,row.drive_id,row.folder_id,marker,row.mime_type) or
+                str(value.get('size'))!=str(row.size_bytes)):
+            raise ValidationError('El archivo reservado de Drive cambió; requiere revisión.')
+        digest=value.get('sha256Checksum')
+        if not digest:
+            remote=call(row,user,'GET','/files/'+file_id(row.drive_id),params={'alt':'media','supportsAllDrives':'true'},raw=True)
+            digest=hashlib.sha256(remote.content).hexdigest()
+        if digest!=row.digest:
+            raise ValidationError('El archivo reservado de Drive no coincide con la subida.')
+        return
     employee=row.assignment.employee_id
     if row.conversation_id:
         path=[('chat','Chat'),(f'employee:{employee}',f'Empleado · {employee}'),

@@ -11,7 +11,7 @@ import warnings
 import unicodedata
 
 from PIL import Image, ImageOps, UnidentifiedImageError
-from django.core.files.uploadhandler import FileUploadHandler
+from boldApp.core.memory_uploads import MemoryOnlyUploadHandler
 from rest_framework.exceptions import ValidationError
 from boldApp.workspace.models import ImageStorageRoot
 from boldApp.workspace.image_storage import drive_folder, storage_user
@@ -25,7 +25,7 @@ EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp",
               "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", **{mime: extension for extension, mime in DOCUMENT_MIMES.items()}}
 
 
-class BoundedUpload(FileUploadHandler):
+class BoundedUpload(MemoryOnlyUploadHandler):
     """Reject excess while parsing, not after a huge file is written to disk."""
     def __init__(self, request=None):
         super().__init__(request)
@@ -33,19 +33,19 @@ class BoundedUpload(FileUploadHandler):
         self.files_seen = 0
 
     def new_file(self, *args, **kwargs):
-        super().new_file(*args, **kwargs)
         self.files_seen += 1
         if self.files_seen > 1:
             raise ValidationError("Envía un archivo por mensaje: imagen, nota de voz o documento.")
+        super().new_file(*args, **kwargs)
 
     def receive_data_chunk(self, raw_data, start):
         self.total += len(raw_data)
         if self.total > MAX_BYTES:
             raise ValidationError("El archivo supera los 10 MB.")
-        return raw_data
+        return super().receive_data_chunk(raw_data, start)
 
     def file_complete(self, file_size):
-        return None
+        return super().file_complete(file_size)
 
 
 def prepare(upload):

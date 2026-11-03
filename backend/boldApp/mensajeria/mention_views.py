@@ -18,6 +18,14 @@ class MentionQuery(StrictInputSerializer):
     q = serializers.CharField(min_length=2, max_length=80)
 
 
+class DirectMentionQuery(MentionQuery):
+    q = serializers.CharField(allow_blank=True, min_length=2, max_length=80)
+
+
+class ChannelMentionQuery(MentionQuery):
+    q = serializers.CharField(allow_blank=True, max_length=80)
+
+
 def mention_people_data(people):
     results = [{"employee_id": str(person.pk), "name": person.full_name, "email": person.user_account.email,
         "token": "@" + person.user_account.email.lower()} for person in people
@@ -29,7 +37,7 @@ def mention_people_data(people):
 class DirectMentionPeopleView(PrivateChatView):
     def get(self, request, conversation_id):
         conversation = self.conversation(conversation_id)
-        query = MentionQuery(data=request.query_params)
+        query = DirectMentionQuery(data=request.query_params)
         query.is_valid(raise_exception=True)
         term = query.validated_data["q"].casefold()
         people = direct_mention_people(conversation)
@@ -38,22 +46,22 @@ class DirectMentionPeopleView(PrivateChatView):
         return Response({"results": results, "refine": False})
 
 
-def channel_mention_results(request, channel, policy, codes=("slack.channel.read",)):
-    query = MentionQuery(data=request.query_params)
+def channel_mention_results(request, channel, policy, codes=("slack.channel.read",), *, autocomplete=False):
+    query = (ChannelMentionQuery if autocomplete else MentionQuery)(data=request.query_params)
     query.is_valid(raise_exception=True)
     term = query.validated_data['q']
     rows = Employee.objects.filter(Q(full_name__icontains=term) | Q(user_account__email__icontains=term),
         is_active=True, user_account__is_active=True).order_by('full_name', 'pk')
     people = list(with_mention_assignments(rows[:101]))
-    if len(people) > 100:
+    if len(people) > 100 and not autocomplete:
         raise ValidationError('Hay demasiadas coincidencias. Escribe más del nombre o del correo.')
     results = mention_people_data(authorized_people(people, channel, policy.permissions, codes))
-    return Response({'results':results[:20], 'refine':len(results)>20})
+    return Response({'results':results[:20], 'refine':len(results)>20 or len(people)>100})
 
 
 class ChannelMentionPeopleView(SlackView):
     def get(self, request, channel_id):
-        return channel_mention_results(request, self.channel(channel_id), self.policy())
+        return channel_mention_results(request, self.channel(channel_id), self.policy(), autocomplete=True)
 
 
 class PageMentionPeopleView(PageView):

@@ -1,4 +1,5 @@
 from django.urls import path
+from .typing import TypingView
 
 from .views import ConversationDetailView, ConversationListView, MessageDetailView, MessageListView, MessageMediaView, ReceiptView, PreferencesView, UnreadSummaryView
 from .channel_views import DepartmentListView, ChannelListView, ChannelDetailView, ChannelMessageListView, ChannelMessageDetailView, ChannelReadView, ChannelTaskSearchView, ChannelMediaView, ChannelFollowView, ChannelUnreadView
@@ -15,15 +16,23 @@ from .search_views import HistorySearchView, DirectMessageContextView, ChannelMe
 from .resource_views import ResourceLibraryView
 from .upload_views import MediaUploadView,MediaUploadDiscardView
 from .personal_views import SavedItemView
-from .thread_views import ThreadFollowView
+from .thread_views import ThreadFollowView, ThreadManageView, ThreadPreferenceView, ThreadReadView
+from .channel_collections import ChannelThreadsView, ChannelPinsView, ChannelThreadStartView, ChannelPinView
+from .channel_categories import ChannelCategoryListView, ChannelCategoryDetailView, CategoryPositionView, ChannelCategoryMoveView
 from .mention_views import ChannelMentionPeopleView, DirectMentionPeopleView, PageMentionPeopleView
 from .reading_views import ReadingReminderView, ReadingReminderClearView
 from .reaction_views import DirectReactionView, ChannelReactionView
 from .task_conversion_views import MessageTasksView, TaskConversionProjectsView
 from .agreement_views import AgreementDestinationsView, AgreementReviewView, AgreementCreateView
 from .automation_views import AutomationListView, AutomationDetailView, AutomationHistoryView, AutomationAuditView, AutomationProjectsView
+from .server_views import ServerListView, ServerDetailView
+from .server_icons import ServerIconView
 
 urlpatterns = [
+    path('server-icons/<str:kind>/<uuid:identity>/', ServerIconView.as_view(http_method_names=['get', 'patch', 'options'])),
+    path('server-icons/<str:kind>/<uuid:identity>/image/', ServerIconView.as_view(http_method_names=['get', 'options']), {'image': True}),
+    path('servers/', ServerListView.as_view(http_method_names=['get', 'post', 'options'])),
+    path('servers/<uuid:server_id>/', ServerDetailView.as_view(http_method_names=['get', 'patch', 'options'])),
     path('channels/<uuid:channel_id>/automation-projects/', AutomationProjectsView.as_view()),
     path('channels/<uuid:channel_id>/automation-projects/<uuid:project_id>/', AutomationProjectsView.as_view()),
     path('channels/<uuid:channel_id>/automations/', AutomationListView.as_view()),
@@ -55,13 +64,25 @@ urlpatterns = [
     path("channels/<uuid:channel_id>/pages/<uuid:page_id>/mention-people/", PageMentionPeopleView.as_view()),
     path("conversations/<uuid:conversation_id>/mention-people/", DirectMentionPeopleView.as_view()),
     path("channels/<uuid:channel_id>/mention-people/", ChannelMentionPeopleView.as_view()),
+    path("channel-categories/", ChannelCategoryListView.as_view()),
+    path("channel-categories/<uuid:category_id>/", ChannelCategoryDetailView.as_view()),
+    path("channel-categories/<uuid:category_id>/position/", CategoryPositionView.as_view()),
+    path("channels/<uuid:channel_id>/category/", ChannelCategoryMoveView.as_view()),
+    path("channels/<uuid:channel_id>/threads/", ChannelThreadsView.as_view()),
+    path("channels/<uuid:channel_id>/pins/", ChannelPinsView.as_view()),
+    path("channels/<uuid:channel_id>/messages/<uuid:message_id>/thread/", ChannelThreadStartView.as_view()),
+    path("channels/<uuid:channel_id>/messages/<uuid:message_id>/pin/", ChannelPinView.as_view()),
     path("channels/<uuid:channel_id>/messages/<uuid:message_id>/following/", ThreadFollowView.as_view()),
+    path("channels/<uuid:channel_id>/messages/<uuid:message_id>/thread-settings/", ThreadManageView.as_view(http_method_names=["patch", "options"])),
+    path("channels/<uuid:channel_id>/messages/<uuid:message_id>/thread-preferences/", ThreadPreferenceView.as_view(http_method_names=["put", "options"])),
+    path("channels/<uuid:channel_id>/messages/<uuid:message_id>/thread-read/", ThreadReadView.as_view(http_method_names=["post", "options"])),
     path("saved-items/", SavedItemView.as_view(http_method_names=["put", "options"])),
     path("saved-items/<uuid:document_id>/", SavedItemView.as_view(http_method_names=["delete", "options"])),
     path("search/", HistorySearchView.as_view(), name="messaging-history-search"),
     path("conversations/<uuid:conversation_id>/messages/<uuid:message_id>/context/", DirectMessageContextView.as_view()),
     path("channels/<uuid:channel_id>/messages/<uuid:message_id>/context/", ChannelMessageContextView.as_view()),
     path("draft-grants/", DraftGrantView.as_view(), name="messaging-draft-grant"),
+    path("conversations/<uuid:conversation_id>/typing/", TypingView.as_view()),
     path("channels/<uuid:channel_id>/pages/<uuid:page_id>/ticket/", PageTicketView.as_view()),
     path("channels/<uuid:channel_id>/templates/", TemplateListView.as_view()),
     path("channels/<uuid:channel_id>/templates/<str:template_id>/", TemplateDetailView.as_view()),

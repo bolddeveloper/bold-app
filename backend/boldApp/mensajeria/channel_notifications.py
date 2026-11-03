@@ -13,13 +13,22 @@ from .models import ChannelSubscription, ChannelThreadSubscription, DepartmentCh
 from .mentions import active_channel_mention, channel_mentions
 
 
+def thread_notice_allowed(preference, mentioned):
+    if not preference:
+        return True
+    if preference.left or preference.muted_forever or (preference.muted_until and preference.muted_until > timezone.now()):
+        return False
+    return preference.notification_level != "none" and (preference.notification_level != "mentions" or mentioned)
+
+
 def notify_channel_message(message, actor, *, mentioned_only=None):
     if mentioned_only is not None and not mentioned_only:
         return
     mentioned = {uuid.UUID(row["employee_id"]) for row in channel_mentions(message)}
     followers = set(ChannelSubscription.objects.filter(channel=message.channel, following=True).values_list("employee_id", flat=True))
-    threads = set(ChannelThreadSubscription.objects.filter(parent_id=message.parent_id, parent__channel_id=message.channel_id,
-        parent__parent__isnull=True, following=True).values_list("employee_id", flat=True)) if message.parent_id else set()
+    preferences = {row.employee_id: row for row in ChannelThreadSubscription.objects.filter(parent_id=message.parent_id,
+        parent__channel_id=message.channel_id, parent__parent__isnull=True)} if message.parent_id else {}
+    threads = {employee for employee, row in preferences.items() if row.following and not row.left}
     followed = followers | threads
     targets = mentioned_only if mentioned_only is not None else followed | mentioned
     if not targets:
@@ -30,6 +39,8 @@ def notify_channel_message(message, actor, *, mentioned_only=None):
         employee__user_account__is_active=True, is_active=True, released_at__isnull=True).exclude(employee_id=message.author_id)
     for recipient in recipients:
         is_mention = recipient.employee_id in mentioned and event_preferences(recipient.employee.user_account.notification_settings)["slack.mentioned"]
+        if not thread_notice_allowed(preferences.get(recipient.employee_id), is_mention):
+            continue
         if not is_mention and (mentioned_only is not None or recipient.employee_id not in followed):
             continue
         if not ChannelPolicy(recipient, permissions=permissions).allows("slack.channel.read", message.channel.unit, message.channel_id, require_assurance=False):
@@ -82,6 +93,16 @@ def notification_channel_readable(assignment, notification, session=None, *, pus
     if push:
         if notification.is_read or notification.dismissed_at:
             return False
+        preference = None
+        if notification.metadata.get("parent_id"):
+            try:
+                parent_id = uuid.UUID(notification.metadata["parent_id"])
+            except (ValueError, TypeError, AttributeError):
+                return False
+            preference = ChannelThreadSubscription.objects.filter(parent_id=parent_id, parent__channel=channel,
+                parent__parent__isnull=True, employee_id=assignment.employee_id).first()
+            if not thread_notice_allowed(preference, notification.type == "slack.mentioned"):
+                return False
         if notification.type == "slack.mentioned":
             try:
                 message_id = uuid.UUID(notification.metadata.get("message_id", ""))

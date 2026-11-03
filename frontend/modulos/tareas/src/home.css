@@ -1965,8 +1965,8 @@
 }
 
 .home_drag {
-    width: 40px !important;
-    height: 40px !important;
+    width: 40px;
+    height: 40px;
     touch-action: none;
     user-select: none;
 }

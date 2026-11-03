@@ -34,8 +34,13 @@ class DirectMentionTests(TestCase):
         self.assertEqual(self.client.get(url, {'q':'bob'}).data['results'][0]['token'], self.token)
         self.assertEqual(self.client.get(url, {'q':'alice'}).data['results'][0]['employee_id'], str(self.alice.employee_id))
         self.assertEqual(self.client.get(url, {'q':'eve'}).data['results'], [])
+        suggestions = self.client.get(url, {'q': ''})
+        self.assertEqual(suggestions.status_code, 200)
+        self.assertEqual({row['employee_id'] for row in suggestions.data['results']},
+            {str(self.alice.employee_id), str(self.bob.employee_id)})
         for outsider in (self.eve, self.owner):
             self.assertEqual(self.as_person(outsider).get(url, {'q':'bob'}).status_code, 404)
+            self.assertEqual(self.as_person(outsider).get(url, {'q':''}).status_code, 404)
         for query in ({}, {'q':'x'}, {'q':'bob','employee_id':str(self.eve.employee_id)}):
             self.assertEqual(self.client.get(url, query).status_code, 400)
         self.assertEqual(APIClient().get(url, {'q':'bob'}).status_code, 401)

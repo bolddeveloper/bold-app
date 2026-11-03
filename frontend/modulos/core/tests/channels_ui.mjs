@@ -20,10 +20,10 @@ const opens = [];
 globalThis.__channelsCore = core;
 globalThis.__channelsShell = {open_direct_chat:person => opens.push(person.employee_id),set_active_module:module => opens.push(module)};
 const channelId="00000000-0000-4000-8000-000000000001", departmentId="00000000-0000-4000-8000-000000000002";
-const department={id:departmentId,name:"IT",color:"#4760A8",can_create:true};
+const department={id:departmentId,name:"IT",color:"#4760A8",can_create:true,can_edit_icon:true};
 let channel={id:channelId,name:"General",description:"Contexto del equipo",department,version:1,activity_version:2,can_manage:true,can_manage_access:true,can_send:true,archived_at:null,visibility:"public"};
 let accessMembers=[],accessReads=0,accessWrites=0,peopleQueries=[];
-let mentionQueries=[];
+let mentionQueries=[],mentionSignals=[],mentionDelay=null,mentionFailure=null,mentionRefine=false;
 const makeMessage=(id,body,parent=null,author="me") => ({id,body,parent_id:parent,channel_id:channelId,sequence:Number(id),version:1,author:{employee_id:author,name:author === "me" ? "Mi cuenta" : "Colega"},department:{name:author === "me" ? "IT" : "Marketing",color:"#9250A3"},created_at:new Date().toISOString(),editable_until:new Date(Date.now()+600000).toISOString(),can_edit:author === "me",reply_count:0});
 let rows=[makeMessage("1","Guía https://example.com <script>no ejecutar</script>",null,"peer"),makeMessage("2","Mi mensaje")];
 let calls=0, sends=0, failSend=false, attempted=[], releaseSend, channelCreates=[];
@@ -35,20 +35,46 @@ const threadPreferences=new Map();let threadWrites=0,threadWriteFails=false;
 const pendingCount=()=>rows.filter(row=>row.author.employee_id!=="me" && row.sequence>(readCursors.get(row.parent_id || "root") || 0)).length;
 const channelSnapshot=()=>({...channel,activity_version:rows.at(-1)?.sequence || 0,unread_count:pendingCount()});
 const confirmed=new Map();
+let privateServers=[],serverCreates=[],iconWrites=[],personalServerOrder=[];
+const categoryScopes=new Map(),categoryMoves=[],channelCategoryMoves=[],categoryCreations=[];let categoryCreateFails=false,categoryDeleteFails=false;const categoryEdits=[],categoryDeletes=[];
+const categoryKey=scope=>scope.server ? 'server:'+scope.server:scope.unit;
+const categoryCatalog=scope=>({scope:categoryKey(scope),can_manage:true,results:(categoryScopes.get(categoryKey(scope)) || []).map(row=>({...row}))});
+const preferenceAttempts=[],preferenceConfirmed=new Map();let preferenceFails=false;
+const threadProjection=row=>({...row,can_manage_thread:true,can_edit_thread:true,can_close_thread:!row.thread_deleted_at,can_reply_thread:!(row.thread_closed_at || row.thread_locked || row.thread_deleted_at),...Object.fromEntries(Object.entries(threadPreferences.get(row.id) || {}).filter(([key])=>key!=='parent_id').map(([key,value])=>['thread_'+key,value]))});
 globalThis.__channelsApi={
+    threadPreferences:async(_,id,values)=>{preferenceAttempts.push(values);let state=preferenceConfirmed.get(values.client_id);if(!state){const before=threadPreferences.get(id) || {state_version:0,following:false};state={...before,parent_id:id,state_version:before.state_version+1,...(values.favorite!=null ? {favorite:values.favorite}:{}),...(values.left!=null ? {left:values.left}:{}),...(values.notifications ? {notifications:values.notifications}:{}),...(values.mute ? {muted_forever:values.mute==='forever',muted_until:values.mute==='1h' ? new Date(Date.now()+3600000).toISOString():null}:{})};threadPreferences.set(id,state);preferenceConfirmed.set(values.client_id,state);}if(preferenceFails)throw {status:0};return state;},
+    manageThread:async(_,id,values)=>{const row=rows.find(row=>row.id===id);Object.assign(row,values.action==='rename' ? {thread_title:values.title}:values.action==='close' ? {thread_closed_at:new Date().toISOString()}:values.action==='open' ? {thread_closed_at:null}:values.action==='lock' ? {thread_locked:true,thread_closed_at:new Date().toISOString()}:values.action==='unlock' ? {thread_locked:false}:values.action==='delete' ? {thread_deleted_at:new Date().toISOString(),thread_closed_at:new Date().toISOString()}:{thread_deleted_at:null});row.version++;return {message:threadProjection(row)};},
+    readThread:async(_,id)=>({message:{...threadProjection(rows.find(row=>row.id===id)),unread_reply_count:0},channel:channelSnapshot()}),
+    categories:async scope=>categoryCatalog(scope),
+    createCategory:async(scope,values)=>{categoryCreations.push(values);const key=categoryKey(scope),rows=categoryScopes.get(key) || [];if(!rows.some(row=>row.id===values.client_id))rows.push({id:values.client_id,name:values.name,position:rows.length,version:1});categoryScopes.set(key,rows);if(categoryCreateFails)throw {status:0};return categoryCatalog(scope);},
+    updateCategory:async(scope,id,values)=>{const row=categoryScopes.get(categoryKey(scope)).find(item=>item.id===id);categoryEdits.push({scope,id,values});assert.equal(values.version,row.version);row.name=values.name;row.version++;return categoryCatalog(scope);},
+    deleteCategory:async(scope,id,values)=>{categoryDeletes.push({scope,id,values});if(categoryDeleteFails)throw {status:500};const key=categoryKey(scope);categoryScopes.set(key,categoryScopes.get(key).filter(row=>row.id!==id));if(channel.category_id===id)channel={...channel,category_id:null,version:channel.version+1};return categoryCatalog(scope);},
+    moveCategory:async(scope,id,values)=>{categoryMoves.push({scope,id,values});const rows=categoryScopes.get(categoryKey(scope)),row=rows.find(item=>item.id===id),rest=rows.filter(item=>item.id!==id),index=rest.findIndex(item=>item.id===values.before_id);rest.splice(index<0 ? rest.length:index,0,row);categoryScopes.set(categoryKey(scope),rest.map((item,i)=>({...item,position:i,version:item.version+1})));return categoryCatalog(scope);},
+    moveChannelCategory:async(scope,id,values)=>{channelCategoryMoves.push({scope,id,values});channel={...channel,category_id:values.category_id,version:channel.version+1};return {channel:channelSnapshot()};},
+    serverOrder:async()=>personalServerOrder,
+    saveServerOrder:async order=>{personalServerOrder=[...order];return {slack_server_order:order};},
+    serverIcon:async()=>({avatar_url:null,icon_version:0,can_edit_icon:true}),
+    updateServerIcon:async(kind,id,values)=>{iconWrites.push({kind,id,values});return {avatar_url:null,icon_version:1,can_edit_icon:true};},
+    servers:async()=>({results:privateServers}),
+    createServer:async values=>{serverCreates.push(values);const row={id:'00000000-0000-4000-8000-000000000055',...values,private:true,can_manage:true,can_create:true,version:1};privateServers.push(row);return row;},
+    server:async id=>({...privateServers.find(row=>row.id===id),members:[]}),
     departments:async () => {calls++; return {results:[department],can_create_independent:true};},
     people:async (filters,options,next)=>{peopleQueries.push(filters);const person={employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado",avatar_url:null,departments:[department]};return {results:next ? [{...person,employee_id:"00000000-0000-4000-8000-000000000022",name:"Segunda colega"}] : [person],departments:[{...department,count:2}],next:filters.department && !next ? `/api/v2/messaging/channels/people/?channel=${channel.id}&department=${departmentId}&cursor=two` : null};},
-    mentionPeople:async(_,query)=>{mentionQueries.push(query);return {results:[{employee_id:'peer',name:'Colega',email:'peer@bold.gt',token:'@peer@bold.gt'}],refine:false};},
+    mentionPeople:async(_,query,options)=>{mentionQueries.push(query);mentionSignals.push(options?.signal);if(mentionFailure)throw mentionFailure;if(mentionDelay)return mentionDelay;return {results:[{employee_id:'peer',name:'Colega',email:'peer@bold.gt',token:'@peer@bold.gt'},{employee_id:'other',name:'Otra persona',email:'other@bold.gt',token:'@other@bold.gt'}].filter(row=>!query || row.name.toLowerCase().includes(query.toLowerCase()) || row.email.includes(query)),refine:mentionRefine};},
     managed:async()=>({results:[channel],next:null}),
     access:async()=>{accessReads++;return {...channel,members:accessMembers};},
     setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
     list:async archived => {calls++; return {results:!channel.archived_at || archived ? [channelSnapshot()] : [],next:null};},
     detail:async()=>{deepLoads++;return channelSnapshot();},
-    message:async(_,id)=>({message:rows.find(row=>row.id===id)}),
+    message:async(_,id)=>({message:threadProjection(rows.find(row=>row.id===id))}),
     follow:async(_,following)=>{channel={...channel,following,state_version:(channel.state_version || 0)+1};return channelSnapshot();},
+    threads:async(_channel,query='',_next,_options,filters={})=>({results:rows.filter(row=>!row.parent_id && (row.thread_started_at || rows.some(reply=>reply.parent_id===row.id)) && (row.thread_title || row.body).toLowerCase().includes(query.toLowerCase()) && (filters.state==='deleted' ? !!row.thread_deleted_at:!row.thread_deleted_at) && (!filters.favorite || threadPreferences.get(row.id)?.favorite)).map(threadProjection),next:null}),
+    pins:async()=>({results:rows.filter(row=>row.pinned_at),next:null}),
+    startThread:async(_channel,id,title)=>{const message=rows.find(row=>row.id===id);if(!message.thread_started_at)Object.assign(message,{thread_title:title,thread_started_at:new Date().toISOString(),version:message.version+1});return {message:{...message}};},
+    pin:async(_channel,id,pinned)=>{const message=rows.find(row=>row.id===id);Object.assign(message,{pinned_at:pinned ? new Date().toISOString():null,version:message.version+1});return {message:{...message}};},
     followThread:async(_,parent,following)=>{threadWrites++;if(threadWriteFails)throw {status:429};const previous=threadPreferences.get(parent) || {following:false,state_version:0};const state={parent_id:parent,following,state_version:previous.state_version+(previous.following!==following ? 1:0)};threadPreferences.set(parent,state);return state;},
     read:async(_,id)=>{reads++;const row=rows.find(row=>row.id===id);assert.ok(row);const key=row.parent_id || "root";readCursors.set(key,Math.max(readCursors.get(key) || 0,row.sequence));channel={...channel,state_version:(channel.state_version || 0)+1};return {channel:channelSnapshot(),read_sequence:readCursors.get(key),parent_id:row.parent_id};},
-    messages:async (_,parent) => {calls++; return {results:rows.filter(row => row.parent_id === (parent || null)).sort((a,b) => b.sequence-a.sequence).map(row => ({...row,thread_following:threadPreferences.get(row.id)?.following || false,thread_state_version:threadPreferences.get(row.id)?.state_version || 0,task:row.task && !taskReadable ? {available:false} : row.task,reply_count:rows.filter(reply => reply.parent_id === row.id).length,unread_reply_count:rows.filter(reply=>reply.parent_id===row.id && reply.author.employee_id!=="me" && reply.sequence>(readCursors.get(row.id) || 0)).length})),next:null,channel:channelSnapshot(),thread:parent ? {parent_id:parent,following:false,state_version:0,...threadPreferences.get(parent)}:undefined};},
+    messages:async (_,parent) => {calls++; return {results:rows.filter(row => row.parent_id === (parent || null)).sort((a,b) => b.sequence-a.sequence).map(row => ({...row,thread_following:threadPreferences.get(row.id)?.following || false,thread_state_version:threadPreferences.get(row.id)?.state_version || 0,task:row.task && !taskReadable ? {available:false} : row.task,reply_count:rows.filter(reply => reply.parent_id === row.id).length,unread_reply_count:rows.filter(reply=>reply.parent_id===row.id && reply.author.employee_id!=="me" && reply.sequence>(readCursors.get(row.id) || 0)).length})),next:null,channel:channelSnapshot(),thread_source:parent ? threadProjection(rows.find(row=>row.id===parent)):undefined,thread:parent ? {parent_id:parent,following:false,state_version:0,...threadPreferences.get(parent)}:undefined};},
     tasks:async (_,query) => {searches++;return {results:query.includes("Revisión") && taskReadable ? [taskFixture] : [],next:null};},
     task:async id => {assert.equal(id,taskId);if (!taskReadable) throw {status:404};return taskFixture;},
     send:async (_,values) => {
@@ -56,7 +82,7 @@ globalThis.__channelsApi={
         if (values.task_id && !taskReadable) throw {status:404};
         if (releaseSend) await new Promise(resolve => {releaseSend=resolve;});
         let message=confirmed.get(values.client_id);
-        if (!message) {message={...makeMessage(String(rows.length+1),values.body,values.parent_id),task:values.task_id ? {...taskFixture,available:true} : null}; confirmed.set(values.client_id,message); rows.push(message);}
+        if (!message) {message={...makeMessage(String(rows.length+1),values.body,values.parent_id),...(values.thread_title ? {thread_title:values.thread_title,thread_started_at:new Date().toISOString()}:{}),task:values.task_id ? {...taskFixture,available:true} : null}; confirmed.set(values.client_id,message); rows.push(message);}
         if (failSend) throw {status:0};
         return {message};
     },
@@ -71,12 +97,12 @@ globalThis.__channelsApi={
     media:async (_,id)=>{mediaDownloads++;assert.ok(rows.find(row=>row.id===id)?.media);return new Blob(["private-pixels"],{type:"image/webp"});},
     edit:async (_,id,values) => {const index=rows.findIndex(row => row.id === id); rows[index]={...rows[index],body:values.body,version:rows[index].version+1,edited_at:new Date().toISOString()}; return {message:rows[index]};},
     update:async (_,values) => {channel={...channel,...values,version:channel.version+1,...("archived" in values ? {archived_at:values.archived ? new Date().toISOString() : null,can_send:!values.archived} : {})}; return channel;},
-    create:async values => {channelCreates.push(values);channel={...channel,id:"00000000-0000-4000-8000-000000000003",name:values.name,description:values.description,department:values.unit_id ? department : null,version:1}; return channel;},
+    create:async values => {channelCreates.push(values);channel={...channel,id:`00000000-0000-4000-8000-${String(channelCreates.length+2).padStart(12,'0')}`,name:values.name,description:values.description,category_id:values.category_id || null,department:values.unit_id ? department : null,server:values.server_id ? privateServers.find(row=>row.id===values.server_id):null,version:1}; return channel;},
 };
 const replacements=[
     ["/core/core_provider.jsx","export const useCore=()=>globalThis.__channelsCore;"],
     ["/core/app_shell.jsx","export const useShell=()=>globalThis.__channelsShell;"],
-    ["/core/shared/bold_dialog.js","export const confirmBold=async()=>globalThis.__channelsConfirm !== false;"],
+    ["/core/shared/bold_dialog.js","export const confirmBold=async()=>globalThis.__channelsConfirm !== false;export const promptBold=async(_,value)=>globalThis.__categoryName===undefined ? value:globalThis.__categoryName;"],
     // Parent-navigation contract only; the real page/CRDT components have their
     // own acceptance suites, including unsaved drafts and recovery.
     ["/mensajeria/channel_pages.jsx",'export default function Pages({onDirty}){return <section aria-label="Página sintética"><button onClick={()=>onDirty(true)}>Simular página pendiente</button></section>;}'],
@@ -94,19 +120,45 @@ const root=createRoot(document.getElementById("root"));
 const settle=()=>new Promise(resolve => setTimeout(resolve,40));
 const waitFor=async predicate => {const deadline=Date.now()+4000; while (!predicate() && Date.now()<deadline) await settle(); assert.ok(predicate(),"expected channel UI state");};
 const button=text => [...document.querySelectorAll("button")].find(node => node.textContent === text);
+const threadOption=()=>[...document.querySelectorAll('.messaging_message_menu:not([hidden]) button')].find(node=>['Crear hilo','Abrir hilo'].includes(node.textContent));
 const input=(field,text) => {const prototype=field instanceof dom.window.HTMLTextAreaElement ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype,"value").set.call(field,text); field.dispatchEvent(new Event("input",{bubbles:true}));};
 const submit=()=>document.querySelector(".slack_composer").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
 try {
     root.render(React.createElement(Channels));
     await waitFor(()=>document.querySelector(".slack_sidebar nav button"));
-    document.querySelector(".slack_sidebar nav button").click();
-    await waitFor(()=>document.querySelectorAll(".slack_message").length===2);
+    assert.equal(document.querySelectorAll('.slack_rail_channel').length,2,'departments and the legacy independent group appear as servers');
+    document.querySelector('.slack_sidebar nav button').click();
+    await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===2);
+    assert.equal(document.querySelector('.slack_module').classList.contains('slack_explorer_open'),false,'choosing a channel leaves more room for its messages');
+    input(document.querySelector('#slack_message'),'Borrador de navegación');await settle();
+    const beforeNavigation=calls;
+    document.querySelector('[aria-label="Buscar servidores"]').click();await settle();
+    assert.equal(document.querySelector('.slack_rail').classList.contains('is_expanded'),true);
+    document.querySelector('[aria-label="Cerrar buscador de servidores"]').click();await settle();
+    assert.equal(document.querySelector('#slack_message').value,'Borrador de navegación','opening the browser does not replace the channel or its draft');
+    assert.equal(calls,beforeNavigation,'expanding the navigator adds no background requests');
+    document.querySelector('[aria-label="Buscar servidores"]').click();await settle();
+    input(document.querySelector('[aria-label="Servidores de Slack"] input'),'indepen');await settle();
+    assert.equal(document.querySelectorAll('.slack_rail_channel').length,1,'server search filters server names, not text channels');
+    assert.equal(document.querySelector('.slack_rail_channel').getAttribute('aria-label'),'Abrir servidor Independientes');
+    document.querySelector('[aria-label="Cerrar buscador de servidores"]').click();await settle();
+    input(document.querySelector('#slack_message'),'');await settle();
+    const railButton=document.querySelector('.slack_rail_channel');railButton.focus();
+    document.querySelector('.slack_rail_channels').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+    assert.equal(document.activeElement,document.querySelectorAll('.slack_rail_channel')[1],'server rail supports keyboard navigation');
     assert.equal(document.querySelector(".slack_message script"),null);
     assert.match(document.querySelector(".slack_message_body").textContent,/<script>/);
     assert.match(document.querySelector(".slack_message_card .slack_department").textContent,/Marketing/);
     assert.equal(document.querySelector(".slack_message_body a").rel,"noopener noreferrer");
     assert.equal([...document.querySelectorAll("button")].filter(node=>node.textContent === "Editar mi mensaje").length,1);
     document.querySelector('[aria-label="Abrir chat con Colega"]').click(); assert.deepEqual(opens,["peer"]);
+    document.querySelector('[aria-label="Abrir servidor IT"]').dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:50,clientY:50}));
+    await waitFor(()=>document.querySelector('.slack_server_context'));
+    button('Cambiar imagen del servidor').click();await waitFor(()=>document.querySelector('.slack_icon_editor'));
+    assert.equal(document.querySelector('.slack_icon_editor input:not([type=file])'),null,'server appearance has no name editor');
+    assert.ok(document.querySelector('.slack_main').hasAttribute('inert'));
+    assert.equal(iconWrites.length,0,'opening appearance never changes the icon');
+    document.querySelector('[aria-label="Cerrar imagen del servidor"]').click();await waitFor(()=>!document.querySelector('.slack_icon_editor'));
     const idle=calls; await settle(); assert.equal(calls,idle,"idle does not poll");
     button('Archivos y enlaces').click();await waitFor(()=>document.querySelector('.resource_library'));
     assert.ok(document.querySelector('.slack_main').hasAttribute('inert'));assert.ok(document.querySelector('.slack_sidebar').hasAttribute('inert'));
@@ -122,9 +174,32 @@ try {
     await waitFor(()=>document.activeElement===document.querySelector('#slack_message'));
     assert.equal(sends,0,'choosing a mention never sends the draft');
     input(document.querySelector('#slack_message'),'');await settle();
+    const inlineSends=sends,beforeInline=mentionQueries.length,composerField=document.querySelector('#slack_message');
+    composerField.focus();input(composerField,'persona@bold.gt');await settle();assert.equal(document.querySelector('.messaging_mention_suggestions'),null);
+    input(composerField,'Hola @');await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]').length===2);
+    assert.equal(document.activeElement,composerField);assert.equal(document.querySelector('.slack_main').hasAttribute('inert'),false);
+    composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await settle();
+    assert.match(document.querySelector('.messaging_mention_suggestions [aria-selected=true]').textContent,/Otra persona/);
+    input(composerField,'Hola @col');await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]').length===1);
+    assert.equal(mentionQueries.length,beforeInline+1,'complete authorized roster filters locally');
+    assert.equal(composerField.getAttribute('aria-activedescendant'),document.querySelector('.messaging_mention_suggestions [role=option]').id);
+    composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await waitFor(()=>!document.querySelector('.messaging_mention_suggestions'));
+    assert.equal(composerField.value,'Hola @peer@bold.gt ');assert.equal(sends,inlineSends,'Enter selects without sending');
+    let releaseMention;mentionDelay=new Promise(resolve=>{releaseMention=resolve;});input(composerField,'@');await waitFor(()=>mentionQueries.length===beforeInline+2);
+    composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await waitFor(()=>!document.querySelector('.messaging_mention_suggestions'));
+    assert.equal(mentionSignals.at(-1).aborted,true);assert.equal(composerField.value,'@');
+    releaseMention({results:[{employee_id:'late',name:'Tardío',email:'late@bold.gt',token:'@late@bold.gt'}],refine:false});mentionDelay=null;await settle();assert.equal(document.querySelector('.messaging_mention_suggestions'),null);
+    input(composerField,'');await settle();mentionFailure={status:500};input(composerField,'@');await waitFor(()=>document.querySelector('.messaging_mention_suggestions [role=alert]'));
+    assert.equal(composerField.value,'@');mentionFailure=null;document.querySelector('.messaging_mention_suggestions [role=alert] button').click();await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]').length===2);
+    composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));input(composerField,'');await settle();
+    mentionRefine=true;const beforeRefine=mentionQueries.length;input(composerField,'@');await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]').length===2);
+    input(composerField,'@p');await settle();input(composerField,'@pe');await settle();input(composerField,'@peer');
+    await waitFor(()=>mentionQueries.length===beforeRefine+2);await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]').length===1);
+    assert.equal(mentionQueries.at(-1),'peer','a partial roster searches the server after typing settles');
+    composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));mentionRefine=false;input(composerField,'');await settle();
     const channelSearch=document.querySelector('.slack_channel_search input');
     input(channelSearch,'genreal');await settle();assert.match(document.querySelector('.slack_sidebar nav').textContent,/General/);
-    assert.equal(document.querySelector('.slack_sidebar select').options.length,2,'only departments with matching channels remain');
+    assert.equal(document.querySelector('.slack_sidebar h1').textContent,'IT','search remains inside the active server');
     input(channelSearch,'inexistente');await settle();assert.equal(document.querySelector('.slack_sidebar nav section'),null);
     document.querySelector('[aria-label="Limpiar buscar canal"]').click();await settle();await waitFor(()=>document.querySelector('.slack_sidebar nav button'));
     assert.equal(reads,0,"loading history without visibility evidence never acknowledges it");
@@ -135,15 +210,33 @@ try {
     input(document.querySelector("#slack_message"),"Mensaje de prueba"); await settle();
     releaseSend=true; submit(); submit(); await settle(); assert.equal(sends,1);
     releaseSend(); releaseSend=null;
-    await waitFor(()=>document.querySelectorAll(".slack_message").length===3);
+    await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===3);
     assert.equal(document.querySelector("#slack_message").value,"");
     failSend=true; input(document.querySelector("#slack_message"),"Respuesta perdida"); await settle(); submit();
     await waitFor(()=>document.querySelector('[role="alert"]'));
     assert.ok(document.querySelector("#slack_message").disabled,"uncertain send payload stays immutable");
     const retryId=attempted.at(-1); failSend=false; submit();
-    await waitFor(()=>document.querySelectorAll(".slack_message").length===4);
+    await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===4);
     assert.equal(attempted.at(-1),retryId); assert.equal(rows.filter(row=>row.body === "Respuesta perdida").length,1);
-    button("Responder en hilo").click(); await waitFor(()=>document.querySelector(".slack_thread_context")); await settle();
+    document.querySelector('.slack_active_conversation [aria-label="Opciones de este mensaje"]').click();await waitFor(()=>button('Fijar mensaje'));
+    button('Fijar mensaje').click();await waitFor(()=>rows[0].pinned_at);
+    document.querySelector('.slack_active_conversation [aria-label="Opciones de este mensaje"]').click();await settle();
+    document.querySelector('[aria-label="Mensajes fijados"]').click();await waitFor(()=>document.querySelector('.slack_catalog_card'));
+    assert.ok(document.querySelector('.slack_catalog_card').textContent.includes(rows[0].body));
+    document.querySelector('[aria-label="Cerrar lista"]').click();
+    assert.equal(button('Responder en hilo'),undefined,'thread actions no longer occupy a footer below each message');
+    document.querySelector('.slack_active_conversation [aria-label="Opciones de este mensaje"]').click();await waitFor(()=>threadOption());
+    threadOption().click(); await waitFor(()=>document.querySelector(".slack_thread_context")); await settle();
+    assert.ok(document.querySelector('.slack_channel_context'),'opening a thread keeps the channel alongside it');
+    assert.equal(document.querySelector('.slack_thread_link'),null,'the source preview uses the same compact message actions');
+    input(document.querySelector('[aria-label="Nombre del hilo"]'),'Revisión de diseño');await settle();document.querySelector('.slack_thread_name button').click();
+    await waitFor(()=>rows[0].thread_title==='Revisión de diseño');
+    await waitFor(()=>!document.querySelector('[aria-label="Hilos del canal"]').disabled);
+    await waitFor(()=>document.querySelector('.slack_channel_context .slack_thread_started button'));
+    document.querySelector('.slack_channel_context .slack_thread_started button').click();await waitFor(()=>document.querySelector('.slack_catalog_card')?.textContent.includes('Revisión de diseño'));
+    assert.match(document.querySelector('.slack_catalog_card').textContent,/Revisión de diseño/);
+    input(document.querySelector('[aria-label="Buscar hilo"]'),'No existe');await waitFor(()=>!document.querySelector('.slack_catalog_card'));
+    document.querySelector('[aria-label="Cerrar lista"]').click();
     await waitFor(()=>button("Seguir hilo") && !button("Seguir hilo").disabled);
     input(document.querySelector("#slack_message"),"Borrador del hilo");await settle();
     threadWriteFails=true;button("Seguir hilo").click();await waitFor(()=>document.querySelector('[role="alert"]')?.textContent.includes("Espera"));
@@ -154,10 +247,16 @@ try {
     assert.equal(document.querySelector("#slack_message").value,"Borrador del hilo");
     button("Dejar de seguir hilo").click();await waitFor(()=>button("Seguir hilo"));
     assert.equal(threadWrites,3);assert.equal(channel.following,false,"thread following never opts into the channel");
+    input(document.querySelector('#slack_message'),'@col');await waitFor(()=>document.querySelector('.messaging_mention_suggestions [role=option]'));
+    document.querySelector('.messaging_mention_suggestions [role=option]').click();await waitFor(()=>!document.querySelector('.messaging_mention_suggestions'));
+    assert.equal(document.querySelector('#slack_message').value,'@peer@bold.gt ');assert.ok(document.querySelector('.slack_thread_context'),'mention stays inside the thread');
     input(document.querySelector("#slack_message"),"En el hilo"); await settle(); submit();
-    await waitFor(()=>document.querySelectorAll(".slack_message").length===1);
+    await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===1);
     assert.equal(rows.at(-1).parent_id,"1");
-    document.querySelector('[aria-label="Volver al canal"]').click(); await waitFor(()=>document.querySelectorAll(".slack_message").length===4);
+    document.querySelector('.slack_channel_context [aria-label="Opciones de este mensaje"]').click();await waitFor(()=>threadOption());
+    threadOption().click();await settle();
+    assert.equal(document.querySelectorAll('.slack_active_conversation .slack_message').length,1,'reopening the same thread preserves its loaded replies');
+    document.querySelector('[aria-label="Volver al canal"]').click(); await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===4);
     document.querySelector('[aria-label="Configurar canal"]').click(); await waitFor(()=>document.querySelector(".slack_editor"));
     assert.ok(document.querySelector(".slack_main").hasAttribute("inert"));
     const field=[...document.querySelectorAll(".slack_editor label")].find(node=>node.textContent.startsWith("Nombre" )).querySelector("input");
@@ -177,8 +276,8 @@ try {
     assert.match(document.querySelector('.slack_task_draft').textContent,/Revisión de prueba/);
     submit();await waitFor(()=>document.querySelector('.slack_task_card'));
     assert.equal(rows.at(-1).body,"");assert.equal(rows.at(-1).task.id,taskId,"a task can be sent without caption");
-    const taskOpens=[];const onTask=event=>taskOpens.push(event.detail.task);window.addEventListener('bold:brand-resource',onTask);
-    document.querySelector('.slack_task_card').click();await waitFor(()=>taskOpens.length===1);assert.deepEqual(taskOpens,[taskId]);
+    const taskOpens=[];const onTask=event=>taskOpens.push(event.detail);window.addEventListener('bold:brand-resource',onTask);
+    document.querySelector('.slack_task_card').click();await waitFor(()=>taskOpens.length===1);assert.deepEqual(taskOpens,[{task:taskId,context:'slack'}]);
     taskReadable=false;document.querySelector('.slack_task_card').click();
     await waitFor(()=>document.querySelector('.slack_task_unavailable'));
     assert.equal(document.querySelector('.slack_task_card'),null);assert.equal(taskOpens.length,1,"lost task access cannot open an old card");
@@ -225,11 +324,20 @@ try {
     document.querySelector('#slack_message').dispatchEvent(paste);await waitFor(()=>document.querySelector('.messaging_image_queue'));
     validationMedia=true;submit();await waitFor(()=>document.querySelector('[role="alert"]')?.textContent.includes('Archivo rechazado'));
     assert.equal(document.querySelector('#slack_message').disabled,false);validationMedia=false;
-    button("Responder en hilo").click();await waitFor(()=>document.querySelector('.slack_thread_context'));
+    const messageCard=document.querySelector('.slack_active_conversation .slack_message_card');
+    await waitFor(()=>!messageCard.querySelector('[aria-label="Opciones de este mensaje"]').disabled);await settle();
+    const contextMenu=new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true});messageCard.dispatchEvent(contextMenu);
+    assert.ok(contextMenu.defaultPrevented,'right click opens message actions instead of the browser menu');await waitFor(()=>threadOption());
+    threadOption().click();await waitFor(()=>document.querySelector('.slack_thread_context'));
     assert.equal(document.querySelector('.messaging_image_queue'),null);
+    const threadPaste=new Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(threadPaste,'clipboardData',{value:{files:[secondImage]}});
+    const sentBeforePreview=mediaAttempts.length;document.querySelector('.slack_active_conversation .slack_messages').dispatchEvent(threadPaste);
+    await waitFor(()=>document.querySelector('.slack_active_conversation .messaging_image_queue'));assert.ok(threadPaste.defaultPrevented);
+    assert.equal(mediaAttempts.length,sentBeforePreview,'pasting into a thread only prepares the local queue');
+    document.querySelector('[aria-label="Quitar todas las imágenes"]').click();await waitFor(()=>!document.querySelector('.messaging_image_queue'));
     document.querySelector('[aria-label="Volver al canal"]').click();await waitFor(()=>document.querySelector('.messaging_image_queue'));
     document.querySelector('[aria-label="Quitar todas las imágenes"]').click();await waitFor(()=>!document.querySelector('.messaging_image_queue'));
-    const drop=new Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:{files:[secondImage]}});document.querySelector('.slack_composer').dispatchEvent(drop);
+    const drop=new Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:{items:[{kind:'file',getAsFile:()=>secondImage}]}});document.querySelector('.slack_active_conversation .slack_messages').dispatchEvent(drop);
     await waitFor(()=>document.querySelector('.messaging_image_queue'));assert.ok(drop.defaultPrevented);
     document.querySelector('[aria-label="Quitar todas las imágenes"]').click();await waitFor(()=>!document.querySelector('.messaging_image_queue'));
     // Real recorder component, synthetic microphone/codec: no hardware or data
@@ -267,10 +375,10 @@ try {
     // not a blind injection of the notification's content into the view.
     const hiddenReply=makeMessage(String(rows.length+1),'Respuesta pendiente','1','peer');rows.push(hiddenReply);
     window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{channel_id:channelId,kind:'message.created'}}}));
-    await waitFor(()=>document.querySelector('.slack_message_card footer .slack_unread_badge'));
+    await waitFor(()=>document.querySelector('.slack_thread_started .slack_unread_badge'));
     button('Marcar vista como leída').click();await settle();assert.equal(pendingCount(),1,'reading the channel keeps unseen thread replies unread');
     globalThis.__channelsShell.slack_target={channel_id:channelId,parent_id:'1',requestId:'notice-1'};root.render(React.createElement(Channels));
-    await waitFor(()=>document.querySelector('.slack_thread_context'));await waitFor(()=>document.querySelector('.slack_message_body')?.textContent==='En el hilo');
+    await waitFor(()=>document.querySelector('.slack_thread_context'));await waitFor(()=>document.querySelector('.slack_active_conversation .slack_message_body')?.textContent==='En el hilo');
     await waitFor(()=>!button('Marcar vista como leída').disabled);
     button('Marcar vista como leída').click();await waitFor(()=>pendingCount()===0);
     const opened=deepLoads;input(document.querySelector('#slack_message'),'No reabrir por cada envío');await settle();submit();await waitFor(()=>document.querySelector('#slack_message').value==='');
@@ -326,23 +434,34 @@ try {
     // is selected or another channel's message did not fetch this list again.
     core.slack={unread:{ready:true,total:9,byChannel:{[channelId]:9},truncated:false}};root.render(React.createElement(Channels));await settle();
     assert.match(document.querySelector('.slack_sidebar nav button').getAttribute('aria-label'),/9 mensajes sin leer/);
+    assert.equal(document.querySelector('.slack_unread_badge').textContent,'9','the text-channel list uses the verified unread count');
     // Independent creation uses an actual null department, not the active unit.
+    document.querySelector('[aria-label="Abrir servidor Independientes"]').click();await settle();
+    await waitFor(()=>document.querySelector('.slack_sidebar h1')?.textContent==='Independientes');
     document.querySelector('[aria-label="Crear canal"]').click();await waitFor(()=>document.querySelector('.slack_editor'));
-    assert.equal(document.querySelector('.slack_editor select').value,"");
+    assert.match(document.querySelector('.slack_channel_editor > header p').textContent,/Independientes/);
+    assert.equal(document.querySelector('.slack_channel_editor .slack_server_context'),null,'server metadata must not use the floating context-menu class');
+    assert.equal(document.querySelector('.slack_channel_appearance').open,false,'optional appearance starts collapsed');
+    assert.ok(document.querySelector('.slack_access_fields.is_compact'));
+    assert.ok(!document.querySelector('.slack_channel_access_help').open);
     const independentName=[...document.querySelectorAll('.slack_editor label')].find(node=>node.textContent.startsWith('Nombre')).querySelector('input');
     input(independentName,'Espacio independiente');await settle();
+    document.querySelector('.slack_channel_appearance summary').click();await settle();
+    input(document.querySelector('.slack_channel_editor textarea'),'Acuerdos del equipo');await settle();
     document.querySelector('[aria-label="Usar color #9250A3"]').click();await settle();
+    document.querySelector('.slack_channel_appearance summary').click();await settle();
     document.querySelector('.slack_editor form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
     await waitFor(()=>!document.querySelector('.slack_editor'));
     assert.equal(channelCreates.at(-1).unit_id,null);
     assert.equal(channelCreates.at(-1).color,'#9250A3');
+    assert.equal(channelCreates.at(-1).description,'Acuerdos del equipo','collapsing optional fields preserves their values');
     assert.match(document.querySelector('.slack_header').textContent,/Sin departamento/);
     assert.match(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
-    const groupFilter=document.querySelector('.slack_sidebar select');groupFilter.value='independent';groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
-    assert.match(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
-    groupFilter.value=departmentId;groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
-    assert.doesNotMatch(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/);
-    groupFilter.value='';groupFilter.dispatchEvent(new Event('change',{bubbles:true}));await settle();
+    document.querySelector('[aria-label="Abrir servidor IT"]').click();await settle();
+    assert.doesNotMatch(document.querySelector('.slack_sidebar nav').textContent,/Espacio independiente/,'other servers never mix channels');
+    document.querySelector('[aria-label="Abrir servidor Independientes"]').click();await settle();
+    await waitFor(()=>document.querySelector('.slack_sidebar nav button'));
+    document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
     document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>document.querySelector('.slack_editor'));
     assert.equal(document.querySelector('.slack_editor select'),null,'editing an independent channel does not dereference its missing department');
     document.querySelector('[aria-label="Cerrar configuración"]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
@@ -387,8 +506,123 @@ try {
     input(document.querySelector('#slack_message'),'Borrador privado');await settle();
     core.authorizationRevision=1;root.render(React.createElement(Channels));await waitFor(()=>!document.querySelector('#slack_message'));
     assert.equal(document.querySelector('.slack_message'),null,'a resource-access revision purges history even without session uncertainty');
+    document.querySelector('[aria-label="Abrir servidor Independientes"]').click();await settle();
+    await waitFor(()=>document.querySelector('.slack_sidebar nav button'));
     document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
     assert.equal(document.querySelector('#slack_message').value,'','private drafts are not retained across revocation');
+    document.querySelector('[aria-label="Crear servidor privado"]').click();await waitFor(()=>document.querySelector('.slack_server_editor'));
+    input(document.querySelector('.slack_server_editor input'),'Proyecto reservado');await settle();
+    assert.equal(document.querySelector('.slack_server_editor select'),null,'private server creation never offers public visibility');
+    button('Crear servidor').click();await waitFor(()=>!document.querySelector('.slack_server_editor'));
+    await waitFor(()=>document.querySelector('[aria-label="Abrir servidor Proyecto reservado"]'));
+    assert.equal(serverCreates.length,1);assert.match(document.querySelector('.slack_sidebar h1').textContent,/Proyecto reservado/);
+    assert.equal(document.querySelector('.slack_sidebar nav button'),null,'private server starts with its own empty channel list');
+    document.querySelector('[aria-label="Crear canal"]').click();await waitFor(()=>document.querySelector('.slack_channel_editor'));
+    input([...document.querySelectorAll('.slack_editor label')].find(node=>node.textContent.startsWith('Nombre')).querySelector('input'),'general');await settle();
+    assert.equal(document.querySelector('.slack_channel_editor .slack_access_fields'),null,'server channels inherit invitations');
+    document.querySelector('.slack_channel_editor button[type=submit]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
+    assert.equal(channelCreates.at(-1).server_id,privateServers[0].id);assert.equal(channelCreates.at(-1).unit_id,null);
+    assert.equal(channelCreates.at(-1).visibility,'private');
+    await waitFor(()=>!document.querySelector('[aria-label="Hilos del canal"]').disabled);
+    document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(()=>button('Crear'));
+    button('Crear').click();await waitFor(()=>document.querySelector('.slack_thread_create'));
+    input(document.querySelector('.slack_thread_create input'),'Plan del lanzamiento');await settle();
+    failSend=true;document.querySelector('.slack_thread_create').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>document.querySelector('.slack_thread_create button')?.textContent==='Reintentar creación');
+    const threadAttempt=attempted.at(-1);failSend=false;
+    document.querySelector('.slack_thread_create').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>document.querySelector('.slack_thread_context')?.textContent.includes('Plan del lanzamiento'));
+    assert.equal(attempted.at(-1),threadAttempt,'a lost thread creation response preserves its send identifier');
+    assert.equal(rows.filter(row=>row.thread_title==='Plan del lanzamiento').length,1);
+    // Shared categories: blank-area context menu, retry identity and native drag/drop.
+    await waitFor(()=>button('Crear categoría'));
+    document.querySelector('.slack_categorized_channels').dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:120,clientY:200}));
+    await waitFor(()=>document.querySelector('.slack_organization_menu'));
+    [...document.querySelectorAll('.slack_organization_menu button')].find(node=>node.textContent==='Crear categoría').click();
+    await waitFor(()=>document.querySelector('.slack_category_form input'));
+    document.querySelector('.slack_category_form input').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+    await waitFor(()=>!document.querySelector('.slack_category_form'));
+    assert.equal(document.activeElement.textContent,'Crear categoría');
+    button('Crear categoría').click();await waitFor(()=>document.querySelector('.slack_category_form input'));
+    input(document.querySelector('.slack_category_form input'),'App BOLD');await settle();categoryCreateFails=true;
+    document.querySelector('.slack_category_form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>document.querySelector('.slack_category_form input')?.disabled && !document.querySelector('.slack_category_form button[type=submit]').disabled);
+    const categoryAttempt=categoryCreations.at(-1).client_id;categoryCreateFails=false;
+    document.querySelector('.slack_category_form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>!document.querySelector('.slack_category_form'));
+    assert.equal(categoryCreations.at(-1).client_id,categoryAttempt);
+    button('Crear categoría').click();await waitFor(()=>document.querySelector('.slack_category_form input'));
+    input(document.querySelector('.slack_category_form input'),'Reuniones');await settle();
+    document.querySelector('.slack_category_form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>document.querySelectorAll('.slack_category').length===2 && !document.querySelector('.slack_category_form'));
+    const firstCategory=document.querySelectorAll('.slack_category')[0],secondCategory=document.querySelectorAll('.slack_category')[1];
+    const firstId=firstCategory.dataset.category,secondId=secondCategory.dataset.category;
+    const dropUI=(source,target)=>{const transfer={setData(){},effectAllowed:'',dropEffect:''};for(const [node,type] of [[source,'dragstart'],[target,'dragover'],[target,'drop'],[source,'dragend']]){const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,'dataTransfer',{value:transfer});node.dispatchEvent(event);}};
+    assert.equal(document.querySelector('.slack_channel_item > button').getAttribute('draggable'),'true');
+    dropUI(document.querySelector('.slack_channel_item > button'),firstCategory);
+    await waitFor(()=>channel.category_id===firstId && document.querySelector(`[data-category="${firstId}"] .slack_channel_item`));
+    assert.equal(channelCategoryMoves.at(-1).values.category_id,firstId);
+    assert.ok(document.querySelector('.slack_thread_context'),'organizing preserves the open thread');
+    dropUI(secondCategory.querySelector('.slack_category_toggle'),firstCategory);
+    await waitFor(()=>document.querySelector('.slack_category').dataset.category===secondId && !document.querySelector('.slack_categorized_channels').getAttribute('aria-busy').includes('true'));
+    assert.ok(document.querySelector(`[data-category="${firstId}"] .slack_channel_item`),'category moves carry their channels');
+    assert.equal(categoryMoves.at(-1).values.before_id,firstId);
+    document.querySelector(`[data-category="${firstId}"] .slack_category_toggle`).click();await settle();
+    assert.ok(document.querySelector(`[data-category="${firstId}"] .slack_category_content`).hidden);
+    document.querySelector(`[aria-label="Opciones de categoría Reuniones"]`).click();await waitFor(()=>button('Bajar categoría'));
+    button('Bajar categoría').click();await waitFor(()=>document.querySelector('.slack_category').dataset.category===firstId);
+    document.querySelector(`[aria-label="Crear canal en App BOLD"]`).click();await waitFor(()=>document.querySelector('.slack_channel_editor'));
+    input([...document.querySelectorAll('.slack_editor label')].find(node=>node.textContent.startsWith('Nombre')).querySelector('input'),'dentro-de-categoria');await settle();
+    document.querySelector('.slack_channel_editor button[type=submit]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
+    assert.equal(channelCreates.at(-1).category_id,firstId);
+    document.querySelector(`[data-category="${firstId}"] .slack_category_header`).dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await waitFor(()=>button('Editar nombre'));
+    globalThis.__categoryName=null;button('Editar nombre').click();await settle();assert.equal(categoryEdits.length,0,'canceling rename writes nothing');
+    document.querySelector('[aria-label="Opciones de categoría App BOLD"]').click();await waitFor(()=>button('Editar nombre'));
+    globalThis.__categoryName='App renovada';button('Editar nombre').click();await waitFor(()=>document.querySelector('[aria-label="Opciones de categoría App renovada"]'));
+    assert.equal(categoryEdits.at(-1).values.name,'App renovada');assert.equal(channel.category_id,firstId,'rename keeps child channels in the same category');
+    document.querySelector('[aria-label="Opciones de categoría App renovada"]').click();await waitFor(()=>button('Eliminar categoría'));
+    globalThis.__channelsConfirm=false;button('Eliminar categoría').click();await settle();assert.equal(categoryDeletes.length,0,'canceling deletion keeps the category');
+    globalThis.__channelsConfirm=true;categoryDeleteFails=true;document.querySelector('[aria-label="Opciones de categoría App renovada"]').click();await waitFor(()=>button('Eliminar categoría'));button('Eliminar categoría').click();
+    await waitFor(()=>document.querySelector('.slack_categories_error'));assert.ok(document.querySelector(`[data-category="${firstId}"]`),'failed deletion preserves the category and its channels');
+    categoryDeleteFails=false;await waitFor(()=>!document.querySelector('[aria-label="Opciones de categoría App renovada"]').disabled);document.querySelector('[aria-label="Opciones de categoría App renovada"]').click();await waitFor(()=>button('Eliminar categoría'));button('Eliminar categoría').click();
+    await waitFor(()=>!document.querySelector(`[data-category="${firstId}"]`) && document.querySelector('.slack_uncategorized .slack_channel_item'));
+    assert.equal(channel.category_id,null);assert.ok(rows.length,'ungrouping does not remove channel messages');delete globalThis.__categoryName;
+
+    // Thread context menus are usable by keyboard, touch button and right click.
+    const menu=()=>[...document.querySelectorAll('.slack_thread_menu')].find(node=>!node.hidden);
+    const menuItem=text=>[...menu().querySelectorAll('button')].find(node=>node.textContent.trim()===text);
+    const openThreadMenu=async()=>{document.querySelector('.slack_thread_context .slack_thread_more').click();await waitFor(()=>menu());};
+    document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(()=>[...document.querySelectorAll('.slack_catalog_card')].some(node=>node.textContent.includes('Plan del lanzamiento')));
+    [...document.querySelectorAll('.slack_catalog_card')].find(node=>node.textContent.includes('Plan del lanzamiento')).click();await waitFor(()=>document.querySelector('.slack_thread_context .slack_thread_more'));
+    await waitFor(()=>!document.querySelector('#slack_message').disabled);
+    input(document.querySelector('#slack_message'),'Borrador que se conserva');await settle();
+    await openThreadMenu();menuItem('Cerrar hilo').click();await waitFor(()=>document.querySelector('.slack_thread_readonly'));
+    assert.ok(document.querySelector('#slack_message').disabled);assert.equal(document.querySelector('#slack_message').value,'Borrador que se conserva');
+    await openThreadMenu();menuItem('Reabrir hilo').click();await waitFor(()=>!document.querySelector('#slack_message').disabled);
+    assert.equal(document.querySelector('#slack_message').value,'Borrador que se conserva');
+    await openThreadMenu();menuItem('Bloquear hilo').click();await waitFor(()=>document.querySelector('.slack_thread_readonly')?.textContent.includes('bloqueado'));
+    await openThreadMenu();assert.ok(menuItem('Reabrir hilo').disabled);menuItem('Desbloquear hilo').click();await waitFor(()=>!menu());
+    await openThreadMenu();menuItem('Reabrir hilo').click();await waitFor(()=>!document.querySelector('#slack_message').disabled);
+    await openThreadMenu();menuItem('Editar hilo').click();await waitFor(()=>menu()?.querySelector('form input'));
+    input(menu().querySelector('input'),'Nuevo nombre del hilo');await settle();menu().querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    await waitFor(()=>document.querySelector('.slack_thread_context>div>strong').textContent.includes('Nuevo nombre del hilo'));
+    await openThreadMenu();preferenceFails=true;menuItem('Añadir a favoritos').click();await waitFor(()=>menu()?.querySelector('[role=alert]'));
+    const lostPreference=preferenceAttempts.at(-1);preferenceFails=false;menuItem('Reintentar cambio').click();await waitFor(()=>!menu());
+    assert.equal(preferenceAttempts.at(-1).client_id,lostPreference.client_id);
+    await openThreadMenu();assert.ok(menuItem('Quitar de favoritos'));menuItem('Silenciar hilo').click();await waitFor(()=>menuItem('1 hora'));menuItem('1 hora').click();await waitFor(()=>!menu());
+    await openThreadMenu();menuItem('Ajustes de notificaciones').click();await waitFor(()=>menuItem('Solo menciones'));menuItem('Solo menciones').click();await waitFor(()=>!menu());
+    await openThreadMenu();menuItem('Abandonar hilo').click();await waitFor(()=>!menu());
+    await openThreadMenu();assert.ok(menuItem('Volver al hilo'));menuItem('Marcar como leído').click();await waitFor(()=>!menu());
+    await openThreadMenu();menuItem('Eliminar hilo').click();await waitFor(()=>menu()?.getAttribute('role')==='alertdialog');
+    assert.ok(!document.querySelector('.slack_thread_readonly'),'delete must wait for confirmation');
+    menuItem('Confirmar eliminación').click();await waitFor(()=>document.querySelector('.slack_thread_readonly')?.textContent.includes('Eliminados'));
+    await openThreadMenu();menuItem('Restaurar hilo').click();await waitFor(()=>document.querySelector('.slack_thread_readonly')?.textContent.includes('cerrado'));
+    await openThreadMenu();menuItem('Reabrir hilo').click();await waitFor(()=>!document.querySelector('#slack_message').disabled);
+    document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(()=>document.querySelector('.slack_catalog_card'));
+    document.querySelector('.slack_thread_filters button[aria-pressed=false]').click();await settle();
+    [...document.querySelectorAll('.slack_catalog_card')].find(node=>node.textContent.includes('Nuevo nombre del hilo')).dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await waitFor(()=>menu());
+    menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'End',bubbles:true}));assert.equal(document.activeElement.textContent.trim(),'Volver al hilo');
+    menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await waitFor(()=>!menu());
     core.securityUncertain=true; root.render(React.createElement(Channels)); await settle();
     assert.equal(document.querySelector(".slack_message"),null);
     assert.match(document.querySelector('[role="status"]').textContent,/sesión autorizada/);

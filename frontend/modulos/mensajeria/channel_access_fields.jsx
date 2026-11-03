@@ -5,7 +5,7 @@ import {Dropdown, PersonIdentity, SearchField, DepartmentTag} from "./channel_pi
 import {invitePeople, personMatches} from "./channel_discovery.js";
 import {normalizeQuery} from "./messaging_models.js";
 
-export default function ChannelAccessFields({unit, channelId, visibility, members, onVisibility, onMembers, onBusyChange, disabled=false}) {
+export default function ChannelAccessFields({unit, channelId, visibility, members, onVisibility, onMembers, onBusyChange, disabled=false, privateServer=false,compact=false}) {
     const [query,setQuery]=useState(""),[people,setPeople]=useState([]),[departments,setDepartments]=useState([]),[next,setNext]=useState(null);
     const [error,setError]=useState(""),[loading,setLoading]=useState(false),[bulk,setBulk]=useState(null),[notice,setNotice]=useState("");
     const [open,setOpen]=useState(false),[tab,setTab]=useState("people"),[memberQuery,setMemberQuery]=useState("");
@@ -44,12 +44,14 @@ export default function ChannelAccessFields({unit, channelId, visibility, member
         finally{if(bulkRequest.current===controller){bulkRequest.current=null;if(!controller.signal.aborted){setBulk(null);onBusyChange?.(false);}}}
     }
     const locked=disabled || !!bulk;
-    return <fieldset className="slack_access_fields" disabled={locked}>
+    const accessHint=(visibility==="private" ? "Ni el propietario ni los administradores pueden leer sin una invitación. Al crear, se incluye al creador como invitado." : visibility==="department" ? "Entra el departamento de la asignación activa y las personas añadidas. Las excepciones individuales prevalecen." : "Puede entrar cualquier empleado, salvo las restricciones individuales y del módulo Permisos.")+" El acceso requiere Chat habilitado para la asignación activa.";
+    const ruleHint=privateServer ? "Quitar a una persona retira su acceso a todos los canales del servidor. El creador conserva la administración. Máximo 200 personas, incluido el creador." : "Quitar una excepción restaura la regla general; en un canal privado retira la invitación. «Sin acceso» siempre bloquea la lectura. Máximo 200 personas, incluido el creador.";
+    return <fieldset className={`slack_access_fields ${compact ? 'is_compact':''}`} disabled={locked}>
         <legend>Privacidad y participación</legend>
-        <label>Quién puede entrar<select value={visibility} onChange={event=>onVisibility(event.target.value)}>
+        {!privateServer && <label>Quién puede entrar<select value={visibility} onChange={event=>onVisibility(event.target.value)}>
             <option value="public">Todos los empleados</option>{unit && <option value="department">Departamento e invitados</option>}<option value="private">Solo personas invitadas</option>
-        </select></label>
-        <p className="slack_access_hint">{visibility==="private" ? "Ni el propietario ni los administradores pueden leer sin una invitación. Al crear, se incluye al creador como invitado." : visibility==="department" ? "Entra el departamento de la asignación activa y las personas añadidas. Las excepciones individuales prevalecen." : "Puede entrar cualquier empleado, salvo las restricciones individuales y del módulo Permisos."} El piloto sigue limitado a IT.</p>
+        </select></label>}
+        <p className="slack_access_hint">{compact ? visibility==='private' ? 'Solo invitados. Te añadimos al crear el canal.':visibility==='department' ? 'Tu departamento y las personas que invites.':'Todos los empleados con acceso a Chat.':accessHint}</p>
         <Dropdown label={<><UserPlus size={18} aria-hidden="true"/>Invitar personas</>} open={open} onToggle={setOpen} disabled={locked}>
             <div className="slack_picker_tabs" role="group" aria-label="Tipo de invitación"><button type="button" aria-pressed={tab==="people"} onClick={()=>{setTab("people");setQuery("");}}><Users size={16} aria-hidden="true"/>Personas</button><button type="button" aria-pressed={tab==="departments"} onClick={()=>{setTab("departments");setQuery("");}}><Building2 size={16} aria-hidden="true"/>Departamentos</button></div>
             <SearchField label={tab==="people" ? "Buscar persona" : "Buscar departamento a invitar"} placeholder={tab==="people" ? "Nombre, correo o departamento" : "Nombre del departamento"} value={query} onChange={setQuery} autoFocus/>
@@ -57,18 +59,18 @@ export default function ChannelAccessFields({unit, channelId, visibility, member
                 {loading && <small role="status">Buscando…</small>}
                 {tab==="people" ? <>{people.map(person=>{const added=members.some(row=>row.employee_id===person.employee_id);return <button type="button" data-picker-option key={person.employee_id} aria-label={added ? `${person.name}, ya añadido` : `Añadir a ${person.name}`} disabled={added || locked || members.length>=200} onClick={()=>{try{add([person]);}catch(err){setError(err.message);}}}><PersonIdentity person={person}/>{added ? <Check size={17} aria-hidden="true"/> : <UserPlus size={17} aria-hidden="true"/>}</button>;})}{!loading && !people.length && <p>No se encontraron personas activas.</p>}{next && <button type="button" disabled={loading || locked} onClick={more}>Cargar más personas</button>}</> : <>{departments.filter(row=>normalizeQuery(row.name).includes(normalizeQuery(query))).map(row=><button type="button" data-picker-option key={row.id} disabled={locked} onClick={()=>inviteDepartment(row)} aria-label={`Invitar departamento ${row.name}`}><Building2 size={22} aria-hidden="true"/><span className="slack_person_identity"><DepartmentTag department={row}/><small>{row.count} {row.count===1 ? "persona activa" : "personas activas"}</small></span><UserPlus size={18} aria-hidden="true"/></button>)}{!loading && !departments.some(row=>normalizeQuery(row.name).includes(normalizeQuery(query))) && <p>No hay departamentos coincidentes.</p>}</>}
             </div>
-            {tab==="departments" && <p className="slack_access_hint">Añade a las personas activas actuales. No incluye futuros miembros ni cambia las reglas ya asignadas. Invitar no amplía el piloto fuera de IT.</p>}
+            {tab==="departments" && <p className="slack_access_hint">Añade a las personas activas actuales. No incluye futuros miembros ni cambia las reglas ya asignadas. Invitar no habilita Chat para una asignación que no lo tenga permitido.</p>}
         </Dropdown>
         {bulk && <p role="status">Preparando invitaciones del departamento…</p>}
         {notice && <p className="slack_access_feedback" role="status">{notice}</p>}
         {error && <p className="slack_error" role="alert">{error}</p>}
-        <Dropdown label={<><Users size={18} aria-hidden="true"/>Personas con acceso o excepción ({members.length})</>} disabled={locked}>
+        {(!compact || members.length>0) && <Dropdown label={<><Users size={18} aria-hidden="true"/>Personas con acceso o excepción ({members.length})</>} disabled={locked}>
             <SearchField label="Buscar persona invitada" value={memberQuery} onChange={setMemberQuery} placeholder="Nombre, correo o departamento" autoFocus/>
             <ul className="slack_access_members" aria-label="Excepciones e invitaciones">
-                {members.filter(person=>personMatches(person,memberQuery)).map(person=><li key={person.employee_id}><div className="slack_person_row"><PersonIdentity person={person}/></div><div className="slack_member_actions"><label><span className="slack_sr_only">Acceso de {person.name || "empleado"}</span><select aria-label={`Acceso de ${person.name || "empleado"}`} value={person.access} onChange={event=>onMembers(members.map(row=>row.employee_id===person.employee_id ? {...row,access:event.target.value} : row))}><option value="write">Leer y participar</option><option value="read">Solo lectura</option><option value="blocked">Sin acceso</option></select></label><button type="button" aria-label={`Quitar excepción de ${person.name || "empleado"}`} onClick={()=>onMembers(members.filter(row=>row.employee_id!==person.employee_id))}><X size={17} aria-hidden="true"/></button></div></li>)}
+                {members.filter(person=>personMatches(person,memberQuery)).map(person=><li key={person.employee_id}><div className="slack_person_row"><PersonIdentity person={person}/></div><div className="slack_member_actions"><label><span className="slack_sr_only">Acceso de {person.name || "empleado"}</span><select aria-label={`Acceso de ${person.name || "empleado"}`} value={person.access} disabled={privateServer && person.owner} onChange={event=>onMembers(members.map(row=>row.employee_id===person.employee_id ? {...row,access:event.target.value} : row))}><option value="write">Leer y participar</option><option value="read">Solo lectura</option>{!privateServer && <option value="blocked">Sin acceso</option>}</select></label><button type="button" aria-label={`Quitar excepción de ${person.name || "empleado"}`} disabled={privateServer && person.owner} onClick={()=>onMembers(members.filter(row=>row.employee_id!==person.employee_id))}><X size={17} aria-hidden="true"/></button></div></li>)}
                 {!members.some(person=>personMatches(person,memberQuery)) && <li className="slack_members_empty">{members.length ? "No hay personas coincidentes." : "Aún no has añadido invitaciones ni excepciones."}</li>}
             </ul>
-        </Dropdown>
-        <small>Quitar una excepción restaura la regla general; en un canal privado retira la invitación. «Sin acceso» siempre bloquea la lectura. Máximo 200 personas, incluido el creador.</small>
+        </Dropdown>}
+        {compact ? <details className="slack_channel_access_help"><summary>Reglas de acceso</summary><p>{accessHint}</p><p>{ruleHint}</p></details>:<small>{ruleHint}</small>}
     </fieldset>;
 }

@@ -8,6 +8,7 @@ from boldApp.core.models import UserAccount, JobRole
 from boldApp.autenticacion.models import PrivateNote
 from boldApp.tareas.models import Project, Task, Comment, Attachment
 from boldApp.sugerencias.models import Suggestion
+from boldApp.mensajeria.models import ServerIcon
 from boldApp.workspace.image_storage import IMAGE_FIELDS, resource_key, storage_user, store_instance_images, task_path, rename_instance_folders
 from boldApp.workspace.models import ImageStorageRoot, ImageDocument
 
@@ -17,6 +18,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=0, help="Máximo de registros con imágenes por ejecución; 0 procesa todos.")
+        parser.add_argument("--server-icons-only", action="store_true", help="Migrar solo iconos de servidores de Slack.")
 
     def handle(self, *args, **options):
         root = ImageStorageRoot.objects.filter(active=True).select_related("user").first()
@@ -24,7 +26,8 @@ class Command(BaseCommand):
             raise CommandError("Primero selecciona la carpeta en Administración → Conectores → Almacenamiento de imágenes.")
         storage_user(root)
         completed, failures = 0, 0
-        for model in (UserAccount, Project, Task, Comment, Attachment, Suggestion, PrivateNote, JobRole, ImageDocument):
+        models = (ServerIcon,) if options["server_icons_only"] else (UserAccount, Project, Task, Comment, Attachment, Suggestion, PrivateNote, JobRole, ImageDocument, ServerIcon)
+        for model in models:
             for candidate in model.objects.order_by("pk").iterator(chunk_size=100):
                 kind, _ = resource_key(candidate)
                 fields = IMAGE_FIELDS[kind]

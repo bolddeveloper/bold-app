@@ -5,7 +5,7 @@ import InternalTabs from "./internal_tabs.jsx";
 import GoogleEmbedViewer from "./google_embed_viewer.jsx";
 import "./published_view.css";
 import { useEffect, useRef, useState } from "react";
-import { FileText, Sheet, Presentation, Plus, Upload } from "lucide-react";
+import { FileText, Sheet, Presentation, Plus, Upload, CheckCircle2, Info, X } from "lucide-react";
 import { workspaceApi } from "./workspace_api.js";
 import GoogleConnection from "./google_connection.jsx";
 import "./workspace.css";
@@ -14,12 +14,14 @@ import DriveModule, { DriveFolderPicker, DriveUploadDialog } from "./drive_modul
 import { useShell } from "../core/app_shell.jsx";
 import WorkspaceEditor from "./workspace_editor.jsx";
 import {officeUploadAccept, officeUploadError} from "./office_files.js?docs-uploads";
+import "./docs_workspace_v3.css";
 
 const kinds = { docs: ["Documentos", FileText, "#4285f4"], sheets: ["Hojas de cálculo", Sheet, "#0f9d58"], slides: ["Presentaciones", Presentation, "#e5a900"] };
+const descriptions = {docs: "Redacta y organiza ideas con tu equipo.", sheets: "Trabaja con datos, fórmulas y tablas.", slides: "Prepara presentaciones para tus proyectos."};
 export const fileKind = mime => Object.keys(kinds).find(kind => mime === `application/vnd.google-apps.${{ docs: "document", sheets: "spreadsheet", slides: "presentation" }[kind]}`);
 
 export default function WorkspaceModule({ mode = "drive" }) {
-    return mode === "drive" ? <DriveModule/> : <DocsModule mode={mode}/>;
+    return mode === "drive" ? <DriveModule/> : <div className="docs_workspace_v3"><DocsModule mode={mode}/></div>;
 }
 function DocsHome({ creationRequest }) {
     const shell = useShell();
@@ -53,24 +55,24 @@ function DocsHome({ creationRequest }) {
         } catch (problem) {setError(problem.message);}
         finally {mutation.current = false; setWorking(false);}
     }
-    return <section className="workspace_module">
+    return <section className="workspace_module docs_home">
         {fileDrop && <div className="drive_drop_hint" role="status"><Upload size={36}/><strong>Suelta aquí para subir</strong><span>Solo Word, Excel y PowerPoint · Luego elige la carpeta</span></div>}
-        {connection?.connected && <p className="docs_drop_tip"><Upload size={16}/>Arrastra archivos de Word, Excel o PowerPoint aquí</p>}
         <input ref={uploadInput} type="file" hidden multiple accept={officeUploadAccept} onChange={event => {const items = Array.from(event.target.files || []); event.target.value = ""; receiveFiles(items);}}/>
         {droppedFiles && <DriveUploadDialog items={droppedFiles} connection={connection} close={() => setDroppedFiles(null)}/>}
-        <header className="workspace_header"><div><h1>Docs</h1><p>Documentos, hojas de cálculo y presentaciones dentro de BOLD</p></div><span className="workspace_account_email" aria-label="Cuenta Google conectada">{connection?.email || "Sin cuenta Google conectada"}</span></header>
+        <header className="workspace_header"><div><h1>Docs</h1><p>Documentos, hojas de cálculo y presentaciones dentro de BOLD.</p></div><div className="workspace_header_actions"><span className="workspace_account_email" aria-label="Cuenta Google conectada">{connection?.connected && <CheckCircle2 size={15}/>}<span>{connection?.email || "Sin cuenta Google conectada"}</span></span>{connection?.connected && <button className="docs_upload" disabled={working || !!createType || !!droppedFiles} onClick={() => uploadInput.current.click()}><Upload size={16}/>Subir archivo</button>}</div></header>
         {error && !createType && <p className="workspace_error" role="alert">{error}</p>}
         {!connection ? <p>Comprobando conexión…</p> : !connection.connected ? <GoogleConnection onConnected={result => {setConnection(result); shell.sync_workspace_account(result);}}/> : <div className="workspace_types">
-            {Object.entries(kinds).map(([id, [label, Icon, color]]) => <article key={id}><Icon size={32} style={{color}}/><h2>{label}</h2><button disabled={working} onClick={() => {setError(""); setCreateName("Sin título"); setCreateType(id);}}><Plus size={16}/>Crear {label.toLowerCase()}</button><button disabled={working || !!createType || !!droppedFiles} onClick={() => uploadInput.current.click()}><Upload size={16}/>Subir archivo</button></article>)}
+            {Object.entries(kinds).map(([id, [label, Icon, color]]) => <article key={id}><span className="workspace_type_icon"><Icon size={25} style={{color}}/></span><h2>{label}</h2><p>{descriptions[id]}</p><button disabled={working} onClick={() => {setError(""); setCreateName("Sin título"); setCreateType(id);}}><Plus size={16}/>Crear {label.toLowerCase()}</button></article>)}
         </div>}
+        {connection?.connected && <p className="docs_drop_tip"><Upload size={15}/>También puedes arrastrar archivos de Word, Excel o PowerPoint y elegir su carpeta en Drive.</p>}
         <DocsDevelopmentNotice/>
-        {createType && createPortal(<div className="workspace_overlay"><section className="workspace_dialog docs_create_dialog" role="dialog" aria-modal="true" aria-label="Crear archivo Google"><h2>Crear {kinds[createType][0].toLowerCase()}</h2>{error && <p role="alert">{error}</p>}<form onSubmit={event => event.preventDefault()}><label>Nombre<input disabled={working} value={createName} onChange={event => setCreateName(event.target.value)} maxLength={255} required/></label><p>Elige dónde guardar el archivo en Drive.</p><DriveFolderPicker label="Crear aquí" disabled={working || !createName.trim()} submit={submitCreate}/><button disabled={working} type="button" onClick={() => setCreateType("")}>Cancelar</button></form></section></div>, document.getElementById("bold-overlay-root") || document.body)}
+        {createType && createPortal(<div className="workspace_overlay"><section className="workspace_dialog docs_create_dialog" role="dialog" aria-modal="true" aria-label="Crear archivo Google"><header className="docs_create_header"><h2>Crear {kinds[createType][0].toLowerCase()}</h2><button type="button" aria-label="Cerrar creación de archivo" disabled={working} onClick={() => setCreateType("")}><X size={18}/></button></header>{error && <p role="alert">{error}</p>}<form onSubmit={event => event.preventDefault()}><label>Nombre<input disabled={working} value={createName} onChange={event => setCreateName(event.target.value)} maxLength={255} required/></label><p>Elige dónde guardar el archivo en Drive.</p><DriveFolderPicker label="Crear aquí" disabled={working || !createName.trim()} submit={submitCreate}/><button disabled={working} type="button" onClick={() => setCreateType("")}>Cancelar</button></form></section></div>, document.getElementById("bold-overlay-root") || document.body)}
     </section>;
 }
 
 // Pestañas conservadas por el shell al cambiar entre módulos.
 function DocsDevelopmentNotice() {
-    return <aside className="docs_development_notice" role="note"><p><strong>Se está trabajando en este módulo.</strong><span>Se recomienda crear y abrir en Google desde la vista del editor, arriba a la derecha.</span></p><img src="/bold-loader.svg" alt="" aria-hidden="true" width="210" height="122"/></aside>;
+    return <aside className="docs_development_notice" role="note"><Info size={17} aria-hidden="true"/><p><strong>Se está trabajando en este módulo.</strong><span>Se recomienda crear y abrir en Google desde la vista del editor, arriba a la derecha.</span></p></aside>;
 }
 
 function DocsModule({ mode }) {

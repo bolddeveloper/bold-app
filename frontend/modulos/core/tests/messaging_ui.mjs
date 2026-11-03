@@ -8,7 +8,7 @@ import {installMessagingFixture} from "./messaging_fixture.js";
 const replacements = [
     ["/core/core_provider.jsx", "export const useCore = () => globalThis.__messagingCore;"],
     ["/core/app_shell.jsx", "export const useShell = () => globalThis.__messagingShell;"],
-    ["/core/http_client.js", "export const is_using_real_backend = () => true; export const http = {request: async () => {throw Error('No network in fixture');}};"],
+    ["/core/http_client.js", "export const is_using_real_backend = () => true; export const api_base_url='http://127.0.0.1:5186'; export const http = {request: async () => {throw Error('No network in fixture');}};"],
     ["/mensajeria/messaging_api.js", "export const messagingApi = globalThis.__messagingApi;"],
     ["/mensajeria/draft_service.js", "export const draftService={purge:async()=>{},open:async()=>({recover:async()=>null,save:async()=>true,clear:async()=>true,isActive:()=>true,close:()=>{}})};"],
     ["/core/shared/bold_dialog.js", "export const confirmBold=async()=>globalThis.__messagingConfirm !== false; export const promptBold=async()=>null;"],
@@ -16,21 +16,22 @@ const replacements = [
 ];
 const server = await createServer({configFile: false, plugins: [{name: "isolated-messaging", enforce: "pre", transform(_, id) {
     return replacements.find(([suffix]) => id.replaceAll("\\", "/").endsWith(suffix))?.[1];
-}}], resolve: {dedupe: ["react", "react-dom", "lucide-react"]}, esbuild: {jsx: "automatic", jsxImportSource: "react"}, cacheDir: path.join(os.tmpdir(), "bold-messaging-ui"),
-    optimizeDeps: {noDiscovery: true, include: process.argv.includes("--serve") ? ["react", "react/jsx-dev-runtime", "react/jsx-runtime", "react-dom", "react-dom/client", "lucide-react"] : [], entries: []}, server: process.argv.includes("--serve") ? {port: 5186, host: "127.0.0.1", strictPort: true, fs: {allow: [path.resolve("..")]}} : {middlewareMode: true, hmr: false}, appType: "custom"});
+}}], resolve: {dedupe: ["react", "react-dom", "lucide-react", "qrcode"]}, esbuild: {jsx: "automatic", jsxImportSource: "react"}, cacheDir: path.join(os.tmpdir(), "bold-messaging-ui"),
+    optimizeDeps: {noDiscovery: true, include: process.argv.includes("--serve") ? ["react", "react/jsx-dev-runtime", "react/jsx-runtime", "react-dom", "react-dom/client", "lucide-react", "qrcode"] : [], entries: []}, server: process.argv.includes("--serve") ? {port: 5186, host: "127.0.0.1", strictPort: true, fs: {allow: [path.resolve("..")]}} : {middlewareMode: true, hmr: false}, appType: "custom"});
 
 if (process.argv.includes("--serve")) {
     // Serve a transformed HTML entry so Vite rewrites the bare module imports.
     server.middlewares.use(async (request, response, next) => {
         if (request.url.split("?")[0] !== "/") return next();
-        const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOLD · Prueba aislada</title><style>body{margin:0}#root{padding-top:4px}.messaging_module{height:calc(100dvh - 32px)!important}</style></head><body><div id="root"></div><script type="module">
+        const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>BOLD · Prueba aislada</title><style>body{margin:0}#preview-tools{height:32px;display:flex;gap:8px;align-items:center;padding:0 8px;font:11px sans-serif}#preview-tools button{font:inherit}#root{min-height:0;height:calc(100dvh - 32px)}#root :is(.messaging_module,.slack_module){height:calc(100dvh - 44px)!important}</style></head><body><div id="preview-tools">Prueba aislada · Datos ficticios <button id="preview-typing">Simular escritura</button><button id="preview-theme">Claro / oscuro</button></div><div id="root" class="bold_v3"></div><script type="module">
             import React from 'react'; import {createRoot} from 'react-dom/client';
             import {installMessagingFixture} from '/tests/messaging_fixture.js';
             import '/@fs/${path.resolve("../tareas/src/styles.css").replaceAll("\\", "/")}';
             import '/@fs/${path.resolve("../tareas/src/theme_rework.css").replaceAll("\\", "/")}';
-            import '/app_shell.css'; import '/shared/presence.css';
-            installMessagingFixture(); if (location.search.includes('dark')) document.body.classList.add('theme_dark');
-            const {default: Messaging} = await import('/@fs/${path.resolve("../mensajeria/messaging_module.jsx").replaceAll("\\", "/")}');
+            import '/app_shell.css'; import '/shared/presence.css'; import '/design_v3.css';
+            const demo=installMessagingFixture(); const {prepareChatPreview}=await import('/tests/fixtures/chat_preview.js'); prepareChatPreview(demo); if (location.search.includes('dark')) document.documentElement.classList.add('theme_dark');
+            const slack=location.search.includes('slack'); if(slack){const {prepareSlackPreview}=await import('/tests/fixtures/slack_preview.js');prepareSlackPreview(demo);}
+            const {default: Messaging} = await import(slack ? '/@fs/${path.resolve("../mensajeria/channel_module.jsx").replaceAll("\\", "/")}' : '/@fs/${path.resolve("../mensajeria/messaging_module.jsx").replaceAll("\\", "/")}');
             createRoot(document.getElementById('root')).render(React.createElement(Messaging));
         </script></body></html>`;
         response.setHeader("Content-Type", "text/html; charset=utf-8"); response.end(await server.transformIndexHtml("/", html));
@@ -57,6 +58,11 @@ if (process.argv.includes("--serve")) {
     };
     const input = text => {const field = document.querySelector("textarea"); Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value").set.call(field, text); field.dispatchEvent(new Event("input", {bubbles: true}));};
     const submit = () => document.querySelector("form").dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+    async function clickMessageAction(button){
+        const menu=button.closest('.messaging_message_menu');
+        if(menu?.hidden){menu.closest('.messaging_bubble').querySelector('.messaging_message_menu_trigger').click();await settle();}
+        button.click();await settle();
+    }
     async function addPeerMention(){
         const field=document.querySelector('textarea');field.setSelectionRange(field.value.length,field.value.length);
         document.querySelector('[aria-label="Mencionar a una persona"]').click();await waitFor(()=>document.querySelector('.slack_mention_picker input'));
@@ -70,6 +76,105 @@ if (process.argv.includes("--serve")) {
     try {
         root.render(React.createElement(Messaging)); await waitFor(() => document.querySelectorAll(".messaging_message").length === 2);
         console.log("Messaging DOM: conversation rendered; checking interactions…");
+        const employeeQuery=value=>{const field=document.querySelector('[aria-label="Buscar empleado"]');Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(field,value);field.dispatchEvent(new Event('input',{bubbles:true}));};
+        document.querySelector('[aria-label="Nuevo chat"]').click();await settle();employeeQuery('ána');await settle();
+        const restrictedPerson=document.querySelector('.messaging_chat_row');
+        assert.match(restrictedPerson.textContent,/Ana de prueba.*Chat no habilitado/);
+        assert.equal(restrictedPerson.disabled,true,'employees outside the pilot are visible but cannot receive new chats');
+        const opens=fixture.calls.filter(value=>value==='open').length;restrictedPerson.click();await settle();
+        assert.equal(fixture.calls.filter(value=>value==='open').length,opens,'showing a directory match does not expand chat permissions');
+        employeeQuery('fixture.peer@bold.gt');await settle();
+        assert.equal(document.querySelectorAll('.messaging_chat_row').length,1);
+        assert.equal(document.querySelector('.messaging_chat_row').disabled,false,'authorized people can be found by email');
+        employeeQuery('Destino de prueba');await settle();
+        assert.equal(document.querySelector('.messaging_chat_row').disabled,false,'directory-only people remain available without online presence');
+        employeeQuery('sin coincidencias');await settle();assert.match(document.querySelector('.messaging_chat_list').textContent,/Prueba con nombre o correo/);
+        document.querySelector('[aria-label="Ver conversaciones"]').click();await settle();
+        const messageTrigger=document.querySelector('.messaging_message_menu_trigger'),messageMenu=document.querySelector('.messaging_message_menu');
+        assert.equal(messageMenu.hidden,true,'message actions do not occupy the bubble until opened');
+        assert.equal(document.querySelector('.messaging_bubble > header button'),null,'message headers keep only the author');
+        messageTrigger.click();await settle();assert.equal(messageMenu.hidden,false);
+        assert.equal(document.activeElement,messageMenu.querySelector('button'),'keyboard focus enters the action list');
+        messageMenu.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await settle();
+        assert.equal(document.activeElement,messageMenu.querySelectorAll('button')[1]);
+        messageMenu.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await settle();
+        assert.equal(messageMenu.hidden,true);assert.equal(document.activeElement,messageTrigger);
+        assert.equal(document.querySelectorAll('.messaging_quick_actions button').length,3);
+        assert.equal(document.querySelectorAll('.messaging_composer_actions > button').length,4,'options, record, emojis and send stay on the composer bar');
+        const emojiButton=document.querySelector('[aria-label="Insertar emoji"]');
+        assert.equal(emojiButton.previousElementSibling.getAttribute('aria-label'),'Grabar nota de voz','emojis sit beside the microphone');
+        const optionsButton=document.querySelector('button[aria-label="Opciones del mensaje"]');
+        optionsButton.click();await settle();assert.equal(optionsButton.getAttribute('aria-expanded'),'true');
+        assert.equal(document.querySelector('.messaging_composer_options [aria-label="Insertar emoji"]'),null,'the attachment menu no longer duplicates emojis');
+        document.querySelector('.messaging_composer_options').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();
+        assert.equal(optionsButton.getAttribute('aria-expanded'),'false');assert.equal(document.activeElement,optionsButton);
+        window.dispatchEvent(new CustomEvent('bold:messaging-event',{detail:{event_type:'messaging.typing',payload:{conversation_id:'another-chat'}}}));await settle();
+        assert.equal(document.querySelector('.messaging_typing'),null,'typing from another chat stays private');
+        window.dispatchEvent(new CustomEvent('bold:messaging-event',{detail:{event_type:'messaging.typing',payload:{conversation_id:fixture.conversation.id}}}));await settle();
+        assert.match(document.querySelector('.messaging_peer').textContent,/Escribiendo/);
+        assert.match(document.querySelector('.messaging_stage_note').textContent,/Conversación privada/);
+        window.dispatchEvent(new CustomEvent('bold:messaging-event',{detail:{event_type:'messaging.message.created',payload:{conversation_id:fixture.conversation.id}}}));await settle();
+        assert.equal(document.querySelector('.messaging_typing'),null,'incoming messages stop the typing animation');
+        emojiButton.click();await waitFor(()=>document.querySelector('.messaging_emoji_dialog'));
+        assert.equal(document.querySelector('.messaging_dialog_scrim'),null,'emojis never dim the conversation');
+        assert.equal(document.querySelector('.messaging_emoji_dialog').getAttribute('aria-modal'),null);
+        assert.equal(document.querySelector('.messaging_conversation').hasAttribute('inert'),false);
+        document.querySelector('[aria-label="Buscar emoji"]').dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        await waitFor(()=>!document.querySelector('.messaging_emoji_dialog'));
+        assert.equal(document.activeElement,emojiButton,'Escape returns focus to the trigger');
+        emojiButton.click();await waitFor(()=>document.querySelector('.messaging_emoji_dialog'));
+        document.querySelector('#messaging_input').dispatchEvent(new Event('pointerdown',{bubbles:true}));
+        await waitFor(()=>!document.querySelector('.messaging_emoji_dialog'));
+        emojiButton.click();await waitFor(()=>document.querySelector('.messaging_emoji_dialog'));
+        const emojiSearch=document.querySelector('[aria-label="Buscar emoji"]');
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(emojiSearch,'crecimiento');emojiSearch.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+        assert.equal(document.querySelectorAll('.messaging_emoji_grid button').length,1);
+        document.querySelector('.messaging_emoji_grid button').click();await waitFor(()=>!document.querySelector('.messaging_emoji_dialog'));
+        assert.equal(document.querySelector('#messaging_input').value,'📈');assert.equal(fixture.calls.filter(call=>call==='send').length,0,'emoji selection never sends');input('');await settle();assert.equal(document.querySelector('#messaging_input').style.height,'','empty composer returns to its compact CSS height');
+        emojiButton.click();await waitFor(()=>document.querySelector('.messaging_emoji_dialog'));
+        assert.equal(document.querySelector('.messaging_emoji_group_title').textContent,'Recientes');
+        assert.equal(document.querySelector('.messaging_emoji_grid button').textContent,'📈','recent emojis stay available during the session');
+        document.querySelector('[aria-label="Trabajo"]').click();await settle();
+        assert.ok(document.querySelectorAll('.messaging_emoji_grid button').length>1,'category icons switch the emoji grid');
+        document.querySelector('[aria-label="Cerrar emojis"]').click();await waitFor(()=>!document.querySelector('.messaging_emoji_dialog'));
+        const beforeInline=fixture.calls.filter(call=>call==='mention-search').length,inlineSends=fixture.calls.filter(call=>call==='send').length;
+        input('persona@bold.gt');await settle();
+        assert.equal(document.querySelector('.messaging_mention_suggestions'),null,'ordinary email does not open mentions');
+        const composerField=document.querySelector('#messaging_input');composerField.focus();input('Hola @');
+        await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role="option"]').length===2);
+        assert.equal(document.activeElement,composerField,'typing keeps focus in the composer');
+        assert.equal(document.querySelector('.messaging_conversation').hasAttribute('inert'),false);
+        composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await settle();
+        assert.equal(document.querySelector('.messaging_mention_suggestions [aria-selected="true"]').textContent.includes('Persona de prueba'),true);
+        input('Hola @peer');await settle();
+        assert.equal(document.querySelectorAll('.messaging_mention_suggestions [role="option"]').length,1);
+        assert.equal(fixture.calls.filter(call=>call==='mention-search').length,beforeInline+1,'one authorized lookup, local filtering as you type');
+        assert.equal(composerField.getAttribute('aria-activedescendant'),document.querySelector('.messaging_mention_suggestions [role="option"]').id);
+        composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+        await waitFor(()=>!document.querySelector('.messaging_mention_suggestions'));
+        assert.equal(composerField.value,'Hola @fixture.peer@bold.gt ','selection replaces the typed @ and query');
+        assert.equal(fixture.calls.filter(call=>call==='send').length,inlineSends,'Enter chooses the person without sending');
+        let releaseInline;fixture.mentionDelay=new Promise(resolve=>{releaseInline=resolve;});input('@');
+        await waitFor(()=>fixture.calls.filter(call=>call==='mention-search').length===beforeInline+2);
+        composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        await waitFor(()=>!document.querySelector('.messaging_mention_suggestions'));
+        assert.equal(fixture.mentionSignal.aborted,true);
+        assert.equal(composerField.value,'@','Escape preserves the typed draft');
+        releaseInline({results:[{employee_id:'late',name:'Resultado tardío',email:'late@bold.gt',token:'@late@bold.gt'}]});fixture.mentionDelay=null;await settle();
+        assert.equal(document.querySelector('.messaging_mention_suggestions'),null,'late results cannot reopen the list');
+        input('');await settle();fixture.mentionError={status:500};input('@');
+        await waitFor(()=>document.querySelector('.messaging_mention_suggestions [role="alert"]'));
+        assert.equal(composerField.value,'@','a failed lookup preserves the draft');
+        fixture.mentionError=null;document.querySelector('.messaging_mention_suggestions [role="alert"] button').click();
+        await waitFor(()=>document.querySelectorAll('.messaging_mention_suggestions [role="option"]').length===2);
+        composerField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));input('');await settle();
+        document.querySelector('[aria-label="Configurar mensajería"]').click();await waitFor(()=>document.querySelector('.messaging_preferences_dialog input'));
+        const multiline=document.querySelector('[name="chat_enter"][value="newline"]');multiline.click();await settle();
+        document.querySelector('.messaging_preferences_dialog form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>fixture.enterBehavior==='newline' && !document.querySelector('.messaging_preferences_dialog fieldset').disabled);
+        document.querySelector('[aria-label="Cerrar preferencia de Enter"]').click();await waitFor(()=>!document.querySelector('.messaging_preferences_dialog'));
+        const restoredPreference=await globalThis.__messagingApi.savePreferences('send');window.dispatchEvent(new CustomEvent('bold:messaging-preferences',{detail:restoredPreference}));await settle();
+
+
         document.querySelector('.messaging_peer').click();await settle();
         [...document.querySelectorAll('button')].find(node=>node.textContent==='Archivos y enlaces').click();await waitFor(()=>document.querySelector('.resource_library'));
         assert.ok(document.querySelector('.messaging_conversation').hasAttribute('inert'));
@@ -133,7 +238,7 @@ if (process.argv.includes("--serve")) {
         assert.equal(document.querySelector("textarea").value, "No perder este borrador");
         assert.match(document.querySelector('[role="alert"]').textContent, /Conservamos tu texto/);
         fixture.failSend = false;
-        document.querySelector('[aria-label="Editar mi mensaje"]').click(); await settle(); input("Texto corregido"); await settle();
+        await clickMessageAction(document.querySelector('[aria-label="Editar mi mensaje"]')); await settle(); input("Texto corregido"); await settle();
         assert.equal(await addPeerMention(),'Texto corregido @fixture.peer@bold.gt ');
         submit(); await settle();
         assert.match(document.querySelector(".messaging_mine .messaging_text").textContent, /Texto corregido/);
@@ -190,11 +295,13 @@ if (process.argv.includes("--serve")) {
         assert.ok(document.querySelector('.messaging_audio > .messaging_audio_rate'),"speed shares the playback row instead of adding height below the waveform");
         assert.ok(!document.querySelector('.messaging_audio_meta button'),"duration metadata is a compact, non-interactive row");
         assert.ok(document.querySelector('[aria-label="Pausar nota de voz"]'),"one tap downloads and starts playback");
+        assert.ok(document.querySelector(".messaging_audio.is_playing"));
         assert.equal(decodes,1); assert.equal(contextClosed,1,"waveform decoding releases its audio context");
         const audioNode = document.querySelector('audio');
         Object.defineProperty(audioNode,"duration",{configurable:true,value:83});
         audioNode.dispatchEvent(new Event("loadedmetadata")); audioNode.currentTime=23; audioNode.dispatchEvent(new Event("timeupdate")); await settle();
         const seek = document.querySelector('[aria-label="Posición de la nota de voz"]');
+        assert.match(document.querySelector(".messaging_audio_meta").textContent,/0:23 \/ 1:23/);
         assert.equal(seek.disabled,false); assert.equal(seek.getAttribute('aria-valuetext'),"0:23 de 1:23");
         assert.ok(document.querySelector('.messaging_wave_bars i[data-played="true"]'));
         document.querySelector('[aria-label="Velocidad de reproducción: 1×"]').click(); await settle();
@@ -249,7 +356,7 @@ if (process.argv.includes("--serve")) {
         };
         root = createRoot(document.getElementById("root"));
         root.render(React.createElement(VoiceRecorder,{onReady:file=>{received=file;},onRecording:value=>{recording=value;},onError:value=>{recordingError=value;}})); await settle();
-        document.querySelector('[aria-label="Grabar nota de voz"]').click(); await settle(); assert.equal(recording,true);
+        document.querySelector('[aria-label="Grabar nota de voz"]').click(); await settle(); assert.equal(recording,true);assert.ok(document.querySelector(".messaging_recording.is_recording .messaging_recording_meter"));
         document.querySelector('[aria-label="Detener y escuchar grabación"]').click(); await settle();
         assert.equal(received.type,"audio/webm"); assert.equal(recording,false); assert.ok(tracksStopped>0); assert.equal(recordingError,"");
         received = null;
@@ -306,7 +413,7 @@ if (process.argv.includes("--serve")) {
         document.querySelector('[aria-label="Quitar imagen seleccionada"]').click(); await settle();
         assert.equal(document.querySelectorAll('.messaging_queue_thumb').length,2);
         const dropped = new Event("drop",{bubbles:true,cancelable:true}); Object.defineProperty(dropped,"dataTransfer",{value:{files:[three],types:["Files"]}});
-        document.querySelector('form').dispatchEvent(dropped); await settle(); assert.equal(document.querySelectorAll('.messaging_queue_thumb').length,3);
+        document.querySelector('.messaging_log').dispatchEvent(dropped); await settle(); assert.equal(document.querySelectorAll('.messaging_queue_thumb').length,3,'dropping on the conversation prepares the same bounded queue');
         input("Tercera descripción"); await settle();
         assert.equal(await addPeerMention(),'Tercera descripción @fixture.peer@bold.gt ');
         const beforeSend=fixture.mediaSends.length, beforeRows=fixture.getRows().length;
@@ -333,7 +440,7 @@ if (process.argv.includes("--serve")) {
         pickImages([one]); await settle(); input("Conservar al cancelar"); await settle();
         document.querySelector('[aria-label="Quitar todas las imágenes"]').click(); await settle();
         assert.equal(document.querySelector('textarea').value,"Conservar al cancelar");
-        const pasted = new Event("paste",{bubbles:true,cancelable:true}); Object.defineProperty(pasted,"clipboardData",{value:{files:[one,two]}});
+        const pasted = new Event("paste",{bubbles:true,cancelable:true}); Object.defineProperty(pasted,"clipboardData",{value:{items:[{kind:'file',getAsFile:()=>one},{kind:'file',getAsFile:()=>two}]}});
         document.querySelector('textarea').dispatchEvent(pasted); await settle();
         assert.equal(document.querySelectorAll('.messaging_queue_thumb').length,2,"paste supports multiple images without launching the editor");
         fixture.failMediaAt=fixture.mediaSends.length+1; fixture.failMediaStatus=400;
@@ -351,15 +458,15 @@ if (process.argv.includes("--serve")) {
         root=createRoot(document.getElementById("root")); root.render(React.createElement(Messaging));
         await waitFor(()=>document.querySelectorAll('[aria-label="Reenviar mensaje"]').length>0);
         input("Borrador independiente del reenvío"); await settle();
-        const forwardTrigger=document.querySelector('[aria-label="Reenviar mensaje"]'); forwardTrigger.focus(); forwardTrigger.click();
+        const forwardTrigger=document.querySelector('[aria-label="Reenviar mensaje"]'); await clickMessageAction(forwardTrigger);
         await waitFor(()=>document.querySelector('dialog[open] .messaging_forward_people'));
         assert.ok(document.activeElement===document.querySelector('dialog input[type="search"]'));
         assert.equal(document.querySelectorAll('dialog input[type="radio"]').length,1,"only another eligible IT employee is listed, not the source peer or disabled employees");
         assert.ok(!document.querySelector('dialog script'),"forward preview is escaped");
         assert.ok(document.querySelector('dialog button[type="submit"]').disabled);
         document.querySelector('dialog').dispatchEvent(new Event("cancel",{cancelable:true})); await settle();
-        assert.ok(!document.querySelector('dialog')); assert.ok(document.activeElement===forwardTrigger);
-        forwardTrigger.click(); await waitFor(()=>document.querySelector('dialog[open]'));
+        assert.ok(!document.querySelector('dialog')); assert.ok(document.activeElement===forwardTrigger.closest(".messaging_bubble").querySelector(".messaging_message_menu_trigger"));
+        await clickMessageAction(forwardTrigger); await waitFor(()=>document.querySelector('dialog[open]'));
         document.querySelector('dialog input[type="radio"]').click(); await settle();
         const sourceText=document.querySelector('.messaging_text').textContent, countBeforeForward=fixture.getRows().length;
         let finishForward; fixture.sendDelay=new Promise(resolve=>{finishForward=resolve;});
@@ -413,7 +520,7 @@ if (process.argv.includes("--serve")) {
         const ownRow=document.querySelector('.messaging_mine').closest('.messaging_message_row');
         const imageRow=document.querySelector('[aria-label="Reenviar imagen"]').closest('.messaging_message_row');
         const sourceCount=document.querySelectorAll('.messaging_message').length;
-        textRow.querySelector('[aria-label="Reenviar mensaje"]').click(); await waitFor(()=>document.querySelector('dialog[open]'));
+        await clickMessageAction(textRow.querySelector('[aria-label="Reenviar mensaje"]')); await waitFor(()=>document.querySelector('dialog[open]'));
         [...document.querySelectorAll('dialog button')].find(button=>button.textContent==="Seleccionar varios mensajes").click(); await settle();
         assert.ok(!document.querySelector('dialog')); assert.ok(document.querySelector('.messaging_selecting'));
         assert.ok(textRow.querySelector('input[type="checkbox"]').checked,"single forward can seed multi-select without sending anything");
@@ -454,7 +561,7 @@ if (process.argv.includes("--serve")) {
         assert.ok(document.querySelector('.messaging_selection_send').disabled,"empty selection cannot send");
         document.querySelector('.messaging_selection_bar').dispatchEvent(new dom.window.KeyboardEvent("keydown",{key:"Escape",bubbles:true})); await settle();
         assert.ok(!document.querySelector('.messaging_selecting')); assert.ok(document.activeElement===selectTrigger);
-        document.querySelector('[aria-label="Editar mi mensaje"]').click(); await settle(); input("Edición aún no enviada"); await settle();
+        await clickMessageAction(document.querySelector('[aria-label="Editar mi mensaje"]')); await settle(); input("Edición aún no enviada"); await settle();
         selectTrigger.click(); await settle();
         document.querySelector('[aria-label="Cancelar selección de mensajes"]').click(); await settle();
         assert.equal(document.querySelector('textarea').value,"Edición aún no enviada","selection does not discard an in-progress edit");
@@ -487,7 +594,7 @@ if (process.argv.includes("--serve")) {
         Object.defineProperty(documentField,'files',{configurable:true,value:[pausedFile]});documentField.dispatchEvent(new Event('change',{bubbles:true}));
         await waitFor(()=>document.querySelector('.messaging_media_draft'));submit();
         await waitFor(()=>document.querySelector('.messaging_upload_status button'));
-        assert.match(document.querySelector('.messaging_upload_status').textContent,/Esperando turno/);
+        assert.match(document.querySelector('.messaging_upload_status').textContent,/archivo sigue en tu dispositivo/);
         document.querySelector('.messaging_upload_status button').click();
         await waitFor(()=>!document.querySelector('.messaging_upload_status[aria-label="Estado del adjunto"]') && !document.querySelector('[type="submit"]').disabled);
         assert.equal(document.querySelector('#messaging_input').value,pausedAttempt.body);

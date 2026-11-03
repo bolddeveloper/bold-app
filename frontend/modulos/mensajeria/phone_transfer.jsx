@@ -73,6 +73,6 @@ export default function PhoneTransfer({target, onFiles, onClose}) {
         {row?.approved && <button type="button" disabled={busy || !row.images.length} onClick={receive}>{busy ? "Preparando imágenes…" : `Añadir ${row.images.length} al borrador y finalizar`}</button>}
         {error && <p role="alert">{error}</p>}
         {row && error && <button type="button" disabled={busy} onClick={() => run(async () => {const result = await phoneApi.status(row.id, {signal: controller.current.signal}); if (active.current) setRow(result);})}>Actualizar transferencia</button>}
-        <small>Hasta 10 imágenes. Nada se publica sin pulsar Enviar en BOLD. Cerrar cancela el vínculo y elimina las copias temporales.</small>
+        <small>Hasta 10 imágenes, guardadas de forma privada en Drive. Nada se publica sin pulsar Enviar en BOLD. Cerrar cancela el vínculo.</small>
     </section></div>;
 }

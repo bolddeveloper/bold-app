@@ -10,7 +10,7 @@ from .channel_views import SlackView
 from .media import BoundedUpload, MAX_BYTES, prepare
 from .serializers import StrictInputSerializer
 from .views import Conflict
-from .upload_outbox import rows, enqueue, manifest, wake,identity,TTL,QueueFull
+from .upload_outbox import rows, enqueue, manifest,identity,TTL,QueueFull,claim,perform
 
 
 class UploadInput(StrictInputSerializer):
@@ -73,7 +73,13 @@ class MediaUploadView(SlackView):
             if length.isdigit() and int(length)>MAX_BYTES+65536:
                 raise ValidationError('El archivo supera los 10 MB.')
             form=UploadInput(data=request.data);form.is_valid(raise_exception=True)
-            row,created=enqueue(request,kind,container,form.validated_data['client_id'],prepare(form.validated_data['file']))
+            prepared=prepare(form.validated_data['file'])
+            with transaction.atomic():
+                row,created=enqueue(request,kind,container,form.validated_data['client_id'],prepared)
+                lease=claim(row.pk)
+            if lease:
+                perform(row.pk,prepared['content'],lease=lease)
+                row=rows().get(pk=row.pk)
             return Response(manifest(row),status=202 if created else 200)
         form=UploadAction(data=request.data);form.is_valid(raise_exception=True)
         # Cancelling one's own staging is not a write into an archived/read-only
@@ -91,11 +97,9 @@ class MediaUploadView(SlackView):
             else:
                 if not isinstance(request.auth,AuthSession):
                     raise PermissionDenied('Se requiere una sesión autenticada.')
-                if row.state!='failed' or row.attempts>=6 or row.expires_at<=timezone.now() or not row.cipher_bytes:
+                if row.state!='failed' or row.attempts>=6 or row.expires_at<=timezone.now():
                     raise Conflict('La subida no admite otro reintento con este identificador.')
-                row.state='queued';row.cycle_attempts=0;row.next_at=timezone.now();row.session=request.auth;row.error_code=''
-                row.save(update_fields=['state','cycle_attempts','next_at','session','error_code','updated_at'])
-                transaction.on_commit(wake,robust=True)
+                raise Conflict('Reenvía el archivo desde el navegador con el mismo identificador. No se conserva una copia en el servidor.')
             from .upload_events import publish_upload_change
             publish_upload_change(row)
             return Response(manifest(row))

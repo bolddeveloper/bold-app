@@ -1,0 +1,93 @@
+:root .google_docs_module {min-width:0;padding:0;}
+:root .docs_workspace_v3 {min-width:0;padding:10px;color:var(--bold_text);}
+:root .workspace_module.docs_home {padding:0;min-width:0;}
+:root .docs_home .workspace_header {margin:0 0 12px;gap:12px;padding:10px 12px;border:1px solid var(--bold_line);background:var(--bold_surface);}
+:root .docs_home .workspace_header h1 {margin:0 0 4px;font-size:20px;line-height:1.2;}
+:root .docs_home .workspace_header p {font-size:12px;line-height:1.5;}
+:root .docs_home .workspace_header_actions {display:flex;align-items:center;gap:10px;min-width:0;}
+:root .docs_home .workspace_account_email {display:flex;align-items:center;gap:6px;max-width:240px;font-size:12px;overflow-wrap:anywhere;}
+:root .docs_home .workspace_account_email svg {color:var(--bold_red);flex:none;}
+:root .docs_home button {min-height:34px;padding:6px 10px;border-radius:0;font-size:12px;font-weight:500;}
+:root .docs_home .docs_upload {flex:none;background:var(--bold_red);color:#fff;border-color:var(--bold_red);}
+:root .docs_home .docs_upload:hover {background:var(--bold_red_dark,#bd2828);}
+:root .docs_home .docs_drop_tip {margin:10px 0;font-size:12px;}
+:root .docs_home .workspace_types {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:none;margin:0;}
+:root .docs_home .workspace_types article {display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface);box-shadow:0 3px 10px #00000009;min-width:0;transition:border-color 160ms,box-shadow 160ms;}
+:root .docs_home .workspace_types article:hover {border-color:var(--bold_muted);box-shadow:0 5px 16px #00000012;}
+:root .docs_home .workspace_type_icon {display:grid;place-items:center;width:40px;height:40px;background:var(--bold_surface_soft);border:1px solid var(--bold_line);}
+:root .docs_home .workspace_types h2 {font-size:16px;margin:0;}
+:root .docs_home .workspace_types p {margin:0 0 3px;font-size:12px;line-height:1.6;color:var(--bold_muted);}
+:root .docs_home .workspace_types button {margin-top:auto;width:auto;align-self:flex-start;}
+:root .google_internal_tabs {margin:0 0 10px;padding:5px;gap:5px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface);min-width:0;}
+:root .google_internal_tabs>div {min-width:0;overflow-x:auto;scrollbar-width:thin;}
+:root .google_internal_tabs button {min-height:34px;border-radius:0;font-size:12px;padding:6px 10px;color:var(--bold_text);}
+:root .google_internal_tabs [role=tab][aria-selected=true] {background:var(--bold_red);border-color:var(--bold_red);color:#fff;}
+:root .google_internal_tabs .google_file_tab {border-radius:0;min-width:0;}
+:root .google_internal_tabs .google_file_tab>button:first-child span {max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+:root .google_internal_tabs .google_file_tab>button:last-child {width:30px;padding:0;}
+:root .docs_development_notice {display:flex;flex-direction:row;align-items:flex-start;gap:9px;width:100%;max-width:none;margin:14px 0 0;padding:10px 12px;border:1px solid var(--bold_line);background:var(--bold_surface_soft);text-align:left;}
+:root .docs_development_notice>svg {flex:none;margin-top:2px;color:var(--bold_muted);}
+:root .docs_development_notice p {font-size:12px;line-height:1.6;}
+:root .docs_development_notice p span {margin-top:2px;}
+:root .docs_home .workspace_connection {max-width:none;padding:18px;border-radius:0;background:var(--bold_surface);}
+:root .docs_home .workspace_connection h2 {font-size:18px;}
+:root .docs_home .workspace_connection p {font-size:13px;}
+:root .workspace_dialog.docs_create_dialog {box-sizing:border-box;width:min(490px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:14px;border-radius:4px;background:var(--bold_surface);border:1px solid var(--bold_line);color:var(--bold_text);overflow:auto;}
+:root .workspace_overlay:has(>.docs_create_dialog) {box-sizing:border-box;padding:12px;display:flex;align-items:center;justify-content:center;}
+:root .docs_create_header {display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--bold_line);margin-bottom:12px;padding-bottom:10px;}
+:root .docs_create_header h2 {margin:0;font-size:16px;}
+:root .docs_create_header button {width:32px;height:32px;padding:0;border:0;background:transparent;}
+:root .docs_create_dialog form {gap:10px;margin:0;}
+:root .docs_create_dialog label {display:grid;gap:6px;font-size:12px;margin:0;}
+:root .docs_create_dialog input {box-sizing:border-box;width:100%;border-radius:3px;background:var(--bold_surface_soft);}
+:root .docs_create_dialog p {margin:0;font-size:12px;color:var(--bold_muted);}
+:root .docs_create_dialog :is(button,select) {border-radius:3px;min-height:34px;font-size:12px;}
+:root .docs_create_dialog form>button {align-self:flex-end;}
+:root .docs_create_dialog .drive_move_picker {display:grid;gap:8px;padding:0;}
+:root .docs_create_dialog .drive_destination_heading {margin:0;gap:8px;}
+:root .docs_create_dialog .drive_destination_heading strong {font-size:13px;}
+:root .docs_create_dialog .drive_destination_heading>svg {width:20px;height:20px;}
+:root .docs_create_dialog .drive_destination_heading select {background:var(--bold_surface_soft);color:var(--bold_text);border-color:var(--bold_line);}
+:root .docs_create_dialog .drive_destination_path {margin:0;min-width:0;}
+:root .docs_create_dialog .drive_destination_search {display:flex;flex-direction:row;align-items:center;gap:8px;margin:0;}
+:root .docs_create_dialog .drive_destination_search input {min-width:0;}
+:root .docs_create_dialog .drive_destination_folders {max-height:200px;border-radius:3px;border-color:var(--bold_line);}
+:root .docs_create_dialog .drive_destination_folders button {min-height:34px;padding:6px 8px;}
+:root .docs_create_dialog .drive_destination_folders button>svg {width:16px;height:16px;}
+:root .docs_workspace_v3 .google_embed_viewer {margin:0;padding:12px;border-radius:0;background:var(--bold_surface);border-color:var(--bold_line);}
+:root .docs_workspace_v3 .google_embed_viewer>header {gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+:root .docs_workspace_v3 .google_embed_viewer h1 {font-size:18px;overflow-wrap:anywhere;}
+:root .docs_workspace_v3 .workspace_button {border-radius:0;font-size:12px;}
+:root .docs_workspace_v3 .google_publish_help {border-radius:3px;}
+:root .docs_workspace_v3 .google_publish_help form {min-width:0;}
+:root .docs_workspace_v3 .google_publish_help textarea {box-sizing:border-box;max-width:100%;}
+:root .docs_workspace_v3 .bold_editor {margin:0;border-radius:0;}
+:root .docs_workspace_v3 .editor_header {gap:8px;padding:8px 10px;flex-wrap:wrap;}
+:root .docs_workspace_v3 .editor_header button,:root .docs_workspace_v3 .editor_google {border-radius:0;min-height:34px;font-size:12px;}
+:root .docs_workspace_v3 .editor_identity {min-width:0;}
+:root .docs_workspace_v3 .editor_identity input {font-size:16px;max-width:100%;}
+:root .docs_workspace_v3 .editor_menubar {min-width:0;gap:6px;flex-wrap:wrap;}
+@media(max-width:899px) {
+    :root .docs_workspace_v3 {padding:6px;}
+    :root .docs_home .workspace_header {flex-wrap:wrap;}
+    :root .docs_home .workspace_header_actions {width:100%;justify-content:space-between;}
+    :root .docs_home .workspace_types {gap:8px;}
+    :root .docs_home .workspace_types article {padding:12px;}
+}
+@media(max-width:600px) {
+    :root .docs_home .workspace_types {grid-template-columns:minmax(0,1fr);}
+    :root .docs_home .workspace_types article {display:grid;grid-template-columns:40px minmax(0,1fr);gap:6px 12px;}
+    :root .docs_home .workspace_type_icon {grid-column:1;grid-row:1 / 3;}
+    :root .docs_home .workspace_types h2,:root .docs_home .workspace_types p {grid-column:2;}
+    :root .docs_home .workspace_types button {grid-column:2;margin-top:3px;}
+    :root .docs_create_dialog input {font-size:16px;}
+    :root .docs_create_dialog .drive_destination_folders {max-height:180px;}
+    :root .docs_workspace_v3 .editor_identity {flex-basis:calc(100% - 100px);}
+    :root .docs_workspace_v3 .editor_header .editor_google {margin-left:0;}
+}
+@media(max-width:600px),(pointer:coarse) {
+    :root .docs_home button,:root .google_internal_tabs button,:root .docs_create_dialog :is(button,select),:root .docs_workspace_v3 .editor_header button {min-height:44px;}
+    :root .docs_create_dialog .drive_destination_folders button {min-height:44px;}
+    :root .docs_create_header button {width:44px;}
+}
+@media(prefers-reduced-motion:reduce) {:root .docs_home * {animation:none!important;transition:none!important;}}

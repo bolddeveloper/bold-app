@@ -27,9 +27,10 @@ export function createMessagingApi(client = http) {
         list: (next, options) => client.request(pagePath(root, next), options),
         open: (employee, options) => client.request(root, {...options, method: "POST", body: {employee_id: identity(employee)}}),
         detail: (conversation, options) => client.request(`${root}${identity(conversation)}/`, options),
+        typing: conversation => client.request(`${root}${identity(conversation)}/typing/`, {method:"POST",body:{}}),
         mentionPeople: (conversation, query, options) => {
             const term=typeof query==='string' ? query.trim():'';
-            if(term.length<2 || term.length>80)throw new Error('Escribe entre 2 y 80 caracteres para buscar una persona.');
+            if(typeof query!=='string' || term.length===1 || term.length>80)throw new Error('Escribe entre 2 y 80 caracteres para buscar una persona, o deja la búsqueda vacía para ver los participantes.');
             return client.request(`${root}${identity(conversation)}/mention-people/?${new URLSearchParams({q:term})}`,options);
         },
         messages: (conversation, next, options) => client.request(pagePath(messagesPath(conversation), next), options),

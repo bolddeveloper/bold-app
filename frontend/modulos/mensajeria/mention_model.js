@@ -1,5 +1,14 @@
+import {mentionAtCaret} from '../tareas/src/mentions.js';
+
 const tokenPattern=()=>/(?<![A-Za-z0-9._%+@-])(@[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,189}\.[A-Za-z]{2,24})(?![A-Za-z0-9_%+@-]|\.[A-Za-z0-9])/gi;
 const literalPattern=()=>/```[\s\S]*?```|`[^`\n]*`|[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+|mailto:\S+/gi;
+
+export function chatMentionAtCaret(body,start,end=start){
+    if(!Number.isSafeInteger(start) || start<0 || start>body.length || end!==start)return null;
+    const match=mentionAtCaret(body.slice(0,start));
+    if(!match || [...body.matchAll(literalPattern())].some(row=>row.index<=start-match.length && row.index+row[0].length>=start))return null;
+    return {query:match.query,start:start-match.length,end:start};
+}
 
 export function mentionParts(body,mentions=[]){
     const literals=[...body.matchAll(literalPattern())].map(match=>[match.index,match.index+match[0].length]);

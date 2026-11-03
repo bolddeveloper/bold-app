@@ -68,7 +68,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         visible_pages = [page.pk for page in ChannelPage.objects.select_related('channel__unit').filter(pk__in=page_ids)
             if all(policy.allows(code, page.channel.unit, page.channel_id) for code in PAGE_READ_CODES)]
         return base.select_related(
-            "actor_assignment__employee", "recipient_assignment", "task", "project"
+            "actor_assignment__employee__user_account", "recipient_assignment", "task", "project"
         ).filter(
             Q(task__isnull=True) | Q(task_id__in=visible_tasks),
         ).filter(
@@ -87,6 +87,14 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         if updated:
             dispatch_invalidation(request.assignment.pk)
         return Response({"updated": updated})
+
+    @action(detail=True, methods=["post"], url_path="dismiss")
+    def dismiss(self, request, pk=None):
+        notification = self.get_object()
+        notification.dismissed_at = timezone.now()
+        notification.save(update_fields=["dismissed_at"])
+        dispatch_invalidation(request.assignment.pk)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):

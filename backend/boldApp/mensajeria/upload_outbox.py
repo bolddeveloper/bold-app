@@ -1,8 +1,4 @@
-"""Durable media staging. Provider calls are forbidden inside DB transactions.
-
-Two steps: store normalized bytes privately, then publish with upload_id only
-after Drive confirms. No pending message/notification is exposed to a peer.
-"""
+"""Metadata-only upload intents. File bytes live in the browser, RAM and Drive."""
 import base64
 import hashlib
 import logging
@@ -87,8 +83,6 @@ def enqueue(request, kind, container, client_id, prepared):
     if not isinstance(request.auth,AuthSession):
         raise PermissionDenied('Se requiere una sesión autenticada para conservar una subida.')
     token = identity(kind,container.pk,request.user.pk,client_id)
-    # Normalize/validate/encrypt before taking the reservation mutex.
-    encoded = cipher().encrypt(prepared['content'])
     with transaction.atomic():
         # Publication and discard lock the container before the upload. Taking
         # this first also prevents quota/FK key-share deadlocks with discard.
@@ -103,13 +97,15 @@ def enqueue(request, kind, container, client_id, prepared):
                 return old,False
             if any(getattr(old,key)!=prepared[key] for key in META):
                 raise Conflict('Este intento ya contiene otro archivo. No se ha duplicado.')
+            if old.state == 'failed' and old.attempts < 6 and old.expires_at > timezone.now():
+                old.state='queued';old.cycle_attempts=0;old.next_at=timezone.now();old.session=request.auth;old.error_code=''
+                old.save(update_fields=['state','cycle_attempts','next_at','session','error_code','updated_at'])
             return old, False
         messages=container.messages.filter(author_id=request.assignment.employee_id,client_id=client_id)
         if messages.exists():
             raise Conflict('Este intento ya se publicó. Consulta el mensaje antes de crear otra subida.')
-        from .upload_capacity import check_capacity, check_temporary_capacity
+        from .upload_capacity import check_capacity
         check_capacity(request.user, prepared['size_bytes'])
-        check_temporary_capacity(request.user, len(encoded), check_records=False)
         # Short global mutex makes byte/count reservations atomic across roots/users.
         own = MediaUpload.objects.filter(account=request.user)
         if (own.filter(state__in=(*ACTIVE,'ready','failed')).count() >= 20 or
@@ -121,24 +117,12 @@ def enqueue(request, kind, container, client_id, prepared):
         now = timezone.now()
         row = MediaUpload.objects.create(id=token,account=request.user,assignment=request.assignment,session=request.auth,
             conversation=container if kind=='chat' else None, channel=container if kind=='channel' else None,
-            root=root,client_id=client_id,content=encoded,cipher_bytes=len(encoded),next_at=now,expires_at=now+TTL,
+            root=root,client_id=client_id,content=b'',cipher_bytes=0,next_at=now,expires_at=now+TTL,
             **{key:prepared[key] for key in META})
         live(row)
         from .upload_events import publish_upload_change
         publish_upload_change(row)
-        # Eager mode must NOT turn the request back into a synchronous Drive upload.
-        transaction.on_commit(wake,robust=True)
         return row, True
-
-
-def wake():
-    if not settings.CELERY_TASK_ALWAYS_EAGER:
-        from .upload_tasks import drain_media_uploads
-        try:
-            drain_media_uploads.apply_async(retry=False,ignore_result=True)
-        except Exception as exc:
-            # The durable row is the outbox; periodic recovery can redispatch.
-            log.warning('Media queue wake unavailable (%s)',type(exc).__name__)
 
 
 def manifest(row):
@@ -148,6 +132,7 @@ def manifest(row):
         'error_code':row.error_code,'message_id':str(row.message_id) if row.message_id else None,
         'next_attempt_at':row.next_at if row.state=='retry' else None,
         'can_retry':row.state=='failed' and row.attempts<6 and row.expires_at>now,
+        'requires_file':row.state in ('queued','retry','failed') or row.state=='uploading' and (not row.lease_until or row.lease_until<=now),
         'can_cancel':row.state not in ('attached','cancelled','expired')}
 
 
@@ -177,15 +162,20 @@ def renew(row):
         raise StaleLease()
 
 
-def perform(upload_id):
-    row = claim(upload_id)
+def perform(upload_id, content=None, *, lease=None):
+    row = lease or claim(upload_id)
     if not row:
+        ready = rows().filter(pk=upload_id,state='ready').first()
+        if ready:
+            try:
+                live(ready)
+                return True
+            except (PermissionDenied,NotFound):
+                return False
         return False
     try:
         live(row)
-        encoded = MediaUpload.objects.only('content').get(pk=row.pk).content
-        content = cipher().decrypt(bytes(encoded))
-        if len(content)!=row.size_bytes or hashlib.sha256(content).hexdigest()!=row.digest:
+        if content is not None and (len(content)!=row.size_bytes or hashlib.sha256(content).hexdigest()!=row.digest):
             raise ValueError('Staged content integrity failure')
         from .upload_provider import upload
         upload(row,content)
@@ -208,14 +198,15 @@ def perform(upload_id):
         from cryptography.fernet import InvalidToken
         from boldApp.workspace.service import GoogleUnavailable, Reconnect
         transient = isinstance(exc,GoogleUnavailable)
-        code = ('access_changed' if isinstance(exc,(PermissionDenied,NotFound)) else 'drive_reconnect' if isinstance(exc,Reconnect)
+        from .upload_provider import FileRequired
+        code = ('file_required' if isinstance(exc,FileRequired) else 'access_changed' if isinstance(exc,(PermissionDenied,NotFound)) else 'drive_reconnect' if isinstance(exc,Reconnect)
             else 'drive_unavailable' if transient else 'integrity' if isinstance(exc,(ValueError,InvalidToken)) else 'upload_failed')
         log.warning('Media upload stopped: %s (%s)',row.pk,code)
         with transaction.atomic():
             saved = MediaUpload.objects.select_for_update().get(pk=row.pk)
             if saved.state!='uploading' or saved.lease_token!=row.lease_token:
                 return False
-            saved.state='retry' if transient and saved.cycle_attempts<3 and saved.attempts<6 else 'failed'
+            saved.state='failed'
             saved.error_code=code; saved.next_at=timezone.now()+timedelta(seconds=30*2**(saved.cycle_attempts-1))
             saved.lease_token=None; saved.lease_until=None
             saved.save(update_fields=['state','error_code','next_at','lease_token','lease_until','updated_at'])
@@ -250,14 +241,14 @@ def attach(row,message):
 
 
 def expire_pending(limit=20):
-    # Keep tombstones/reserved IDs for reconciliation; only staged ciphertext is cleared.
+    # Legacy originals await explicit migration; expiry must never erase them.
     now = timezone.now()
-    ids = list(MediaUpload.objects.filter(state__in=(*ACTIVE,'ready','failed'),expires_at__lte=now)
+    ids = list(MediaUpload.objects.filter(content=b'',state__in=(*ACTIVE,'ready','failed'),expires_at__lte=now)
         .order_by('expires_at').values_list('pk',flat=True)[:limit])
     for identity in ids:
         with transaction.atomic():
             row=MediaUpload.objects.select_for_update().get(pk=identity)
-            if row.state in (*ACTIVE,'ready','failed') and row.expires_at<=now:
+            if not row.content and row.state in (*ACTIVE,'ready','failed') and row.expires_at<=now:
                 row.state='expired'; row.content=b''; row.cipher_bytes=0
                 row.save(update_fields=['state','content','cipher_bytes','updated_at'])
                 from .upload_events import publish_upload_change

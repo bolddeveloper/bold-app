@@ -34,7 +34,7 @@ export async function phoneRequest(id, token, action, {file, clientId, deviceTok
     const body = file ? new FormData() : deviceToken ? JSON.stringify({device_token: deviceToken}) : undefined;
     if (file) {body.set("file", file, file.name); body.set("client_id", clientId);}
     const response = await fetch(`${phoneRoot}${id}/${action}/`, {method: body ? "POST" : "GET", credentials: "omit",
-        cache: "no-store", referrerPolicy: "no-referrer", signal: AbortSignal.any([AbortSignal.timeout(30000), ...(signal ? [signal] : [])]),
+        cache: "no-store", referrerPolicy: "no-referrer", signal: AbortSignal.any([AbortSignal.timeout(file ? 120000:30000), ...(signal ? [signal] : [])]),
         headers: {Authorization: `Bearer ${token}`, ...(deviceToken ? {"Content-Type": "application/json"} : {})}, body});
     const data = await response.json().catch(() => null);
     if (!response.ok) {const error = Error(data?.detail || (Array.isArray(data) ? data.join(" ") : "No se pudo completar la transferencia. Inténtalo de nuevo.")); error.status = response.status; throw error;}

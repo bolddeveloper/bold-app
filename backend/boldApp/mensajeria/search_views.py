@@ -235,8 +235,8 @@ class DirectMessageContextView(PrivateChatView):
 class ChannelMessageContextView(SlackView):
     def get(self, request, channel_id, message_id):
         channel = self.channel(channel_id)
-        anchor = get_object_or_404(channel.messages.select_related("author__user_account", "media", "channel__unit"), pk=message_id)
-        rows = channel.messages.filter(parent_id=anchor.parent_id).select_related("author__user_account", "media", "channel__unit")
+        anchor = get_object_or_404(channel.messages.select_related("author__user_account", "media", "channel__unit", "parent"), pk=message_id)
+        rows = channel.messages.filter(parent_id=anchor.parent_id).select_related("author__user_account", "media", "channel__unit", "parent")
         older = list(rows.filter(sequence__lt=anchor.sequence).order_by("-sequence")[:15])
         newer = list(rows.filter(sequence__gt=anchor.sequence).order_by("sequence")[:15])
         ordered = [*reversed(older), anchor, *newer]

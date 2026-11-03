@@ -34,7 +34,9 @@ class UploadCapacityTests(TransactionTestCase):
         self.assertEqual(MessageMedia.objects.count(),1)
 
     def test_cancel_before_remote_id_refunds_bytes_but_keeps_metadata(self):
+        self.drive.unavailable=True
         first=self.queue(content=b'Capacity'); row=MediaUpload.objects.get()
+        self.drive.unavailable=False
         self.assertEqual(self.client.post(self.url+str(row.pk)+'/',{'action':'cancel'},format='json').status_code,200)
         with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=1):
             self.assertEqual(self.queue(content=b'x').status_code,202)
@@ -91,38 +93,38 @@ class PhoneCapacityTests(TransactionTestCase):
     upload=phone_base.PhoneTransferTests.upload
     ready=phone_base.PhoneTransferTests.ready
 
-    def test_qr_uses_the_shared_temporary_budget_and_duplicate_does_not_reserve_twice(self):
+    def test_qr_uses_drive_budget_and_duplicate_does_not_reserve_twice(self):
         self.ready(); token=uuid.uuid4()
         self.assertEqual(self.upload(token).status_code,201)
         size=PhoneImage.objects.get().size_bytes
-        with override_settings(MESSAGING_UPLOAD_QUEUE_BYTES=size):
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=size):
             self.assertEqual(self.upload(token).status_code,200)
-            self.assertEqual(self.upload().status_code,429)
-        with override_settings(MESSAGING_UPLOAD_ACCOUNT_BYTES=size):
-            self.assertEqual(self.upload().status_code,429)
+            self.assertEqual(self.upload().status_code,507)
+        with override_settings(MESSAGING_STORAGE_ACCOUNT_BYTES=size):
+            self.assertEqual(self.upload().status_code,507)
         self.assertEqual(PhoneImage.objects.count(),1)
         self.assertEqual(self.client.delete(self.url).status_code,204)
         self.ready()
-        with override_settings(MESSAGING_UPLOAD_QUEUE_BYTES=size):
-            self.assertEqual(self.upload().status_code,201)
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=size):
+            self.assertEqual(self.upload().status_code,507)
 
-    def test_phone_and_encrypted_staging_copies_both_count_until_phone_is_removed(self):
-        from boldApp.workspace.models import ImageStorageRoot
-        ImageStorageRoot.objects.create(user=self.alice.employee.user_account,subject='synthetic',client_id='synthetic',
-            google_email='fixture@example.invalid',folder_id='synthetic_root',folder_name='BOLD APP',active=True)
+    def test_phone_and_message_files_count_in_drive_without_server_payloads(self):
         self.ready(); self.assertEqual(self.upload().status_code,201)
         size=PhoneImage.objects.get().size_bytes
         url=self.root+self.conversation+'/uploads/'
         file_bytes=b'Capacity'
-        limit=size+len(cipher().encrypt(file_bytes))-1
+        limit=size+len(file_bytes)-1
         def queue():
             from django.core.files.uploadedfile import SimpleUploadedFile
             return self.client.post(url,{'client_id':str(uuid.uuid4()),
                 'file':SimpleUploadedFile('revision.txt',file_bytes,content_type='text/plain')},format='multipart')
-        with override_settings(MESSAGING_UPLOAD_QUEUE_BYTES=limit):
-            self.assertEqual(queue().status_code,429)
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=limit):
+            self.assertEqual(queue().status_code,507)
             self.assertEqual(self.client.delete(self.url).status_code,204)
+            self.assertEqual(queue().status_code,507)
+        with override_settings(MESSAGING_STORAGE_TOTAL_BYTES=limit+1):
             self.assertEqual(queue().status_code,202)
+        self.assertTrue(all(not bytes(row.content) for row in MediaUpload.objects.all()))
 
     def test_phone_metadata_cannot_bypass_record_limit_and_existing_image_can_be_retried(self):
         self.ready();token=uuid.uuid4()
