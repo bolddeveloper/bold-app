@@ -26,7 +26,7 @@ def scope_access(view, *, lock=False, manage=False):
     unit = server = None
     if query.get("server"):
         server_id = serializers.UUIDField().run_validation(query["server"])
-        rows = PrivateServer.objects.select_related("creator")
+        rows = PrivateServer.objects.filter(deleted_at__isnull=True).select_related("creator")
         server = get_object_or_404(rows.select_for_update(of=("self",)) if lock else rows, pk=server_id)
         access = server.members.filter(employee_id=view.actor()).values_list("access", flat=True).first()
         if not access or manage and (server.creator.employee_id != view.actor() or access != "write"):

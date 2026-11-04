@@ -79,13 +79,17 @@ class ChannelMentionTests(TestCase):
         message = self.send(self.token).data['message']
         self.assertEqual(message['mentions'], [])
         self.assertFalse(Notification.objects.exists())
-        self.assertEqual(self.client.get(self.url + 'mention-people/', {'q': 'bob'}).data['results'], [])
+        picker = self.client.get(self.url + 'mention-people/', {'q': 'bob'}).data
+        self.assertEqual(picker['results'], [])
+        self.assertEqual([row['token'] for row in picker['references']], [self.token])
+        self.assertEqual(self.as_person(self.bob).get(self.url).status_code, 404)
         owner = self.as_person(self.owner)
         self.assertEqual(owner.get(self.url + 'mention-people/', {'q': 'alice'}).status_code, 404)
         rule = ChannelAccessRule.objects.create(channel=channel, employee=self.bob.employee, access='read')
         allowed = self.client.get(self.url + 'mention-people/', {'q': 'bob'})
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(allowed.data['results'][0]['employee_id'], str(self.bob.employee_id))
+        self.assertEqual(allowed.data['references'], [])
         self.send(self.token)
         notice = Notification.objects.get()
         self.assertTrue(readable(str(self.bob.pk), str(notice.pk)))

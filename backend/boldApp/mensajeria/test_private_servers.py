@@ -60,6 +60,34 @@ class PrivateServerTests(TestCase):
         self.assertEqual(DepartmentChannel.objects.get(pk=channel['id']).messages.count(),1)
         self.assertEqual(self.client.patch(endpoint,{'name':'Viejo','members':[],'version':1},format='json').status_code,409)
 
+    def test_creator_can_remove_only_private_servers_and_history_is_preserved(self):
+        server, channel, url = self.create()
+        peer = self.as_person(self.bob)
+        sent = peer.post(url + "messages/", {"body": "Conservar historial", "client_id": str(uuid.uuid4())}, format="json")
+        self.assertEqual(sent.status_code, 201)
+        endpoint = self.servers + server["id"] + "/"
+        version = {"version": server["version"]}
+        self.assertEqual(peer.delete(endpoint, version, format="json").status_code, 404)
+        self.assertEqual(self.as_person(self.owner).delete(endpoint, version, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(self.servers + str(self.it.pk) + "/", version, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(endpoint, {"version": server["version"] + 1}, format="json").status_code, 409)
+        self.assertEqual(peer.get(url).status_code, 200)
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.client.delete(endpoint, version, format="json")
+        self.assertEqual(response.status_code, 204)
+        self.assertTrue(callbacks)
+        self.assertIsNotNone(PrivateServer.objects.get(pk=server["id"]).deleted_at)
+        self.assertEqual(DepartmentChannel.objects.get(pk=channel["id"]).messages.count(), 1)
+        self.assertEqual(ChannelAccessEpoch.objects.get(employee_id=self.bob.employee_id).revision, 1)
+        for client in (self.client, peer):
+            self.assertEqual(client.get(self.servers).data["results"], [])
+            self.assertEqual(client.get(url).status_code, 404)
+            self.assertEqual(client.get(url + "messages/").status_code, 404)
+            self.assertEqual(client.get("/api/v2/messaging/server-icons/private/" + server["id"] + "/").status_code, 404)
+            self.assertNotIn(channel["id"], [row["id"] for row in client.get(self.root).data["results"]])
+        self.assertIsNone(channel_event(self.bob.pk, {"channel_id": channel["id"], "kind": "message.created"}))
+        self.assertEqual(self.client.post(self.root, {"name": "nuevo", "server_id": server["id"]}, format="json").status_code, 404)
+
     def test_readonly_and_core_restrictions_apply_in_server_channels(self):
         server, channel, url=self.create(access='read')
         peer=self.as_person(self.bob)
@@ -68,6 +96,16 @@ class PrivateServerTests(TestCase):
         self.deny('slack.channel.read')
         self.assertEqual(peer.get(url).status_code,404)
         self.assertEqual(peer.get(self.servers).status_code,403)
+
+    def test_private_server_mentions_use_invited_people_across_departments(self):
+        _, _, url = self.create(access="read")
+        token = "@" + self.bob.employee.user_account.email
+        picker = self.client.get(url + "mention-people/", {"q": "bob"}).data
+        self.assertEqual([row["token"] for row in picker["results"]], [token])
+        self.assertEqual(picker["references"], [])
+        response = self.client.post(url + "messages/", {"body": token, "client_id": str(uuid.uuid4())}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["message"]["mentions"][0]["employee_id"], str(self.bob.employee_id))
 
     def test_names_are_scoped_to_server_and_channels_cannot_mix_departments(self):
         first, channel, _=self.create()

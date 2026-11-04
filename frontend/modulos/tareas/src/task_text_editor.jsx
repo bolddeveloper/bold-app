@@ -29,7 +29,7 @@ export function TextEditorField({ name, defaultValue = "", value, onChange, maxL
     return <div className="app_text_editor_field"><TaskTextEditor {...props} maxLength={maxLength} value={current} onChange={next => { setDraft(next); onChange?.(next); }} />{name && <input type="hidden" name={name} value={current} />}</div>;
 }
 
-export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, maxLength, allowImages = true, allowVoiceNotes = true, changeDelay = 0, draftRef }) {
+export function TaskTextEditor({ value = "", onChange, label = "Descripción", placeholder = "Escribe una descripción…", notes = [], onNotesChange, onBusyChange, resource = "tasks", resourceId, disabled = false, onFiles, onSubmit, submitDisabled = false, compact = !!onSubmit, allowMentions = compact, maxLength, allowImages = true, allowVoiceNotes = true, changeDelay = 0, draftRef }) {
     const editor = useRef(null), selection = useRef(null), lastValue = useRef(value), controls = useRef(null), styleMenu = useRef(null);
     const commitTimer = useRef(null), dirty = useRef(false), commit = useRef(null);
     const [linkOpen, setLinkOpen] = useState(false), [link, setLink] = useState("https://"), [linkError, setLinkError] = useState("");
@@ -49,7 +49,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         if (mention) mentionOptions.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest"});
     }, [mention, mentionIndex]);
     function findMention() {
-        if (!compact || disabled) return;
+        if (!allowMentions || disabled) return;
         const range = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null;
         const match = range?.collapsed && editor.current?.contains(range.endContainer) && range.endContainer.nodeType === Node.TEXT_NODE ? mentionAtCaret(range.endContainer.textContent.slice(0, range.endOffset)) : null;
         mentionRange.current = match ? range.cloneRange() : null;
@@ -177,7 +177,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = !disabled && allowImages && !imagesBusy ? "copy" : "none"; } }}
         onDrop={event => { const files = transferredFiles(event.dataTransfer); if (files.length) { event.preventDefault(); event.stopPropagation(); void insertImages(files); } else { const text = event.dataTransfer.getData("text/plain") || event.dataTransfer.getData("text/uri-list"); if (text) { event.preventDefault(); event.stopPropagation(); remember(); command("insertText", text); } } }} onKeyDown={event => {
             if (event.nativeEvent.isComposing) return;
-            if (mention && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
+            if (mention && (compact || candidates.length || event.key === "Escape") && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) {
                 event.preventDefault(); event.stopPropagation();
                 if (event.key === "Escape") setMention(null);
                 else if (event.key === "Enter" && candidates.length) insertMention(candidates[mentionIndex % candidates.length]);
@@ -192,7 +192,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
             <div className="task_mention_heading" aria-hidden="true"><AtSign size={13}/><strong>Mencionar</strong><small>{candidates.length}</small></div>
             <div id={mentionId} ref={mentionOptions} className="task_mention_options" role="listbox" aria-label="Personas para mencionar">{candidates.length ? candidates.map((person, index) => <button className="task_mention_option" id={`${mentionId}-${index}`} type="button" role="option" aria-selected={index === mentionIndex} key={person.email} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(person)}>
                 <span className="task_mention_avatar" aria-hidden="true"><AvatarImage url={person.avatar_url} initials={person.initials || (person.name || person.email).trim().split(/\s+/).slice(0,2).map(word=>word[0]).join("").toUpperCase()}/></span>
-                <span className="task_mention_identity"><strong>{person.name}</strong><small>{person.email}</small></span>
+                <span className="task_mention_identity"><strong>{person.name}</strong><small>{person.email}{person.unit_name && ` · ${person.unit_name}`}</small></span>
                 <span className="task_mention_enter" aria-hidden="true">Enter</span>
             </button>) : <p className="task_mention_empty" role="status">Sin coincidencias. Prueba otro nombre o correo.</p>}</div>
             <div className="task_mention_hint" aria-hidden="true">↑↓ Elegir <span>Enter · Mencionar</span><span>Esc · Cerrar</span></div>
@@ -201,7 +201,7 @@ export function TaskTextEditor({ value = "", onChange, label = "Descripción", p
         {allowVoiceNotes && <VoiceNotes value={notes} onChange={onNotesChange} onBusyChange={onBusyChange} controlsRef={controls} resource={resource} resourceId={resourceId} disabled={disabled} />}
         <div className="task_editor_footer"><div className="task_editor_insert" ref={controls}>
             {allowImages && <label className="detail_comment_image_button" title="Adjuntar imagen"><ImagePlus size={17} /><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple aria-label="Adjuntar imágenes" disabled={disabled || imagesBusy} onChange={event => { const files = Array.from(event.target.files); event.target.value = ""; void insertImages(files); }} /></label>}
-            {compact && <button type="button" aria-label="Mencionar persona" title="Mencionar persona (@)" disabled={disabled} onMouseDown={event => {event.preventDefault(); remember();}} onClick={() => {command("insertText", " @"); findMention();}}><AtSign size={17}/></button>}
+            {allowMentions && <button type="button" aria-label="Mencionar persona" title="Mencionar persona (@)" disabled={disabled} onMouseDown={event => {event.preventDefault(); remember();}} onClick={() => {command("insertText", " @"); findMention();}}><AtSign size={17}/></button>}
         </div>{onSubmit ? <button type="button" className="task_editor_send" title="Enviar comentario (Enter). Nueva línea: Shift+Enter" aria-label="Enviar comentario" disabled={disabled || imagesBusy || submitDisabled} onClick={onSubmit}><ArrowUp size={16} /></button> : <small>{label}</small>}</div>
         {imageError && <small role="alert">{imageError}</small>}
     </div>;

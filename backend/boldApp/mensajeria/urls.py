@@ -32,7 +32,7 @@ urlpatterns = [
     path('server-icons/<str:kind>/<uuid:identity>/', ServerIconView.as_view(http_method_names=['get', 'patch', 'options'])),
     path('server-icons/<str:kind>/<uuid:identity>/image/', ServerIconView.as_view(http_method_names=['get', 'options']), {'image': True}),
     path('servers/', ServerListView.as_view(http_method_names=['get', 'post', 'options'])),
-    path('servers/<uuid:server_id>/', ServerDetailView.as_view(http_method_names=['get', 'patch', 'options'])),
+    path('servers/<uuid:server_id>/', ServerDetailView.as_view(http_method_names=['get', 'patch', 'delete', 'options'])),
     path('channels/<uuid:channel_id>/automation-projects/', AutomationProjectsView.as_view()),
     path('channels/<uuid:channel_id>/automation-projects/<uuid:project_id>/', AutomationProjectsView.as_view()),
     path('channels/<uuid:channel_id>/automations/', AutomationListView.as_view()),

@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from boldApp.core.models import Employee, PositionAssignment
 from .channel_access import ChannelPolicy
-from .models import ChannelAccessRule, ResourceMention, SearchDocument
+from .models import ChannelAccessRule, PrivateServerMember, ResourceMention, SearchDocument
 
 MAX_MENTIONS = 20
 TOKEN = re.compile(r"(?<![A-Za-z0-9._%+@-])(@[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,189}\.[A-Za-z]{2,24})(?![A-Za-z0-9_%+@-]|\.[A-Za-z0-9])", re.IGNORECASE)
@@ -31,8 +31,13 @@ def with_mention_assignments(people):
 
 def authorized_people(people, channel, permissions, codes=("slack.channel.read",)):
     people = list(people)
-    rules = dict(ChannelAccessRule.objects.filter(channel=channel, employee_id__in=[person.pk for person in people])
-        .values_list("employee_id", "access"))
+    employee_ids = [person.pk for person in people]
+    if channel.server_id:
+        rules = dict(PrivateServerMember.objects.filter(server_id=channel.server_id, server__deleted_at__isnull=True,
+            employee_id__in=employee_ids).values_list("employee_id", "access"))
+    else:
+        rules = dict(ChannelAccessRule.objects.filter(channel=channel, employee_id__in=employee_ids)
+            .values_list("employee_id", "access"))
     result = []
     for person in people:
         access = rules.get(person.pk)
@@ -44,7 +49,9 @@ def authorized_people(people, channel, permissions, codes=("slack.channel.read",
             policy = ChannelPolicy(assignment, permissions=permissions)
             policy.resources[("slack_channel", str(channel.pk))] = {"id": channel.pk, "unit_id": channel.unit_id,
                 "creator_id": channel.creator_id, "creator__employee_id": channel.creator.employee_id,
-                "visibility": channel.visibility, "access": access}
+                "visibility": channel.visibility, "access": access, "server_id": channel.server_id,
+                "server_access": access if channel.server_id else None,
+                "server__creator__employee_id": channel.server.creator.employee_id if channel.server_id else None}
             # Another person's session/MFA cannot be asserted during selection.
             # Receiving content and push projections still enforce that session.
             if all(policy.allows(code, channel.unit, channel.pk, require_assurance=False) for code in codes):

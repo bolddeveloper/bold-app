@@ -17,7 +17,7 @@ export function NoticeLayer({children}) {
     useLayoutEffect(() => {
         const element = layer.current;
         element.showPopover?.();
-        return () => { if (element.matches(":popover-open")) element.hidePopover(); };
+        return () => element.hidePopover?.();
     }, [host]);
     return createPortal(<div ref={layer} popover="manual" className="bold_notice_layer">{children}</div>, host);
 }
@@ -25,17 +25,18 @@ export function NoticeLayer({children}) {
 // SweetAlert owns its container, so moving it into the active dialog is safe.
 export function floatToast(popup) {
     const element = popup.closest(".swal2-container");
+    if (!element) return;
     element.setAttribute("popover", "manual");
     element.classList.add("bold_floating_toast");
     let previous;
     const update = () => {
         const host = noticeHost();
         if (host !== previous) {
-            if (element.matches(":popover-open")) element.hidePopover();
+            element.hidePopover?.();
             host.appendChild(element);
             previous = host;
         }
-        if (element.isConnected && !element.matches(":popover-open")) element.showPopover?.();
+        if (element.isConnected && element.showPopover && !element.matches(":popover-open")) element.showPopover();
     };
     update();
     return observeHost(update);

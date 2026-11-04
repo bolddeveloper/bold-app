@@ -29,7 +29,8 @@
 :root .slack_module .slack_channel_group_title button {padding:3px;min-height:26px;width:28px;background:transparent;border:0;}
 :root .slack_module .slack_server_hint {display:flex;align-items:center;gap:5px;margin:0;font-size:12px;}
 :root .slack_module .slack_editor.slack_server_editor {width:min(560px,calc(100vw - 24px));}
-:root .slack_module .slack_server_editor form > footer {display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+:root .slack_module .slack_server_editor form > footer {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:12px;}
+:root .slack_module .slack_server_editor button.slack_delete_server {margin-inline-end:auto;color:var(--bold_red);background:transparent;}
 :root .slack_module .slack_sidebar header small {font-size:10px;margin-top:2px;}
 :root .slack_module .slack_sidebar header > button {width:30px;padding:5px;border:0;background:transparent;}
 :root .slack_module .slack_channel_search .slack_field_label {font-size:11px;margin-bottom:4px;}
@@ -70,8 +71,7 @@
 :root .slack_module .slack_messages {padding:6px 12px 12px;scrollbar-width:thin;}
 :root .slack_module .slack_message {margin:0;padding:9px 3px;gap:9px;transition:background-color 160ms;}
 :root .slack_module .slack_message:hover {background:var(--bold_surface_soft);}
-:root .slack_module .slack_avatar {width:32px;min-height:32px;flex:0 0 32px;font-size:11px;}
-:root .slack_module .slack_avatar {border-radius:50%;}
+:root .slack_module .slack_avatar {display:grid;place-items:center;width:32px;height:32px;min-height:32px;padding:0;flex:0 0 32px;border-radius:50%;font-size:11px;}
 :root .slack_module .slack_message_card {position:relative;min-width:0;padding:0 5px;border:0;border-radius:0;background:transparent;}
 :root .slack_module .slack_mine .slack_message_card {border:0;border-left:2px solid color-mix(in srgb,var(--bold_red) 45%,var(--bold_line));padding-left:8px;}
 :root .slack_module .slack_message_card > header {font-size:12px;gap:6px;padding-right:27px;min-height:22px;}
@@ -253,7 +253,7 @@ html.theme_dark .slack_module .slack_message_body a {color:#ff8585;}
     :root .slack_module .slack_channel_actions > button {font-size:0;width:36px;min-height:40px;padding:7px;}
     :root .slack_module .slack_messages {padding:3px 5px 8px;scrollbar-gutter:auto;}
     :root .slack_module .slack_message {gap:5px;padding:8px 0;}
-    :root .slack_module .slack_avatar {width:26px;min-height:30px;flex-basis:26px;}
+    :root .slack_module .slack_avatar {width:30px;height:30px;min-height:30px;flex-basis:30px;}
     :root .slack_module .slack_message_card {padding:0 2px;}
     :root .slack_module .slack_message_card > header {padding-right:42px;gap:4px;font-size:11px;}
     :root .slack_module .slack_message_card time {font-size:9px;}

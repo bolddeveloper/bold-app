@@ -57,7 +57,7 @@ try {
     assert.ok([...editor.querySelectorAll("a")].some(a => a.textContent === "Guía" && a.getAttribute("href") === "https://example.com/long"));
     await act(async () => render(true)); transferEvent("paste", {files: [image]}, editor); await settle(); assert.equal(received.length, 2);
     const {updateCore}=await server.ssrLoadModule(path.resolve('core_store.js'));
-    updateCore({directory:Array.from({length:6},(_,index)=>({id:`person-${index}`,name:`Persona ${index}`,email:`person${index}@example.test`}))});
+    updateCore({directory:Array.from({length:6},(_,index)=>({id:`person-${index}`,name:`Persona ${index}`,email:`person${index}@example.test`,unit_name:index===5 ? 'Marketing' : 'IT'}))});
     let sent=0,scrolled;
     HTMLElement.prototype.scrollIntoView=function(){scrolled=this.id;};
     root.render(React.createElement(TaskTextEditor,{value:'',label:'Comentario',compact:true,onChange:next=>{value=next;},onSubmit:()=>sent++}));await settle();
@@ -71,6 +71,13 @@ try {
     assert.equal(options.at(-1).getAttribute('aria-selected'),'true');assert.equal(scrolled,options.at(-1).id);
     mentionEditor.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await settle();
     assert.equal(document.querySelector('.task_mention_menu'),null);assert.match(value,/@person5@example\.test/);assert.equal(sent,0);
+    root.render(React.createElement(TaskTextEditor,{key:'description',value:'',label:'Descripción',allowMentions:true,onChange:next=>{value=next;}}));await settle();
+    const description=document.querySelector('[role="textbox"]');description.focus();description.textContent='Coordinar con @Persona 5';
+    const descriptionRange=document.createRange();descriptionRange.selectNodeContents(description);descriptionRange.collapse(false);
+    window.getSelection().removeAllRanges();window.getSelection().addRange(descriptionRange);
+    description.dispatchEvent(new Event('input',{bubbles:true}));await settle();
+    const marketing=document.querySelector('.task_mention_option');assert.match(marketing.textContent,/Marketing/);
+    marketing.click();await settle();assert.match(value,/@person5@example\.test/);
     updateCore({directory:[]});
     const {CommentItem, TaskActionsContext} = await server.ssrLoadModule(`/@fs/${path.resolve("../tareas/src/comment_item.jsx").replaceAll("\\", "/")}`);
     let allowed = true;

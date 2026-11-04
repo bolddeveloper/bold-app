@@ -1997,7 +1997,7 @@ export function EditTaskModal({ board_columns, drawer, edit_attachments, edit_dr
                     <div className="task_form_disclosure_body">
                     <div className="bold_field_group">
                         <label className="bold_field_label">Descripción</label>
-                        <TaskTextEditor value={description} onChange={set_description} changeDelay={160} draftRef={description_editor} notes={edit_draft.voice_notes || []} onNotesChange={value => handle_edit_field_change("voice_notes", value)} resourceId={edit_draft.id} onBusyChange={set_audio_busy} disabled={pending} />
+                        <TaskTextEditor allowMentions value={description} onChange={set_description} changeDelay={160} draftRef={description_editor} notes={edit_draft.voice_notes || []} onNotesChange={value => handle_edit_field_change("voice_notes", value)} resourceId={edit_draft.id} onBusyChange={set_audio_busy} disabled={pending} />
                     </div>
                     </div></section>
 
@@ -2281,7 +2281,7 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
                     <section className="task_form_disclosure task_form_description" aria-label="Descripción"><header>{render_icon(file_text_icon,15)}Descripción<small>{description ? "Con contenido" : "Opcional"}</small></header><div className="task_form_disclosure_body">
                     <div className="bold_field_group">
                         <label className="bold_field_label">Descripción</label>
-                        <TaskTextEditor value={description} onChange={value => {description_latest.current = value; set_description(value);}} changeDelay={160} draftRef={description_editor} notes={voice_notes} onNotesChange={set_voice_notes} onBusyChange={set_audio_busy} disabled={pending} />
+                        <TaskTextEditor allowMentions value={description} onChange={value => {description_latest.current = value; set_description(value);}} changeDelay={160} draftRef={description_editor} notes={voice_notes} onNotesChange={set_voice_notes} onBusyChange={set_audio_busy} disabled={pending} />
                     </div>
                     </div></section>
 
@@ -2323,7 +2323,7 @@ function CreateTaskModal({ board_columns, personal_columns, last_sections = {}, 
                                         <label className="bold_field_group">Prioridad<TaskSelect aria_label="Prioridad de la subtarea" variant="priority" disabled={pending} value={sub.priority || "Media"} options={priority_items} on_change={value => set_subtasks(rows => rows.map(row => row.id === sub.id ? {...row,priority:value} : row))}/></label>
                                     </div>
                                     <div className="bold_field_group"><span className="bold_field_label">Inicio y fecha límite</span><CalendarDateRangeField start={sub.start_date || ""} end={sub.due_date || ""} disabled={pending} onChange={({start,end}) => set_subtasks(rows => rows.map(row => row.id === sub.id ? {...row,start_date:start || null,due_date:end || null} : row))}/></div>
-                                    <div className="bold_field_group"><span className="bold_field_label">Descripción</span><TaskTextEditor label="Descripción de la subtarea" value={sub.description || ""} onChange={value => set_subtasks(rows => rows.map(row => row.id === sub.id ? {...row,description:value} : row))} disabled={pending} allowImages={false} allowVoiceNotes={false}/></div>
+                                    <div className="bold_field_group"><span className="bold_field_label">Descripción</span><TaskTextEditor allowMentions label="Descripción de la subtarea" value={sub.description || ""} onChange={value => set_subtasks(rows => rows.map(row => row.id === sub.id ? {...row,description:value} : row))} disabled={pending} allowImages={false} allowVoiceNotes={false}/></div>
                                     <small>Se guardará junto con la tarea principal.</small>
                                 </div>}
                                 </div>
@@ -4063,7 +4063,7 @@ function TaskAppContent({ externalModules = {} }) {
     const [syncing_task_count, set_syncing_task_count] = use_state(0);
     const [local_comments, set_local_comments] = use_state([]);
     use_effect(() => {
-        const updated = event => app_toast.fire({icon: "info", title: event.detail.title});
+        const updated = event => app_toast.fire({icon: "info", titleText: event.detail.title});
         window.addEventListener("bold:background-update", updated);
         return () => window.removeEventListener("bold:background-update", updated);
     }, []);
@@ -4383,7 +4383,7 @@ function TaskAppContent({ externalModules = {} }) {
 
     use_effect(() => {
         if (!api_error || !data) return;
-        app_toast.fire({ icon: "error", title: api_error });
+        app_toast.fire({ icon: "error", titleText: api_error });
         set_api_error("");
     }, [api_error, data]);
 
@@ -4430,7 +4430,7 @@ function TaskAppContent({ externalModules = {} }) {
                         if (scope === sharing_context.current) set_workspace_shares({scope, items: resultShares.items});
                     } catch {if (scope === sharing_context.current) set_api_error("La biblioteca se guardó; la lista de colaboradores se actualizará al recuperar conexión.");}
                 }
-                app_toast.fire({icon: "success", title: "Workspace guardado en el servidor"});
+                app_toast.fire({icon: "success", titleText: "Workspace guardado en el servidor"});
                 return scope === sharing_context.current;
             } catch (problem) {
                 if (scope === sharing_context.current) {
@@ -4459,7 +4459,7 @@ function TaskAppContent({ externalModules = {} }) {
                 }
             }).catch(problem => {if (scope === sharing_context.current) set_api_error(`No se pudo actualizar la carpeta compartida: ${problem.message}`);});
             set_workspace_state(state => ({ ...state, items: saved }));
-            app_toast.fire({ icon: "success", title: "Workspace guardado" });
+            app_toast.fire({ icon: "success", titleText: "Workspace guardado" });
             return true;
         } catch { set_api_error("No se pudieron guardar las carpetas. El cambio no se aplicó."); return false; }
     }
@@ -5155,7 +5155,7 @@ function TaskAppContent({ externalModules = {} }) {
         try {
             await operation(); if (version !== mutation_generation.current) return false;
             await refresh.current(resources); if (version !== mutation_generation.current) return false;
-            on_success(); app_toast.fire({ icon: "success", title: success_title }); return true;
+            on_success(); app_toast.fire({ icon: "success", titleText: success_title }); return true;
         } catch (error) {
             if (version !== mutation_generation.current) return false;
             if (error.name !== "AbortError") {
@@ -5254,7 +5254,7 @@ function TaskAppContent({ externalModules = {} }) {
             on_success(result);
             try { await refresh.current(); }
             catch { set_api_error("El cambio se guardó, pero no se pudo actualizar la vista. Vuelve a cargar la página."); }
-            if (success_title) app_toast.fire({ icon: "success", title: success_title });
+            if (success_title) app_toast.fire({ icon: "success", titleText: success_title });
         })();
         return true;
     }
@@ -5453,7 +5453,7 @@ function TaskAppContent({ externalModules = {} }) {
                 return { ...patch(task), subtasks: (task.subtasks || []).map(patch) };
             }));
         }
-        app_toast.fire({ icon: "success", title: success_title });
+        app_toast.fire({ icon: "success", titleText: success_title });
         return true;
     }
 
@@ -6077,7 +6077,7 @@ function TaskAppContent({ externalModules = {} }) {
         if (real) return await mutate(() => saveSubtasks(task, next, data)) ? draft.id : false;
         set_tasks(current => current.map(item => item.id === task_id ? { ...item, subtasks: next } : item));
         update_task_request(task_id, { ...task, subtasks: next }).catch(() => {});
-        app_toast.fire({ icon: "success", title: "Subtarea agregada" });
+        app_toast.fire({ icon: "success", titleText: "Subtarea agregada" });
         return draft.id;
     }
 
@@ -6171,7 +6171,7 @@ function TaskAppContent({ externalModules = {} }) {
             set_active_modal(null);
             set_selected_task_id(editing_subtask_parent_id);
             set_editing_subtask_parent_id(null);
-            app_toast.fire({ icon: "success", title: "Subtarea guardada" });
+            app_toast.fire({ icon: "success", titleText: "Subtarea guardada" });
             return;
         }
 

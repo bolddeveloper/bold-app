@@ -56,7 +56,13 @@ def channel_mention_results(request, channel, policy, codes=("slack.channel.read
     if len(people) > 100 and not autocomplete:
         raise ValidationError('Hay demasiadas coincidencias. Escribe más del nombre o del correo.')
     results = mention_people_data(authorized_people(people, channel, policy.permissions, codes))
-    return Response({'results':results[:20], 'refine':len(results)>20 or len(people)>100})
+    # These people are already visible in Core's directory. Keep text-only references
+    # separate from the channel-authorized results used for mention notifications.
+    authorized_ids = {row["employee_id"] for row in results}
+    references = [row for row in mention_people_data(person for person in people if person.mention_assignments)
+        if row["employee_id"] not in authorized_ids]
+    return Response({"results": results[:20], "references": references[:max(0, 20 - len(results))],
+        "refine": len(results) + len(references) > 20 or len(people) > 100})
 
 
 class ChannelMentionPeopleView(SlackView):

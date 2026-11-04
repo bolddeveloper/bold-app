@@ -78,7 +78,7 @@ class ServerIconView(SlackView):
                 rows = rows.select_for_update()
             unit, server = get_object_or_404(rows, pk=identity), None
         elif kind == 'private':
-            rows = PrivateServer.objects.select_related('creator')
+            rows = PrivateServer.objects.filter(deleted_at__isnull=True).select_related('creator')
             if lock:
                 rows = rows.select_for_update(of=('self',))
             server = get_object_or_404(rows, pk=identity)

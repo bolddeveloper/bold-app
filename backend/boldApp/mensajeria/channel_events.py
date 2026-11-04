@@ -44,7 +44,7 @@ def channel_event(assignment_id, event, session_id=None):
         unit = OrganizationalUnit.objects.filter(pk=unit_id).first() if unit_id else None
         if unit_id and not unit:
             return None
-        if server_id and not PrivateServer.objects.filter(pk=server_id, members__employee_id=assignment.employee_id).exists():
+        if server_id and not PrivateServer.objects.filter(pk=server_id, deleted_at__isnull=True, members__employee_id=assignment.employee_id).exists():
             return None
         if not ChannelPolicy(assignment, request).allows("slack.channel.read", unit):
             return None

@@ -36,6 +36,7 @@ export function createChannelApi(client = http) {
         updateServerIcon: (kind,server,values,options) => client.request(`/api/v2/messaging/server-icons/${kind==='private' ? 'private':'department'}/${id(server)}/`,{...options,method:'PATCH',body:values}),
         server: (server, options) => client.request(`/api/v2/messaging/servers/${id(server)}/`,options),
         updateServer: (server, values, options) => client.request(`/api/v2/messaging/servers/${id(server)}/`,{...options,method:'PATCH',body:values}),
+        deleteServer: (server, version, options) => client.request(`/api/v2/messaging/servers/${id(server)}/`,{...options,method:'DELETE',body:{version}}),
         categories: (scope,options)=>client.request(channelPage('/api/v2/messaging/channel-categories/',null,scope),options),
         createCategory: (scope,values,options)=>client.request(channelPage('/api/v2/messaging/channel-categories/',null,scope),{...options,method:'POST',body:values}),
         updateCategory: (scope,category,values,options)=>client.request(channelPage(`/api/v2/messaging/channel-categories/${id(category)}/`,null,scope),{...options,method:'PATCH',body:values}),

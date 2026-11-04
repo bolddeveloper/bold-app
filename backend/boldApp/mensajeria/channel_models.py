@@ -14,6 +14,7 @@ class PrivateServer(UUIDPrimaryKeyModel):
     creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
     version = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "messaging_private_servers"

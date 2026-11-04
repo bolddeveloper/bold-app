@@ -20,7 +20,8 @@ class ChannelPolicy:
         rules = dict(ChannelAccessRule.objects.filter(channel_id__in=[row.pk for row in channels],
             employee_id=self.assignment.employee_id).values_list("channel_id", "access"))
         servers = {server: (access, owner) for server, access, owner in PrivateServerMember.objects.filter(
-            server_id__in=[row.server_id for row in channels if row.server_id], employee_id=self.assignment.employee_id
+            server_id__in=[row.server_id for row in channels if row.server_id], server__deleted_at__isnull=True,
+            employee_id=self.assignment.employee_id
         ).values_list("server_id", "access", "server__creator__employee_id")}
         from .server_icons import prime_icons
         prime_icons(self, servers=list(servers))

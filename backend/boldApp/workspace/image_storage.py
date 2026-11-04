@@ -89,7 +89,7 @@ def can_read(request, kind, instance, field=None, image=None):
         from boldApp.mensajeria.channel_access import ChannelPolicy
         if not assignment_can_chat(request.assignment):
             return False
-        if instance.server_id and not instance.server.members.filter(employee_id=request.assignment.employee_id).exists():
+        if instance.server_id and (instance.server.deleted_at or not instance.server.members.filter(employee_id=request.assignment.employee_id).exists()):
             return False
         return ChannelPolicy(request.assignment, request).allows("slack.channel.read", instance.unit)
     if kind == "workbook":

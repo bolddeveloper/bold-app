@@ -545,6 +545,23 @@ export function getReleaseNotes(assignment) {
 
 export const releaseNotes = [
     {
+        id: "2026-11-04-slack-mentions-notices-avatars",
+        date: "2026-11-04", category: "Mejoras", icon: "bell",
+        title: "Menciones más fáciles y avisos más compactos",
+        summary: "Encuentra a colegas de otros departamentos, lee avisos sin perder de vista tu trabajo y distingue mejor los avatares en Slack.",
+        sections: [
+            {title: "Avisos y tareas", items: [
+                "Los avisos dentro de BOLD, como la confirmación al eliminar un comentario, ocupan menos espacio en computadora y teléfono.",
+                "Escribe @ en descripciones y comentarios de tareas para buscar personas de otros departamentos. Las menciones en descripciones sirven como referencia. En comentarios, los avisos respetan el acceso a la tarea y las preferencias de cada persona.",
+            ]},
+            {title: "Slack durante el piloto de IT", items: [
+                "Busca a colegas con @ en canales e hilos. Si alguien no tiene acceso a la conversación, aparece como Solo referencia y no recibe un aviso ni acceso.",
+                "Quien creó un servidor privado y conserva permiso para administrarlo puede eliminarlo desde su configuración. Los servidores de departamento están protegidos.",
+                "Las fotos de perfil ocupan el círculo del avatar en mensajes e hilos, con iniciales cuando falta una foto.",
+            ]},
+        ],
+    },
+    {
         id: "2026-11-04-team-personal-navigation",
         date: "2026-11-04", category: "Correcciones", icon: "update",
         title: "Vuelve de Equipo a Mis tareas conservando tu vista",

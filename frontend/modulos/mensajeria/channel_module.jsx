@@ -248,6 +248,19 @@ export default function ChannelModule() {
             catch(err){if(mounted.current && snapshot===state.current.identity)report(err);}
         }
     }
+    async function serverDeleted(id){
+        const snapshot=state.current.identity;
+        setServerEditor(null);
+        setServers(current=>current.filter(row=>row.id!==id));
+        if(state.current.department===`server:${id}` || state.current.selected?.server?.id===id){
+            pageDirtyChanged(false);
+            await select(null);
+            if(!mounted.current || snapshot!==state.current.identity)return;
+            setChannels([]);setChannelNext(null);setQuery('');
+            setDepartment(departments.find(row=>row.id===core.activeAssignment?.unitId)?.id || departments[0]?.id || 'independent');
+        }
+        setNotice('Servidor privado eliminado.');
+    }
     async function loadMessages(signal, next = null) {
         const snapshot = state.current;
         if (!snapshot.selected || snapshot.channelTab!=="messages") return;
@@ -644,7 +657,7 @@ export default function ChannelModule() {
         </main>
         {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
         {iconEditor && <ServerIconEditor server={iconEditor} onClose={()=>setIconEditor(null)} onSaved={value=>{const row=iconEditor;setIconEditor(null);if(row.private){setServers(current=>current.map(item=>item.id===row.serverId ? {...item,...value}:item));setSelected(current=>current?.server?.id===row.serverId ? {...current,server:{...current.server,...value}}:current);}else setDepartments(current=>current.map(item=>item.id===row.id ? {...item,...value}:item));}}/>}
-        {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved}/>}
+        {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved} onDeleted={serverDeleted}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}
         {taskPicker && selected && <ChannelTaskPicker channelId={selected.id} onClose={()=>setTaskPicker(false)} onSelect={task=>{setTaskDrafts(current=>({...current,[key]:task}));setTaskPicker(false);field.current?.focus();}}/>}
         {inlineOpen && selected && <MentionSuggestions key={`${mentionKey}:${inlineMention.start}`} channelId={selected.id} anchorRef={field} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={report} onSelect={person=>chooseMention(person,inlineMention)}/>}

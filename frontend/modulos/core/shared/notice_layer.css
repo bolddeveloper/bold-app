@@ -1,12 +1,27 @@
 .bold_notice_layer[popover] { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; pointer-events: none; color: var(--bold_text); z-index: 2147483647; }
 .bold_notice_layer > * { pointer-events: auto; }
-.swal2-container.bold_floating_toast[popover] { margin: 0; border: 0; max-width: none; max-height: none; background: transparent; color: inherit; z-index: 2147483647; }
+:root .swal2-container.bold_floating_toast[popover] {
+    inset: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) auto auto;
+    width: min(360px, calc(100vw - max(10px, env(safe-area-inset-left)) - max(10px, env(safe-area-inset-right))));
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 2147483647;
+}
+.swal2-container.bold_floating_toast:popover-open { display: block; }
 .bold_notice_layer::backdrop, .bold_floating_toast::backdrop { background: transparent; pointer-events: none; }
 
 .swal2-container .swal2-popup.swal2-toast.task_notice_toast {
-    width: min(360px, calc(100vw - 24px));
-    gap: 12px;
-    padding: 14px 16px 17px;
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+    padding: 10px 12px 13px;
     border: 1px solid var(--bold_line);
     border-radius: 0;
     background: var(--bold_elevated);
@@ -14,17 +29,44 @@
     box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 
+/* SweetAlert spans the icon across 99 rows; a vertical gap multiplies the height. */
+.task_notice_toast.swal2-toast .swal2-icon { grid-row: 1; margin: 0; }
+
 .task_notice_toast.swal2-toast .swal2-title {
     margin: 0;
     color: var(--bold_text);
     font-size: 14px;
     font-weight: 600;
     line-height: 1.45;
+    text-align: start;
     overflow-wrap: anywhere;
 }
 
 .task_notice_toast .swal2-timer-progress-bar-container { height: 3px; }
 .task_notice_toast.swal2-toast .swal2-timer-progress-bar { background: var(--bold_red); }
+
+.bold_notice_layer > .task_saving_indicator {
+    max-width: min(360px, calc(100vw - 24px));
+    box-sizing: border-box;
+    border-radius: 0;
+    color: var(--bold_text);
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+.bold_notice_layer .task_action_spinner { flex-shrink: 0; }
+
+@media (min-width: 761px) {
+    body:has(.bold_notice_layer > .sheets_notice) .bold_notice_layer > .task_saving_indicator {
+        left: 22px;
+        right: auto;
+    }
+}
+
+.bold_notice_layer > .task_failed_drafts {
+    box-sizing: border-box;
+    border-radius: 0;
+    overflow-wrap: anywhere;
+}
 
 @media (prefers-reduced-motion: reduce) {
     .task_notice_toast.swal2-toast,

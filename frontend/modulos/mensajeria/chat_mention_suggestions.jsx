@@ -19,8 +19,9 @@ export default function ChatMentionSuggestions({conversationId,channelId,anchorR
             const request=channelId ? channelApi.mentionPeople(channelId,searchQuery,{signal:controller.signal}):messagingApi.mentionPeople(conversationId,'',{signal:controller.signal});
             request.then(page=>{
                 if(controller.signal.aborted)return;
-                setPeople(page.results);setRefine(Boolean(page.refine));
-                if(!searchQuery && !page.refine)complete.current={scope,people:page.results};
+                const rows=[...page.results,...(page.references || []).map(row=>({...row,referenceOnly:true}))];
+                setPeople(rows);setRefine(Boolean(page.refine));
+                if(!searchQuery && !page.refine)complete.current={scope,people:rows};
             }).catch(err=>{
                 if(controller.signal.aborted)return;
                 if([401,403,404].includes(err.status))callbacks.current.onDenied(err);
@@ -51,9 +52,9 @@ export default function ChatMentionSuggestions({conversationId,channelId,anchorR
         <header><AtSign size={16} aria-hidden="true"/><strong>Mencionar persona</strong><small>Esc para cerrar</small></header>
         {busy && <p role="status"><LoaderCircle size={15} className="messaging_spin" aria-hidden="true"/>Cargando personas…</p>}
         {error && <div role="alert"><p>{error}</p><button type="button" onClick={()=>{setAttempt(value=>value+1);anchorRef.current?.focus();}}>Reintentar</button></div>}
-        <div id={listId} role="listbox" aria-label="Personas que puedes mencionar" aria-busy={busy}>{rows.map((person,row)=><button key={person.employee_id} id={`${listId}-${row}`} type="button" role="option" aria-selected={selected===row} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(person)}><span className="messaging_mention_initial" aria-hidden="true">{person.name?.trim().slice(0,1)}</span><span><strong>{person.name}</strong><small>{person.email}</small></span></button>)}</div>
-        {!busy && !error && !rows.length && <p role="status">No hay personas con acceso que coincidan.</p>}
+        <div id={listId} role="listbox" aria-label="Personas que puedes mencionar" aria-busy={busy}>{rows.map((person,row)=><button key={person.employee_id} id={`${listId}-${row}`} type="button" role="option" aria-selected={selected===row} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(person)}><span className="messaging_mention_initial" aria-hidden="true">{person.name?.trim().slice(0,1)}</span><span><strong>{person.name}</strong><small>{person.email}{person.referenceOnly && ' · Solo referencia'}</small></span></button>)}</div>
+        {!busy && !error && !rows.length && <p role="status">No hay personas que coincidan.</p>}
         {refine && <p>Escribe más del nombre o correo para buscar otras personas.</p>}
-        <footer>{channelId ? 'Solo personas con acceso al canal':'Solo participantes de este chat'} · ↑ ↓ elegir · Enter insertar</footer>
+        <footer>{channelId ? 'Solo se avisa a personas con acceso':'Solo participantes de este chat'} · ↑ ↓ elegir · Enter insertar</footer>
     </section>;
 }

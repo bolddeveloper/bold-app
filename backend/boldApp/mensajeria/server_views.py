@@ -2,6 +2,7 @@
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
@@ -24,6 +25,21 @@ class ServerInput(StrictInputSerializer):
     color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", max_length=7, default="#ed3033")
     members = AccessMember(many=True, max_length=200, default=list)
     version = serializers.IntegerField(min_value=1, required=False)
+
+
+class ServerVersion(StrictInputSerializer):
+    version = serializers.IntegerField(min_value=1)
+
+
+def invalidate_members(employee_ids):
+    if not employee_ids:
+        return
+    ChannelAccessEpoch.objects.bulk_create(
+        [ChannelAccessEpoch(employee_id=person) for person in employee_ids], ignore_conflicts=True)
+    rows = ChannelAccessEpoch.objects.filter(employee_id__in=employee_ids)
+    list(rows.select_for_update().order_by("employee_id"))
+    rows.update(revision=F("revision") + 1)
+    transaction.on_commit(dispatch_authorization_invalidation, robust=True)
 
 
 def server_data(server, assignment, policy):
@@ -57,7 +73,7 @@ def reviewed_members(values, creator_id):
 class ServerListView(SlackView):
     def get(self, request):
         self.policy().require("slack.channel.read", None)
-        rows = PrivateServer.objects.filter(members__employee_id=self.actor()).select_related("creator").order_by("name", "id")
+        rows = PrivateServer.objects.filter(deleted_at__isnull=True, members__employee_id=self.actor()).select_related("creator").order_by("name", "id")
         query = request.query_params.get('q', '').strip()[:80]
         if query:
             ids = [pk for pk, name in rows.values_list('pk', 'name') if channel_matches(name, query)]
@@ -74,7 +90,7 @@ class ServerListView(SlackView):
         self.policy().require("slack.channel.create", None)
         # Serialize the per-person limit even across their active assignments.
         Employee.objects.select_for_update().get(pk=self.actor())
-        if PrivateServer.objects.filter(creator__employee_id=self.actor()).count() >= 50:
+        if PrivateServer.objects.filter(deleted_at__isnull=True, creator__employee_id=self.actor()).count() >= 50:
             raise ValidationError("Puedes crear hasta 50 servidores privados.")
         form = ServerInput(data=request.data)
         form.is_valid(raise_exception=True)
@@ -88,7 +104,7 @@ class ServerListView(SlackView):
 
 class ServerDetailView(SlackView):
     def server(self, server_id, lock=False):
-        rows = PrivateServer.objects.select_related("creator")
+        rows = PrivateServer.objects.filter(deleted_at__isnull=True).select_related("creator")
         if lock:
             rows = rows.select_for_update(of=("self",))
         server = get_object_or_404(rows, pk=server_id)
@@ -123,12 +139,23 @@ class ServerDetailView(SlackView):
         server.version += 1
         server.save(update_fields=["name", "color", "version"])
         affected = sorted(person for person in before.keys() | after.keys() if before.get(person) != after.get(person))
-        ChannelAccessEpoch.objects.bulk_create([ChannelAccessEpoch(employee_id=person) for person in affected], ignore_conflicts=True)
-        list(ChannelAccessEpoch.objects.select_for_update().filter(employee_id__in=affected).order_by("employee_id"))
-        ChannelAccessEpoch.objects.filter(employee_id__in=affected).update(revision=F("revision") + 1)
-        if affected:
-            transaction.on_commit(dispatch_authorization_invalidation)
+        invalidate_members(affected)
         record_system_event("slack.server.updated", request, module_code="slack", target_type="slack_server", target_id=server.pk)
         for channel in channels:
             publish_channel(channel, "channel.access_changed")
         return Response({**server_data(server, request.assignment, self.policy()), "members": server_members(server)})
+
+    @transaction.atomic
+    def delete(self, request, server_id):
+        server = self.server(server_id, lock=True)
+        form = ServerVersion(data=request.data)
+        form.is_valid(raise_exception=True)
+        if server.version != form.validated_data["version"]:
+            raise Conflict("El servidor cambió. Vuelve a abrir su configuración antes de eliminarlo.")
+        # Lock channel writers before revoking access. Retain channels, history and Drive references.
+        list(server.channels.select_for_update().order_by("pk").values_list("pk", flat=True))
+        server.deleted_at = timezone.now()
+        server.save(update_fields=["deleted_at"])
+        invalidate_members(list(server.members.order_by("employee_id").values_list("employee_id", flat=True)))
+        record_system_event("slack.server.deleted", request, module_code="slack", target_type="slack_server", target_id=server.pk)
+        return Response(status=204)

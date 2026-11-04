@@ -149,3 +149,24 @@
 .sheets_person_check{margin-left:auto;color:#4285ff}
 
 .sheets_template_card h3{overflow-wrap:anywhere;margin:12px 0 8px}.sheets_template_card .sheets_file_icon{display:inline-flex}.sheets_file_card .sheets_template_actions{justify-content:flex-start;flex-wrap:wrap;gap:8px}.sheets_template_help{color:var(--sheet-muted);font-size:13px;line-height:1.5;margin:0 0 18px}.sheets_library_tools,.sheets_library_body>main,.sheets_search{min-width:0}@media(max-width:600px){.sheets_file_grid{grid-template-columns:minmax(0,1fr)}.sheets_template_actions button{min-height:44px}}
+.bold_notice_layer > .sheets_notice {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    max-width: min(370px, calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right))));
+    max-height: calc(100dvh - 24px);
+    box-sizing: border-box;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 0;
+    background: var(--bold_elevated);
+    color: var(--bold_text);
+    border-color: var(--bold_line);
+    border-inline-start: 2px solid var(--bold_red);
+}
+.sheets_notice > span { flex: 1 1 calc(100% - 40px); min-width: 0; }
+.sheets_notice > button { min-height: 28px; padding: 4px 6px; }
+.sheets_notice > button:not(:disabled):hover { background: var(--bold_surface_soft); }
+@media (pointer: coarse) { .sheets_notice > button { min-height: 44px; } }

@@ -231,7 +231,7 @@ class ChannelListView(SlackView):
         if values["server_id"]:
             if values["unit_id"] or values["members"]:
                 raise ValidationError("El canal hereda las invitaciones de su servidor, sin departamento adicional.")
-            server = get_object_or_404(PrivateServer.objects.select_for_update().select_related("creator"), pk=values["server_id"])
+            server = get_object_or_404(PrivateServer.objects.select_for_update().select_related("creator"), pk=values["server_id"], deleted_at__isnull=True)
             if server.creator.employee_id != self.actor() or not server.members.filter(employee_id=self.actor(), access="write").exists():
                 raise NotFound("No puedes crear canales en este servidor.")
             values["visibility"] = "private"

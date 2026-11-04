@@ -14,12 +14,13 @@ const {channelApi}=await load('../mensajeria/channel_api.js'),{default:Picker}=a
 const {messagingApi}=await load('../mensajeria/messaging_api.js');
 const {pageApi}=await load('../mensajeria/page_api.js');
 const person={employee_id:'00000000-0000-4000-8000-000000000002',name:'Persona <script>inocua</script>',email:'person@bold.gt',token:'@person@bold.gt'};
+const reference={employee_id:'00000000-0000-4000-8000-000000000003',name:'Persona de otro departamento',email:'other@bold.gt',token:'@other@bold.gt'};
 let calls=0,fail=true,closed=0,denied=0,selected=[],release,signal;
 let directCalls=0,directTarget=null;
 let pageCalls=0,pageTarget=null;
 pageApi.mentionPeople=async(channel,page,query,options)=>{pageCalls++;pageTarget={channel,page};signal=options.signal;return {results:[person],refine:false};};
 messagingApi.mentionPeople=async(id,query,options)=>{directCalls++;directTarget=id;signal=options.signal;return {results:[person],refine:false};};
-channelApi.mentionPeople=async(_,query,options)=>{calls++;signal=options.signal;if(release)return new Promise(resolve=>{release=resolve;});if(fail)throw {status:503};return {results:[person],refine:false};};
+channelApi.mentionPeople=async(_,query,options)=>{calls++;signal=options.signal;if(release)return new Promise(resolve=>{release=resolve;});if(fail)throw {status:503};return {results:[person],references:[reference],refine:false};};
 const root=createRoot(document.getElementById('root')),settle=()=>new Promise(resolve=>setTimeout(resolve,35));
 async function waitFor(check){const deadline=Date.now()+5000;while(!check() && Date.now()<deadline)await settle();assert.ok(check(),'expected mention UI state');}
 const mount=(key,conversationId,pageId)=>root.render(React.createElement(Picker,{key,...(conversationId ? {conversationId}:{channelId:'00000000-0000-4000-8000-000000000001',pageId}),onClose:()=>closed++,onDenied:()=>denied++,onSelect:person=>selected.push(person)}));
@@ -31,6 +32,9 @@ try{
     fail=false;submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
     assert.equal(document.querySelector('script'),null);assert.match(document.querySelector('.slack_task_results').textContent,/<script>/);
     document.querySelector('.slack_task_results button').click();assert.equal(selected[0].token,person.token);
+    document.querySelector('.slack_task_results li:last-child button').click();
+    assert.equal(selected[1].token,reference.token);assert.equal(selected[1].referenceOnly,true);
+    assert.match(document.querySelector('.slack_task_results li:last-child').textContent,/Solo referencia/);
     release=true;submit();await waitFor(()=>typeof release==='function');const oldSignal=signal;
     mount('next-identity');await waitFor(()=>document.querySelector('input')?.value==='');assert.equal(oldSignal.aborted,true);
     release({results:[person],refine:false});await settle();assert.equal(document.querySelectorAll('.slack_task_results button').length,0,'late old identity results stay gone');
@@ -41,7 +45,7 @@ try{
     input('Persona');await settle();assert.equal(directCalls,0);submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
     assert.equal(directTarget,conversationId);assert.equal(calls,channelCalls,'Chat never queries the channel/global directory endpoint');
     const pageId='00000000-0000-4000-8000-000000000005';mount('page',null,pageId);
-    await waitFor(()=>document.querySelector('[role="dialog"]')?.textContent.includes('Solo personas con acceso a esta página'));
+    await waitFor(()=>document.querySelector('[role="dialog"]')?.textContent.includes('Solo las personas con acceso a la página'));
     input('Persona');await settle();assert.equal(pageCalls,0);submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
     assert.deepEqual(pageTarget,{channel:'00000000-0000-4000-8000-000000000001',page:pageId});assert.equal(calls,channelCalls);
     root.render(React.createElement('p',null,React.createElement(Text,{text:'Hola @person@bold.gt https://example.com',mentions:[person]})));await waitFor(()=>document.querySelector('.messaging_mention'));

@@ -10,7 +10,7 @@ from .channel_models import ChannelAccessRule, DepartmentChannel, PrivateServerM
 
 def readable_channels(rows, employee_id, unit_id):
     rule = ChannelAccessRule.objects.filter(channel_id=OuterRef("pk"), employee_id=employee_id)
-    member = PrivateServerMember.objects.filter(server_id=OuterRef("server_id"), employee_id=employee_id)
+    member = PrivateServerMember.objects.filter(server_id=OuterRef("server_id"), server__deleted_at__isnull=True, employee_id=employee_id)
     return rows.annotate(_server_access=Subquery(member.values("access")[:1]),
         _channel_access=Subquery(rule.values("access")[:1]), _has_channel_access=Exists(rule)).filter(
         Q(server__isnull=False, _server_access__in=["read", "write"]) |
@@ -26,7 +26,7 @@ def channel_context(assignment, resource_id, context=None):
     if channel:
         channel["access"] = ChannelAccessRule.objects.filter(channel_id=resource_id, employee_id=assignment.employee_id).values_list("access", flat=True).first()
         if channel["server_id"]:
-            channel["server_access"] = PrivateServerMember.objects.filter(server_id=channel["server_id"], employee_id=assignment.employee_id).values_list("access", flat=True).first()
+            channel["server_access"] = PrivateServerMember.objects.filter(server_id=channel["server_id"], server__deleted_at__isnull=True, employee_id=assignment.employee_id).values_list("access", flat=True).first()
     if context is not None:
         context.resource_contexts[key] = channel
     return channel
