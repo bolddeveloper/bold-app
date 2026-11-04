@@ -44,6 +44,16 @@ test("personal tasks preserve scope, board and Equipo across reloads", () => {
     }
 });
 
+test("a legacy Equipo preference cannot trap an explicit return to Mis tareas", () => {
+    const mine = taskViewKey("assignment-a", "mine");
+    globalThis.localStorage = {getItem: key => key === mine ? "team" : null};
+    try {
+        assert.deepEqual(readTaskView(mine), {section: "tasks", view: "list"});
+        // Reloading Equipo itself remains valid; it is a separate destination.
+        assert.equal(restoreTaskNavigation({scope: "mine", section: "team", view: "board"}).section, "team");
+    } finally {delete globalThis.localStorage;}
+});
+
 test("project links override personal scope and cannot open Equipo", () => {
     assert.deepEqual(restoreTaskNavigation({scope: "mine", section: "team", view: "board"}, "?project=linked"), {
         scope: "project", projectId: "linked", section: "tasks", view: "board",

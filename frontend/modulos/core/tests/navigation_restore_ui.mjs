@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import {tmpdir} from "node:os";
-import {join, resolve} from "node:path";
-import {pathToFileURL} from "node:url";
+import {resolve} from "node:path";
+import {JSDOM} from "jsdom";
 import React, {act} from "react";
 import {createRoot} from "react-dom/client";
 import {createServer} from "vite";
 import {entranceModule} from "../shell_navigation_state.js";
-const {JSDOM} = await import(pathToFileURL(join(tmpdir(), "bold-ui-check/node_modules/jsdom/lib/api.js")));
 const dom = new JSDOM('<div id="root"></div>', {url: "http://localhost:5174"});
 for (const key of ["window", "document", "Event", "CustomEvent"]) globalThis[key] = dom.window[key];
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+// This isolated DOM fixture has no sibling browser tabs to synchronize.
+globalThis.BroadcastChannel = undefined;
 let resolvePermission;
 globalThis.navigationCore = {account: {id: "account"}, activeAssignment: {id: "employee"}, permissions: {can: () => new Promise(resolve => {resolvePermission = resolve;})}};
 const mounted = [];
@@ -27,7 +27,7 @@ const server = await createServer({configFile: false, plugins: [{name: "navigati
     if (path.endsWith("/tareas/src/data/task_data.js")) return "export const team_members = [];";
     if (path.endsWith("/hojas/sheets_cache.js")) return "export const sheetsCache = {clear: async () => {}};";
     if (/\/(task_app|admin_module|permissions_module|calendar_module|profile_module|workspace_module|suggestions_module|sheets_module)\.jsx(?:\?|$)/.test(path)) return "export default function Module() {return null;}";
-}}], resolve: {dedupe: ["react", "react-dom"]}, optimizeDeps: {noDiscovery: true, entries: [], include: []}, esbuild: {jsx: "automatic"}, server: {middlewareMode: true, hmr: false}, appType: "custom"});
+}}], resolve: {dedupe: ["react", "react-dom", "lucide-react", "sweetalert2"]}, optimizeDeps: {noDiscovery: true, entries: [], include: []}, esbuild: {jsx: "automatic"}, server: {middlewareMode: true, hmr: false}, appType: "custom"});
 const root = createRoot(document.getElementById("root"));
 try {
     const {ApplicationWorkspace} = await server.ssrLoadModule(`/@fs/${resolve("app.jsx").replaceAll("\\", "/")}`);

@@ -5,6 +5,9 @@ import AdministrationModule from "../administrativo/admin_module.jsx";
 import PermissionsModule from "../permisos/permissions_module.jsx";
 import CalendarModule from "../calendario/calendar_module.jsx";
 import ProfileModule from "../perfil/profile_module.jsx";
+import {NoteViewer} from "../perfil/news_preferences.jsx";
+import {getReleaseNotes} from "../perfil/release_notes.js";
+import {channelLinkTarget} from "../mensajeria/channel_links.js";
 import GoogleConnection from "../docs/google_connection.jsx";
 import WorkspaceModule from "../docs/workspace_module.jsx?docs-uploads";
 import SuggestionsModule from "../sugerencias/suggestions_module.jsx";
@@ -72,7 +75,8 @@ function ApplicationWorkspace() {
         ...(canAdminister ? { administration: <AdministrationModule /> } : {}),
     };
     if (sheetsPermission?.context !== permissionContext) return <p role="status">Restaurando vista...</p>;
-    return <ShellProvider key={core.activeAssignment?.id || "demo"} contextId={core.activeAssignment?.id || "demo"} navigation={navigation}>
+    return <ShellProvider key={core.activeAssignment?.id || "demo"} contextId={core.activeAssignment?.id || "demo"} navigation={navigation}
+        initialSlackTarget={channelLinkTarget(window.location.search)} news={{notes: getReleaseNotes(core.activeAssignment), Viewer: NoteViewer}}>
         <TasksModule externalModules={externalModules} />
     </ShellProvider>;
 }

@@ -2,10 +2,11 @@
 export function taskViewKey(navigationKey, scope, resourceId = "") {
     return scope === "mine" ? `${navigationKey}:mine:view` : `${navigationKey}:${scope}:${resourceId}:view`;
 }
-export function readTaskView(key, scope = "mine") {
+export function readTaskView(key) {
     let saved;
     try {saved = globalThis.localStorage?.getItem(key);} catch { /* Optional preference. */ }
-    return {section: ["timeline", "states", ...(scope === "mine" ? ["team"] : [])].includes(saved) ? saved : "tasks",
+    // Equipo is a separate destination, including for legacy saved preferences.
+    return {section: ["timeline", "states"].includes(saved) ? saved : "tasks",
         view: saved === "board" ? "board" : "list"};
 }
 

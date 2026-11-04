@@ -19,11 +19,32 @@ let root;
 try{
     const React=await import("react"),{createRoot}=await import("react-dom/client");
     const {default:News}=await server.ssrLoadModule(`/@fs/${path.resolve("../perfil/news_preferences.jsx").replaceAll("\\","/")}`);
-    const {releaseNotes}=await import("../../perfil/release_notes.js");
+    const {releaseNotes,itPilotReleaseNotes,getReleaseNotes}=await import("../../perfil/release_notes.js");
+    const pageButton=label=>Array.from(document.querySelectorAll(".bold_news_pagination button")).find(button=>button.textContent.includes(label));
+    async function checkPages(notes){
+        const titles=[];
+        assert.equal(document.querySelector(".bold_news_badge").textContent,`${notes.length} notas`);
+        while(true){
+            const cards=Array.from(document.querySelectorAll(".bold_news_card"));
+            assert.ok(cards.length<=6); titles.push(...cards.map(card=>card.querySelector("strong").textContent));
+            const nextPage=pageButton("Siguiente"); if(!nextPage || nextPage.disabled)break;
+            await React.act(async()=>nextPage.click());
+        }
+        assert.deepEqual(titles,notes.map(note=>note.title));
+        while(pageButton("Anterior") && !pageButton("Anterior").disabled)await React.act(async()=>pageButton("Anterior").click());
+    }
+    async function openNote(title){
+        while(true){
+            const card=Array.from(document.querySelectorAll(".bold_news_card")).find(card=>card.querySelector("strong").textContent===title);
+            if(card){await React.act(async()=>card.click());return;}
+            const nextPage=pageButton("Siguiente"); assert.ok(nextPage && !nextPage.disabled,`Missing note: ${title}`);
+            await React.act(async()=>nextPage.click());
+        }
+    }
     root=createRoot(document.getElementById("root"));
     await React.act(async()=>root.render(React.createElement(News)));
-    assert.equal(document.querySelectorAll(".bold_news_card").length,releaseNotes.length+7);
-    await React.act(async()=>document.querySelector(".bold_news_card").click());
+    await checkPages(getReleaseNotes({chat_enabled:true}));
+    await openNote(itPilotReleaseNotes[0].title);
     assert.match(document.querySelector('[role="dialog"]').textContent,/Borradores recuperables/);
     const next=()=>Array.from(document.querySelectorAll(".bold_news_dialog footer button")).find(button=>button.textContent.includes("Siguiente"));
     for(let i=0;i<6;i++)await React.act(async()=>next().click());
@@ -31,17 +52,17 @@ try{
     globalThis.__pilotNewsCore={activeAssignment:{id:"outside",chat_enabled:false}};
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
-    assert.equal(document.querySelectorAll(".bold_news_card").length,releaseNotes.length);
+    await checkPages(releaseNotes);
     assert.doesNotMatch(document.body.textContent,/Automatizaciones controladas|Borradores recuperables/);
     globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:true}};
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
-    await React.act(async()=>document.querySelector(".bold_news_card").click());
+    await openNote(itPilotReleaseNotes[0].title);
     globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:false}};
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
-    assert.equal(document.querySelectorAll(".bold_news_card").length,releaseNotes.length);
-    console.log("Pilot notes: seven cards, reader navigation, assignment switch and same-assignment revocation passed.");
+    await checkPages(releaseNotes);
+    console.log("Pilot notes: pagination, seven IT-only cards, reader navigation, assignment switch and same-assignment revocation passed.");
 }finally{
     if(root){const {act}=await import("react");await act(async()=>root.unmount());}
     await server.close();dom.window.close();delete globalThis.__pilotNewsCore;

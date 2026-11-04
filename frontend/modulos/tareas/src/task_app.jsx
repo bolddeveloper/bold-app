@@ -4306,6 +4306,8 @@ function TaskAppContent({ externalModules = {} }) {
             set_active_section(saved.section); set_active_view(saved.view);
             return;
         }
+        // Visiting Equipo must not replace the last personal task view.
+        if (active_section === "team") return;
         try { localStorage.setItem(view_storage_key, active_section === "tasks" ? active_view : active_section); } catch { /* Navigation works without storage. */ }
     }, [active_section, active_view, view_storage_key, task_scope]);
     use_effect(() => {

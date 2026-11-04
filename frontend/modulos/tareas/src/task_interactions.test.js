@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 const require = createRequire(new URL("../../core/package.json", import.meta.url));
 const { parse } = require("@babel/parser");
+const { JSDOM } = require("jsdom");
 const source = readFileSync(new URL("./task_app.jsx", import.meta.url), "utf8");
 const ast = parse(source, { sourceType: "module", plugins: ["jsx"] });
 function find(node, predicate) {
@@ -19,19 +20,30 @@ function handler(name, context) {
     const node = find(ast, item => item.type === "FunctionDeclaration" && item.id.name === name);
     return runInNewContext(`(${source.slice(node.start, node.end)})`, context);
 }
-// Prepared only: respect the user's instruction not to run tests.
-test("quick creation keeps clicks in either form and closes outside", () => {
+test("quick creation keeps current form and trigger clicks; closes outside or on Escape", () => {
     const node = find(ast, item => item.type === "VariableDeclarator" && item.id?.name === "close" && source.slice(item.start, item.end).includes("set_quick_task_open"));
     let closed = false;
     const close = runInNewContext(`(${source.slice(node.init.start, node.init.end)})`, {
         set_quick_task_text: () => {}, set_quick_task_open: value => {closed = !value;}, set_quick_task_section: () => {},
     });
-    for (const name of ["quick_task_form", "board_quick_task_form"]) {
-        close({type:"pointerdown", target:{closest: selectors => selectors.split(",").some(selector => selector.trim() === `.${name}`)}});
-        assert.equal(closed, false);
-    }
-    close({type:"pointerdown", target:{closest: () => null}});
-    assert.equal(closed, true);
+    const dom = new JSDOM(`<main>
+        <form class="bold_task_composer quick_task_form"><textarea></textarea><button>Guardar</button></form>
+        <form class="bold_task_composer board_quick_task_form"><textarea></textarea><button>Guardar</button></form>
+        <form class="bold_task_composer"><textarea></textarea><button>Guardar</button></form>
+        <button class="board_quick_add_button"><span>Agregar</span></button>
+        <button class="add_row_button"><span>Agregar</span></button><aside></aside>
+    </main>`);
+    try {
+        for (const target of dom.window.document.querySelectorAll("form, form textarea, form button, button span")) {
+            close({type:"pointerdown", target});
+            assert.equal(closed, false, "Clicks inside the composer or its trigger must preserve the draft");
+        }
+        close({type:"keydown", key:"Enter"}); assert.equal(closed, false);
+        close({type:"keydown", key:"Escape"}); assert.equal(closed, true);
+        closed = false;
+        close({type:"pointerdown", target:dom.window.document.querySelector("aside")});
+        assert.equal(closed, true);
+    } finally {dom.window.close();}
 });
 test("subtask arrow opens details without opening an editor", () => {
     let selected;

@@ -1,12 +1,11 @@
 import {useEffect, useRef} from "react";
 import {ArrowRight, Bell, Keyboard, Layers, Newspaper, UserRound, X} from "lucide-react";
-import {releaseNotes as publicNotes} from "../perfil/release_notes.js";
 import {useDialog} from "./shared/use_dialog.js";
 import "./header_news.css";
 
 const icons = {keyboard:Keyboard, bell:Bell, profile:UserRound, update:Layers};
 
-export function HeaderNewsPanel({releaseNotes = publicNotes, anchor, onClose, onViewAll, onSelect}) {
+export function HeaderNewsPanel({releaseNotes = [], anchor, onClose, onViewAll, onSelect}) {
     const panel = useRef(null);
     useDialog(true, ".header_news_panel", onClose);
     useEffect(() => {

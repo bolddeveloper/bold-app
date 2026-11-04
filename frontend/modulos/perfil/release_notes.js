@@ -545,6 +545,24 @@ export function getReleaseNotes(assignment) {
 
 export const releaseNotes = [
     {
+        id: "2026-11-04-team-personal-navigation",
+        date: "2026-11-04", category: "Correcciones", icon: "update",
+        title: "Vuelve de Equipo a Mis tareas conservando tu vista",
+        summary: "Se corrige el regreso a Mis tareas y se conserva la vista personal al consultar Equipo.",
+        sections: [
+            {title: "Qué se corrigió", items: [
+                "Pulsar Mis tareas después de entrar en Equipo vuelve a tus tareas, sin quedarse en el directorio del equipo.",
+                "Equipo ya no reemplaza tu preferencia de Lista, Tablero, Estados o Cronograma. Volver a tus tareas recupera esa vista.",
+                "La corrección también admite preferencias guardadas por versiones anteriores: no necesitas borrar los datos del navegador.",
+            ]},
+            {title: "Qué probar", items: [
+                "Elige una vista en Mis tareas, entra en Equipo y vuelve. Repite después de recargar mientras estás en Equipo.",
+                "Comprueba que puedes abrir y cerrar las notas de parche desde Novedades y desde Perfil.",
+            ]},
+            {title: "Alcance del piloto", items: ["Chat y Slack continúan disponibles únicamente para el departamento de IT y sujetos a sus permisos habituales."]},
+        ],
+    },
+    {
         id: "2026-11-03-compact-profile-settings",
         date: "2026-11-03",
         category: "Diseño",

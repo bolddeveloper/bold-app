@@ -50,7 +50,7 @@ test("header panels filter notifications and open the latest three patch notes",
         await wait(()=>document.querySelectorAll('article').length===0);assert.equal(cleared,1);
         assert.equal(button('Limpiar todo').disabled,true);
         let viewedAll=0, closed=0, noteIndex=null;
-        root.render(React.createElement(HeaderNewsPanel,{anchor:document.body,onClose:()=>closed++,onViewAll:()=>viewedAll++,onSelect:index=>noteIndex=index}));
+        root.render(React.createElement(HeaderNewsPanel,{releaseNotes,anchor:document.body,onClose:()=>closed++,onViewAll:()=>viewedAll++,onSelect:index=>noteIndex=index}));
         await wait(()=>document.querySelectorAll('.header_news_card').length===3);
         assert.deepEqual([...document.querySelectorAll('.header_news_copy strong')].map(e=>e.textContent),releaseNotes.slice(0,3).map(note=>note.title));
         document.querySelectorAll('.header_news_card')[2].click();assert.equal(noteIndex,2);

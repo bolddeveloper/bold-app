@@ -1,7 +1,5 @@
 import {HeaderNewsPanel} from "./header_news.jsx";
-import {NoteViewer} from "../perfil/news_preferences.jsx";
 import {NotificationPanel} from "./notification_panel.jsx";
-import {getReleaseNotes} from "../perfil/release_notes.js";
 import "./shared/bold_dialog.css";
 import {useKeyboardShortcuts} from "./use_keyboard_shortcuts.js";
 import {confirmBold} from "./shared/bold_dialog.js";
@@ -18,19 +16,17 @@ import { searchNavigation } from "./global_search.js";
 import { entranceModule, historyModule, isShellModuleAllowed } from "./shell_navigation_state.js";
 import { startNotificationBellReminder } from "./notification_bell.js";
 import {InterfaceWelcome} from "./interface_welcome.jsx";
-import {channelLinkTarget} from '../mensajeria/channel_links.js';
 const icon_map = { messaging: chat_icon, profile: settings_icon, docs: docs_icon, drive: drive_icon, home: home_icon, check: check_icon, inbox: inbox_icon, calendar: calendar_icon, reports: bar_chart_icon, sheets: sheets_icon, suggestions: ideas_icon, administration: shield_check_icon, permissions: key_round_icon };
 icon_map.slack = channels_icon;
 const render_icon = (icon, size) => createElement(icon, { size, strokeWidth: 2, "aria-hidden": "true" });
 const ShellContext = createContext(null);
 export const useShell = () => useContext(ShellContext);
-export function ShellProvider({ children, navigation, contextId = "demo" }) {
+export function ShellProvider({ children, navigation, contextId = "demo", initialSlackTarget = null, news }) {
     const storageKey = `bold_shell_module:${contextId}`;
     const [active_module, set_module] = useState(() => {
         let saved;
         try { saved = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey); } catch { /* Optional navigation preference. */ }
-        const query=new URLSearchParams(window.location.search);
-        if(channelLinkTarget(query) && isShellModuleAllowed("slack",navigation))return "slack";
+        if(initialSlackTarget && isShellModuleAllowed("slack",navigation))return "slack";
         return entranceModule(navigation, saved);
     });
     useEffect(() => {
@@ -43,7 +39,7 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
     const [profile_tab, set_profile_tab] = useState("account");
     const [chat_target, set_chat_target] = useState(null);
     const [slack_target,set_slack_target]=useState(()=>{
-        const target=channelLinkTarget(window.location.search);
+        const target=isShellModuleAllowed("slack",navigation) ? initialSlackTarget : null;
         return target ? {...target,requestId:crypto.randomUUID()}:null;
     });
     const slack_dirty=useRef(false);
@@ -127,11 +123,13 @@ export function ShellProvider({ children, navigation, contextId = "demo" }) {
             set_active_module(navigation.find(item => item.default)?.id || navigation[0]?.id);
         }
     }, [active_module, navigation]);
-    return <ShellContext.Provider value={{ set_slack_dirty, slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current || slack_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
+    return <ShellContext.Provider value={{ news, set_slack_dirty, slack_target, open_channel:async target=>{if(await set_active_module("slack")){set_slack_target({...target,requestId:crypto.randomUUID()});set_is_sidebar_open(false);}}, chat_target, open_direct_chat: async person => {if (await set_active_module("messaging")) {set_chat_target({...person}); set_is_sidebar_open(false);}}, profile_tab, set_profile_tab, profile_editing, set_profile_editing, set_profile_dirty, can_change_department: async () => {if (active_module === "docs" && workspace_busy.current) return false; return !(workspace_dirty.current || profile_dirty.current || slack_dirty.current) || await confirmBold("\u00bfCambiar departamento y descartar los cambios sin guardar?");}, open_profile: async (edit = false, tab = "account") => {if (await set_active_module("profile")) {set_profile_tab(tab);if (edit || active_module !== "profile") set_profile_editing(edit); set_is_sidebar_open(false);}}, active_module, set_active_module, workspace_tab_state, workspace_connection, open_workspace_tab, close_workspace_tab, select_workspace_tab, sync_workspace_account, drive_folder, finish_drive_folder: requestId => set_drive_folder(current => current?.requestId === requestId ? null : current), open_drive_folder: async folder => {if (await set_active_module("drive")) set_drive_folder({...folder, requestId: crypto.randomUUID()});}, workspace_file, set_workspace_file, set_workspace_dirty, set_workspace_busy, is_sidebar_open, set_is_sidebar_open, is_dark_mode, set_is_dark_mode, navigation_items: navigation }}>{children}</ShellContext.Provider>;
 }
 export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedback, overlays, membersContent, latestNewsId, welcomeConnection, children }) {
     const shell = useShell();
     const core = useCore();
+    const releaseNotes = shell.news?.notes || [];
+    const NoteViewer = shell.news?.Viewer;
     useEffect(() => {
         if (shell.active_module !== "home") return;
         let active = true;
@@ -196,8 +194,8 @@ export function AppShell({ sidebarProps, topBarProps, mobileHeaderProps, feedbac
         <main className="main_workspace" inert={compact && shell.is_sidebar_open ? true : undefined}>
             {feedback}
             <TopBar {...mobileHeaderProps} {...membersActions} {...profileActions} {...topBarProps} {...shell} {...identity} compact={compact} bellPulse={bellPulse} bellReminder={bellReminder} handle_toggle_notifications={handle_toggle_notifications} />
-            {newsAnchor && <ResponsiveOverlay query="(max-width: 1023px)"><div className="news_surface task_tool_anchor"><HeaderNewsPanel releaseNotes={getReleaseNotes(core.activeAssignment)} anchor={newsAnchor} onClose={() => setNewsAnchor(null)} onViewAll={() => {setNewsAnchor(null); shell.open_profile(false, "news");}} onSelect={index => {setNewsAnchor(null); setNewsNote(index);}}/></div></ResponsiveOverlay>}
-            {newsNote !== null && <NoteViewer releaseNotes={getReleaseNotes(core.activeAssignment)} index={newsNote} select={setNewsNote} close={() => setNewsNote(null)}/>}
+            {newsAnchor && <ResponsiveOverlay query="(max-width: 1023px)"><div className="news_surface task_tool_anchor"><HeaderNewsPanel releaseNotes={releaseNotes} anchor={newsAnchor} onClose={() => setNewsAnchor(null)} onViewAll={() => {setNewsAnchor(null); shell.open_profile(false, "news");}} onSelect={index => {setNewsAnchor(null); setNewsNote(index);}}/></div></ResponsiveOverlay>}
+            {newsNote !== null && NoteViewer && releaseNotes[newsNote] && <NoteViewer releaseNotes={releaseNotes} index={newsNote} select={setNewsNote} close={() => setNewsNote(null)}/>}
             {topBarProps.is_notifications_open && <ResponsiveOverlay query="(max-width: 1023px)" onClose={topBarProps.handle_close_notifications}><div className="notification_surface task_tool_anchor">{<NotificationsPanel {...topBarProps}/>}</div></ResponsiveOverlay>}
             {children}
         </main>
