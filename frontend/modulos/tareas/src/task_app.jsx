@@ -126,7 +126,31 @@ import { commentQueries, pagedCommentsEnabled, notifyCommentViews } from "./serv
 
 const notification_type_icons = { assignment: user_plus_icon, "task.assigned": user_plus_icon, "task.collaborator_added": user_plus_icon, "project.assigned": user_plus_icon, "project.member_added": user_plus_icon, comment: message_circle_icon, "comment.created": message_circle_icon, "comment.mentioned": message_circle_icon, status_changed: check_circle_icon, "task.status_changed": check_circle_icon };
 let stop_toast_layer;
-const app_toast = Swal.mixin({ didOpen: popup => { stop_toast_layer?.(); stop_toast_layer = floatToast(popup); }, didDestroy: () => { stop_toast_layer?.(); stop_toast_layer = null; }, toast: true, position: "top-end", showConfirmButton: false, timer: 2400, timerProgressBar: true, iconHtml: '<span class="task_action_spinner" aria-hidden="true"></span>', customClass: {popup: "task_notice_toast", icon: "task_notice_icon"} });
+const app_toast = Swal.mixin({
+    didOpen: popup => {
+        stop_toast_layer?.();
+        stop_toast_layer = floatToast(popup);
+        const title = Swal.getTitle();
+        if (!title || title.scrollHeight <= title.clientHeight) return;
+        title.tabIndex = 0;
+        Swal.increaseTimer(5000);
+        const pause = () => Swal.stopTimer();
+        popup.addEventListener("mouseenter", pause);
+        popup.addEventListener("focusin", pause);
+        popup.addEventListener("mouseleave", () => { if (!popup.matches(":focus-within")) Swal.resumeTimer(); });
+        popup.addEventListener("focusout", event => {
+            if (!popup.contains(event.relatedTarget) && !popup.matches(":hover")) Swal.resumeTimer();
+        });
+    },
+    didDestroy: () => { stop_toast_layer?.(); stop_toast_layer = null; },
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 2400,
+    timerProgressBar: true,
+    iconHtml: '<span class="task_action_spinner" aria-hidden="true"></span>',
+    customClass: {popup: "task_notice_toast", icon: "task_notice_icon"},
+});
 const show_task_permission_denied = message => Swal.fire({
     icon: "warning",
     title: "No puedes modificar esta tarea",

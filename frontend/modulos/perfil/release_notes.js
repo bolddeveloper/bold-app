@@ -546,7 +546,7 @@ export function getReleaseNotes(assignment) {
 export const releaseNotes = [
     {
         id: "2026-11-04-slack-mentions-notices-avatars",
-        date: "2026-11-04", category: "Mejoras", icon: "bell",
+        date: "2026-11-05", category: "Mejoras", icon: "bell",
         title: "Menciones más fáciles y avisos más compactos",
         summary: "Encuentra a colegas de otros departamentos, lee avisos sin perder de vista tu trabajo y distingue mejor los avatares en Slack.",
         sections: [
