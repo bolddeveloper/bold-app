@@ -1,5 +1,4 @@
-// Mejoras generales del 30 de octubre. El piloto de Chat/Slack conserva
-// su catálogo y su autorización independientes.
+// Mejoras generales del 30 de octubre. Se conservan las fechas y los IDs históricos.
 export const multitaskingReleaseNotes = [
     {id:"2026-10-30-owner-notice-origin",date:"2026-10-30",category:"Mejoras",icon:"bell",
         title:"Un distintivo discreto para los avisos del propietario",
@@ -29,7 +28,7 @@ export const multitaskingReleaseNotes = [
         summary:"La nueva tarea conserva un borrador cifrado por cuenta y las vistas de tareas respetan mejor tus preferencias.",
         sections:[{title:"Qué cambió",items:["El borrador de nueva tarea conserva descripción, imágenes insertadas, notas de voz, subtareas, colaboradores y adjuntos en este dispositivo durante hasta siete días. Puedes descartarlo desde el propio formulario.","Al cambiar de módulo, recargar o volver a iniciar sesión con la misma cuenta puedes retomar el borrador. No se envía automáticamente; si hubo un intento de envío, se pide comprobar primero si la tarea ya existe.","Las vistas de proyecto se separan por asignación. Volver a Tareas o abrir su menú ya no fuerza un reinicio de la vista; las secciones y filtros sincronizan sus preferencias entre pestañas.","Los borradores cifrados de Chat y Slack conservan su copia al cerrar sesión, retirando las claves de memoria. Recuperarlos exige iniciar sesión de nuevo y mantener permiso sobre la conversación o página."]},
             {title:"Qué probar",items:["Comienza una tarea con texto y adjuntos, cambia de módulo y regresa a crearla. Repite tras cerrar sesión. Comprueba también el descarte, las secciones contraídas y tu vista de proyecto."]},
-            {title:"Alcance",items:["La copia del borrador se conserva en este dispositivo; no se sincroniza entre equipos. Chat y Slack continúan disponibles únicamente para el piloto de IT."]}]},
+            {title:"Alcance",items:["La copia del borrador se conserva en este dispositivo; no se sincroniza entre equipos. Chat y Slack están disponibles para todos los departamentos desde el 6 de noviembre."]}]},
 ];
 
 // Borradores de piloto: NO forman parte del listado visible. Revisar fecha y
@@ -457,11 +456,11 @@ export const pendingPilotReleaseNotes = [{
 }];
 
 // Notas de versión. Añadir las nuevas entradas al principio de la lista.
-// Publicadas para el piloto, separadas de las novedades generales. La bandera
-// procede del servidor y de la asignación activa, no del nombre del cargo.
-export const itPilotReleaseNotes = [
+// Funciones publicadas inicialmente para IT y disponibles para toda la organización
+// desde el 6 de noviembre. Conservar fechas e identificadores ya publicados.
+export const messagingReleaseNotes = [
     {
-        id: "2026-10-30-it-private-drafts", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-private-drafts", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "1. Borradores recuperables y edición más segura",
         summary: "Recupera el trabajo pendiente de Chat, Slack y páginas sin enviarlo automáticamente.",
         sections: [{title: "Qué cambió", items: [
@@ -471,20 +470,20 @@ export const itPilotReleaseNotes = [
         ]}, {title: "Qué probar", items: [
             "Escribe en Chat o Slack, añade un archivo sin enviarlo y recarga. Recupera la preparación y comprueba que no se publicó ningún mensaje automáticamente.",
             "Edita una página junto a un colega y deshaz tu cambio: el suyo debe conservarse. Al cerrar sesión o perder acceso no deben recuperarse borradores privados.",
-        ]}, {title: "Alcance del piloto", items: ["Disponible solo para IT y sujeto a los permisos actuales. No sustituye una copia de seguridad ni permite recuperar contenido cuyo acceso se haya revocado."]}],
+        ]}, {title: "Disponibilidad", items: ["Disponible para todos los departamentos desde el 6 de noviembre, sujeto a los permisos actuales. No sustituye una copia de seguridad ni permite recuperar contenido cuyo acceso se haya revocado."]}],
     },
     {
-        id: "2026-10-30-it-history-search", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-history-search", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "2. Busca en el historial, no solo en lo que está cargado",
         summary: "Encuentra mensajes, páginas y archivos anteriores y ábrelos en su contexto.",
         sections: [{title: "Qué se agregó", items: [
             "La búsqueda recorre el historial conservado y permite filtrar por persona, conversación o canal, fechas y tipo de contenido.",
             "Los resultados incluyen mensajes, páginas y nombres o metadatos de archivos; no buscan dentro del contenido de documentos adjuntos.",
             "Las coincidencias, sus fragmentos y los resultados se filtran por tus permisos actuales antes de mostrarse.",
-        ]}, {title: "Qué probar", items: ["Busca una palabra de un mensaje antiguo, combina los filtros y abre el resultado. Repite con una página y con el nombre de un archivo.", "Comprueba con otro colega que un chat ajeno o un canal privado sin invitación no aparece en sus resultados."]}, {title: "Alcance del piloto", items: ["Solo IT. La búsqueda no concede acceso a conversaciones, páginas o tareas que no puedas consultar."]}],
+        ]}, {title: "Qué probar", items: ["Busca una palabra de un mensaje antiguo, combina los filtros y abre el resultado. Repite con una página y con el nombre de un archivo.", "Comprueba con otro colega que un chat ajeno o un canal privado sin invitación no aparece en sus resultados."]}, {title: "Permisos", items: ["La búsqueda no concede acceso a conversaciones, páginas o tareas que no puedas consultar."]}],
     },
     {
-        id: "2026-10-30-it-personal-attention", date: "2026-10-30", category: "Piloto IT", icon: "bell",
+        id: "2026-10-30-it-personal-attention", date: "2026-10-30", category: "Mejoras", icon: "bell",
         title: "3. Menciones, seguimiento y organización personal",
         summary: "Sigue hilos, guarda contenido, reacciona y decide cómo atender las menciones.",
         sections: [{title: "Qué se agregó y mejoró", items: [
@@ -492,20 +491,20 @@ export const itPilotReleaseNotes = [
             "Las menciones pueden avisarte en canales accesibles que no sigues. Puedes desactivar ese comportamiento desde tus preferencias de notificaciones.",
             "Ahora puedes seguir hilos, guardar mensajes, adjuntos y páginas, marcar conversaciones como no leídas y añadir o retirar tus propias reacciones.",
             "Los guardados y marcas personales se conservan entre dispositivos. Marcar como no leído no retira una confirmación de lectura ya enviada.",
-        ]}, {title: "Qué probar", items: ["Menciona a un colega en un canal que no siga, revisa la preferencia personal y prueba el seguimiento de un hilo.", "Guarda un mensaje, vuelve a abrirlo desde tus guardados y añade una reacción desde dos cuentas."]}, {title: "Alcance del piloto", items: ["Solo IT. Los avisos respetan el acceso y las preferencias; una reacción no modifica el mensaje ni amplía su plazo de edición."]}],
+        ]}, {title: "Qué probar", items: ["Menciona a un colega en un canal que no siga, revisa la preferencia personal y prueba el seguimiento de un hilo.", "Guarda un mensaje, vuelve a abrirlo desde tus guardados y añade una reacción desde dos cuentas."]}, {title: "Permisos", items: ["Los avisos respetan el acceso y las preferencias; una reacción no modifica el mensaje ni amplía su plazo de edición."]}],
     },
     {
-        id: "2026-10-30-it-messages-to-work", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-messages-to-work", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "4. Convierte conversaciones en tareas y acuerdos",
         summary: "Lleva una petición a Tareas o reúne mensajes en una página de acuerdos con referencias al origen.",
         sections: [{title: "Qué se agregó", items: [
             "Desde un mensaje puedes preparar una tarea, elegir un proyecto, sección, responsable y fecha con los permisos habituales del módulo Tareas.",
             "Puedes seleccionar varios mensajes y preparar una página de acuerdos. La revisión muestra lo que vas a compartir antes de confirmar.",
             "Los vínculos al origen respetan los permisos. Los reintentos de una misma operación evitan crear copias duplicadas.",
-        ]}, {title: "Qué probar", items: ["Convierte un mensaje en tarea y comprueba sus datos y referencias desde ambos módulos.", "Selecciona mensajes para una página de acuerdos, revisa el destino y confirma. No compartas un chat privado en un canal más amplio sin revisar su contenido."]}, {title: "Alcance del piloto", items: ["Solo IT. Crear una tarea o página no comparte automáticamente el historial completo ni concede acceso al origen privado."]}],
+        ]}, {title: "Qué probar", items: ["Convierte un mensaje en tarea y comprueba sus datos y referencias desde ambos módulos.", "Selecciona mensajes para una página de acuerdos, revisa el destino y confirma. No compartas un chat privado en un canal más amplio sin revisar su contenido."]}, {title: "Permisos", items: ["Crear una tarea o página no comparte automáticamente el historial completo ni concede acceso al origen privado."]}],
     },
     {
-        id: "2026-10-30-it-structured-pages", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-structured-pages", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "5. Páginas organizadas y conocimiento compartido",
         summary: "Organiza subpáginas, conecta información y resuelve comentarios sin perder el contexto.",
         sections: [{title: "Qué se agregó y mejoró", items: [
@@ -513,10 +512,10 @@ export const itPilotReleaseNotes = [
             "Puedes insertar enlaces internos con nombres personalizados y consultar las referencias de otras páginas a las que tengas acceso.",
             "Los bloques admiten comentarios y respuestas que pueden resolverse. Solo el autor puede editar o eliminar sus propios comentarios.",
             "Se amplían el formato básico, los alias de enlaces, los bloques de código y las plantillas de procesos, manteniendo la coedición y el historial existentes.",
-        ]}, {title: "Qué probar", items: ["Crea una subpágina, muévela y enlázala desde otra. Comprueba la navegación y sus referencias.", "Utiliza una plantilla, edita con otro colega y abre un comentario sobre un bloque para responderlo y resolverlo."]}, {title: "Alcance del piloto", items: ["Solo IT. Las páginas heredan el acceso al canal; copiar un enlace no invita a terceros ni habilita un portal para clientes."]}],
+        ]}, {title: "Qué probar", items: ["Crea una subpágina, muévela y enlázala desde otra. Comprueba la navegación y sus referencias.", "Utiliza una plantilla, edita con otro colega y abre un comentario sobre un bloque para responderlo y resolverlo."]}, {title: "Permisos", items: ["Las páginas heredan el acceso al canal; copiar un enlace no invita a terceros ni habilita un portal para clientes."]}],
     },
     {
-        id: "2026-10-30-it-resource-library", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-resource-library", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "6. Biblioteca de recursos y subidas recuperables",
         summary: "Consulta archivos y enlaces del historial y controla las preparaciones pendientes de envío.",
         sections: [{title: "Qué se agregó y mejoró", items: [
@@ -524,10 +523,10 @@ export const itPilotReleaseNotes = [
             "Se admiten PDF, TXT, CSV y documentos DOCX, XLSX y PPTX validados. Los documentos se descargan como originales, sin vista previa; el límite general es de 10 MB y TXT/CSV de 2 MB.",
             "Las preparaciones de archivos se suben en segundo plano al Drive configurado, sin crear permisos públicos. La interfaz distingue pendiente, listo, fallo y reintento.",
             "Puedes recuperar una preparación tras recargar, revisar lotes de reenvío y descartar archivos pendientes. Pausar la espera no equivale a descartar la preparación.",
-        ]}, {title: "Qué probar", items: ["Envía un documento y comprueba que el destinatario puede descargarlo desde su mensaje y biblioteca, pero un tercero no.", "Prepara un archivo, recarga y recupéralo; después prueba el descarte explícito. Reenvía una selección y comprueba que un reintento no duplica mensajes."]}, {title: "Límites del piloto", items: ["Solo IT. Las cuotas internas pueden detener nuevas preparaciones sin borrar lo publicado. Los permisos y el espacio disponible en Google siguen siendo independientes; esta validación de formatos no equivale a un antivirus."]}],
+        ]}, {title: "Qué probar", items: ["Envía un documento y comprueba que el destinatario puede descargarlo desde su mensaje y biblioteca, pero un tercero no.", "Prepara un archivo, recarga y recupéralo; después prueba el descarte explícito. Reenvía una selección y comprueba que un reintento no duplica mensajes."]}, {title: "Límites", items: ["Las cuotas internas pueden detener nuevas preparaciones sin borrar lo publicado. Los permisos y el espacio disponible en Google siguen siendo independientes; esta validación de formatos no equivale a un antivirus."]}],
     },
     {
-        id: "2026-10-30-it-scoped-automations", date: "2026-10-30", category: "Piloto IT", icon: "update",
+        id: "2026-10-30-it-scoped-automations", date: "2026-10-30", category: "Mejoras", icon: "update",
         title: "7. Automatizaciones controladas para tus canales",
         summary: "Configura recordatorios, avisos de cambio de estado y páginas periódicas con activación explícita.",
         sections: [{title: "Qué se agregó", items: [
@@ -535,15 +534,40 @@ export const itPilotReleaseNotes = [
             "Las reglas nuevas empiezan pausadas. Revisa el destino y confirma su activación; puedes consultar el registro de ejecuciones y pausarlas después.",
             "Cada persona administra únicamente sus reglas. Las ejecuciones vuelven a comprobar los permisos y evitan duplicar un mismo efecto al reintentar.",
             "El aviso de estado no modifica la tarea. Estas reglas no ejecutan código arbitrario ni envían mensajes a servicios externos.",
-        ]}, {title: "Qué probar", items: ["Crea un recordatorio próximo, comprueba que empieza pausado, actívalo y verifica el mensaje y su registro cuando llegue la hora.", "Configura un aviso de estado y una página periódica. Comprueba que otro colega no puede editar tus reglas y pausa las de prueba al terminar."]}, {title: "Límites del piloto", items: ["Solo IT y sujeto a permisos y cuotas. La ejecución es en segundo plano y puede demorarse; no debe usarse como alarma de emergencia o de precisión al segundo."]}],
+        ]}, {title: "Qué probar", items: ["Crea un recordatorio próximo, comprueba que empieza pausado, actívalo y verifica el mensaje y su registro cuando llegue la hora.", "Configura un aviso de estado y una página periódica. Comprueba que otro colega no puede editar tus reglas y pausa las de prueba al terminar."]}, {title: "Límites", items: ["Sujeto a permisos, cuotas y la habilitación de automatizaciones de la organización. La ejecución es en segundo plano y puede demorarse; no debe usarse como alarma de emergencia o de precisión al segundo."]}],
     },
 ];
 
-export function getReleaseNotes(assignment) {
-    return assignment?.chat_enabled === true ? [...itPilotReleaseNotes, ...releaseNotes].sort((a, b) => b.date.localeCompare(a.date)) : releaseNotes;
+export function getReleaseNotes() {
+    return releaseNotes;
 }
 
 export const releaseNotes = [
+    {
+        id: "2026-11-06-chat-slack-organization-launch", date: "2026-11-06", category: "Actualización", icon: "update",
+        title: "Chat y Slack para toda la organización",
+        summary: "Los módulos dejan de ser un piloto de IT y están disponibles para los empleados de todos los departamentos.",
+        sections: [
+            {title: "Conversaciones entre empleados", items: [
+                "Abre Chat desde la barra lateral o pulsa la tarjeta de un colega en Equipo. El avatar conserva el acceso a su perfil.",
+                "Comparte mensajes, imágenes, notas de voz y documentos; reenvía una selección a otros chats y consulta archivos y enlaces compartidos.",
+                "Las confirmaciones distinguen enviado, entregado y leído. Solo el autor puede editar un mensaje durante sus primeros diez minutos.",
+            ]},
+            {title: "Canales y páginas de trabajo", items: [
+                "En Slack encontrarás los departamentos y sus canales accesibles. Puedes organizar conversaciones en hilos y trabajar con páginas, plantillas y coedición según tus permisos.",
+                "Sigue los canales o hilos que te interesan, guarda referencias y configura tus avisos de menciones. Las siete notas de funciones de Chat y Slack ya forman parte del historial general de Novedades.",
+                "Las imágenes, notas de voz y documentos utilizan el Drive configurado en BOLD, con sus límites y controles de acceso.",
+            ]},
+            {title: "Privacidad y acceso", items: [
+                "Los chats directos siguen siendo privados para sus dos participantes. Los canales y servidores privados requieren invitación: abrir los módulos a toda la empresa no comparte sus conversaciones.",
+                "Se conservan los permisos configurables de Slack y las restricciones de lectura y participación de cada canal. Se requiere una cuenta y un cargo activos.",
+            ]},
+            {title: "Qué probar", items: [
+                "Inicia un chat con un colega de otro departamento, envía un mensaje y comprueba sus confirmaciones. Abre después un canal accesible en Slack y consulta sus páginas.",
+                "Si usas la PWA instalada, acepta Actualizar BOLD cuando aparezca el aviso; no es necesario instalarla de nuevo.",
+            ]},
+        ],
+    },
     {
         id: "2026-11-04-slack-mentions-notices-avatars",
         date: "2026-11-05", category: "Mejoras", icon: "bell",
@@ -554,7 +578,7 @@ export const releaseNotes = [
                 "Los avisos dentro de BOLD, como la confirmación al eliminar un comentario, ocupan menos espacio en computadora y teléfono.",
                 "Escribe @ en descripciones y comentarios de tareas para buscar personas de otros departamentos. Las menciones en descripciones sirven como referencia. En comentarios, los avisos respetan el acceso a la tarea y las preferencias de cada persona.",
             ]},
-            {title: "Slack durante el piloto de IT", items: [
+            {title: "Menciones y servidores de Slack", items: [
                 "Busca a colegas con @ en canales e hilos. Si alguien no tiene acceso a la conversación, aparece como Solo referencia y no recibe un aviso ni acceso.",
                 "Quien creó un servidor privado y conserva permiso para administrarlo puede eliminarlo desde su configuración. Los servidores de departamento están protegidos.",
                 "Las fotos de perfil ocupan el círculo del avatar en mensajes e hilos, con iniciales cuando falta una foto.",
@@ -576,7 +600,7 @@ export const releaseNotes = [
                 "Elige una vista en Mis tareas, entra en Equipo y vuelve. Repite después de recargar mientras estás en Equipo.",
                 "Comprueba que puedes abrir y cerrar las notas de parche desde Novedades y desde Perfil.",
             ]},
-            {title: "Alcance del piloto", items: ["Chat y Slack continúan disponibles únicamente para el departamento de IT y sujetos a sus permisos habituales."]},
+            {title: "Disponibilidad", items: ["Desde el 6 de noviembre, Chat y Slack están disponibles para todos los departamentos y sujetos a sus permisos habituales."]},
         ],
     },
     {
@@ -1223,4 +1247,5 @@ export const releaseNotes = [
             {title: "Preferencias y novedades", items: ["Cuenta, Conectores, Notificaciones y Atajos están disponibles desde Perfil.", "Las confirmaciones dentro de la aplicación usan ventanas con el diseño de BOLD.", "El nuevo apartado Novedades reúne las notas de la demo. Abre una tarjeta para consultar sus cambios completos."]},
         ],
     },
-];
+    ...messagingReleaseNotes,
+].sort((a, b) => b.date.localeCompare(a.date));

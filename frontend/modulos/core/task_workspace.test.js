@@ -10,7 +10,10 @@ test("task detail tabs retain comment drafts, open subtasks and preserve folded 
     const names=['window','document','navigator','HTMLElement','Element','Event','KeyboardEvent','MutationObserver','sessionStorage','ResizeObserver','DOMParser','BroadcastChannel'];
     const descriptors=Object.fromEntries(names.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
     for(const key of names)Object.defineProperty(globalThis,key,{configurable:true,value:key==='ResizeObserver' ? class {observe(){}disconnect(){}} : dom.window[key]});
-    const server=await createServer({root:process.cwd(),configFile:false,logLevel:'error',define:{'import.meta.env.VITE_USE_REAL_BACKEND':'"false"'},resolve:{dedupe:['react','react-dom','lucide-react','sweetalert2','qrcode','driver.js']},esbuild:{jsx:'automatic',jsxImportSource:'react'},cacheDir:path.join(os.tmpdir(),'bold-task-detail-ui'),optimizeDeps:{noDiscovery:true,entries:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
+    // The creation form is private to task_app; expose it only in this isolated harness.
+    const server=await createServer({root:process.cwd(),configFile:false,plugins:[{name:'task-form-test-export',enforce:'pre',transform(source,id){
+        if(id.replaceAll('\\','/').endsWith('/tareas/src/task_app.jsx'))return source+'\nexport {CreateTaskModal};';
+    }}],logLevel:'error',define:{'import.meta.env.VITE_USE_REAL_BACKEND':'"false"'},resolve:{dedupe:['react','react-dom','lucide-react','sweetalert2','qrcode','driver.js']},esbuild:{jsx:'automatic',jsxImportSource:'react'},cacheDir:path.join(os.tmpdir(),'bold-task-detail-ui'),optimizeDeps:{noDiscovery:true,entries:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
     let root;
     try {
     const {default:React}=await import('react'),{createRoot}=await import('react-dom/client');
@@ -87,7 +90,9 @@ test("task detail tabs retain comment drafts, open subtasks and preserve folded 
         assert.equal(created[0].start_date,'2026-11-02');assert.equal(created[0].due_date,'2026-11-09');
         assert.equal(created[0].subtasks[0].priority,'Alta');assert.match(created[0].subtasks[0].description,/Detalles conservados/);
         assert.equal(created[0].subtasks[0].assignee_id,'sofia');
-        assert.equal(created[0].subtasks[0].start_date,'2026-11-02');assert.equal(created[0].subtasks[0].due_date,'2026-11-09');
+        const today=new Date(),weekLater=new Date(today);weekLater.setDate(weekLater.getDate()+7);
+        const localDate=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        assert.equal(created[0].subtasks[0].start_date,localDate(today));assert.equal(created[0].subtasks[0].due_date,localDate(weekLater));
         assert.equal(JSON.parse(sessionStorage.getItem('detail-form-test')).subtasks[0].priority,'Alta');
         assert.ok(sessionStorage.getItem('detail-form-test'),'failed saves retain the draft');
         let edited;

@@ -19,7 +19,7 @@ let root;
 try{
     const React=await import("react"),{createRoot}=await import("react-dom/client");
     const {default:News}=await server.ssrLoadModule(`/@fs/${path.resolve("../perfil/news_preferences.jsx").replaceAll("\\","/")}`);
-    const {releaseNotes,itPilotReleaseNotes,getReleaseNotes}=await import("../../perfil/release_notes.js");
+    const {releaseNotes,messagingReleaseNotes,getReleaseNotes}=await import("../../perfil/release_notes.js");
     const pageButton=label=>Array.from(document.querySelectorAll(".bold_news_pagination button")).find(button=>button.textContent.includes(label));
     async function checkPages(notes){
         const titles=[];
@@ -44,7 +44,7 @@ try{
     root=createRoot(document.getElementById("root"));
     await React.act(async()=>root.render(React.createElement(News)));
     await checkPages(getReleaseNotes({chat_enabled:true}));
-    await openNote(itPilotReleaseNotes[0].title);
+    await openNote(messagingReleaseNotes[0].title);
     assert.match(document.querySelector('[role="dialog"]').textContent,/Borradores recuperables/);
     const next=()=>Array.from(document.querySelectorAll(".bold_news_dialog footer button")).find(button=>button.textContent.includes("Siguiente"));
     for(let i=0;i<6;i++)await React.act(async()=>next().click());
@@ -53,16 +53,19 @@ try{
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
     await checkPages(releaseNotes);
-    assert.doesNotMatch(document.body.textContent,/Automatizaciones controladas|Borradores recuperables/);
+    await openNote(messagingReleaseNotes[0].title);
+    assert.match(document.querySelector('[role="dialog"]').textContent,/Borradores recuperables/);
     globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:true}};
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
-    await openNote(itPilotReleaseNotes[0].title);
+    await openNote(messagingReleaseNotes[0].title);
     globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:false}};
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
     await checkPages(releaseNotes);
-    console.log("Pilot notes: pagination, seven IT-only cards, reader navigation, assignment switch and same-assignment revocation passed.");
+    await openNote(releaseNotes[0].title);
+    assert.match(document.querySelector('[role="dialog"]').textContent,/Chat y Slack para toda la organización/);
+    console.log("Release notes: pagination, seven general feature cards, launch, reader navigation and assignment switches passed.");
 }finally{
     if(root){const {act}=await import("react");await act(async()=>root.unmount());}
     await server.close();dom.window.close();delete globalThis.__pilotNewsCore;

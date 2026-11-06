@@ -20,7 +20,7 @@ def eligible_people(queryset):
 
 
 class CanUseChatPilot(BasePermission):
-    message = "Chat está disponible temporalmente solo para el departamento de IT."
+    message = "Chat requiere una asignación activa y autorizada."
 
     def has_permission(self, request, view):
         return assignment_can_chat(getattr(request, "assignment", None))

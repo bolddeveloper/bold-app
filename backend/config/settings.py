@@ -317,9 +317,9 @@ SHEETS_AGENDA_SOURCE = os.environ.get("SHEETS_AGENDA_SOURCE", "")
 # En producción Sheets permanece cerrado hasta configurar las unidades del piloto.
 SHEETS_PILOT_ENABLED = os.environ.get("SHEETS_PILOT_ENABLED", "false" if DEBUG else "true").lower() in {"true", "1"}
 SHEETS_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("SHEETS_PILOT_UNIT_IDS", "").split(",") if value.strip())
-# A missing allowlist closes Chat, including for owners. Open to everyone only
-# after the separately approved public launch.
-MESSAGING_PILOT_ENABLED = os.environ.get("MESSAGING_PILOT_ENABLED", "true").lower() in {"true", "1"}
+# Chat/Slack are available organization-wide. An explicit restricted rollout
+# remains supported for isolated staging or an operational rollback.
+MESSAGING_PILOT_ENABLED = os.environ.get("MESSAGING_PILOT_ENABLED", "false").lower() in {"true", "1"}
 MESSAGING_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get("MESSAGING_PILOT_UNIT_IDS", "").split(",") if value.strip())
 
 # Internal logical budgets, not a measurement/guarantee of Google/Oracle bills.

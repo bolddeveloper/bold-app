@@ -79,5 +79,27 @@ class ChatPilotTests(TestCase):
     def test_explicit_public_switch_preserves_private_chat_contract(self):
         with self.settings(MESSAGING_PILOT_ENABLED=False):
             self.assertTrue(AssignmentDirectorySerializer(self.owner).data["chat_enabled"])
-            response = self.client_for(self.alice).post(self.root, {"employee_id": str(self.employee.employee_id)}, format="json")
+            self.assertTrue(AssignmentDirectorySerializer(self.employee).data["chat_enabled"])
+            sender = self.client_for(self.alice)
+            recipient = self.client_for(self.employee)
+            response = sender.post(self.root, {"employee_id": str(self.employee.employee_id)}, format="json")
             self.assertEqual(response.status_code, 201)
+            detail = f"{self.root}{response.data['id']}/"
+            sent = sender.post(detail + "messages/", {"body": "Entre departamentos", "client_id": str(uuid.uuid4())}, format="json")
+            self.assertEqual(sent.status_code, 201, sent.data)
+            message_id = sent.data['message']['id']
+            history = recipient.get(detail + "messages/")
+            self.assertEqual(history.status_code, 200)
+            self.assertEqual(history.data['results'][0]['id'], message_id)
+            for state in ('delivered', 'read'):
+                receipt = recipient.post(detail + "receipts/", {"message_ids": [message_id], "state": state}, format="json")
+                self.assertEqual(receipt.status_code, 200, receipt.data)
+            from boldApp.notificaciones.models import Notification
+            self.assertTrue(Notification.objects.filter(recipient_assignment=self.employee,
+                type='messaging.message_created', resource_id=response.data['id']).exists())
+            for outsider in (self.owner, self.bob):
+                client = self.client_for(outsider)
+                self.assertEqual(client.get(detail + "messages/").status_code, 404)
+                self.assertEqual(client.get(self.root).data['results'], [])
+            self.assertEqual(recipient.patch(detail + "messages/" + message_id + "/",
+                {"body": "Edición ajena", "version": 1}, format="json").status_code, 403)

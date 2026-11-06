@@ -1,6 +1,8 @@
-# Plantillas y coedición de páginas — piloto IT
+# Plantillas y coedición de páginas
 
-Estado: desplegado y verificado en Oracle y Cloudflare; piloto exclusivo de IT.
+Estado vigente desde el 6 de noviembre de 2026: disponible para todos los
+departamentos, con los permisos e invitaciones de cada canal. El registro de
+implementación siguiente corresponde al piloto anterior de IT.
 Rama: `feature/chat-directo`. Base: `8459c3c1`.
 
 ## Entrega solicitada

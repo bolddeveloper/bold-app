@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,itPilotReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
 
-test("las cinco mejoras generales publicadas incluyen qué probar sin abrir el piloto",()=>{
+test("las cinco mejoras generales publicadas incluyen qué probar",()=>{
     assert.equal(multitaskingReleaseNotes.length,5);
     assert.deepEqual(releaseNotes.filter(note => multitaskingReleaseNotes.includes(note)),multitaskingReleaseNotes);
     for(const note of multitaskingReleaseNotes){
@@ -15,20 +15,20 @@ test("las cinco mejoras generales publicadas incluyen qué probar sin abrir el p
     assert.match(background.sections.flatMap(section=>section.items).join(" "),/completamente cerrada aún no está habilitada/);
 });
 
-test("las siete novedades del 30 de octubre solo se ofrecen a la asignación piloto habilitada",()=>{
-    assert.equal(itPilotReleaseNotes.length,7);
-    for(const assignment of [undefined,null,{}, {chat_enabled:false},{chat_enabled:"true"},{unit_name:"IT"},{account_is_superuser:true}]){
+test("las siete funciones publicadas se ofrecen a toda la organización conservando sus IDs",()=>{
+    assert.equal(messagingReleaseNotes.length,7);
+    for(const assignment of [undefined,null,{}, {chat_enabled:false},{chat_enabled:true},{chat_enabled:"true"},{unit_name:"Marketing"},{account_is_superuser:true}]){
         assert.deepEqual(getReleaseNotes(assignment),releaseNotes);
     }
-    const notes=getReleaseNotes({id:"it",chat_enabled:true});
-    assert.deepEqual(notes,[...itPilotReleaseNotes,...releaseNotes].sort((a,b)=>b.date.localeCompare(a.date)));
+    const notes=getReleaseNotes({id:"marketing",chat_enabled:true});
     assert.equal(new Set(notes.map(note=>note.id)).size,notes.length);
-    for(const note of itPilotReleaseNotes){
-        assert.equal(note.date,"2026-10-30");assert.equal(note.category,"Piloto IT");
+    for(const note of messagingReleaseNotes){
+        assert.equal(note.date,"2026-10-30");assert.match(note.id,/^2026-10-30-it-/);
+        assert.notEqual(note.category,"Piloto IT");
         assert.ok(note.title && note.summary && note.sections.length>=3);
         assert.ok(note.sections.some(section=>section.title==="Qué probar"));
         for(const section of note.sections)assert.ok(section.title && section.items.every(item=>typeof item==="string" && item.trim()));
-        assert.equal(releaseNotes.some(row=>row.id===note.id),false);
+        assert.equal(releaseNotes.some(row=>row.id===note.id),true);
     }
 });
 
@@ -41,7 +41,14 @@ test("las notas preparadas del piloto conservan el formato sin publicarse",()=>{
     }
 });
 
-test("el chat piloto no se anuncia como lanzamiento público", () => {
+test("el lanzamiento reemplaza las referencias vigentes al piloto sin publicar borradores antiguos", () => {
+    const launch=releaseNotes[0];
+    assert.equal(launch.id,"2026-11-06-chat-slack-organization-launch");
+    assert.equal(launch.date,"2026-11-06");
+    assert.match(launch.summary,/dejan de ser un piloto/);
+    for(const note of releaseNotes.filter(note=>note.id!==launch.id && note.id!=="2026-10-19-sheets-it-pilot")){
+        assert.doesNotMatch(JSON.stringify([note.category,note.title,note.summary,note.sections]),/piloto|Solo IT|solo para IT|únicamente para el departamento de IT/i);
+    }
     assert.equal(releaseNotes.some(note => ["2026-10-19-live-messaging-receipts", "2026-10-19-direct-messaging-foundation"].includes(note.id)), false);
     assert.ok(releaseNotes.some(note => note.id === "2026-10-19-notification-push-recovery"));
 });
@@ -49,7 +56,7 @@ test("el chat piloto no se anuncia como lanzamiento público", () => {
 test("las notas conservan campos completos, identificadores únicos y fechas válidas", () => {
     assert.ok(releaseNotes.length > 0);
     assert.equal(new Set(releaseNotes.map(note => note.id)).size, releaseNotes.length);
-    for (const note of [...itPilotReleaseNotes,...releaseNotes]) {
+    for (const note of releaseNotes) {
         for (const key of ["id", "date", "category", "icon", "title", "summary"]) {
             assert.equal(typeof note[key], "string", `${note.id}: ${key}`);
             assert.ok(note[key].trim(), `${note.id}: ${key} vacío`);

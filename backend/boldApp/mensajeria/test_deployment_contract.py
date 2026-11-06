@@ -59,10 +59,15 @@ class DeploymentContractTests(SimpleTestCase):
                 self.assertEqual(environment.get(name),'${'+name+':-'+str(default)+'}')
                 self.assertEqual(example.get(name),str(default))
 
-    def test_api_and_worker_share_the_anchor_and_keep_automations_and_pilot_closed_by_default(self):
+    def test_api_and_worker_share_the_anchor_with_general_messaging_and_explicit_automations(self):
         compose=(ROOT/'deploy/oracle/compose.oracle.yaml').read_text(encoding='utf-8')
         self.assertIn('  MESSAGING_AUTOMATIONS_ENABLED: "${MESSAGING_AUTOMATIONS_ENABLED:-false}"',compose)
-        self.assertIn('  MESSAGING_PILOT_ENABLED: "${MESSAGING_PILOT_ENABLED:-true}"',compose)
+        self.assertIn('  MESSAGING_PILOT_ENABLED: "${MESSAGING_PILOT_ENABLED:-false}"',compose)
+        self.assertEqual(self.renderer().example_settings()['MESSAGING_PILOT_ENABLED'],'false')
+        settings_tree=ast.parse((ROOT/'backend/config/settings.py').read_text(encoding='utf-8'))
+        pilot=next(node.value for node in settings_tree.body if isinstance(node,ast.Assign)
+            and any(isinstance(target,ast.Name) and target.id=='MESSAGING_PILOT_ENABLED' for target in node.targets))
+        self.assertEqual(pilot.left.func.value.args[1].value,'false')
         self.assertIn('  MESSAGING_PILOT_UNIT_IDS: "${MESSAGING_PILOT_UNIT_IDS:-}"',compose)
         for service,next_service in [('backend','worker'),('worker','cloudflared')]:
             block=compose.split('\n  '+service+':\n',1)[1].split('\n  '+next_service+':\n',1)[0]

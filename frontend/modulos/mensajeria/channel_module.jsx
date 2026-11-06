@@ -552,7 +552,7 @@ export default function ChannelModule() {
         }catch(err){setError(err.message);setMentionPicker(null);setInlineMention(null);}
     }
     const fileTransfer=useFileTransfer({field,context:`${identity}:${key}`,disabled:composerLocked || loading || !!edit || pendingMedia || sidebarLocked || catalogOpen || startingThread,onFiles:addFiles});
-    if (!allowed) return <section className="slack_module"><p role="status">Slack permanece disponible únicamente para el piloto de IT con una sesión autorizada.</p></section>;
+    if (!allowed) return <section className="slack_module"><p role="status">Slack requiere una sesión autorizada y permisos de acceso. Si cambiaste de cargo, vuelve a comprobar tu sesión.</p></section>;
     const groups=[...new Map([
         ...departments.map(row=>({...row,departmentId:row.id})),
         ...servers.map(row=>({...row,id:`server:${row.id}`,serverId:row.id})),

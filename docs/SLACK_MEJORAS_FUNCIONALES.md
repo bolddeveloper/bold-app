@@ -1,5 +1,14 @@
 # Slack, páginas y Chat: mejoras funcionales ordenadas
 
+## Lanzamiento general — 6 de noviembre de 2026
+
+Chat y Slack están disponibles para todos los departamentos. Se retira la
+restricción de IT mediante `MESSAGING_PILOT_ENABLED=false` en HTTP y trabajador,
+conservando los permisos y las invitaciones privadas. Las siete tarjetas
+funcionales pasan al historial general con sus IDs y fechas conservados y una
+nota nueva explica la apertura. El detalle operativo vigente está al inicio de
+`docs/CHAT_PILOTO_IT.md`; las entregas siguientes son el registro histórico.
+
 ## Entrega online autorizada — 30 de octubre de 2026
 
 Las siete fases se desplegaron para la revisión online del equipo de IT, sin

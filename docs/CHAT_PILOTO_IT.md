@@ -1,4 +1,23 @@
-# Chat: piloto interno de IT
+# Chat y Slack: lanzamiento general e historial del piloto
+
+## Estado vigente — 6 de noviembre de 2026
+
+Chat y Slack dejan de ser un piloto: están disponibles para empleados activos de
+todos los departamentos con `MESSAGING_PILOT_ENABLED=false` en backend y worker.
+El valor predeterminado del código, Compose y su ejemplo también es `false`.
+No se crean invitaciones ni se amplían permisos de recursos: los chats siguen
+siendo privados para dos participantes, y los canales y servidores privados
+requieren invitación. Los permisos configurados de Slack siguen aplicándose.
+Sheets mantiene su configuración independiente; esta apertura no lo modifica.
+
+Novedades incluye una nota de lanzamiento y las siete tarjetas funcionales ya
+publicadas, ahora con categoría general y sus identificadores y fechas intactos.
+Los borradores internos no publicados siguen fuera del historial visible.
+
+Para restringir temporalmente una instalación puede activarse explícitamente
+`MESSAGING_PILOT_ENABLED=true` con su lista de unidades; eso no elimina historial.
+Las secciones siguientes documentan el desarrollo y las entregas anteriores:
+sus restricciones de IT corresponden al estado histórico, no al lanzamiento actual.
 
 Esta entrega habilita pruebas exclusivamente entre personas con una plaza activa
 en las unidades autorizadas de IT. No constituye el lanzamiento público del chat.

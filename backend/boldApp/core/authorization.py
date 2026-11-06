@@ -391,7 +391,7 @@ def resolve_access(
     if permission.code.startswith("slack."):
         from boldApp.mensajeria.access import assignment_can_chat
         if not assignment_can_chat(assignment):
-            return _decision(False, "Slack permanece en el piloto de IT.", "slack_pilot_restricted",
+            return _decision(False, "Slack requiere una asignación activa y autorizada.", "slack_pilot_restricted",
                              "system", policy_version=context.policy_version)
         if resource_id is not None:
             from boldApp.mensajeria.channel_acl import boundary_allows

@@ -9,6 +9,17 @@ ejecutar el Compose. Nunca agregues `.env.oracle` ni la carpeta `backups` a Git.
 
 Preparación de Sheets y comprobaciones antes de publicar: [SHEETS.md](SHEETS.md).
 
+## Chat y Slack: acceso general
+
+Desde el 6 de noviembre de 2026, `MESSAGING_PILOT_ENABLED=false` abre los módulos
+a los empleados activos de todos los departamentos. Es el valor predeterminado
+de Django, Compose y la plantilla. Una instalación que conserve `true` en su
+`.env.oracle` seguirá restringida: actualizarlo y recrear **backend y worker**.
+Las invitaciones de canales/servidores privados y los permisos de Slack se
+conservan. `SHEETS_PILOT_ENABLED` es independiente y no cambia con esta entrega.
+El modo restringido sigue disponible como configuración explícita de pruebas
+o reversión; no elimina historial.
+
 ## Notificaciones con la PWA cerrada
 
 La implementación Web Push necesita aplicar `boldApp_notificaciones.0003_web_push`
