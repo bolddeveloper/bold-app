@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {pendingSupportContextReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
 
-test("el contexto de BOLD se prepara solo como lectura y sin anunciar producción",()=>{
-    const [note]=pendingSupportContextReleaseNotes;
-    assert.equal(pendingSupportContextReleaseNotes.length,1);
-    assert.equal(getReleaseNotes({chat_enabled:true}).some(row=>row.id===note.id),false);
+test("soportebold y MCP se publican juntos tras verificar producción, conservando límites y permisos",()=>{
+    const [note]=supportIntegrationReleaseNotes;
+    assert.equal(supportIntegrationReleaseNotes.length,1);
+    assert.equal(releaseNotes[0],note);
+    assert.equal(getReleaseNotes({chat_enabled:true}).filter(row=>row.id===note.id).length,1);
     const text=note.sections.flatMap(row=>row.items).join(' ');
     assert.match(text,/Solo lectura/);
     assert.match(text,/No conecta servicios externos/);
-    assert.match(text,/sin despliegue en producción/);
+    assert.match(text,/activo en producción/);
+    assert.match(text,/no amplía tus permisos/);
+    assert.match(text,/como máximo en una hora/);
 });
 
 test("soporte BOLD prepara una nota sin anunciar un despliegue", () => {
@@ -68,7 +71,7 @@ test("las notas preparadas del piloto conservan el formato sin publicarse",()=>{
 });
 
 test("el lanzamiento reemplaza las referencias vigentes al piloto sin publicar borradores antiguos", () => {
-    const launch=releaseNotes[0];
+    const launch=releaseNotes.find(note=>note.id==="2026-11-06-chat-slack-organization-launch");
     assert.equal(launch.id,"2026-11-06-chat-slack-organization-launch");
     assert.equal(launch.date,"2026-11-06");
     assert.match(launch.summary,/dejan de ser un piloto/);

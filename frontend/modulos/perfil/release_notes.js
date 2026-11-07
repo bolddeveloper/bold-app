@@ -1,18 +1,22 @@
-// Notas preparadas fuera de los listados publicados.
-export const pendingSupportContextReleaseNotes = [{
+// Entrega comprobada en producción el 7 de noviembre.
+export const supportIntegrationReleaseNotes = [{
     id:"2026-11-07-soporte-bold-contexto-lectura",date:"2026-11-07",category:"Mejoras",icon:"update",
-    title:"Consulta el contexto de BOLD desde Slack",
-    summary:"soportebold puede resumir mensajes del canal y consultar información compartida del equipo, solo como lectura.",
+    title:"soportebold y la conexión de asistentes ya están disponibles",
+    summary:"Consulta el contexto compartido desde Slack y conecta asistentes con tu cuenta y permisos de BOLD.",
     sections:[{title:"Qué puedes consultar",items:[
         "Menciona a @soportebold en un canal y pregunta por mensajes recientes o por su hilo. También puede consultar nombres y departamentos del directorio de Mi equipo.",
         "Puede informar sobre responsables, estados y fechas de tareas que las personas publicaron en Mi equipo para el departamento del canal. En servidores personales utiliza tu departamento activo.",
+    ]},{title:"Conectar un asistente mediante MCP",items:[
+        "La conexión utiliza una asignación de tu cuenta y los permisos que tenga en BOLD. Puedes autorizar solo lectura; permitir cambios requiere una confirmación expresa y no amplía tus permisos.",
+        "Cada conexión vence como máximo en una hora y termina antes al vencer o cerrar la sesión de BOLD que la autorizó. Después debes volver a autorizar.",
     ]},{title:"Límites y disponibilidad",items:[
         "Solo lectura: no modifica tareas ni ajustes. No consulta otros canales, mensajes directos, tareas sin compartir ni contenido de adjuntos. No conecta servicios externos.",
         "El contexto tiene límites de tamaño; una muestra no equivale al total del equipo. Los permisos y las publicaciones se revisan de nuevo antes de responder.",
-        "Configuración de producción preparada con un servicio independiente. Requiere activación y una cuenta de Codex autorizada; todavía sin despliegue en producción. Las respuestas siguen consumiendo el uso de esa cuenta.",
+        "El asistente está activo en producción. Sus respuestas consumen el uso o los créditos de la cuenta de Codex configurada para el servicio. Se aplican límites diarios y los fallos no se reintentan automáticamente.",
     ]}],
 }];
 
+// Borradores históricos fuera de los listados publicados.
 export const pendingSupportReleaseNotes = [{
     id:"2026-11-06-soporte-bold-mentions",date:"2026-11-06",category:"Mejoras",icon:"update",
     title:"Pide ayuda a Soporte BOLD desde un hilo de Slack",
@@ -586,6 +590,7 @@ export function getReleaseNotes() {
 }
 
 export const releaseNotes = [
+    ...supportIntegrationReleaseNotes,
     {
         id: "2026-11-06-chat-slack-organization-launch", date: "2026-11-06", category: "Actualización", icon: "update",
         title: "Chat y Slack para toda la organización",
