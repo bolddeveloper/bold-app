@@ -60,7 +60,7 @@ function Department({value}) {
     return <span className="slack_department" style={{"--department-color":/^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "var(--bold_red_dark)"}}>{value.name}</span>;
 }
 
-function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved, onDeleted}) {
+function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved, onDelete}) {
     const [unit, setUnit] = useState(channel ? channel.department?.id || "" : scope ? scope.departmentId || "" : canCreateIndependent ? "" : departments.find(row => row.can_create)?.id || "");
     const [name, setName] = useState(channel?.name || ""), [description, setDescription] = useState(channel?.description || "");
     const [color,setColor]=useState(channel?.color || ""),[inviting,setInviting]=useState(false);
@@ -88,9 +88,7 @@ function ChannelEditor({channel, scope, departments, canCreateIndependent, onClo
         sending.current = true; setBusy(true); setError("");
         const controller = new AbortController(); request.current = controller;
         try {
-            if (!await confirmBold(`¿Eliminar «${channel.name}»? El canal dejará de estar disponible para todos sus miembros. El historial y los archivos se conservan.`, {title:"Eliminar canal de texto"}) || controller.signal.aborted) return;
-            await channelApi.deleteChannel(channel.id, channel.version, {signal:controller.signal});
-            if (active.current && !controller.signal.aborted) onDeleted(channel.id);
+            await onDelete(channel,{signal:controller.signal});
         } catch (err) {if (active.current && err.name !== "AbortError") setError(channelError(err));}
         finally {sending.current = false; if (active.current) setBusy(false);}
     }
@@ -564,6 +562,18 @@ export default function ChannelModule() {
         setNotice("Canal eliminado; se conserva el historial y los archivos.");
         refresh.current?.request();
     }
+    async function removeChannel(row,{signal}={}) {
+        if(busy.current || recording || !row.can_manage || signal?.aborted)return false;
+        const snapshot=state.current.identity;
+        busy.current=true;setSending(true);setError('');
+        try {
+            if(!await confirmBold(`¿Eliminar «${row.name}»? El canal dejará de estar disponible para todos sus miembros. El historial y los archivos se conservan.`,{title:'Eliminar canal de texto'}) || !mounted.current || signal?.aborted || snapshot!==state.current.identity)return false;
+            await channelApi.deleteChannel(row.id,row.version,{signal});
+        } catch(err) {if(err.status===409)refresh.current?.request();throw err;}
+        finally {busy.current=false;if(mounted.current)setSending(false);}
+        if(mounted.current && !signal?.aborted && snapshot===state.current.identity)await channelDeleted(row.id);
+        return true;
+    }
     async function openTask(task) {
         if (!task?.available || openingTask.current) return;
         const controller=new AbortController();openingTask.current=controller;setOpeningTaskId(task.id);setError("");
@@ -629,7 +639,7 @@ export default function ChannelModule() {
             <header><div><h1 title={activeServer?.name}>{activeServer?.name || "Slack"}</h1>{activeServer?.private && <small>Privado</small>}</div>{activeServer?.can_edit_icon && <button type="button" aria-label="Cambiar imagen del servidor" title="Cambiar imagen del servidor" disabled={sending || recording} onClick={()=>setIconEditor(activeServer)}><ImagePlus size={17}/></button>}{activeServer?.private && activeServer.can_manage && <button type="button" aria-label="Configurar servidor" title="Invitaciones y configuración" onClick={()=>setServerEditor({...activeServer,id:activeServer.serverId})}><Settings2 size={17}/></button>}<button type="button" aria-label="Ocultar canales" title="Ocultar canales" onClick={hideExplorer}><PanelLeftClose size={18} aria-hidden="true"/></button></header>
             <div className="slack_channel_search"><span className="slack_field_label">Buscar canal</span><SearchField label="Buscar canal" value={query} onChange={setQuery} placeholder="Nombre del canal"/></div>
             <details className="slack_filters"><summary><ListFilter size={15} aria-hidden="true"/>Filtrar canales</summary><div><label className="slack_archive_filter"><input type="checkbox" checked={archived} onChange={event=>setArchived(event.target.checked)}/> Incluir archivados</label></div></details>
-            <ChannelCategories key={`${identity}:${activeServer?.id}`} server={activeServer} channels={matchingChannels} selectedId={selected?.id} loading={loading} query={query} disabled={sending || recording} unreadFor={unreadFor} onSelect={select} onCreateChannel={createInServer} onDenied={report} onChannelChanged={row=>{setChannels(current=>current.map(item=>item.id===row.id ? mergeChannelDetails(item,row):item));setSelected(current=>current?.id===row.id ? mergeChannelDetails(current,row):current);}}/>
+            <ChannelCategories key={`${identity}:${activeServer?.id}`} server={activeServer} channels={matchingChannels} selectedId={selected?.id} loading={loading} query={query} disabled={sending || recording} unreadFor={unreadFor} onSelect={select} onCreateChannel={createInServer} onConfigureChannel={row=>setEditor({channel:row})} onDeleteChannel={removeChannel} onDenied={report} onChannelChanged={row=>{setChannels(current=>current.map(item=>item.id===row.id ? mergeChannelDetails(item,row):item));setSelected(current=>current?.id===row.id ? mergeChannelDetails(current,row):current);}}/>
             {channelNext && <button type="button" disabled={loading} onClick={async () => {setLoading(true);const controller=reads.current,querySnapshot=query,serverSnapshot=department;try {const page = await channelApi.list(archived,channelNext,{signal:controller.signal},{...channelServerFilters(serverSnapshot),...(query ? {q:query}:{})}); if (!controller.signal.aborted && mounted.current && querySnapshot===state.current.query && serverSnapshot===state.current.department) {setChannels(current => [...new Map([...current,...page.results].map(row => [row.id,row])).values()]); setChannelNext(page.next);}} catch(err) {if(!controller.signal.aborted)report(err);} finally {if (mounted.current && !controller.signal.aborted) setLoading(false);}}}>Cargar más canales</button>}
             <div className="slack_sidebar_shortcuts">
                 <button type="button" aria-label="Buscar en el historial" disabled={sending || recording} onClick={()=>setHistoryOpen(true)}><History size={16} aria-hidden="true"/><span>Historial</span></button>
@@ -704,7 +714,7 @@ export default function ChannelModule() {
                 </section>
             </div>}
         </main>
-        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onDeleted={channelDeleted} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
+        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onDelete={removeChannel} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
         {iconEditor && <ServerIconEditor server={iconEditor} onClose={()=>setIconEditor(null)} onSaved={value=>{const row=iconEditor;setIconEditor(null);if(row.private){setServers(current=>current.map(item=>item.id===row.serverId ? {...item,...value}:item));setSelected(current=>current?.server?.id===row.serverId ? {...current,server:{...current.server,...value}}:current);}else setDepartments(current=>current.map(item=>item.id===row.id ? {...item,...value}:item));}}/>}
         {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved} onDeleted={serverDeleted}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}

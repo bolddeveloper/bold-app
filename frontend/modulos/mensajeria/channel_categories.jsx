@@ -6,11 +6,11 @@ import {ReadingScopeBadge} from './reading_reminder.jsx';
 import {confirmBold,promptBold} from '../core/shared/bold_dialog.js';
 import './channel_categories.css';
 
-export default function ChannelCategories({server,channels,selectedId,loading,query,disabled,unreadFor,onSelect,onCreateChannel,onChannelChanged,onDenied}){
+export default function ChannelCategories({server,channels,selectedId,loading,query,disabled,unreadFor,onSelect,onCreateChannel,onChannelChanged,onConfigureChannel,onDeleteChannel,onDenied}){
     const [catalog,setCatalog]=useState({results:[],can_manage:false}),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
     const [creating,setCreating]=useState(false),[name,setName]=useState(''),[collapsed,setCollapsed]=useState({}),[context,setContext]=useState(null),[dragging,setDragging]=useState(null),[over,setOver]=useState(undefined);
     const menu=useRef(null),field=useRef(null),createButton=useRef(null),active=useRef(true),request=useRef(null),pending=useRef(false),attempt=useRef(null),drag=useRef(null),refresh=useRef(null);
-    const callbacks=useRef({});callbacks.current={onDenied,onChannelChanged};
+    const callbacks=useRef({});callbacks.current={onDenied,onChannelChanged,onConfigureChannel,onDeleteChannel};
     const scope=channelServerFilters(server.id),categories=catalog.results,canManage=ready && catalog.can_manage;
     const selectedCategory=channels.find(row=>row.id===selectedId)?.category_id;
     const locked=disabled || busy;
@@ -76,6 +76,14 @@ export default function ChannelCategories({server,channels,selectedId,loading,qu
         catch(err){if(!controller.signal.aborted){fail(err);refresh.current?.request();window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{kind:'channel.categories_changed',scope:server.id}}}));}}
         finally{pending.current=false;if(active.current && !controller.signal.aborted)setBusy(false);}
     }
+    async function removeChannel(row){
+        if(pending.current || locked || !row.can_manage)return;
+        pending.current=true;setBusy(true);setError('');setNotice('');closeMenu();
+        const controller=new AbortController();request.current=controller;
+        try{await callbacks.current.onDeleteChannel(row,{signal:controller.signal});}
+        catch(err){if(!controller.signal.aborted)fail(err);}
+        finally{pending.current=false;if(active.current && !controller.signal.aborted)setBusy(false);}
+    }
     function begin(event,kind,row){
         if(locked || event.target.closest('[data-no-drag]')){event.preventDefault();return;}
         const value={kind,id:row.id};drag.current=value;setDragging(value);setContext(null);
@@ -90,7 +98,7 @@ export default function ChannelCategories({server,channels,selectedId,loading,qu
     }
     function channelRow(row){const count=unreadFor(row);return <div key={row.id} className={`slack_channel_item ${dragging?.kind==='channel' && dragging.id===row.id ? 'is_dragging':''}`} draggable={!locked && row.can_manage} onDragStart={event=>begin(event,'channel',row)} onDragEnd={finish} onContextMenu={event=>{if(row.can_manage && ready)openMenu('channel',event,row);}}>
         <button type="button" draggable={!locked && row.can_manage} style={{'--channel-color':channelColor(row)}} aria-current={selectedId===row.id ? 'page':undefined} aria-label={count>0 ? `${row.name}, ${count} ${count===1 ? 'mensaje':'mensajes'} sin leer`:undefined} disabled={locked} onClick={()=>onSelect(row)}><Hash className="slack_channel_hash" size={17} aria-hidden="true"/><span>{row.name}<ReadingScopeBadge channelId={row.id}/></span>{row.visibility==='private' && <LockKeyhole size={12} aria-label="Privado"/>}{row.following && <Bell size={14} aria-label="Siguiendo"/>}{count>0 && <strong className="slack_unread_badge" aria-hidden="true">{count>99 ? '99+':count}</strong>}{row.archived_at && <Archive size={15} aria-label="Archivado"/>}</button>
-        {row.can_manage && ready && <button type="button" className="slack_channel_move" aria-label={`Mover canal ${row.name}`} title="Mover a una categoría" disabled={locked} onClick={event=>openMenu('channel',event,row)}><MoreHorizontal size={14}/></button>}
+        {row.can_manage && ready && <button type="button" className="slack_channel_move" aria-label={`Opciones del canal ${row.name}`} title="Opciones del canal" disabled={locked} onClick={event=>openMenu('channel',event,row)}><MoreHorizontal size={14}/></button>}
     </div>;}
     const known=new Set(categories.map(row=>row.id)),loose=channels.filter(row=>!row.category_id || !known.has(row.category_id));
     return <>
@@ -116,7 +124,7 @@ export default function ChannelCategories({server,channels,selectedId,loading,qu
             <header><strong>{context.kind==='blank' ? server.name:context.row.name}</strong><button type="button" aria-label="Cerrar opciones de organización" onClick={closeMenu}><X size={15}/></button></header>
             {context.kind==='blank' && <>{server.can_create && <button type="button" disabled={locked} onClick={()=>{closeMenu();onCreateChannel(null);}}><Plus size={16}/>Crear canal</button>}{canManage && <button type="button" disabled={locked} onClick={()=>{closeMenu();setCreating(true);}}><FolderPlus size={16}/>Crear categoría</button>}{!server.can_create && !canManage && <p>Organización de solo lectura.</p>}</>}
             {context.kind==='category' && <><button type="button" disabled={locked || !canManage} onClick={()=>changeCategory(context.row)}><Pencil size={15}/>Editar nombre</button><button type="button" disabled={locked || categories[0]?.id===context.row.id} onClick={()=>moveCategory(context.row,categories[categories.findIndex(row=>row.id===context.row.id)-1]?.id || null)}><ArrowUp size={15}/>Subir categoría</button><button type="button" disabled={locked || categories.at(-1)?.id===context.row.id} onClick={()=>moveCategory(context.row,categories[categories.findIndex(row=>row.id===context.row.id)+2]?.id || null)}><ArrowDown size={15}/>Bajar categoría</button><button type="button" className="slack_category_delete" disabled={locked || !canManage} onClick={()=>changeCategory(context.row,true)}><Trash2 size={15}/>Eliminar categoría</button></>}
-            {context.kind==='channel' && <label>Mover a categoría<select aria-label="Categoría de destino" value={context.row.category_id || ''} disabled={locked} onChange={event=>moveChannel(context.row,event.target.value || null)}><option value="">Sin categoría</option>{categories.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select><small>Conserva las personas y los permisos del canal.</small></label>}
+            {context.kind==='channel' && <><label>Mover a categoría<select aria-label="Categoría de destino" value={context.row.category_id || ''} disabled={locked} onChange={event=>moveChannel(context.row,event.target.value || null)}><option value="">Sin categoría</option>{categories.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select><small>Conserva las personas y los permisos del canal.</small></label><button type="button" disabled={locked || !context.row.can_manage} onClick={()=>{const row=context.row;closeMenu();callbacks.current.onConfigureChannel(row);}}><Pencil size={15} aria-hidden="true"/>Configurar canal</button><button type="button" className="slack_category_delete" disabled={locked || !context.row.can_manage} onClick={()=>removeChannel(context.row)}><Trash2 size={15} aria-hidden="true"/>Eliminar canal</button></>}
         </div>}
     </>;
 }

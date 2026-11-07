@@ -60,4 +60,4 @@
 :root .slack_module .slack_organization_menu > button,:root .slack_module .slack_organization_menu select {min-height:44px;}
 }
 @media(prefers-reduced-motion:reduce){:root .slack_module :is(.slack_category_toggle > svg,.slack_channel_move) {transition:none;}}
-@media(pointer:coarse){:root .slack_module .slack_category_form :is(input,button){min-height:44px;}:root .slack_module .slack_category_form > header > button {width:44px;}}
+@media(pointer:coarse){:root .slack_module .slack_category_form :is(input,button),:root .slack_module .slack_organization_menu > button {min-height:44px;}:root .slack_module .slack_category_form > header > button {width:44px;}}
