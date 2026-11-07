@@ -28,6 +28,8 @@ from django.urls import path  # noqa: E402
 from boldApp.hojas.consumers import SheetConsumer  # noqa: E402
 from boldApp.mensajeria.page_consumer import PageConsumer  # noqa: E402
 from django.conf import settings  # noqa: E402
+from boldApp.mcp.asgi import McpHTTP  # noqa: E402
+from boldApp.mensajeria.support_asgi import LocalSupportHTTP  # noqa: E402
 
 
 websocket_urlpatterns = core_websocket_urlpatterns + notification_websocket_urlpatterns + tareas_websocket_urlpatterns
@@ -41,7 +43,7 @@ websocket_urlpatterns += [path("ws/pages/<uuid:page_id>/", PageConsumer.as_asgi(
 # al backend, y la validacion debe mirar la misma lista de
 # origenes que ya usa CORS, no ALLOWED_HOSTS (que describe al propio backend).
 application = ProtocolTypeRouter({
-    "http": MemoryOnlyASGIHandler(),
+    "http": LocalSupportHTTP(McpHTTP(MemoryOnlyASGIHandler())),
     "websocket": OriginValidator(
         URLRouter(websocket_urlpatterns),
         settings.CORS_ALLOWED_ORIGINS if settings.CORS_ALLOWED_ORIGINS else ["*"],

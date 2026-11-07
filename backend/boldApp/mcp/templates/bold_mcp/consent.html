@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Autorizar conexión · BOLD</title>
+  <style>
+    :root {font:15px/1.5 system-ui,sans-serif;color-scheme:dark;--surface:#191a1c;--line:#34363b;--text:#eceef2;--muted:#b3b8c2;--accent:#d23a32;background:#101113;color:var(--text)}
+    * {box-sizing:border-box} body {margin:0;padding:24px} main {max-width:540px;margin:8vh auto}
+    h1 {font-size:24px;line-height:1.25;margin:0 0 16px} p {margin:12px 0} .muted {color:var(--muted)}
+    form {border-block:1px solid var(--line);padding:20px 0;margin-top:20px} label {display:block;margin:14px 0 6px}
+    select,button,a.action {font:inherit;color:inherit;border:1px solid var(--line);background:var(--surface);padding:10px 12px;min-height:44px}
+    select {width:100%} button {cursor:pointer} button.primary {background:var(--accent);border-color:var(--accent);color:white}
+    footer {display:flex;gap:8px;flex-wrap:wrap;margin-top:20px} .check {display:flex;gap:10px;align-items:flex-start;padding:10px 0}
+    .check input {margin-top:5px;accent-color:var(--accent)} details {margin:14px 0} summary {cursor:pointer;padding:8px 0}
+    li {margin:3px 0} :focus-visible {outline:2px solid var(--accent);outline-offset:3px} [role=alert] {border:1px solid var(--accent);padding:12px}
+    a {color:inherit} @media(max-width:480px) {body{padding:20px 16px}main{margin:5vh auto}footer button{flex:1}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Conecta {{ client_name }} con BOLD</h1>
+  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+  {% if login_required %}
+    <p>Inicia sesión en BOLD para revisar y autorizar esta conexión.</p>
+    <p><a href="/" target="_blank" rel="noopener">Abrir BOLD e iniciar sesión</a></p>
+    <p class="muted">Después vuelve a esta pestaña y actualiza la página.</p>
+  {% elif user %}
+    <p>Cuenta de <strong>{{ user.employee.full_name }}</strong></p>
+    <p>La conexión utiliza los permisos vigentes de la asignación que elijas.</p>
+    <details><summary>Apartados disponibles</summary><ul>{% for module in modules %}<li>{{ module }}</li>{% endfor %}</ul></details>
+    <form method="post">
+      {% csrf_token %}
+      <label for="assignment">Actuar desde</label>
+      <select id="assignment" name="assignment" required>
+        <option value="">Selecciona una asignación</option>
+        {% for item in assignments %}<option value="{{ item.pk }}">{{ item.position.unit.name }} · {{ item.position.job_role.title }}</option>{% endfor %}
+      </select>
+      {% if write_requested %}<label class="check"><input type="checkbox" name="write" value="yes"><span>Permitir cambios, creación, envío y eliminación de contenido con mis permisos.</span></label>{% endif %}
+      <p class="muted">Sin permitir cambios, la conexión solo consulta información. Caduca como máximo en una hora y al vencer o cerrar esta sesión de BOLD.</p>
+      <footer><button type="submit" name="decision" value="deny">Cancelar</button><button class="primary" type="submit" name="decision" value="allow">Autorizar conexión</button></footer>
+    </form>
+  {% endif %}
+</main>
+</body>
+</html>

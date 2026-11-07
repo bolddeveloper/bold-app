@@ -49,11 +49,11 @@ export default function ChatMentionSuggestions({conversationId,channelId,anchorR
         return()=>{field?.removeEventListener('keydown',keydown,true);document.removeEventListener('pointerdown',outside);};
     },[anchorRef,panelRef,rows,selected,busy]);
     return <section ref={panelRef} popover="manual" className="messaging_mention_suggestions" aria-label={channelId ? "Menciones en este canal":"Menciones en este chat"} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();onClose();anchorRef.current?.focus();}}}>
-        <header><AtSign size={16} aria-hidden="true"/><strong>Mencionar persona</strong><small>Esc para cerrar</small></header>
+        <header><AtSign size={16} aria-hidden="true"/><strong>Mencionar</strong><small>Esc para cerrar</small></header>
         {busy && <p role="status"><LoaderCircle size={15} className="messaging_spin" aria-hidden="true"/>Cargando personas…</p>}
         {error && <div role="alert"><p>{error}</p><button type="button" onClick={()=>{setAttempt(value=>value+1);anchorRef.current?.focus();}}>Reintentar</button></div>}
-        <div id={listId} role="listbox" aria-label="Personas que puedes mencionar" aria-busy={busy}>{rows.map((person,row)=><button key={person.employee_id} id={`${listId}-${row}`} type="button" role="option" aria-selected={selected===row} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(person)}><span className="messaging_mention_initial" aria-hidden="true">{person.name?.trim().slice(0,1)}</span><span><strong>{person.name}</strong><small>{person.email}{person.referenceOnly && ' · Solo referencia'}</small></span></button>)}</div>
-        {!busy && !error && !rows.length && <p role="status">No hay personas que coincidan.</p>}
+        <div id={listId} role="listbox" aria-label="Menciones disponibles" aria-busy={busy}>{rows.map((person,row)=><button key={person.employee_id} id={`${listId}-${row}`} type="button" role="option" aria-selected={selected===row} tabIndex={-1} onMouseDown={event=>event.preventDefault()} onClick={()=>onSelect(person)}><span className="messaging_mention_initial" aria-hidden="true">{person.name?.trim().slice(0,1)}</span><span><strong>{person.name}</strong><small>{person.is_bot ? 'Asistente IA':person.email}{person.referenceOnly && ' · Solo referencia'}</small></span></button>)}</div>
+        {!busy && !error && !rows.length && <p role="status">No hay coincidencias.</p>}
         {refine && <p>Escribe más del nombre o correo para buscar otras personas.</p>}
         <footer>{channelId ? 'Solo se avisa a personas con acceso':'Solo participantes de este chat'} · ↑ ↓ elegir · Enter insertar</footer>
     </section>;

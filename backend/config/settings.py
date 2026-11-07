@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "boldApp.marcas",
     "boldApp.calendario",
     "boldApp.hojas",
+    "boldApp.mcp",
 ]
 
 
@@ -198,6 +199,7 @@ CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 # Define la configuracion base de Django REST Framework.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "boldApp.mcp.authentication.McpInternalAuthentication",
         "boldApp.autenticacion.authentication.CookieSessionAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
@@ -231,6 +233,10 @@ AUTH_SESSION_COOKIE_SAMESITE = os.environ.get("AUTH_SESSION_COOKIE_SAMESITE", "L
 CSRF_COOKIE_SAMESITE = AUTH_SESSION_COOKIE_SAMESITE
 CSRF_COOKIE_SECURE = not DEBUG
 AUTH_MFA_REQUIRED = os.environ.get("AUTH_MFA_REQUIRED", "false").lower() == "true"
+
+# The public resource URL binds OAuth tokens to this BOLD installation.
+MCP_PUBLIC_ORIGIN = os.environ.get("MCP_PUBLIC_ORIGIN", os.environ.get("FRONTEND_URL", "http://localhost:5174"))
+MCP_ENABLED = os.environ.get("MCP_ENABLED", "false").lower() == "true"
 AUTH_CHALLENGE_TTL_SECONDS = int(os.environ.get("AUTH_CHALLENGE_TTL_SECONDS", "3600"))
 AUTH_INVITATION_TTL_SECONDS = int(os.environ.get("AUTH_INVITATION_TTL_SECONDS", "259200"))
 AUTH_WEBSOCKET_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_WEBSOCKET_TICKET_TTL_SECONDS", "45"))
@@ -348,6 +354,14 @@ CACHES = {
                  "KEY_PREFIX": "bold-presence", "OPTIONS": {"socket_connect_timeout": 2, "socket_timeout": 2}}
         if os.environ.get("REDIS_URL") else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "bold-presence"},
 }
+for cache_name in ('mcp', 'support'):
+    CACHES[cache_name] = {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': redis_url,
+        'KEY_PREFIX': 'bold-' + cache_name,
+        'OPTIONS': {'socket_connect_timeout': 2, 'socket_timeout': 2},
+    } if os.environ.get('REDIS_URL') else {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'bold-' + cache_name,
+    }
 
 
 # Define la capa de canales de Django Channels (push en vivo por WebSocket).
@@ -377,3 +391,11 @@ GOOGLE_WORKSPACE_EDITORS_ENABLED = os.environ.get("GOOGLE_WORKSPACE_EDITORS_ENAB
 # Rich-text images arrive as base64 JSON, rather than multipart file fields.
 DATA_UPLOAD_MAX_MEMORY_SIZE = None
 FILE_UPLOAD_HANDLERS = ['boldApp.core.memory_uploads.MemoryOnlyUploadHandler']
+
+# Local support runs through the account signed into Codex, never a Platform API key.
+BOLD_SUPPORT_ENABLED = os.environ.get('BOLD_SUPPORT_ENABLED', 'false').lower() == 'true'
+BOLD_SUPPORT_CODEX_BINARY = os.environ.get('BOLD_SUPPORT_CODEX_BINARY', 'codex')
+BOLD_SUPPORT_UNIT_ID = os.environ.get('BOLD_SUPPORT_UNIT_ID', '')
+BOLD_SUPPORT_MODEL = os.environ.get('BOLD_SUPPORT_MODEL', 'gpt-6-luna')
+BOLD_SUPPORT_DAILY_LIMIT = int(os.environ.get('BOLD_SUPPORT_DAILY_LIMIT', '100'))
+BOLD_SUPPORT_USER_DAILY_LIMIT = int(os.environ.get('BOLD_SUPPORT_USER_DAILY_LIMIT', '20'))

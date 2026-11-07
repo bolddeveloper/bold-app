@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chatMentionAtCaret,mentionParts,insertMention} from './mention_model.js';
+import {mentionPeople} from '../tareas/src/mentions.js';
 
 const person={employee_id:'person',name:'Persona de prueba',token:'@person+alias@bold.gt'};
+test('soportebold appears by name or alias and inserts a verified mention using the existing format',()=>{
+    const bot={employee_id:'bot',name:'soportebold',email:'soportebold@bold.gt',token:'@soportebold@bold.gt',aliases:['Soporte BOLD'],is_bot:true};
+    for(const query of ['sop','soportebold','soporte b','Soporte BOLD'])assert.deepEqual(mentionPeople([bot],query),[bot]);
+    const selected=insertMention('Hola @sop',bot,5,9);
+    assert.equal(selected.text,'Hola @soportebold@bold.gt ');
+    assert.equal(mentionParts(selected.text,[bot]).filter(part=>part.mention?.name==='soportebold').length,1);
+    assert.deepEqual(mentionPeople([bot],'otra persona'),[]);
+});
 test('typed @ detects the current name range without treating emails, links or code as mentions',()=>{
     assert.deepEqual(chatMentionAtCaret('Hola @',6),{query:'',start:5,end:6});
     assert.deepEqual(chatMentionAtCaret('Hola @María José final',16),{query:'María José',start:5,end:16});

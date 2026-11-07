@@ -17,6 +17,7 @@ from .task_conversion_models import MessageTaskConversion  # noqa: F401
 from .agreement_models import MessageAgreement, AgreementSource  # noqa: F401
 from .upload_models import MediaUpload, MediaUploadQuota, MediaUploadFolder  # noqa: F401
 from .automation_models import ChannelAutomation, AutomationRun, AutomationAudit, AutomationBudget  # noqa: F401
+from .support_models import SupportRequest  # noqa: F401
 
 
 class DirectConversation(UUIDPrimaryKeyModel):

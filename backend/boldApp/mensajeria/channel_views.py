@@ -137,7 +137,8 @@ def channel_message_data(message, actor_id, policy):
             "page": page_card(message.page_id, message.channel, policy) if message.page_id else None,
             "media": media_data(message),
             "author": {"employee_id": str(message.author_id), "name": message.author.full_name,
-                       "avatar_url": account.avatar_url if account else None},
+                       "avatar_url": account.avatar_url if account else None,
+                       "is_bot": message.automation_kind == 'support'},
             "department": {"name": message.department_name, "color": message.department_color},
             "created_at": message.created_at, "edited_at": message.edited_at, "version": message.version,
             "thread_title": message.thread_title, "thread_started_at": message.thread_started_at,
@@ -394,6 +395,8 @@ class ChannelMessageListView(SlackView):
         channel.save(update_fields=["activity_version", "updated_at"])
         notify_channel_message(message, request.assignment)
         publish_channel(channel, "message.created")
+        from .support_bot import enqueue
+        enqueue(message, request)
         return Response({"message": channel_message_data(message, self.actor(), self.policy())}, status=201)
 
 

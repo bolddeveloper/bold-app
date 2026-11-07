@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 
 from boldApp.core.models import Employee
 from .channel_views import SlackView
@@ -56,6 +57,11 @@ def channel_mention_results(request, channel, policy, codes=("slack.channel.read
     if len(people) > 100 and not autocomplete:
         raise ValidationError('Hay demasiadas coincidencias. Escribe más del nombre o del correo.')
     results = mention_people_data(authorized_people(people, channel, policy.permissions, codes))
+    if autocomplete and settings.BOLD_SUPPORT_ENABLED and not channel.archived_at and policy.allows('slack.message.create', channel.unit, channel.pk):
+        from .support_identity import mention_person
+        bot = mention_person()
+        if bot and any(term.casefold() in value.casefold() for value in [bot['name'], bot['email'], *bot['aliases']]):
+            results.insert(0, bot)
     # These people are already visible in Core's directory. Keep text-only references
     # separate from the channel-authorized results used for mention notifications.
     authorized_ids = {row["employee_id"] for row in results}

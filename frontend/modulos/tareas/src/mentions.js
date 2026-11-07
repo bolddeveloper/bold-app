@@ -7,7 +7,8 @@ export function mentionPeople(people, query = "") {
     const needle = clean(query.trim()), seen = new Set();
     return people.filter(person => {
         const email = person.email?.toLowerCase();
-        if (!email || seen.has(email) || !clean(`${person.name} ${email}`).includes(needle)) return false;
+        const aliases=Array.isArray(person.aliases) ? person.aliases.join(' '):'';
+        if (!email || seen.has(email) || !clean(`${person.name} ${email} ${aliases}`).includes(needle)) return false;
         seen.add(email); return true;
     }).slice(0, 6);
 }

@@ -35,6 +35,13 @@ x-backend-environment: &backend-environment
   AUTH_SESSION_CUTOFF_TIME: "${AUTH_SESSION_CUTOFF_TIME:-07:00}"
   AUTH_SESSION_IDLE_SECONDS: "${AUTH_SESSION_IDLE_SECONDS:-0}"
   AUTH_MFA_REQUIRED: "${AUTH_MFA_REQUIRED:-false}"
+  MCP_ENABLED: "${MCP_ENABLED:-false}"
+  MCP_PUBLIC_ORIGIN: "${MCP_PUBLIC_ORIGIN:-https://boldapp.boldapp-93b.workers.dev}"
+  BOLD_SUPPORT_ENABLED: "${BOLD_SUPPORT_ENABLED:-false}"
+  BOLD_SUPPORT_UNIT_ID: "${BOLD_SUPPORT_UNIT_ID:-}"
+  BOLD_SUPPORT_MODEL: "${BOLD_SUPPORT_MODEL:-gpt-6-luna}"
+  BOLD_SUPPORT_DAILY_LIMIT: "${BOLD_SUPPORT_DAILY_LIMIT:-100}"
+  BOLD_SUPPORT_USER_DAILY_LIMIT: "${BOLD_SUPPORT_USER_DAILY_LIMIT:-20}"
   AUTH_CHALLENGE_TTL_SECONDS: "${AUTH_CHALLENGE_TTL_SECONDS:-3600}"
   AUTH_INVITATION_TTL_SECONDS: "${AUTH_INVITATION_TTL_SECONDS:-259200}"
   AUTH_WEBSOCKET_TICKET_TTL_SECONDS: "${AUTH_WEBSOCKET_TICKET_TTL_SECONDS:-45}"
@@ -164,7 +171,7 @@ services:
     command:
       - sh
       - -c
-      - python manage.py migrate --noinput && exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
+      - python manage.py check --deploy --fail-level ERROR && python manage.py migrate --noinput && exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
     expose:
       - "8000"
     depends_on:
@@ -192,6 +199,26 @@ services:
     stop_grace_period: 60s
     logging: *default-logging
 
+  support:
+    <<: *backend-security
+    image: "bold-app-support:${BOLD_APP_IMAGE_TAG:-latest}"
+    build:
+      context: ../../backend
+      target: support
+    profiles: ["support"]
+    restart: unless-stopped
+    init: true
+    environment:
+      <<: *backend-environment
+      CODEX_HOME: /var/lib/bold-support/codex
+    volumes:
+      - support_codex:/var/lib/bold-support/codex
+    depends_on:
+      backend:
+        condition: service_healthy
+    stop_grace_period: 110s
+    logging: *default-logging
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -212,3 +239,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  support_codex:

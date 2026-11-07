@@ -36,6 +36,7 @@ export default define_config({
         strictPort: true,
         proxy: {
             "/api": "http://127.0.0.1:8000",
+            "/.well-known/oauth-": "http://127.0.0.1:8000",
             "/ws": { target: "ws://127.0.0.1:8000", ws: true, headers: { Origin: "http://localhost:5174" } }
         },
         fs: {

@@ -141,7 +141,12 @@ def prime_message_mentions(messages, field):
 
 
 def prime_channel_mentions(messages):
+    messages = list(messages)
     prime_message_mentions(messages, "channel_message")
+    from .support_identity import BOT_TOKEN, mention_person
+    bot = mention_person() if any(BOT_TOKEN in row.body.lower() for row in messages) else None
+    for message in messages:
+        message._support_mention = bot
 
 
 def prime_direct_mentions(messages):
@@ -155,7 +160,15 @@ def message_mentions(message, field):
 
 
 def channel_mentions(message):
-    return message_mentions(message, "channel_message")
+    result = message_mentions(message, "channel_message")
+    from .support_identity import BOT_TOKEN, mention_person
+    if not hasattr(message, '_support_mention'):
+        message._support_mention = mention_person() if BOT_TOKEN in message.body.lower() else None
+    bot = message._support_mention
+    if bot and BOT_TOKEN in mention_tokens(message.body):
+        result = [row for row in result if row['token'] != BOT_TOKEN]
+        result.append({key: bot[key] for key in ('employee_id', 'name', 'token', 'is_bot')})
+    return result
 
 
 def active_channel_mention(channel_id, message_id, employee_id):

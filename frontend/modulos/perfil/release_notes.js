@@ -1,4 +1,47 @@
+// Notas preparadas fuera de los listados publicados.
+export const pendingSupportContextReleaseNotes = [{
+    id:"2026-11-07-soporte-bold-contexto-lectura",date:"2026-11-07",category:"Mejoras",icon:"update",
+    title:"Consulta el contexto de BOLD desde Slack",
+    summary:"soportebold puede resumir mensajes del canal y consultar información compartida del equipo, solo como lectura.",
+    sections:[{title:"Qué puedes consultar",items:[
+        "Menciona a @soportebold en un canal y pregunta por mensajes recientes o por su hilo. También puede consultar nombres y departamentos del directorio de Mi equipo.",
+        "Puede informar sobre responsables, estados y fechas de tareas que las personas publicaron en Mi equipo para el departamento del canal. En servidores personales utiliza tu departamento activo.",
+    ]},{title:"Límites y disponibilidad",items:[
+        "Solo lectura: no modifica tareas ni ajustes. No consulta otros canales, mensajes directos, tareas sin compartir ni contenido de adjuntos. No conecta servicios externos.",
+        "El contexto tiene límites de tamaño; una muestra no equivale al total del equipo. Los permisos y las publicaciones se revisan de nuevo antes de responder.",
+        "Configuración de producción preparada con un servicio independiente. Requiere activación y una cuenta de Codex autorizada; todavía sin despliegue en producción. Las respuestas siguen consumiendo el uso de esa cuenta.",
+    ]}],
+}];
+
+export const pendingSupportReleaseNotes = [{
+    id:"2026-11-06-soporte-bold-mentions",date:"2026-11-06",category:"Mejoras",icon:"update",
+    title:"Pide ayuda a Soporte BOLD desde un hilo de Slack",
+    summary:"Preparación local de soportebold, un asistente seleccionable al mencionar en un canal de texto.",
+    sections:[{title:"Cómo funciona",items:[
+        "Escribe @soporte y selecciona soportebold en las sugerencias. También se admite @soporte bold. La respuesta aparece en el hilo y se identifica como Asistente IA.",
+        "El asistente orienta sobre el uso de BOLD. Recibe la pregunta y un contexto limitado del canal y del hilo, junto con información publicada en Mi equipo; no modifica tareas ni consulta otros canales.",
+        "Solo responde a nuevas menciones explícitas. Respeta el acceso actual al canal y deja de responder si el hilo se cierra o se retira el acceso.",
+    ]},{title:"Disponibilidad y consumo",items:[
+        "Requiere activar el servicio de soporte y mantener conectada su cuenta de Codex. Las respuestas consumen el uso o los créditos disponibles de esa cuenta.",
+        "Se aplican límites diarios y se registra el consumo de tokens. Una respuesta fallida no se reintenta automáticamente.",
+        "Nota preparada localmente, fuera de Novedades publicadas. Todavía sin despliegue en producción.",
+    ]}],
+}];
+
 // Mejoras generales del 30 de octubre. Se conservan las fechas y los IDs históricos.
+// Nota preparada para una entrega posterior, fuera de los listados publicados.
+export const pendingMcpReleaseNotes = [{
+    id: "2026-11-06-bold-mcp-connection", date: "2026-11-06", category: "Mejoras", icon: "update",
+    title: "Conecta asistentes con tus apartados de BOLD",
+    summary: "Preparación local de una conexión MCP para consultar y realizar acciones con los permisos de tu cuenta.",
+    sections: [{title: "Autorización de la conexión", items: [
+        "La pantalla de BOLD permite elegir una asignación y autorizar solo consultas o también cambios. Las operaciones siguen comprobando los permisos de cada apartado.",
+        "La conexión vence como máximo en una hora y al terminar la sesión que la autorizó. Puedes cerrar esa sesión para retirar el acceso.",
+    ]}, {title: "Estado de la entrega", items: [
+        "Esta nota está preparada y permanece fuera de Novedades. La conexión necesita activación y despliegue antes de utilizarla en producción.",
+    ]}],
+}];
+
 export const multitaskingReleaseNotes = [
     {id:"2026-10-30-owner-notice-origin",date:"2026-10-30",category:"Mejoras",icon:"bell",
         title:"Un distintivo discreto para los avisos del propietario",

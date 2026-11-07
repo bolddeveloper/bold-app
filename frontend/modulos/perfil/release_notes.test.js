@@ -1,6 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {pendingSupportContextReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
+
+test("el contexto de BOLD se prepara solo como lectura y sin anunciar producción",()=>{
+    const [note]=pendingSupportContextReleaseNotes;
+    assert.equal(pendingSupportContextReleaseNotes.length,1);
+    assert.equal(getReleaseNotes({chat_enabled:true}).some(row=>row.id===note.id),false);
+    const text=note.sections.flatMap(row=>row.items).join(' ');
+    assert.match(text,/Solo lectura/);
+    assert.match(text,/No conecta servicios externos/);
+    assert.match(text,/sin despliegue en producción/);
+});
+
+test("soporte BOLD prepara una nota sin anunciar un despliegue", () => {
+    const [note] = pendingSupportReleaseNotes;
+    assert.equal(pendingSupportReleaseNotes.length, 1);
+    assert.equal(getReleaseNotes({chat_enabled:true}).some(row => row.id === note.id), false);
+    assert.match(note.sections.flatMap(row => row.items).join(" "), /@soporte bold/);
+    assert.match(note.sections.flatMap(row => row.items).join(" "), /Todavía sin despliegue/);
+});
+
+test("la nota MCP queda preparada fuera de las novedades publicadas", () => {
+    assert.equal(pendingMcpReleaseNotes.length, 1);
+    const note = pendingMcpReleaseNotes[0];
+    assert.equal(getReleaseNotes({chat_enabled:true}).some(row => row.id === note.id), false);
+    assert.ok(note.sections.every(section => section.title && section.items.length));
+    assert.match(note.sections.flatMap(section => section.items).join(" "), /activación y despliegue/);
+});
 
 test("las cinco mejoras generales publicadas incluyen qué probar",()=>{
     assert.equal(multitaskingReleaseNotes.length,5);

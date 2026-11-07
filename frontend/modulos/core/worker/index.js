@@ -1,4 +1,4 @@
-const backend_paths = ["/api/", "/ws/", "/health"];
+const backend_paths = ["/api/", "/ws/", "/health", "/.well-known/oauth-"];
 
 
 function is_backend_request(pathname) {

@@ -60,6 +60,15 @@ test("preserva la solicitud de upgrade WebSocket", async () => {
     assert.equal(calls.backend[0].headers.get("upgrade"), "websocket");
 });
 
+test("envía el descubrimiento OAuth del MCP al backend con el origen público", async () => {
+    const {calls, env} = create_environment();
+    const path = "/.well-known/oauth-protected-resource/api/v2/mcp";
+    await worker.fetch(new Request("https://boldapp.example.workers.dev" + path), env);
+    assert.equal(calls.assets.length, 0);
+    assert.equal(calls.backend[0].url, "http://backend" + path);
+    assert.equal(calls.backend[0].headers.get("x-forwarded-host"), "boldapp.example.workers.dev");
+});
+
 
 test("sirve los archivos de la PWA desde Assets", async () => {
     const { calls, env } = create_environment();

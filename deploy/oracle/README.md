@@ -9,6 +9,8 @@ ejecutar el Compose. Nunca agregues `.env.oracle` ni la carpeta `backups` a Git.
 
 Preparación de Sheets y comprobaciones antes de publicar: [SHEETS.md](SHEETS.md).
 
+Preparación del MCP y del bot, sesión privada, activación y comprobaciones públicas: [MCP_SUPPORT.md](MCP_SUPPORT.md).
+
 ## Chat y Slack: acceso general
 
 Desde el 6 de noviembre de 2026, `MESSAGING_PILOT_ENABLED=false` abre los módulos

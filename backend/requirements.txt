@@ -20,3 +20,4 @@ pywebpush==2.5.0
 argon2-cffi==25.1.0
 Pillow==13.0.0
 pycrdt==0.14.10
+mcp==2.3.0
