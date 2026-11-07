@@ -591,6 +591,19 @@ export function getReleaseNotes() {
 
 export const releaseNotes = [
     {
+        id:"2026-11-07-slack-invitation-access-recovery",date:"2026-11-07",category:"Correcciones",icon:"update",
+        title:"Canales e invitaciones de Slack más estables",
+        summary:"Slack actualiza tus invitaciones al recuperar la conexión y conserva los canales disponibles si falla un apartado.",
+        sections:[{title:"Entrar y recuperar conversaciones",items:[
+            "Al recuperar la conexión se vuelve a consultar la lista de servidores y departamentos, para mostrar las invitaciones vigentes sin tener que cerrar sesión.",
+            "Un error de categorías, de otro apartado o de una acción ya no vacía toda la vista. Slack comprueba si mantienes acceso al canal antes de retirar su conversación.",
+            "Las respuestas atrasadas de un canal anterior no bloquean el canal o servidor que estás abriendo.",
+        ]},{title:"Acceso y participación",items:[
+            "Slack está disponible para los empleados activos de todos los departamentos. Para participar en un canal privado necesitas una invitación vigente con Leer y participar.",
+            "Los controles Solo lectura y Sin acceso siguen disponibles al administrar invitaciones. Si se retira tu acceso, se ocultan los mensajes y borradores de la conversación; los demás canales autorizados permanecen disponibles.",
+        ]}],
+    },
+    {
         id:"2026-11-07-slack-support-placement-channel-removal",date:"2026-11-07",category:"Correcciones",icon:"update",
         title:"Respuestas de soporte en el canal y eliminación de canales",
         summary:"soportebold responde donde lo mencionas y los canales de texto incorporan una opción para eliminarlos.",

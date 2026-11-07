@@ -86,6 +86,19 @@ class ChannelPrivacyTests(TestCase):
         self.assertEqual(self.access(self.url,"public",self.rules((self.owner,"blocked")),version=4).status_code,200)
         self.assertEqual(self.as_person(self.owner).get(self.url).status_code,404)
 
+    def test_invited_reader_can_participate_immediately_after_access_is_upgraded(self):
+        channel,url=self.private(members=self.rules((self.bob,"read")))
+        peer=self.as_person(self.bob)
+        self.assertEqual(peer.get(url+"messages/").status_code,200)
+        self.assertEqual(self.send_to(url,peer).status_code,403)
+        changed=self.access(url,"private",self.rules((self.alice,"write"),(self.bob,"write")))
+        self.assertEqual(changed.status_code,200,changed.data)
+        self.assertTrue(peer.get(url).data["can_send"])
+        self.assertEqual(self.send_to(url,peer).status_code,201)
+        self.assertEqual(peer.get(url+"pages/").status_code,200)
+        self.assertEqual(peer.get(url+"threads/").status_code,200)
+        self.assertIsNotNone(channel_event(self.bob.pk,{"channel_id":channel["id"],"kind":"message.created"}))
+
     def test_department_uses_active_assignment_not_any_other_position(self):
         from boldApp.core.models import Position, PositionAssignment
         self.access(self.url,"department",[])

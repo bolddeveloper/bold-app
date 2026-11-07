@@ -38,6 +38,7 @@ const channelSnapshot=()=>({...channel,activity_version:rows.at(-1)?.sequence ||
 const confirmed=new Map();
 let privateServers=[],serverCreates=[],iconWrites=[],personalServerOrder=[];
 const categoryScopes=new Map(),categoryMoves=[],channelCategoryMoves=[],categoryCreations=[];let categoryCreateFails=false,categoryDeleteFails=false;const categoryEdits=[],categoryDeletes=[];
+let categoryReadFailure=null,channelReadFailure=null;
 const categoryKey=scope=>scope.server ? 'server:'+scope.server:scope.unit;
 const categoryCatalog=scope=>({scope:categoryKey(scope),can_manage:true,results:(categoryScopes.get(categoryKey(scope)) || []).map(row=>({...row}))});
 const preferenceAttempts=[],preferenceConfirmed=new Map();let preferenceFails=false;
@@ -46,7 +47,7 @@ globalThis.__channelsApi={
     threadPreferences:async(_,id,values)=>{preferenceAttempts.push(values);let state=preferenceConfirmed.get(values.client_id);if(!state){const before=threadPreferences.get(id) || {state_version:0,following:false};state={...before,parent_id:id,state_version:before.state_version+1,...(values.favorite!=null ? {favorite:values.favorite}:{}),...(values.left!=null ? {left:values.left}:{}),...(values.notifications ? {notifications:values.notifications}:{}),...(values.mute ? {muted_forever:values.mute==='forever',muted_until:values.mute==='1h' ? new Date(Date.now()+3600000).toISOString():null}:{})};threadPreferences.set(id,state);preferenceConfirmed.set(values.client_id,state);}if(preferenceFails)throw {status:0};return state;},
     manageThread:async(_,id,values)=>{const row=rows.find(row=>row.id===id);Object.assign(row,values.action==='rename' ? {thread_title:values.title}:values.action==='close' ? {thread_closed_at:new Date().toISOString()}:values.action==='open' ? {thread_closed_at:null}:values.action==='lock' ? {thread_locked:true,thread_closed_at:new Date().toISOString()}:values.action==='unlock' ? {thread_locked:false}:values.action==='delete' ? {thread_deleted_at:new Date().toISOString(),thread_closed_at:new Date().toISOString()}:{thread_deleted_at:null});row.version++;return {message:threadProjection(row)};},
     readThread:async(_,id)=>({message:{...threadProjection(rows.find(row=>row.id===id)),unread_reply_count:0},channel:channelSnapshot()}),
-    categories:async scope=>categoryCatalog(scope),
+    categories:async scope=>{if(categoryReadFailure)throw categoryReadFailure;return categoryCatalog(scope);},
     createCategory:async(scope,values)=>{categoryCreations.push(values);const key=categoryKey(scope),rows=categoryScopes.get(key) || [];if(!rows.some(row=>row.id===values.client_id))rows.push({id:values.client_id,name:values.name,position:rows.length,version:1});categoryScopes.set(key,rows);if(categoryCreateFails)throw {status:0};return categoryCatalog(scope);},
     updateCategory:async(scope,id,values)=>{const row=categoryScopes.get(categoryKey(scope)).find(item=>item.id===id);categoryEdits.push({scope,id,values});assert.equal(values.version,row.version);row.name=values.name;row.version++;return categoryCatalog(scope);},
     deleteCategory:async(scope,id,values)=>{categoryDeletes.push({scope,id,values});if(categoryDeleteFails)throw {status:500};const key=categoryKey(scope);categoryScopes.set(key,categoryScopes.get(key).filter(row=>row.id!==id));if(channel.category_id===id)channel={...channel,category_id:null,version:channel.version+1};return categoryCatalog(scope);},
@@ -65,9 +66,9 @@ globalThis.__channelsApi={
     managed:async()=>({results:[channel],next:null}),
     access:async()=>{accessReads++;return {...channel,members:accessMembers};},
     setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
-    list:async archived => {calls++; return {results:!channelDeleted && (!channel.archived_at || archived) ? [channelSnapshot()] : [],next:null};},
+    list:async archived => {calls++; return {results:!channelReadFailure && !channelDeleted && (!channel.archived_at || archived) ? [channelSnapshot()] : [],next:null};},
     deleteChannel:async(id,version,options)=>{channelDeletes.push({id,version,options});if(channelDeleteFails)throw {status:409,fields:{detail:'El canal cambió. Actualiza su configuración antes de eliminarlo.'}};channelDeleted=true;},
-    detail:async()=>{deepLoads++;return channelSnapshot();},
+    detail:async()=>{deepLoads++;if(channelReadFailure)throw channelReadFailure;return channelSnapshot();},
     message:async(_,id)=>({message:threadProjection(rows.find(row=>row.id===id))}),
     follow:async(_,following)=>{channel={...channel,following,state_version:(channel.state_version || 0)+1};return channelSnapshot();},
     threads:async(_channel,query='',_next,_options,filters={})=>({results:rows.filter(row=>!row.parent_id && (row.thread_started_at || rows.some(reply=>reply.parent_id===row.id)) && (row.thread_title || row.body).toLowerCase().includes(query.toLowerCase()) && (filters.state==='deleted' ? !!row.thread_deleted_at:!row.thread_deleted_at) && (!filters.favorite || threadPreferences.get(row.id)?.favorite)).map(threadProjection),next:null}),
@@ -131,6 +132,40 @@ try {
     assert.equal(document.querySelectorAll('.slack_rail_channel').length,2,'departments and the legacy independent group appear as servers');
     document.querySelector('.slack_sidebar nav button').click();
     await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===2);
+    categoryReadFailure={status:403};
+    window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{kind:'channel.categories_changed',scope:departmentId}}}));
+    await waitFor(()=>document.querySelector('.slack_error'));
+    await settle();
+    assert.equal(document.querySelectorAll('.slack_active_conversation .slack_message').length,2,'denying category administration must not hide an authorized channel');
+    assert.match(document.querySelector('.slack_error').textContent,/El canal sigue disponible/);
+    assert.ok(document.querySelector('.slack_sidebar nav button'),'a denied subpanel keeps the text-channel catalog');
+    categoryReadFailure=null;
+    window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{kind:'channel.categories_changed',scope:departmentId}}}));
+    const invitedServer={id:'00000000-0000-4000-8000-000000000099',name:'Invitación recibida',private:true,can_manage:false,can_create:false,version:1};
+    privateServers.push(invitedServer);
+    window.dispatchEvent(new CustomEvent('bold:messaging-reconnect'));
+    await waitFor(()=>document.querySelector('[aria-label="Abrir servidor Invitación recibida"]'));
+    assert.ok(document.querySelector('.slack_active_conversation'),'receiving a server invitation does not close the current channel');
+    channelReadFailure={status:404};categoryReadFailure={status:403};
+    window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{kind:'channel.categories_changed',scope:departmentId}}}));
+    await waitFor(()=>!document.querySelector('.slack_active_conversation'));
+    assert.equal(document.querySelector('.slack_message'),null,'confirmed channel revocation still clears private history');
+    assert.ok(document.querySelector('[aria-label="Abrir servidor Invitación recibida"]'),'revoking one channel does not hide other invited servers');
+    categoryReadFailure=null;channelReadFailure=null;privateServers=[];
+    window.dispatchEvent(new CustomEvent('bold:messaging-reconnect'));
+    await waitFor(()=>!document.querySelector('[aria-label="Abrir servidor Invitación recibida"]') && document.querySelector('.slack_sidebar nav button'));
+    document.querySelector('.slack_sidebar nav button').click();
+    await waitFor(()=>document.querySelectorAll('.slack_active_conversation .slack_message').length===2);
+    const normalMessages=channelApi.messages;let rejectStale;
+    channelApi.messages=async()=>{channelApi.messages=normalMessages;return new Promise((_,reject)=>{rejectStale=reject;});};
+    window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{channel_id:channelId,kind:'message.created'}}}));
+    await waitFor(()=>rejectStale);
+    document.querySelector('[aria-label="Abrir servidor Independientes"]').click();await settle();
+    rejectStale({status:404});await settle();
+    assert.equal(document.querySelector('.slack_error'),null,'a late read failure from the previous channel cannot deny the new view');
+    document.querySelector('[aria-label="Abrir servidor IT"]').click();await waitFor(()=>document.querySelector('.slack_sidebar nav button'));
+    document.querySelector('.slack_sidebar nav button').click();
+    await waitFor(()=>document.querySelectorAll('.slack_active_conversation .slack_message').length===2);
     assert.equal(document.querySelector('.slack_module').classList.contains('slack_explorer_open'),false,'choosing a channel leaves more room for its messages');
     input(document.querySelector('#slack_message'),'Borrador de navegación');await settle();
     const beforeNavigation=calls;

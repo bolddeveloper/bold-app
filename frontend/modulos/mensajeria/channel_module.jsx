@@ -214,7 +214,24 @@ export default function ChannelModule() {
         setDrafts({});setTaskDrafts({});setTaskPicker(false);setMediaDrafts({});mediaState.current={};setImageEditor(null);setActiveImage(null);setServerEditor(null);setIconEditor(null);retries.current.clear();
         editCache.current.clear();
     }
-    function report(err) {if (mounted.current && err.name !== "AbortError") {if ([401,403,404].includes(err.status)) {clearPrivateState();setServers([]);}setError(channelError(err));}}
+    async function report(err) {
+        if (!mounted.current || err.name === "AbortError") return;
+        setError(channelError(err));
+        if (err.status === 401) {clearPrivateState();setServers([]);return;}
+        const snapshot=state.current,signal=reads.current?.signal;
+        if (![403,404].includes(err.status) || !snapshot.selected) return;
+        const current=()=>mounted.current && !signal?.aborted && snapshot.identity===state.current.identity && snapshot.key===state.current.key;
+        try {
+            // A denied subpanel or write does not revoke the channel's read access.
+            const row=await channelApi.detail(snapshot.selected.id,{signal});
+            if(current()) {setSelected(value=>mergeChannelDetails(value,row));setError(`${channelError(err)} El canal sigue disponible.`);}
+        } catch (denied) {
+            if (!current() || denied.name === "AbortError") return;
+            clearPrivateState();
+            if (denied.status===401)setServers([]);
+            else refresh.current?.request();
+        }
+    }
     async function select(row, {signal}={}) {
         if (busy.current || recording || signal?.aborted) return false;
         const snapshot=state.current, leavingPage=snapshot.channelTab!=="messages";
@@ -234,10 +251,13 @@ export default function ChannelModule() {
     }
     async function load(signal) {
         const archivedSnapshot = state.current.archived;
-        const querySnapshot=state.current.query,serverSnapshot=state.current.department;
+        const querySnapshot=state.current.query,serverSnapshot=state.current.department,identitySnapshot=state.current.identity;
         if(!serverSnapshot)return;
-        const page = await channelApi.list(archivedSnapshot, null, {signal},{...channelServerFilters(serverSnapshot),...(querySnapshot ? {q:querySnapshot}:{})});
-        if (signal.aborted || !mounted.current || archivedSnapshot !== state.current.archived || querySnapshot!==state.current.query || serverSnapshot!==state.current.department) return;
+        const current=()=>!signal.aborted && mounted.current && identitySnapshot===state.current.identity && archivedSnapshot===state.current.archived && querySnapshot===state.current.query && serverSnapshot===state.current.department;
+        let page;
+        try {page=await channelApi.list(archivedSnapshot,null,{signal},{...channelServerFilters(serverSnapshot),...(querySnapshot ? {q:querySnapshot}:{})});}
+        catch(err){if(current())throw err;return;}
+        if (!current()) return;
         setChannels(current=>page.results.map(row=>mergeChannelDetails(current.find(old=>old.id===row.id),row))); setChannelNext(page.next);
     }
     async function reloadCatalog(next=null){
@@ -275,8 +295,11 @@ export default function ChannelModule() {
     async function loadMessages(signal, next = null) {
         const snapshot = state.current;
         if (!snapshot.selected || snapshot.channelTab!=="messages") return;
-        const page = await channelApi.messages(snapshot.selected.id, snapshot.parent?.id, next, {signal});
-        if (signal.aborted || !mounted.current || snapshot.key !== state.current.key) return;
+        const current=()=>!signal.aborted && mounted.current && snapshot.identity===state.current.identity && snapshot.key===state.current.key && snapshot.channelTab===state.current.channelTab;
+        let page;
+        try {page=await channelApi.messages(snapshot.selected.id,snapshot.parent?.id,next,{signal});}
+        catch(err){if(current())throw err;return;}
+        if (!current()) return;
         setSelected(current=>current?.id===page.channel.id ? mergeChannelDetails(current,page.channel) : current);
         setMessages(current => mergeChannelMessages(current,page.results,{recent:!next}));
         if(page.thread && snapshot.parent)setParent(current=>current?.id===page.thread.parent_id ? mergeChannelMessage(current,threadPreferenceMessage(current,page.thread)):current);
@@ -288,15 +311,18 @@ export default function ChannelModule() {
         mounted.current = true;
         clearPrivateState();setDepartment("");setServers([]);setServerNext(null);setServerLoading(false);
         if (!allowed) {setChannels([]); setDepartments([]);setServers([]); setCanCreateIndependent(false); return () => {mounted.current = false;};}
-        const initial = new AbortController();
-        channelApi.departments({signal:initial.signal}).then(page => {if (!initial.signal.aborted) {setDepartments(page.results);setDepartment(current=>current || page.results.find(row=>row.id===core.activeAssignment?.unitId)?.id || page.results[0]?.id || "independent");setCanCreateIndependent(page.can_create_independent === true);}}).catch(report);
-        channelApi.servers({signal:initial.signal}).then(page=>{if(!initial.signal.aborted){setServers(page.results);setServerNext(page.next);}}).catch(report);
+        const indexRefresh=createChannelRefresh(signal=>Promise.all([
+            channelApi.departments({signal}).then(page=>{if(!signal.aborted){setDepartments(page.results);setDepartment(current=>current || page.results.find(row=>row.id===core.activeAssignment?.unitId)?.id || page.results[0]?.id || "independent");setCanCreateIndependent(page.can_create_independent===true);}}),
+            channelApi.servers({signal}).then(page=>{if(!signal.aborted){setServers(page.results);setServerNext(page.next);}}),
+        ]),report);
+        indexRefresh.request();
         refresh.current = createChannelRefresh(async signal => {await load(signal); await loadMessages(signal);}, report);
         const reactionRefresh=createChannelRefresh(signal=>loadMessages(signal),report);
         const organizationRefresh=createChannelRefresh(signal=>load(signal),report);
         refresh.current.request();
         const update = event => {
             const channel = event.detail?.payload;
+            if(!channel || channel.kind==='channel.access_changed')indexRefresh.request();
             if(channel?.kind==='channel.categories_changed'){if(channel.scope===state.current.department)organizationRefresh.request();return;}
             if(channel?.kind?.startsWith("page.") || channel?.kind==='automation.changed')return;
             if(channel?.kind==='reactions.updated'){
@@ -308,7 +334,7 @@ export default function ChannelModule() {
         window.addEventListener("bold:slack-event", update);
         window.addEventListener("bold:messaging-reconnect", update);
         window.addEventListener("bold:slack-collection-change", update);
-        return () => {mounted.current = false; initial.abort(); reads.current?.abort(); writes.current?.abort();followWrite.current?.abort();threadFollowWrite.current?.abort(); openingTask.current?.abort();refresh.current?.dispose();reactionRefresh.dispose();organizationRefresh.dispose();
+        return () => {mounted.current = false; indexRefresh.dispose(); reads.current?.abort(); writes.current?.abort();followWrite.current?.abort();threadFollowWrite.current?.abort(); openingTask.current?.abort();refresh.current?.dispose();reactionRefresh.dispose();organizationRefresh.dispose();
             threadStart.current?.abort();window.removeEventListener("bold:slack-collection-change", update);window.removeEventListener("bold:slack-event", update); window.removeEventListener("bold:messaging-reconnect", update);};
     }, [allowed, core.authorizationRevision,core.account?.id,core.activeAssignment?.id]);
     useEffect(() => {
@@ -322,7 +348,7 @@ export default function ChannelModule() {
         if (!allowed || !selected || channelTab!=="messages") return;
         const controller = new AbortController();
         setLoading(true);
-        loadMessages(controller.signal).catch(err => {if ([403,404].includes(err.status)) {setMessages([]); setSelected(null);} report(err);}).finally(() => {if (!controller.signal.aborted) setLoading(false);});
+        loadMessages(controller.signal).catch(report).finally(() => {if (!controller.signal.aborted) setLoading(false);});
         return () => controller.abort();
     }, [allowed, selected?.id, parent?.id,channelTab]);
     function jumpToLatest() {stickToBottom.current=true;setNewBelow(false);viewport.current?.scrollTo?.({top:viewport.current.scrollHeight,behavior:"auto"});}

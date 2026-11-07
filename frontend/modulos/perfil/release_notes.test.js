@@ -16,7 +16,7 @@ test("soportebold y MCP se publican juntos tras verificar producción, conservan
 });
 
 test("la corrección de Slack explica ubicación de respuestas y eliminación sin borrar historial",()=>{
-    const note=releaseNotes[0];
+    const note=releaseNotes.find(row=>row.id==="2026-11-07-slack-support-placement-channel-removal");
     assert.equal(note.id,"2026-11-07-slack-support-placement-channel-removal");
     const text=note.sections.flatMap(section=>section.items).join(' ');
     assert.match(text,/sin crear un hilo/);
@@ -24,6 +24,17 @@ test("la corrección de Slack explica ubicación de respuestas y eliminación si
     assert.match(text,/Configurar canal/);
     assert.match(text,/archivos se conservan/);
     assert.match(text,/servidores de departamento siguen protegidos/);
+});
+
+test("la recuperación de invitaciones mantiene los canales autorizados y la revocación",()=>{
+    const note=releaseNotes[0];
+    assert.equal(note.id,"2026-11-07-slack-invitation-access-recovery");
+    const text=note.sections.flatMap(section=>section.items).join(' ');
+    assert.match(text,/sin tener que cerrar sesión/);
+    assert.match(text,/ya no vacía toda la vista/);
+    assert.match(text,/respuestas atrasadas/);
+    assert.match(text,/Leer y participar/);
+    assert.match(text,/se retira tu acceso/);
 });
 
 test("soporte BOLD prepara una nota sin anunciar un despliegue", () => {
