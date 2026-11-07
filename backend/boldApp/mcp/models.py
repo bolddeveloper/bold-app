@@ -16,6 +16,9 @@ class McpAuthorization(models.Model):
     parameters = models.JSONField()
     scopes = models.JSONField(default=list)
     session = models.ForeignKey("boldApp_autenticacion.AuthSession", null=True, on_delete=models.CASCADE)
+    source_session = models.ForeignKey(
+        "boldApp_autenticacion.AuthSession", null=True, on_delete=models.CASCADE, related_name="+",
+    )
     assignment = models.ForeignKey("boldApp_core.PositionAssignment", null=True, on_delete=models.CASCADE)
     code_hash = models.CharField(max_length=64, null=True, unique=True)
     expires_at = models.DateTimeField()
@@ -28,3 +31,9 @@ class McpAccessToken(models.Model):
     token_hash = models.CharField(max_length=64, unique=True)
     authorization = models.ForeignKey(McpAuthorization, on_delete=models.CASCADE, related_name="tokens")
     expires_at = models.DateTimeField()
+
+
+class McpRefreshToken(models.Model):
+    token_hash = models.CharField(max_length=64, unique=True)
+    authorization = models.ForeignKey(McpAuthorization, on_delete=models.CASCADE, related_name="refresh_tokens")
+    consumed_at = models.DateTimeField(null=True)

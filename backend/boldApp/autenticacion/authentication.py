@@ -29,7 +29,10 @@ class CookieSessionAuthentication(BaseAuthentication):
         if not user.is_active or session.credentials_version != user.credentials_version or session.expires_at <= now or (session.idle_expires_at and session.idle_expires_at <= now):
             if session.revoked_at is None:
                 session.revoked_at = now
-                session.revocation_reason = "expired_or_credentials_changed"
+                session.revocation_reason = (
+                    "expired" if user.is_active and session.credentials_version == user.credentials_version
+                    else "expired_or_credentials_changed"
+                )
                 session.save(update_fields=["revoked_at", "revocation_reason"])
             if session_probe:
                 return None

@@ -62,7 +62,7 @@ Verificar después en el entorno público:
 - Un cliente completa OAuth con PKCE mediante una sesión real de BOLD. La autorización de solo lectura impide escrituras. Una conexión con cambios sigue aplicando los permisos actuales de esa persona.
 - En un canal de prueba accesible, mencionar a `@soportebold` y pedir un resumen del texto compartido. Comprobar una única respuesta en su hilo y su llegada en vivo a otro dispositivo, sin recargar.
 - Comprobar que otra conversación y una tarea sin compartir quedan fuera del contexto. Retirar una publicación o el acceso durante una consulta debe impedir publicar los datos generados con ese contexto.
-- Revisar el recibo de la consulta y el uso de la cuenta de Codex. Un fallo no se reintenta automáticamente. Una conexión MCP vence como máximo en una hora y termina antes si vence o se revoca su sesión de BOLD; esta versión requiere volver a autorizar.
+- Revisar el recibo de la consulta y el uso de la cuenta de Codex. Un fallo del bot no se reintenta automáticamente. Los clientes MCP compatibles renuevan el acceso de una hora durante un máximo fijo de 30 días, sin depender del corte diario del navegador. Verificar una renovación y la persistencia del cliente después de reiniciarlo. Cerrar explícitamente la sesión que autorizó la conexión, revocarla o cambiar credenciales invalida también la renovación.
 
 El bot termina la consulta actual antes de apagarse por SIGTERM. Compose concede 110 segundos; cada inferencia tiene un máximo de 90 segundos. Tras una interrupción imprevista, los recibos iniciados se cierran sin volver a consumir el modelo.
 

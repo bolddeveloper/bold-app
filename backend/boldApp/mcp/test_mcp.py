@@ -3,12 +3,16 @@ import hashlib
 import json
 from datetime import timedelta
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from urllib.parse import parse_qs, urlsplit
+from unittest import skipUnless
 from unittest.mock import patch
 
 import httpx2
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
+from django.db import close_old_connections, connection, connections
 from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from django.urls import path
@@ -23,8 +27,8 @@ from boldApp.core.models import Employee, JobRole, OrganizationalUnit, Position,
 from .authentication import validate_authorization
 from .catalog import MODULES, operations
 from .dispatcher import execute
-from .models import McpAccessToken, McpAuthorization, McpClient
-from .oauth import resource_url
+from .models import McpAccessToken, McpAuthorization, McpClient, McpRefreshToken
+from .oauth import BoldOAuthProvider, resource_url
 
 
 class UploadEchoView(APIView):
@@ -67,6 +71,7 @@ class McpTests(TransactionTestCase):
             "redirect_uris": ["http://127.0.0.1:9999/callback"],
             "token_endpoint_auth_method": "none",
             "scope": "bold.read bold.write",
+            "grant_types": ["authorization_code", "refresh_token"],
         })
         self.grant = McpAuthorization.objects.create(
             request_hash=token_hash("solicitud"),
@@ -94,6 +99,29 @@ class McpTests(TransactionTestCase):
             ) as client:
                 return await client.request(method, path, **kwargs)
         return async_to_sync(send)()
+
+    def authorized_tokens(self):
+        verifier = "a" * 50
+        self.grant.code_hash = token_hash("codigo-pruebas")
+        self.grant.parameters = {
+            "code_challenge": base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode(),
+            "redirect_uri": "http://127.0.0.1:9999/callback", "redirect_uri_provided_explicitly": True,
+        }
+        self.grant.save()
+        response = self.http("POST", "/api/v2/mcp/oauth/token", data={
+            "grant_type": "authorization_code", "client_id": self.client_row.pk,
+            "code": "codigo-pruebas", "code_verifier": verifier,
+            "redirect_uri": "http://127.0.0.1:9999/callback", "resource": resource_url(),
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.grant.refresh_from_db()
+        return response.json()
+
+    def refresh(self, token, **extra):
+        return self.http("POST", "/api/v2/mcp/oauth/token", data={
+            "grant_type": "refresh_token", "client_id": self.client_row.pk,
+            "refresh_token": token, "resource": resource_url(), **extra,
+        })
 
     def test_catalog_covers_content_modules_and_excludes_credential_flows(self):
         rows = list(operations().values())
@@ -156,7 +184,7 @@ class McpTests(TransactionTestCase):
         self.assertEqual(metadata.headers['cache-control'], 'no-store')
         self.assertEqual(metadata.headers['referrer-policy'], 'no-referrer')
         self.assertEqual(metadata.headers.get("access-control-allow-origin"), "*")
-        self.assertEqual(metadata.json()["grant_types_supported"], ["authorization_code"])
+        self.assertEqual(metadata.json()["grant_types_supported"], ["authorization_code", "refresh_token"])
         verifier = "a" * 50
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         response = self.http("GET", "/api/v2/mcp/oauth/authorize", params={
@@ -186,6 +214,151 @@ class McpTests(TransactionTestCase):
         self.assertNotIn(success.json()["access_token"], list(McpAccessToken.objects.values_list("token_hash", flat=True)))
         replay = self.http("POST", "/api/v2/mcp/oauth/token", data=payload)
         self.assertEqual(replay.status_code, 400, replay.text)
+
+    def test_refresh_survives_browser_cutoff_with_hashes_and_fixed_lifetime(self):
+        before = timezone.now()
+        tokens = self.authorized_tokens()
+        self.assertEqual(self.grant.source_session_id, self.session.pk)
+        self.assertNotEqual(self.grant.session_id, self.session.pk)
+        connection_expiry = self.grant.session.expires_at
+        self.assertGreaterEqual(self.grant.session.expires_at, before + timedelta(days=30))
+        self.assertLessEqual(self.grant.session.expires_at, timezone.now() + timedelta(days=30))
+        self.assertEqual(self.grant.session.mfa_verified_at, self.session.mfa_verified_at)
+        self.assertEqual(self.grant.session.credentials_version, self.session.credentials_version)
+        self.assertLessEqual(tokens["expires_in"], 3600)
+        self.assertEqual(McpRefreshToken.objects.get().token_hash, token_hash(tokens["refresh_token"]))
+        self.assertNotEqual(McpRefreshToken.objects.get().token_hash, tokens["refresh_token"])
+        self.session.expires_at = timezone.now() - timedelta(seconds=1)
+        self.session.idle_expires_at = timezone.now() - timedelta(seconds=1)
+        self.session.save()
+        expired_browser = self.api().get("/api/v2/auth/session/")
+        self.assertFalse(expired_browser.data["authenticated"])
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.revocation_reason, "expired")
+        self.assertIsNotNone(self.session.revoked_at)
+        McpAccessToken.objects.filter(token_hash=token_hash(tokens["access_token"])).update(expires_at=timezone.now())
+        renewed = self.refresh(tokens["refresh_token"])
+        self.assertEqual(renewed.status_code, 200, renewed.text)
+        self.assertEqual(renewed.headers["cache-control"], "no-store")
+        fresh = renewed.json()
+        self.assertNotEqual(fresh["refresh_token"], tokens["refresh_token"])
+        self.assertNotEqual(fresh["access_token"], tokens["access_token"])
+        self.grant.refresh_from_db()
+        self.assertEqual(self.grant.session.expires_at, connection_expiry)
+        self.assertEqual(self.session.expires_at, AuthSession.objects.get(pk=self.session.pk).expires_at)
+        result = self.http("POST", "/api/v2/mcp", headers={
+            "Authorization": "Bearer " + fresh["access_token"], "Accept": "application/json, text/event-stream",
+        }, json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                 "params": {"name": "bold_read", "arguments": {"operation": "get_auth_profile"}}})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertIn(self.user.email, result.text)
+        self.assertFalse(result.json()["result"].get("isError", False))
+
+    def test_refresh_replay_revokes_the_entire_connection(self):
+        tokens = self.authorized_tokens()
+        renewed = self.refresh(tokens["refresh_token"])
+        self.assertEqual(renewed.status_code, 200, renewed.text)
+        self.assertEqual(self.refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+        self.grant.refresh_from_db()
+        self.assertIsNotNone(self.grant.revoked_at)
+        self.assertEqual(self.refresh(renewed.json()["refresh_token"]).json()["error"], "invalid_grant")
+        denied = self.http("POST", "/api/v2/mcp", headers={"Authorization": "Bearer " + renewed.json()["access_token"]})
+        self.assertEqual(denied.status_code, 401)
+
+    def test_refresh_cannot_change_client_or_scopes(self):
+        tokens = self.authorized_tokens()
+        McpClient.objects.create(id="otro-cliente", metadata={**self.client_row.metadata, "client_id": "otro-cliente"})
+        denied = self.refresh(tokens["refresh_token"], client_id="otro-cliente")
+        self.assertEqual(denied.json()["error"], "invalid_grant")
+        for scope in ("bold.read", "bold.read bold.write otros.permisos"):
+            denied = self.refresh(tokens["refresh_token"], scope=scope)
+            self.assertEqual(denied.json()["error"], "invalid_scope")
+        self.assertIsNone(McpRefreshToken.objects.get().consumed_at)
+        self.assertEqual(self.refresh(tokens["refresh_token"]).status_code, 200)
+
+    def test_refresh_and_access_keep_revocation_account_assignment_and_mfa_checks(self):
+        tokens = self.authorized_tokens()
+        changes = [
+            (self.session, "revoked_at", timezone.now()),
+            (self.grant.session, "revoked_at", timezone.now()),
+            (self.user, "credentials_version", self.user.credentials_version + 1),
+            (self.user, "is_active", False),
+            (self.user, "must_change_password", True),
+            (self.assignment, "is_active", False),
+            (self.grant.session, "expires_at", timezone.now() - timedelta(seconds=1)),
+        ]
+        for row, field, value in changes:
+            with self.subTest(field=field, model=type(row).__name__):
+                original = getattr(row, field)
+                setattr(row, field, value)
+                row.save(update_fields=[field])
+                self.assertEqual(self.refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+                denied = self.http("POST", "/api/v2/mcp", headers={"Authorization": "Bearer " + tokens["access_token"]})
+                self.assertEqual(denied.status_code, 401)
+                setattr(row, field, original)
+                row.save(update_fields=[field])
+        with self.settings(AUTH_MFA_REQUIRED=True):
+            self.assertEqual(self.refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+
+    def test_refresh_revocation_endpoint_revokes_access_too(self):
+        tokens = self.authorized_tokens()
+        revoked = self.http("POST", "/api/v2/mcp/oauth/revoke", data={
+            "client_id": self.client_row.pk,
+            "token": tokens["refresh_token"], "token_type_hint": "refresh_token",
+        })
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+        self.assertEqual(self.refresh(tokens["refresh_token"]).json()["error"], "invalid_grant")
+        self.grant.refresh_from_db()
+        self.assertIsNotNone(self.grant.revoked_at)
+
+    def test_code_only_clients_preserve_one_hour_session_bound_access(self):
+        self.client_row.metadata["grant_types"] = ["authorization_code"]
+        self.client_row.save()
+        tokens = self.authorized_tokens()
+        self.assertFalse(tokens.get("refresh_token"))
+        self.assertIsNone(self.grant.source_session_id)
+        self.assertEqual(self.grant.session_id, self.session.pk)
+        self.assertEqual(McpRefreshToken.objects.count(), 0)
+
+    def test_read_only_refresh_cannot_gain_writes(self):
+        self.grant.scopes = ["bold.read"]
+        tokens = self.authorized_tokens()
+        denied = self.refresh(tokens["refresh_token"], scope="bold.read bold.write")
+        self.assertEqual(denied.json()["error"], "invalid_scope")
+        renewed = self.refresh(tokens["refresh_token"])
+        self.assertEqual(renewed.status_code, 200, renewed.text)
+        self.assertEqual(renewed.json()["scope"], "bold.read")
+        with self.assertRaises(ValidationError):
+            execute(self.grant, "patch_auth_profile", data={"biography": "No autorizado"}, write=True)
+
+    @skipUnless(connection.vendor == "postgresql", "Row locking requires PostgreSQL")
+    def test_concurrent_refresh_is_single_use_and_replay_revokes_the_family(self):
+        from mcp.server.auth.provider import TokenError
+
+        tokens = self.authorized_tokens()
+        provider = BoldOAuthProvider()
+        client = async_to_sync(provider.get_client)(self.client_row.pk)
+        refresh = async_to_sync(provider.load_refresh_token)(client, tokens["refresh_token"])
+        barrier = Barrier(2)
+
+        def exchange():
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                try:
+                    provider.exchange_refresh_token.__wrapped__(provider, client, refresh, refresh.scopes)
+                    return "issued"
+                except TokenError as error:
+                    return error.error
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(lambda _: exchange(), range(2)))
+        self.assertCountEqual(results, ["issued", "invalid_grant"])
+        self.assertEqual(McpRefreshToken.objects.count(), 2)
+        self.grant.refresh_from_db()
+        self.assertIsNotNone(self.grant.revoked_at)
 
     def test_mcp_initialize_list_and_call_use_real_protocol(self):
         headers = {"Authorization": "Bearer " + self.raw, "Accept": "application/json, text/event-stream"}
@@ -265,7 +438,7 @@ class McpTests(TransactionTestCase):
             "client_name": "Cliente remoto",
             "redirect_uris": ["http://127.0.0.1:4444/callback"],
             "token_endpoint_auth_method": "none", "scope": "bold.read bold.write",
-            "grant_types": ["authorization_code"], "response_types": ["code"],
+            "grant_types": ["authorization_code", "refresh_token"], "response_types": ["code"],
         })
         self.assertEqual(response.status_code, 201, response.text)
         invalid = self.http("POST", "/api/v2/mcp/oauth/register", json={
@@ -283,8 +456,9 @@ class McpTests(TransactionTestCase):
 
     def test_random_invalid_tokens_share_the_client_rate_limit(self):
         response = None
-        for index in range(121):
-            response = self.http("POST", "/api/v2/mcp", headers={"Authorization": "Bearer invalido-" + str(index)})
+        with patch("boldApp.mcp.asgi.timezone.now", return_value=timezone.now()):
+            for index in range(121):
+                response = self.http("POST", "/api/v2/mcp", headers={"Authorization": "Bearer invalido-" + str(index)})
         self.assertEqual(response.status_code, 429, response.text)
 
     def test_oauth_rejects_oversized_registration_before_parsing_or_persisting(self):

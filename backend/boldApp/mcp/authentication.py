@@ -12,6 +12,14 @@ def validate_authorization(authorization):
     if not session or authorization.revoked_at:
         raise AuthenticationFailed("La conexión MCP está revocada.")
     user = session.user_account
+    source = authorization.source_session
+    if source:
+        natural_expiry = source.revocation_reason == "expired" and (
+            source.expires_at <= now or (source.idle_expires_at and source.idle_expires_at <= now)
+        )
+        if ((source.revoked_at and not natural_expiry) or source.user_account_id != user.pk
+                or source.credentials_version != user.credentials_version):
+            raise AuthenticationFailed("La sesión que autorizó esta conexión fue revocada.")
     if (
         session.revoked_at or session.expires_at <= now
         or (session.idle_expires_at and session.idle_expires_at <= now)

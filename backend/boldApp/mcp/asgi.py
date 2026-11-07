@@ -1,7 +1,7 @@
 import hashlib
 import logging
 from functools import lru_cache
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from asgiref.sync import sync_to_async, ThreadSensitiveContext
 from django.conf import settings
@@ -43,7 +43,7 @@ def oauth_app():
         for route in routes if route.path != "/.well-known/oauth-authorization-server"
     ]
     metadata = build_metadata(AnyHttpUrl(issuer), None, registration, revocation)
-    metadata.grant_types_supported = ["authorization_code"]
+    metadata.grant_types_supported = ["authorization_code", "refresh_token"]
     metadata.token_endpoint_auth_methods_supported = ["none"]
     metadata.revocation_endpoint_auth_methods_supported = ["none"]
     routes.append(Route(
@@ -123,6 +123,11 @@ class McpHTTP:
                         return await JSONResponse({'detail': 'La solicitud OAuth supera 32 KB.'}, status_code=413)(scope, receive, send)
                     if not frame.get('more_body', False):
                         break
+                if (path == "/api/v2/mcp/oauth/revoke"
+                        and request.headers.get("content-type", "").split(";")[0] == "application/x-www-form-urlencoded"
+                        and "client_secret" not in parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)):
+                    # SDK 2.3 requires this optional field even for public clients using auth method none.
+                    body.extend(b"&client_secret=")
                 original_receive = receive
                 pending = True
                 async def receive():

@@ -101,7 +101,8 @@ class ConnectionsView(APIView):
             "id": str(row.pk), "client_name": row.client.metadata.get("client_name", "Aplicación MCP"),
             "assignment_id": str(row.assignment_id), "scopes": row.scopes,
             "created_at": row.created_at, "revoked_at": row.revoked_at,
-        } for row in rows.select_related("client").order_by("-created_at")[:100]]})
+            "expires_at": row.session.expires_at,
+        } for row in rows.select_related("client", "session").order_by("-created_at")[:100]]})
 
     def delete(self, request, authorization_id):
         row = get_object_or_404(McpAuthorization, pk=authorization_id, session__user_account=request.user)

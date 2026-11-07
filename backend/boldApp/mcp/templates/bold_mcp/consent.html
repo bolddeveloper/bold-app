@@ -38,7 +38,7 @@
         {% for item in assignments %}<option value="{{ item.pk }}">{{ item.position.unit.name }} · {{ item.position.job_role.title }}</option>{% endfor %}
       </select>
       {% if write_requested %}<label class="check"><input type="checkbox" name="write" value="yes"><span>Permitir cambios, creación, envío y eliminación de contenido con mis permisos.</span></label>{% endif %}
-      <p class="muted">Sin permitir cambios, la conexión solo consulta información. Caduca como máximo en una hora y al vencer o cerrar esta sesión de BOLD.</p>
+      <p class="muted">Sin permitir cambios, la conexión solo consulta información. Los clientes compatibles renuevan el acceso automáticamente durante hasta 30 días. Cerrar esta sesión de BOLD o revocar la conexión termina el acceso.</p>
       <footer><button type="submit" name="decision" value="deny">Cancelar</button><button class="primary" type="submit" name="decision" value="allow">Autorizar conexión</button></footer>
     </form>
   {% endif %}

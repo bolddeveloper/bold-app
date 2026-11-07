@@ -22,7 +22,22 @@ Los alcances son `bold.read` y `bold.write`. Solicitar ambos para poder ofrecer 
 
 Si falta la sesión, la pantalla de autorización permite abrir BOLD en otra pestaña. Después de iniciar sesión, volver y actualizar la pantalla de autorización.
 
-La conexión dura como máximo una hora y vence antes si termina la sesión de BOLD. El cierre de sesión, la revocación, el cambio de credenciales, una cuenta inactiva o una asignación retirada invalidan el acceso. Al vencer, se vuelve a autorizar. Esta versión no emite tokens de renovación.
+Los clientes que registran `grant_types: ["authorization_code", "refresh_token"]` reciben acceso de una hora y un token de renovación rotativo. La conexión tiene un límite fijo de 30 días desde la autorización; renovar no amplía ese plazo. El corte diario de la sesión del navegador no interrumpe esta conexión: se utiliza una sesión MCP separada, sin emitir una cookie de acceso al navegador. Los clientes sin renovación conservan el límite anterior de una hora y la vigencia de la sesión original.
+
+El cierre explícito de la sesión de BOLD que autorizó la conexión, la revocación de cualquiera de sus sesiones, el cambio de credenciales, una cuenta inactiva, la retirada de la asignación o la falta de MFA requerido invalidan el acceso y la renovación. Los permisos y la antigüedad de la verificación MFA se comprueban en cada operación. El plazo de 30 días no renueva la verificación MFA.
+
+Los tokens se guardan solo como hashes en el servidor. Cada renovación consume el token anterior y devuelve uno nuevo. Reutilizar un token consumido revoca toda la conexión; el cliente debe serializar la renovación y guardar el resultado antes de continuar. La renovación conserva los mismos alcances: para cambiar entre lectura y escritura se necesita una conexión nueva.
+
+En Codex, añadir una sola vez el servidor a la configuración de usuario y guardar OAuth en el almacén seguro del sistema:
+
+```toml
+[mcp_servers.bold-production]
+url = "https://ORIGEN_PUBLICO_DE_BOLD/api/v2/mcp"
+oauth_resource = "https://ORIGEN_PUBLICO_DE_BOLD/api/v2/mcp"
+scopes = ["bold.read", "bold.write"]
+```
+
+Ejecutar `codex mcp login bold-production --scopes bold.read,bold.write --oauth-client-registration dcr`. Los nuevos chats de ese usuario y equipo reutilizan la conexión guardada. No copiar tokens a prompts, archivos del proyecto ni otros equipos. La aprobación de acciones del cliente es independiente del consentimiento OAuth; autorizar una conexión no concede permiso para enviar mensajes sin una petición del usuario.
 
 ## Herramientas
 
@@ -50,4 +65,4 @@ $env:DATABASE_URL='sqlite:///:memory:'
 python manage.py test boldApp.mcp boldApp.autenticacion.tests --noinput
 ```
 
-Las comprobaciones incluyen OAuth, PKCE incorrecto, reutilización de códigos, CSRF, consentimiento, revocación, límites de lectura/escritura, permisos y llamadas MCP reales a la API. Las pruebas del Worker comprueban el reenvío del descubrimiento OAuth. Para publicar una nota de Novedades, revisar la nota MCP preparada y ejecutar sus pruebas y la compilación frontend.
+Las comprobaciones incluyen OAuth, PKCE incorrecto, reutilización de códigos, renovación y su rotación, revocación por reutilización, corte diario del navegador, límite de 30 días, CSRF, consentimiento, permisos y llamadas MCP reales a la API. La concurrencia de renovación se prueba con PostgreSQL. Las pruebas del Worker comprueban el reenvío del descubrimiento OAuth. Para publicar una nota de Novedades, ejecutar sus pruebas y la compilación frontend.

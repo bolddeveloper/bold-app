@@ -591,6 +591,19 @@ export function getReleaseNotes() {
 
 export const releaseNotes = [
     {
+        id:"2026-11-07-mcp-persistent-renewal",date:"2026-11-07",category:"Mejoras",icon:"update",
+        title:"Conexiones de asistentes con renovación automática",
+        summary:"Los clientes MCP compatibles pueden conservar su conexión y renovar el acceso sin pedir autorización cada hora.",
+        sections:[{title:"Conectar y reutilizar",items:[
+            "Autoriza una conexión nueva desde tu cliente MCP. Si admite renovación y guarda la conexión de forma segura, puede reutilizarla en otros chats del mismo usuario y equipo.",
+            "El acceso se renueva automáticamente durante hasta 30 días desde la autorización inicial. El corte diario de la sesión del navegador no interrumpe esa conexión; al terminar el plazo debes autorizar de nuevo.",
+        ]},{title:"Tus permisos se mantienen",items:[
+            "La conexión conserva la asignación y los alcances autorizados. Elegir solo lectura impide cambios; renovar no amplía tus permisos ni renueva verificaciones MFA.",
+            "Cerrar explícitamente la sesión que autorizó la conexión, revocarla, cambiar tus credenciales o perder acceso a la cuenta o asignación detiene la conexión y su renovación.",
+            "Las conexiones anteriores y los clientes sin renovación conservan el límite de una hora. Las confirmaciones de acciones que configure tu cliente son independientes de esta renovación.",
+        ]}],
+    },
+    {
         id:"2026-11-07-slack-invitation-access-recovery",date:"2026-11-07",category:"Correcciones",icon:"update",
         title:"Canales e invitaciones de Slack más estables",
         summary:"Slack actualiza tus invitaciones al recuperar la conexión y conserva los canales disponibles si falla un apartado.",

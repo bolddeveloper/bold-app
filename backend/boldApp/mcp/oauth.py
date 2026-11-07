@@ -5,16 +5,18 @@ from urllib.parse import urlsplit
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from mcp.server.auth.provider import (
-    AccessToken, AuthorizationCode, AuthorizeError, RegistrationError, TokenError,
+    AccessToken, AuthorizationCode, AuthorizeError, RefreshToken, RegistrationError, TokenError,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from rest_framework.exceptions import AuthenticationFailed
 
 from boldApp.autenticacion.services import token_hash
+from boldApp.autenticacion.models import AuthSession
 from .authentication import validate_authorization
-from .models import McpAccessToken, McpAuthorization, McpClient
+from .models import McpAccessToken, McpAuthorization, McpClient, McpRefreshToken
 
 
 SCOPES = ["bold.read", "bold.write"]
@@ -30,19 +32,36 @@ def resource_url():
 
 def grant_queryset():
     return McpAuthorization.objects.select_related(
-        "session__user_account", "assignment__employee", "client",
+        "session__user_account", "source_session", "assignment__employee", "client",
     )
 
 
 def access_authorization(raw_token):
     token = McpAccessToken.objects.select_related(
         "authorization__session__user_account", "authorization__assignment__employee",
-        "authorization__client",
+        "authorization__client", "authorization__source_session",
     ).filter(token_hash=token_hash(raw_token), expires_at__gt=timezone.now()).first()
     if not token:
         raise AuthenticationFailed("La conexión MCP expiró o no es válida.")
     validate_authorization(token.authorization)
     return token
+
+
+def issue_tokens(authorization, *, refresh):
+    now = timezone.now()
+    expires = min(now + timedelta(hours=1), authorization.session.expires_at)
+    if authorization.session.idle_expires_at:
+        expires = min(expires, authorization.session.idle_expires_at)
+    raw = secrets.token_urlsafe(48)
+    McpAccessToken.objects.create(token_hash=token_hash(raw), authorization=authorization, expires_at=expires)
+    renewal = None
+    if refresh:
+        renewal = secrets.token_urlsafe(48)
+        McpRefreshToken.objects.create(token_hash=token_hash(renewal), authorization=authorization)
+    return OAuthToken(
+        access_token=raw, token_type="Bearer", refresh_token=renewal,
+        expires_in=max(1, int((expires - now).total_seconds())), scope=" ".join(authorization.scopes),
+    )
 
 
 class BoldOAuthProvider:
@@ -119,23 +138,63 @@ class BoldOAuthProvider:
         except AuthenticationFailed as error:
             raise TokenError("invalid_grant", str(error)) from error
         now = timezone.now()
-        expires = min(now + timedelta(hours=1), row.session.expires_at)
-        if row.session.idle_expires_at:
-            expires = min(expires, row.session.idle_expires_at)
-        raw = secrets.token_urlsafe(48)
-        McpAccessToken.objects.create(token_hash=token_hash(raw), authorization=row, expires_at=expires)
+        refresh = "refresh_token" in client.grant_types
+        if refresh:
+            # The OAuth session survives the browser cutoff, but explicit source logout still revokes it.
+            row.source_session = row.session
+            row.session = AuthSession.objects.create(
+                user_account=row.source_session.user_account,
+                token_hash=token_hash(secrets.token_urlsafe(48)),
+                device_name=("MCP · " + row.client.metadata.get("client_name", "Aplicación MCP"))[:120],
+                user_agent="BOLD MCP", expires_at=now + timedelta(days=30),
+                credentials_version=row.source_session.credentials_version,
+                mfa_verified_at=row.source_session.mfa_verified_at,
+                auth_strength=row.source_session.auth_strength,
+            )
         row.consumed_at = now
-        row.save(update_fields=["consumed_at"])
-        return OAuthToken(
-            access_token=raw, token_type="Bearer",
-            expires_in=max(1, int((expires - now).total_seconds())), scope=" ".join(row.scopes),
+        row.save(update_fields=["consumed_at", "source_session", "session"])
+        return issue_tokens(row, refresh=refresh)
+
+    @sync_to_async
+    def load_refresh_token(self, client, refresh_token):
+        row = grant_queryset().filter(
+            refresh_tokens__token_hash=token_hash(refresh_token), client_id=client.client_id,
+        ).first()
+        if not row:
+            return None
+        try:
+            validate_authorization(row)
+        except AuthenticationFailed:
+            return None
+        return RefreshToken(
+            token=refresh_token, client_id=row.client_id, scopes=row.scopes,
+            expires_at=int(row.session.expires_at.timestamp()), resource=resource_url(),
+            subject=str(row.session.user_account_id),
         )
 
-    async def load_refresh_token(self, client, refresh_token):
-        return None
-
-    async def exchange_refresh_token(self, client, refresh_token, scopes):
-        raise TokenError("unsupported_grant_type", "Vuelve a autorizar BOLD al vencer la conexión.")
+    @sync_to_async
+    def exchange_refresh_token(self, client, refresh_token, scopes):
+        with transaction.atomic():
+            row = grant_queryset().select_for_update(of=("self",)).filter(
+                refresh_tokens__token_hash=token_hash(refresh_token.token), client_id=client.client_id,
+            ).first()
+            if not row:
+                raise TokenError("invalid_grant", "La renovación no es válida.")
+            try:
+                validate_authorization(row)
+            except AuthenticationFailed as error:
+                raise TokenError("invalid_grant", str(error)) from error
+            if set(scopes) != set(row.scopes):
+                raise TokenError("invalid_scope", "Para cambiar los permisos debes autorizar una conexión nueva.")
+            token = row.refresh_tokens.get(token_hash=token_hash(refresh_token.token))
+            if not token.consumed_at:
+                token.consumed_at = timezone.now()
+                token.save(update_fields=["consumed_at"])
+                return issue_tokens(row, refresh=True)
+            # Commit family revocation before returning the replay error.
+            row.revoked_at = timezone.now()
+            row.save(update_fields=["revoked_at"])
+        raise TokenError("invalid_grant", "La renovación ya se utilizó. Vuelve a autorizar la conexión.")
 
     @sync_to_async
     def load_access_token(self, token):
@@ -151,4 +210,7 @@ class BoldOAuthProvider:
 
     @sync_to_async
     def revoke_token(self, token):
-        McpAuthorization.objects.filter(tokens__token_hash=token_hash(token.token)).update(revoked_at=timezone.now())
+        digest = token_hash(token.token)
+        McpAuthorization.objects.filter(
+            Q(tokens__token_hash=digest) | Q(refresh_tokens__token_hash=digest),
+        ).update(revoked_at=timezone.now())

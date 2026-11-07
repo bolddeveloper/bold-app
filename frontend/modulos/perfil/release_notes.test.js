@@ -27,7 +27,7 @@ test("la corrección de Slack explica ubicación de respuestas y eliminación si
 });
 
 test("la recuperación de invitaciones mantiene los canales autorizados y la revocación",()=>{
-    const note=releaseNotes[0];
+    const note=releaseNotes.find(row=>row.id==="2026-11-07-slack-invitation-access-recovery");
     assert.equal(note.id,"2026-11-07-slack-invitation-access-recovery");
     const text=note.sections.flatMap(section=>section.items).join(' ');
     assert.match(text,/sin tener que cerrar sesión/);
@@ -35,6 +35,18 @@ test("la recuperación de invitaciones mantiene los canales autorizados y la rev
     assert.match(text,/respuestas atrasadas/);
     assert.match(text,/Leer y participar/);
     assert.match(text,/se retira tu acceso/);
+});
+
+test("la renovación MCP explica compatibilidad, plazo y revocación sin ampliar permisos",()=>{
+    const note=releaseNotes[0];
+    assert.equal(note.id,"2026-11-07-mcp-persistent-renewal");
+    const text=[note.summary,...note.sections.flatMap(section=>section.items)].join(' ');
+    assert.match(text,/clientes MCP compatibles/);
+    assert.match(text,/30 días desde la autorización inicial/);
+    assert.match(text,/mismo usuario y equipo/);
+    assert.match(text,/Cerrar explícitamente la sesión/);
+    assert.match(text,/no amplía tus permisos/);
+    assert.match(text,/clientes sin renovación conservan el límite de una hora/);
 });
 
 test("soporte BOLD prepara una nota sin anunciar un despliegue", () => {
