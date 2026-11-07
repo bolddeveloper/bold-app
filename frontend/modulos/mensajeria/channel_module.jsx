@@ -1,5 +1,5 @@
 import {lazy, Suspense, useEffect, useLayoutEffect, useRef, useState} from "react";
-import {Archive, ArrowDown, ArrowLeft, AtSign, Bell, BellOff, CheckCheck, ChevronDown, Hash, ImagePlus, LockKeyhole, MessageSquare, MoreHorizontal, Plus, RefreshCw, Send, Settings2, Search, PanelLeftClose, History, Bookmark, Mail, ListFilter, X} from "lucide-react";
+import {Archive, ArrowDown, ArrowLeft, AtSign, Bell, BellOff, CheckCheck, ChevronDown, Hash, ImagePlus, LockKeyhole, MessageSquare, MoreHorizontal, Plus, RefreshCw, Send, Settings2, Search, PanelLeftClose, History, Bookmark, Mail, ListFilter, Trash2, X} from "lucide-react";
 import {useFileTransfer,FileDropHint} from "../core/shared/use_file_transfer.jsx";
 import {useCore} from "../core/core_provider.jsx";
 import {useShell} from "../core/app_shell.jsx";
@@ -60,7 +60,7 @@ function Department({value}) {
     return <span className="slack_department" style={{"--department-color":/^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "var(--bold_red_dark)"}}>{value.name}</span>;
 }
 
-function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved}) {
+function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved, onDeleted}) {
     const [unit, setUnit] = useState(channel ? channel.department?.id || "" : scope ? scope.departmentId || "" : canCreateIndependent ? "" : departments.find(row => row.can_create)?.id || "");
     const [name, setName] = useState(channel?.name || ""), [description, setDescription] = useState(channel?.description || "");
     const [color,setColor]=useState(channel?.color || ""),[inviting,setInviting]=useState(false);
@@ -83,6 +83,17 @@ function ChannelEditor({channel, scope, departments, canCreateIndependent, onClo
         } catch (err) {if (active.current && err.name !== "AbortError") setError(channelError(err));}
         finally {sending.current = false; if (active.current) setBusy(false);}
     }
+    async function remove() {
+        if (sending.current || inviting || !channel?.can_manage) return;
+        sending.current = true; setBusy(true); setError("");
+        const controller = new AbortController(); request.current = controller;
+        try {
+            if (!await confirmBold(`¿Eliminar «${channel.name}»? El canal dejará de estar disponible para todos sus miembros. El historial y los archivos se conservan.`, {title:"Eliminar canal de texto"}) || controller.signal.aborted) return;
+            await channelApi.deleteChannel(channel.id, channel.version, {signal:controller.signal});
+            if (active.current && !controller.signal.aborted) onDeleted(channel.id);
+        } catch (err) {if (active.current && err.name !== "AbortError") setError(channelError(err));}
+        finally {sending.current = false; if (active.current) setBusy(false);}
+    }
     return <div className="slack_editor_scrim"><section role="dialog" aria-modal="true" aria-labelledby="slack_editor_title" className={`slack_editor slack_channel_editor ${channel ? 'is_editing':''}`}>
         <header><div><h2 id="slack_editor_title"><Hash size={18} aria-hidden="true"/>{channel ? "Configurar canal" : "Crear canal"}</h2><p>{scope ? <>En <strong>{scope.name}</strong>{scope.categoryId ? ' · Categoría seleccionada':''}</> : channel ? 'Nombre, descripción y apariencia.':'Conversa y comparte archivos con tu equipo.'}</p></div><button type="button" onClick={onClose} disabled={busy || inviting} aria-label="Cerrar configuración"><X aria-hidden="true" size={18}/></button></header>
         <form onSubmit={save} aria-busy={busy}>
@@ -97,7 +108,7 @@ function ChannelEditor({channel, scope, departments, canCreateIndependent, onClo
                 {!channel && !scope?.private && <ChannelAccessFields compact unit={unit} visibility={visibility} members={members} onVisibility={setVisibility} onMembers={setMembers} onBusyChange={setInviting} disabled={busy}/>}
             </fieldset></div>
             {error && <p className="slack_error" role="alert">{error}</p>}
-            <footer className="slack_channel_editor_footer"><button type="button" disabled={busy || inviting} onClick={onClose}>Cancelar</button><button type="submit" className="slack_primary" disabled={busy || inviting || !name.trim() || (!channel && !unit && !scope?.private && !canCreateIndependent)}>{busy ? "Guardando…" : channel ? 'Guardar cambios':'Crear canal'}</button></footer>
+            <footer className="slack_channel_editor_footer">{channel?.can_manage && <button type="button" className="slack_delete_channel" disabled={busy || inviting} onClick={remove}><Trash2 size={15} aria-hidden="true"/>Eliminar canal</button>}<button type="button" disabled={busy || inviting} onClick={onClose}>Cancelar</button><button type="submit" className="slack_primary" disabled={busy || inviting || !name.trim() || (!channel && !unit && !scope?.private && !canCreateIndependent)}>{busy ? "Procesando…" : channel ? 'Guardar cambios':'Crear canal'}</button></footer>
         </form>
     </section></div>;
 }
@@ -515,6 +526,18 @@ export default function ChannelModule() {
             if (mounted.current && !controller.signal.aborted && state.current.selected?.id===channelId) {setSelected(updated); setNotice(updated.archived_at ? "Canal archivado; se conserva el historial." : "Canal restaurado."); refresh.current?.request();}
         } catch (err) {report(err);} finally {busy.current = false; if (mounted.current) setSending(false);}
     }
+    async function channelDeleted(id) {
+        const snapshot = state.current.identity;
+        setEditor(null);
+        if (state.current.selected?.id === id) {
+            pageDirtyChanged(false);
+            await select(null);
+        }
+        if (!mounted.current || snapshot !== state.current.identity) return;
+        setChannels(current => current.filter(row => row.id !== id));
+        setNotice("Canal eliminado; se conserva el historial y los archivos.");
+        refresh.current?.request();
+    }
     async function openTask(task) {
         if (!task?.available || openingTask.current) return;
         const controller=new AbortController();openingTask.current=controller;setOpeningTaskId(task.id);setError("");
@@ -655,7 +678,7 @@ export default function ChannelModule() {
                 </section>
             </div>}
         </main>
-        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
+        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onDeleted={channelDeleted} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
         {iconEditor && <ServerIconEditor server={iconEditor} onClose={()=>setIconEditor(null)} onSaved={value=>{const row=iconEditor;setIconEditor(null);if(row.private){setServers(current=>current.map(item=>item.id===row.serverId ? {...item,...value}:item));setSelected(current=>current?.server?.id===row.serverId ? {...current,server:{...current.server,...value}}:current);}else setDepartments(current=>current.map(item=>item.id===row.id ? {...item,...value}:item));}}/>}
         {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved} onDeleted={serverDeleted}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}

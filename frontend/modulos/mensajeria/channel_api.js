@@ -67,6 +67,7 @@ export function createChannelApi(client = http) {
         list: (archived, next, options,filters={}) => client.request(channelPage(root, next, {...filters,...(archived ? {archived:"true"} : {})}), options),
         create: (values, options) => client.request(root, {...options, method:"POST", body:values}),
         update: (channel, values, options) => client.request(detail(channel), {...options, method:"PATCH", body:values}),
+        deleteChannel: (channel, version, options) => client.request(detail(channel), {...options, method:"DELETE", body:{version}}),
         messages: (channel, parent, next, options) => client.request(channelPage(messages(channel), next, parent ? {parent:id(parent)} : {}), options),
         tasks: (channel, query, next, options, purpose) => client.request(channelPage(detail(channel)+"tasks/",next,{q:query,...(purpose==="page" ? {purpose:"page"}:{})}),options),
         task: (task, options) => client.request(`/api/v2/tasks/${id(task)}/`,options),

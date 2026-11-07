@@ -27,6 +27,7 @@ let mentionQueries=[],mentionSignals=[],mentionDelay=null,mentionFailure=null,me
 const makeMessage=(id,body,parent=null,author="me") => ({id,body,parent_id:parent,channel_id:channelId,sequence:Number(id),version:1,author:{employee_id:author,name:author === "me" ? "Mi cuenta" : "Colega"},department:{name:author === "me" ? "IT" : "Marketing",color:"#9250A3"},created_at:new Date().toISOString(),editable_until:new Date(Date.now()+600000).toISOString(),can_edit:author === "me",reply_count:0});
 let rows=[makeMessage("1","Guía https://example.com <script>no ejecutar</script>",null,"peer"),makeMessage("2","Mi mensaje")];
 let calls=0, sends=0, failSend=false, attempted=[], releaseSend, channelCreates=[];
+let channelDeleted=false,channelDeleteFails=false,channelDeletes=[];
 let mediaAttempts=[],failMediaAt=0,validationMedia=false,mediaDownloads=0;
 const taskId="00000000-0000-4000-8000-000000000010", taskFixture={id:taskId,title:"Revisión de prueba",status:"Pendiente",completed:false};
 let taskReadable=true, searches=0;
@@ -64,7 +65,8 @@ globalThis.__channelsApi={
     managed:async()=>({results:[channel],next:null}),
     access:async()=>{accessReads++;return {...channel,members:accessMembers};},
     setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
-    list:async archived => {calls++; return {results:!channel.archived_at || archived ? [channelSnapshot()] : [],next:null};},
+    list:async archived => {calls++; return {results:!channelDeleted && (!channel.archived_at || archived) ? [channelSnapshot()] : [],next:null};},
+    deleteChannel:async(id,version,options)=>{channelDeletes.push({id,version,options});if(channelDeleteFails)throw {status:409,fields:{detail:'El canal cambió. Actualiza su configuración antes de eliminarlo.'}};channelDeleted=true;},
     detail:async()=>{deepLoads++;return channelSnapshot();},
     message:async(_,id)=>({message:threadProjection(rows.find(row=>row.id===id))}),
     follow:async(_,following)=>{channel={...channel,following,state_version:(channel.state_version || 0)+1};return channelSnapshot();},
@@ -623,6 +625,19 @@ try {
     [...document.querySelectorAll('.slack_catalog_card')].find(node=>node.textContent.includes('Nuevo nombre del hilo')).dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await waitFor(()=>menu());
     menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'End',bubbles:true}));assert.equal(document.activeElement.textContent.trim(),'Volver al hilo');
     menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await waitFor(()=>!menu());
+    document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>button('Eliminar canal'));
+    globalThis.__channelsConfirm=false;button('Eliminar canal').click();await settle();
+    assert.equal(channelDeletes.length,0,'canceling deletion never sends a destructive request');
+    globalThis.__channelsConfirm=true;channelDeleteFails=true;button('Eliminar canal').click();
+    await waitFor(()=>document.querySelector('.slack_channel_editor [role=alert]'));
+    assert.equal(channelDeleted,false);assert.ok(document.querySelector('.slack_active_conversation'),'a conflict keeps the conversation and editor open');
+    assert.match(document.querySelector('.slack_channel_editor [role=alert]').textContent,/canal cambió/);
+    channelDeleteFails=false;button('Eliminar canal').click();
+    await waitFor(()=>!document.querySelector('.slack_channel_editor'));
+    await waitFor(()=>!document.querySelector('.slack_active_conversation'));
+    assert.equal(channelDeletes.at(-1).id,channel.id);assert.equal(channelDeletes.at(-1).version,channel.version);
+    assert.ok(channelDeletes.at(-1).options.signal instanceof AbortSignal);
+    assert.equal(document.querySelectorAll('.slack_channel_item').length,0,'successful deletion removes the channel from the sidebar');
     core.securityUncertain=true; root.render(React.createElement(Channels)); await settle();
     assert.equal(document.querySelector(".slack_message"),null);
     assert.match(document.querySelector('[role="status"]').textContent,/sesión autorizada/);

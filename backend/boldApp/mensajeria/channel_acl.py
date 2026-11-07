@@ -11,7 +11,7 @@ from .channel_models import ChannelAccessRule, DepartmentChannel, PrivateServerM
 def readable_channels(rows, employee_id, unit_id):
     rule = ChannelAccessRule.objects.filter(channel_id=OuterRef("pk"), employee_id=employee_id)
     member = PrivateServerMember.objects.filter(server_id=OuterRef("server_id"), server__deleted_at__isnull=True, employee_id=employee_id)
-    return rows.annotate(_server_access=Subquery(member.values("access")[:1]),
+    return rows.filter(deleted_at__isnull=True).annotate(_server_access=Subquery(member.values("access")[:1]),
         _channel_access=Subquery(rule.values("access")[:1]), _has_channel_access=Exists(rule)).filter(
         Q(server__isnull=False, _server_access__in=["read", "write"]) |
         (Q(server__isnull=True) & (Q(_channel_access__in=["read", "write"]) |
@@ -22,7 +22,7 @@ def channel_context(assignment, resource_id, context=None):
     key = ("slack_channel", str(resource_id))
     if context is not None and key in context.resource_contexts:
         return context.resource_contexts[key]
-    channel = DepartmentChannel.objects.filter(pk=resource_id).values("id", "unit_id", "creator_id", "creator__employee_id", "visibility", "server_id", "server__creator__employee_id").first()
+    channel = DepartmentChannel.objects.filter(pk=resource_id).values("id", "unit_id", "creator_id", "creator__employee_id", "visibility", "server_id", "server__creator__employee_id", "deleted_at").first()
     if channel:
         channel["access"] = ChannelAccessRule.objects.filter(channel_id=resource_id, employee_id=assignment.employee_id).values_list("access", flat=True).first()
         if channel["server_id"]:
@@ -34,7 +34,7 @@ def channel_context(assignment, resource_id, context=None):
 
 def boundary_allows(assignment, permission, target_unit, resource_id, context):
     channel = channel_context(assignment, resource_id, context)
-    if not channel or target_unit.pk != (channel["unit_id"] or assignment.position.unit_id):
+    if not channel or channel["deleted_at"] or target_unit.pk != (channel["unit_id"] or assignment.position.unit_id):
         return False
     if channel.get("server_id"):
         access = channel.get("server_access")

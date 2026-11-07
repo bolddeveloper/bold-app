@@ -48,7 +48,7 @@ def authorized_people(people, channel, permissions, codes=("slack.channel.read",
                 continue
             policy = ChannelPolicy(assignment, permissions=permissions)
             policy.resources[("slack_channel", str(channel.pk))] = {"id": channel.pk, "unit_id": channel.unit_id,
-                "creator_id": channel.creator_id, "creator__employee_id": channel.creator.employee_id,
+                "creator_id": channel.creator_id, "creator__employee_id": channel.creator.employee_id, "deleted_at": channel.deleted_at,
                 "visibility": channel.visibility, "access": access, "server_id": channel.server_id,
                 "server_access": access if channel.server_id else None,
                 "server__creator__employee_id": channel.server.creator.employee_id if channel.server_id else None}

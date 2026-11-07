@@ -79,6 +79,10 @@ class ReadChannel(StrictInputSerializer):
     message_id = serializers.UUIDField()
 
 
+class DeleteChannel(StrictInputSerializer):
+    version = serializers.IntegerField(min_value=1)
+
+
 class FollowChannel(StrictInputSerializer):
     following = serializers.BooleanField()
 
@@ -159,7 +163,7 @@ class SlackView(PrivateChatView):
         return self._channel_policy
 
     def channel(self, channel_id, *, lock=False):
-        rows = DepartmentChannel.objects.select_related("unit", "creator", "server__creator")
+        rows = DepartmentChannel.objects.filter(deleted_at__isnull=True).select_related("unit", "creator", "server__creator")
         if lock:
             rows = rows.select_for_update(of=("self",))
         channel = get_object_or_404(rows, pk=channel_id)
@@ -253,7 +257,7 @@ class ChannelListView(SlackView):
             # Serialize the independent namespace across active departments,
             # including its bounded count; NULL cannot be locked as a unit.
             Permission.objects.select_for_update().get(code="slack.channel.create")
-        if DepartmentChannel.objects.filter(unit=unit, server=server).count() >= 200:
+        if DepartmentChannel.objects.filter(unit=unit, server=server, deleted_at__isnull=True).count() >= 200:
             raise ValidationError("Este grupo alcanzó el límite inicial de 200 canales, incluidos los archivados.")
         from .models import ChannelCategory
         category = get_object_or_404(ChannelCategory, pk=values["category_id"], unit=unit, server=server) if values["category_id"] else None
@@ -297,6 +301,31 @@ class ChannelDetailView(SlackView):
             raise Conflict("Ya existe un canal con ese nombre en el departamento.")
         publish_channel(channel, "channel.updated")
         return Response(channel_data(channel, self.policy()))
+
+    @transaction.atomic
+    def delete(self, request, channel_id):
+        channel = self.channel(channel_id, lock=True)
+        self.policy().require("slack.channel.manage", channel.unit, channel.pk)
+        form = DeleteChannel(data=request.data)
+        form.is_valid(raise_exception=True)
+        if form.validated_data["version"] != channel.version:
+            raise Conflict("El canal cambió. Actualiza su configuración antes de eliminarlo.")
+        # Keep history, pages and Drive references; revoke every content path instead.
+        channel.deleted_at = channel.updated_at = timezone.now()
+        channel.version += 1
+        channel.save(update_fields=["deleted_at", "updated_at", "version"])
+        if channel.server_id:
+            from .server_views import invalidate_members
+            invalidate_members(list(channel.server.members.values_list("employee_id", flat=True)))
+        else:
+            from .channel_access_views import access_data, invalidate_access
+            invalidate_access(channel, access_data(channel), {"visibility": "private", "members": []})
+        from boldApp.administrativo.services import record_system_event
+        record_system_event("slack.channel.deleted", request, module_code="slack", unit=channel.unit,
+            target_type="slack_channel", target_id=channel.pk)
+        from .channel_events import publish_categories
+        publish_categories(channel.unit_id, channel.server_id)
+        return Response(status=204)
 
 
 class ChannelMessageListView(SlackView):

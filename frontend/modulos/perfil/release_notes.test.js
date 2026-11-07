@@ -5,7 +5,7 @@ import {supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpRele
 test("soportebold y MCP se publican juntos tras verificar producción, conservando límites y permisos",()=>{
     const [note]=supportIntegrationReleaseNotes;
     assert.equal(supportIntegrationReleaseNotes.length,1);
-    assert.equal(releaseNotes[0],note);
+    assert.ok(releaseNotes.includes(note));
     assert.equal(getReleaseNotes({chat_enabled:true}).filter(row=>row.id===note.id).length,1);
     const text=note.sections.flatMap(row=>row.items).join(' ');
     assert.match(text,/Solo lectura/);
@@ -13,6 +13,17 @@ test("soportebold y MCP se publican juntos tras verificar producción, conservan
     assert.match(text,/activo en producción/);
     assert.match(text,/no amplía tus permisos/);
     assert.match(text,/como máximo en una hora/);
+});
+
+test("la corrección de Slack explica ubicación de respuestas y eliminación sin borrar historial",()=>{
+    const note=releaseNotes[0];
+    assert.equal(note.id,"2026-11-07-slack-support-placement-channel-removal");
+    const text=note.sections.flatMap(section=>section.items).join(' ');
+    assert.match(text,/sin crear un hilo/);
+    assert.match(text,/mismo hilo/);
+    assert.match(text,/Configurar canal/);
+    assert.match(text,/archivos se conservan/);
+    assert.match(text,/servidores de departamento siguen protegidos/);
 });
 
 test("soporte BOLD prepara una nota sin anunciar un despliegue", () => {

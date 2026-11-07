@@ -6,6 +6,14 @@ import {channelLinkTarget,threadLink} from './channel_links.js';
 
 const channel = "00000000-0000-4000-8000-000000000001", parent = "00000000-0000-4000-8000-000000000002";
 
+test('deleting a text channel sends its reviewed version and respects cancellation',async()=>{
+    const calls=[],api=createChannelApi({request:async(...args)=>calls.push(args)});
+    const controller=new AbortController();
+    await api.deleteChannel(channel,3,{signal:controller.signal});
+    assert.deepEqual(calls,[[`/api/v2/messaging/channels/${channel}/`,{method:'DELETE',body:{version:3},signal:controller.signal}]]);
+    assert.throws(()=>api.deleteChannel('../outside',3));
+});
+
 test('server order reads and updates only the authenticated account preferences',async()=>{
     const calls=[],order=['independent',channel],api=createChannelApi({request:async(path,options)=>{calls.push({path,options});return {slack_server_order:order};}});
     assert.deepEqual(await api.serverOrder(),order);

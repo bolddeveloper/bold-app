@@ -51,8 +51,8 @@ def permitted(job):
         return False
     if not mentioned(message.body) or message.version != job.source_version or message.channel.archived_at:
         return False
-    parent = message.parent if message.parent_id else message
-    if parent.thread_closed_at or parent.thread_locked or parent.thread_deleted_at:
+    parent = message.parent if message.parent_id else None
+    if parent and (parent.thread_closed_at or parent.thread_locked or parent.thread_deleted_at):
         return False
     session = job.session
     if session and (session.revoked_at or session.expires_at <= now
@@ -94,13 +94,13 @@ def publish(pk, body, *, reason='', context_digest=None):
     if not isolated(bot):
         raise ValueError('La identidad de soporte ya no está aislada.')
     source = job.source
-    parent = ChannelMessage.objects.select_for_update().get(pk=source.parent_id or source.pk)
+    parent = ChannelMessage.objects.select_for_update().get(pk=source.parent_id) if source.parent_id else None
     channel.activity_version += 1
     reply = ChannelMessage.objects.create(channel=channel, author=bot.employee, author_assignment=bot,
         department_name='Asistente IA', department_color='#ed3033', client_id=job.pk,
         payload_digest=hashlib.sha256(body.encode()).hexdigest(), sequence=channel.activity_version,
         body=body, parent=parent, automation_kind='support')
-    if not parent.thread_started_at:
+    if parent and not parent.thread_started_at:
         parent.thread_started_at = reply.created_at
         parent.thread_starter_id = source.author_id
         parent.version += 1

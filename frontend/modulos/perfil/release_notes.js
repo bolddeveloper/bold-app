@@ -590,6 +590,19 @@ export function getReleaseNotes() {
 }
 
 export const releaseNotes = [
+    {
+        id:"2026-11-07-slack-support-placement-channel-removal",date:"2026-11-07",category:"Correcciones",icon:"update",
+        title:"Respuestas de soporte en el canal y eliminación de canales",
+        summary:"soportebold responde donde lo mencionas y los canales de texto incorporan una opción para eliminarlos.",
+        sections:[{title:"Soporte en la conversación correcta",items:[
+            "Si mencionas a @soportebold en el chat normal de un canal, su respuesta aparece allí, sin crear un hilo.",
+            "Si lo mencionas dentro de un hilo existente, responde en ese mismo hilo. Se mantienen sus límites de lectura y las comprobaciones de acceso.",
+        ]},{title:"Administrar canales de texto",items:[
+            "Abre Configurar canal y pulsa Eliminar canal. La confirmación explica que dejará de estar disponible para todos sus miembros; el historial, las páginas y los archivos se conservan.",
+            "Necesitas permiso para administrar ese canal. En servidores privados solo puede hacerlo el creador del servidor. Eliminar un canal de texto no elimina su servidor ni los demás canales; los servidores de departamento siguen protegidos.",
+            "Puedes volver a usar el nombre de un canal eliminado. Archivar sigue disponible cuando prefieras conservar el canal visible entre los archivados y poder restaurarlo.",
+        ]}],
+    },
     ...supportIntegrationReleaseNotes,
     {
         id: "2026-11-06-chat-slack-organization-launch", date: "2026-11-06", category: "Actualización", icon: "update",

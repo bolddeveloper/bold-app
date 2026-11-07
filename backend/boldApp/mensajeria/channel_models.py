@@ -73,6 +73,7 @@ class DepartmentChannel(UUIDPrimaryKeyModel):
     color = models.CharField(max_length=7, blank=True, default="", validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Usa un color hexadecimal de seis dígitos.")])
     creator = models.ForeignKey("boldApp_core.PositionAssignment", on_delete=models.PROTECT)
     archived_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
     activity_version = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -82,9 +83,9 @@ class DepartmentChannel(UUIDPrimaryKeyModel):
         db_table = "messaging_department_channels"
         ordering = ["name", "id"]
         constraints = [
-            models.UniqueConstraint(Lower("name"), "unit", name="unique_department_channel_name"),
-            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True, server__isnull=True), name="unique_independent_channel_name"),
-            models.UniqueConstraint(Lower("name"), "server", name="unique_private_server_channel"),
+            models.UniqueConstraint(Lower("name"), "unit", condition=models.Q(deleted_at__isnull=True), name="unique_department_channel_name"),
+            models.UniqueConstraint(Lower("name"), condition=models.Q(unit__isnull=True, server__isnull=True, deleted_at__isnull=True), name="unique_independent_channel_name"),
+            models.UniqueConstraint(Lower("name"), "server", condition=models.Q(deleted_at__isnull=True), name="unique_private_server_channel"),
             models.CheckConstraint(condition=models.Q(server__isnull=True) | models.Q(unit__isnull=True, visibility="private"), name="private_server_channel_boundary"),
             models.CheckConstraint(condition=~models.Q(visibility="department") | models.Q(unit__isnull=False), name="department_channel_has_unit"),
         ]

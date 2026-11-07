@@ -157,7 +157,7 @@ class DepartmentChannelTests(TestCase):
         self.assertEqual(self.send().status_code, 409)
         self.assertEqual(self.client.patch(self.url, {"version": 2, "archived": False}, format="json").status_code, 200)
         self.assertEqual(self.send().status_code, 201)
-        self.assertEqual(self.client.delete(self.url).status_code, 405)
+        self.assertEqual(self.client.delete(self.url).status_code, 400)
 
     def test_retry_is_idempotent_even_after_message_was_edited(self):
         token = str(uuid.uuid4())

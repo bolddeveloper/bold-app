@@ -59,7 +59,10 @@ class SupportTests(TestCase):
         self.assertEqual(request.input_tokens, 200)
         self.assertEqual(request.output_tokens, 35)
         reply = request.reply
-        self.assertEqual(reply.parent_id, source.pk)
+        self.assertIsNone(reply.parent_id)
+        source.refresh_from_db()
+        self.assertIsNone(source.thread_started_at)
+        self.assertEqual(source.replies.count(), 0)
         self.assertEqual(reply.author_assignment_id, BOT_ID)
         self.assertEqual(reply.automation_kind, 'support')
         self.assertNotEqual(reply.author_id, source.author_id)
@@ -70,12 +73,25 @@ class SupportTests(TestCase):
         self.assertFalse(account.is_active)
         self.assertFalse(account.has_usable_password())
         self.assertFalse(account.is_staff or account.is_superuser)
-        result = self.client.get(self.url+'messages/', {'parent':str(source.pk)})
+        result = self.client.get(self.url+'messages/')
         self.assertEqual(result.status_code, 200, result.data)
-        result = result.data['results'][0]
+        result = next(row for row in result.data['results'] if row['id'] == str(reply.pk))
         self.assertEqual(result['author']['name'], BOT_NAME)
         self.assertTrue(result['author']['is_bot'])
         self.assertFalse(result['can_edit'])
+
+    def test_mention_in_an_existing_thread_replies_only_inside_that_thread(self):
+        root = self.send('Conversación ya abierta', thread_title='Ayuda del equipo').data['message']
+        source = self.ask(parent_id=root['id'])
+        started_at = ChannelMessage.objects.get(pk=root['id']).thread_started_at
+        self.assertEqual(drain(), 1)
+        reply = SupportRequest.objects.get(source=source).reply
+        self.assertEqual(str(reply.parent_id), root['id'])
+        history = self.client.get(self.url+'messages/').data['results']
+        self.assertNotIn(str(reply.pk), [row['id'] for row in history])
+        thread = self.client.get(self.url+'messages/', {'parent':root['id']}).data['results']
+        self.assertIn(str(reply.pk), [row['id'] for row in thread])
+        self.assertEqual(ChannelMessage.objects.get(pk=root['id']).thread_started_at, started_at)
 
     def test_bot_is_found_by_name_and_alias_without_enabling_its_login(self):
         account_id = self.bot.employee.user_account.pk
@@ -159,16 +175,37 @@ class SupportTests(TestCase):
 
     def test_changed_question_closed_thread_and_archived_channel_cancel(self):
         for field, value in [('body','Otra pregunta'), ('thread_locked',True), ('thread_closed_at',timezone.now())]:
-            source = self.ask()
+            root = self.send('Tema del equipo').data['message']
+            source = self.ask(parent_id=root['id'])
             changes = {field:value}
             if field == 'body':
                 changes['version'] = 2
-            ChannelMessage.objects.filter(pk=source.pk).update(**changes)
+            ChannelMessage.objects.filter(pk=source.pk if field == 'body' else root['id']).update(**changes)
             self.assertEqual(drain(), 0)
         self.ask()
         DepartmentChannel.objects.filter(pk=self.channel_id).update(archived_at=timezone.now())
         self.assertEqual(drain(), 0)
         self.model.assert_not_called()
+
+    def test_deleted_channel_cancels_before_or_during_inference(self):
+        source = self.ask()
+        channel = DepartmentChannel.objects.get(pk=self.channel_id)
+        channel.deleted_at = timezone.now()
+        channel.save(update_fields=['deleted_at'])
+        self.assertEqual(drain(), 0)
+        self.model.assert_not_called()
+        self.assertEqual(SupportRequest.objects.get(source=source).state, 'skipped')
+        channel.deleted_at = None
+        channel.save(update_fields=['deleted_at'])
+        source = self.ask()
+        def remove_during_generation(_):
+            DepartmentChannel.objects.filter(pk=self.channel_id).update(deleted_at=timezone.now())
+            return 'No publicar.', USAGE
+        self.model.side_effect = remove_during_generation
+        self.assertEqual(drain(), 0)
+        request = SupportRequest.objects.get(source=source)
+        self.assertEqual(request.state, 'skipped')
+        self.assertIsNone(request.reply_id)
 
     def test_permission_revoked_during_inference_does_not_publish(self):
         self.ask()
