@@ -223,6 +223,29 @@ class McpTests(TransactionTestCase):
         self.grant.refresh_from_db()
         self.assertIsNotNone(self.grant.revoked_at)
 
+    @override_settings(MCP_PUBLIC_ORIGIN='https://bold.example', ALLOWED_HOSTS=['bold.example'],
+                       CSRF_TRUSTED_ORIGINS=['https://bold.example'])
+    def test_https_consent_form_preserves_origin_and_requires_a_valid_csrf_submission(self):
+        pending = McpAuthorization.objects.create(request_hash=token_hash('browser-consent'),
+            client=self.client_row, parameters={'redirect_uri':'http://127.0.0.1:9999/callback','state':'test'},
+            scopes=['bold.read','bold.write'], expires_at=timezone.now()+timedelta(minutes=10))
+        path = '/api/v2/mcp/consent/?request=browser-consent'
+        client = self.api(csrf=True)
+        page = client.get(path, secure=True, HTTP_HOST='bold.example')
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page['Referrer-Policy'], 'same-origin')
+        form = {'decision':'allow','assignment':str(self.assignment.pk),
+                'csrfmiddlewaretoken':page.cookies['csrftoken'].value}
+        denied = client.post(path, form, secure=True, HTTP_HOST='bold.example', HTTP_ORIGIN='null')
+        self.assertEqual(denied.status_code, 403)
+        pending.refresh_from_db()
+        self.assertIsNone(pending.code_hash)
+        allowed = client.post(path, form, secure=True, HTTP_HOST='bold.example', HTTP_ORIGIN='https://bold.example')
+        self.assertEqual(allowed.status_code, 302, allowed.content)
+        pending.refresh_from_db()
+        self.assertTrue(pending.code_hash)
+        self.assertEqual(pending.scopes, ['bold.read'])
+
     def test_administrative_permissions_and_other_account_are_preserved(self):
         denied = execute(self.grant, "get_administration_dashboard")
         self.assertEqual(denied["status"], 403)

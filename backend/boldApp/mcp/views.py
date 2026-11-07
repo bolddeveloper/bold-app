@@ -90,7 +90,7 @@ def consent(request):
         context["error"] = str(error.detail)
     response = render(request, "bold_mcp/consent.html", context)
     response["Cache-Control"] = "no-store"
-    response["Referrer-Policy"] = "no-referrer"
+    response["Referrer-Policy"] = "same-origin"
     return response
 
 
