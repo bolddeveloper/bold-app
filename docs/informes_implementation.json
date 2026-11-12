@@ -1,0 +1,283 @@
+{
+  "objective": "Informes personalizados y de equipo, etapas de ejecución e historial fiable, preservando BOLD",
+  "base_commit": "53e1a598",
+  "requirements": [
+    "task-owned optional sequential and parallel phases with leads, multiple responsible people, department, criteria, dependencies, target dates and estimates",
+    "versioned definitions, cycle validation, lifecycle transitions, blocked reasons, reopening consequences, explicit authorized exceptions and preserved history",
+    "completion guards across legacy task, pipeline, automation and API writes; personal organization remains independent",
+    "configurable permission actions, cross-department phase participation without task deletion grants, invitations and resource visibility preserved",
+    "idempotent mutation commands, concurrent update protection, task scoped readiness notifications and existing realtime invalidations",
+    "reusable versioned phase templates saved across devices and shared internally",
+    "reliable immutable task and phase lifecycle events, assignment and department snapshots, truthful historic coverage, original and revised deadlines",
+    "server authorized task, phase, project and scheduled meeting metrics with actual completion dates, unique task counts and explicit time bases",
+    "counts, progress, lead/cycle/wait/blocked times, deadlines, reopenings, workload/aging, mean/median/sample size and source drilldown",
+    "reports builder with filters, grouping, KPI/bar/line/distribution/table visualizations, formulas and coverage explanations",
+    "persisted personal/shared reports across devices without sharing underlying data or widening recipient permissions",
+    "team supervision from organizational relationships and configurable permissions, contextual comparisons without invented productivity scores",
+    "meeting permission boundaries and explicit task/project associations; scheduled duration never presented as attendance or effort",
+    "bounded queries, indexes, scoped cache invalidation, realtime refresh without rapid polling or per-chart Google queries",
+    "responsive light/dark interface matching existing BOLD controls, keyboard and accessible charts/tables",
+    "backend authorization/correctness/concurrency tests, frontend behavioral tests, rendered desktop/mobile evidence, production build and patch notes"
+  ],
+  "deployment": "Local implementation and isolated test migrations only; no production deployment requested for this objective",
+  "completion": "All 16 requirements verified locally against source, targeted and regression tests, coherent rendered evidence and final current-source production build. Migration drift check: No changes detected. No production migration or deployment.",
+  "audit": [
+    {
+      "requirement": 1,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/models/execution.py",
+        "backend/boldApp/tareas/execution_validation.py",
+        "frontend/modulos/tareas/src/task_execution.jsx"
+      ],
+      "evidence": [
+        "test_sequential_handoff_and_cross_department_read_are_scoped",
+        "test_parallel_join_waits_for_all_prerequisites_and_only_one_task_is_counted"
+      ]
+    },
+    {
+      "requirement": 2,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/execution_service.py",
+        "frontend/modulos/tareas/src/execution_timeline.jsx"
+      ],
+      "evidence": [
+        "test_cycles_and_unknown_dependency_rollback_the_entire_command",
+        "test_reopen_preserves_completed_successors_but_requires_review",
+        "test_block_resume_tracks_intervals_without_resetting_first_start"
+      ]
+    },
+    {
+      "requirement": 3,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/signals.py",
+        "backend/boldApp/tareas/pipelines.py"
+      ],
+      "evidence": [
+        "test_completion_cannot_bypass_phases_through_legacy_api_or_pipeline",
+        "test_running_process_cannot_drop_pending_required_work_to_bypass_completion",
+        "test_reopened_phase_does_not_prevent_personal_section_or_order_edits"
+      ]
+    },
+    {
+      "requirement": 4,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/authorization_provider.py",
+        "backend/boldApp/tareas/execution_views.py"
+      ],
+      "evidence": [
+        "test_sequential_handoff_and_cross_department_read_are_scoped",
+        "test_explicit_denials_win_over_responsibility_and_owner_override_needs_reason",
+        "test_removing_a_phase_participant_invalidates_the_former_department_and_read_access"
+      ]
+    },
+    {
+      "requirement": 5,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/execution_service.py",
+        "backend/boldApp/tareas/execution_views.py",
+        "frontend/modulos/tareas/src/task_app.jsx"
+      ],
+      "evidence": [
+        "test_two_different_commands_cannot_overwrite_one_version",
+        "test_simultaneous_retry_applies_once_and_returns_success_twice",
+        "test_new_responsible_receives_ready_notice_without_notifying_existing_people_again",
+        "reports_browser.mjs: scoped live refresh"
+      ]
+    },
+    {
+      "requirement": 6,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/models/execution.py",
+        "backend/boldApp/tareas/execution_views.py",
+        "frontend/modulos/tareas/src/execution_templates.jsx"
+      ],
+      "evidence": [
+        "test_templates_share_definition_without_task_history_or_access",
+        "reports_browser.mjs: template sharing"
+      ]
+    },
+    {
+      "requirement": 7,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/execution_history.py",
+        "backend/boldApp/tareas/models/tasks.py",
+        "backend/boldApp/tareas/migrations/0018_taskexecution_tasktracking_executiontemplate_and_more.py"
+      ],
+      "evidence": [
+        "test_snapshots_keep_department_and_responsible_at_time_of_work",
+        "test_editing_legacy_completed_task_does_not_invent_a_missing_completion_time",
+        "test_reassignment_and_deadline_edits_do_not_rewrite_completed_work"
+      ]
+    },
+    {
+      "requirement": 8,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/report_access.py",
+        "backend/boldApp/tareas/report_engine.py"
+      ],
+      "evidence": [
+        "test_completion_is_grouped_by_real_delivery_not_future_due_date",
+        "test_project_summary_deduplicates_tasks_shared_by_two_projects",
+        "test_phase_project_groups_and_shared_responsibility_keep_unique_totals",
+        "test_meeting_duration_is_programmed_and_calendar_access_is_not_inherited"
+      ]
+    },
+    {
+      "requirement": 9,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/report_metrics.py",
+        "backend/boldApp/tareas/report_engine.py",
+        "backend/boldApp/tareas/report_views.py"
+      ],
+      "evidence": [
+        "test_median_and_mean_do_not_turn_missing_times_into_zero",
+        "test_interval_replay_preserves_waits_blocks_restarts_and_same_time_order",
+        "test_missing_deadline_is_unknown_not_an_on_time_or_late_delivery",
+        "test_phase_cohorts_preserve_full_cycle_while_activity_clips_only_its_window",
+        "test_progress_source_rows_are_percentages_and_csv_escapes_formula_titles"
+      ]
+    },
+    {
+      "requirement": 10,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/report_validation.py",
+        "frontend/modulos/tareas/src/reports_workspace.jsx",
+        "frontend/modulos/tareas/src/report_charts.jsx"
+      ],
+      "evidence": [
+        "test_invalid_free_form_queries_and_incompatible_charts_are_rejected",
+        "test_period_has_explicit_timezone_and_inclusive_final_local_date",
+        "test_filter_choices_never_disclose_an_unreadable_task_or_its_phase",
+        "reports_browser.mjs: saved definitions, keyboard/focus"
+      ]
+    },
+    {
+      "requirement": 11,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/models/reports.py",
+        "backend/boldApp/tareas/report_views.py"
+      ],
+      "evidence": [
+        "test_shared_report_does_not_share_underlying_private_tasks_or_editing",
+        "test_report_versions_and_revoked_sharing_are_effective_on_the_next_request",
+        "test_report_version_allows_only_one_simultaneous_replacement"
+      ]
+    },
+    {
+      "requirement": 12,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/report_access.py",
+        "backend/boldApp/core/security_control.py"
+      ],
+      "evidence": [
+        "test_team_analytics_needs_org_authority_and_still_requires_task_visibility",
+        "test_normal_employee_can_create_report_but_explicit_deny_still_wins",
+        "test_reporting_line_changes_invalidate_security_state_without_a_policy_edit"
+      ]
+    },
+    {
+      "requirement": 13,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/models/reports.py",
+        "backend/boldApp/tareas/report_engine.py",
+        "frontend/modulos/tareas/src/report_meeting_links.jsx"
+      ],
+      "evidence": [
+        "test_meeting_links_keep_calendar_and_task_authorization_separate",
+        "test_meetings_crossing_midnight_allocate_duration_to_each_local_day"
+      ]
+    },
+    {
+      "requirement": 14,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/migrations/0020_task_task_report_created_task_task_report_completed_and_more.py",
+        "backend/boldApp/tareas/report_realtime.py",
+        "backend/boldApp/notificaciones/consumers.py",
+        "frontend/modulos/tareas/src/report_refresh.js",
+        "frontend/modulos/tareas/src/task_execution.jsx"
+      ],
+      "evidence": [
+        "test_illegal_filters_and_unbounded_periods_do_not_execute_queries",
+        "test_bounded_report_counts_are_not_totals_from_the_first_detail_page",
+        "test_subscription_is_opt_in_body_free_revocable_and_can_be_removed",
+        "test_definition_hint_only_reaches_its_selected_recipient",
+        "reports_browser.mjs: scoped live refresh and draft preservation"
+      ]
+    },
+    {
+      "requirement": 15,
+      "status": "verified_local",
+      "sources": [
+        "frontend/modulos/tareas/src/reports.css",
+        "frontend/modulos/tareas/src/task_execution.css",
+        "DESIGN.md",
+        "PRODUCT.md",
+        ".impeccable/design.json"
+      ],
+      "evidence": [
+        "reports_browser.mjs: desktop/mobile, light/dark, native keyboard/focus and mobile filter close",
+        "10 rendered captures in .impeccable/review",
+        "Independent Etapas finish review: ship; Reports named-fix verdict: ship; not a full accessibility audit"
+      ]
+    },
+    {
+      "requirement": 16,
+      "status": "verified_local",
+      "sources": [
+        "backend/boldApp/tareas/tests/test_execution.py",
+        "backend/boldApp/tareas/tests/test_execution_concurrency.py",
+        "backend/boldApp/tareas/tests/test_reports.py",
+        "backend/boldApp/tareas/tests/test_report_metrics.py",
+        "backend/boldApp/notificaciones/tests/test_reports_socket.py",
+        "frontend/modulos/core/tests/reports_browser.mjs",
+        "frontend/modulos/perfil/release_notes.js"
+      ],
+      "evidence": [
+        "349 backend tests: OK, 6 skipped on SQLite",
+        "448 frontend tests: 447 pass, 1 skip",
+        "40 PostgreSQL acceptance tests: OK before final integration fixes",
+        "42 final PostgreSQL execution/pipeline/concurrency tests: OK",
+        "2 final PostgreSQL required-stage and supervision security tests: OK",
+        "Functional browser final: passed",
+        "Current-source production build: exit 0, 5495 modules, built in 3m 7s, index-BqzKtf5F.js; existing large-chunk warning retained."
+      ]
+    }
+  ],
+  "evidence_root": "C:/Users/j_sam/AppData/Local/BOLDApp/validation",
+  "logs": [
+    "informes-backend-release.log",
+    "informes-frontend-release.log",
+    "informes-postgres-final.log",
+    "informes-postgres-integration-final.log",
+    "informes-postgres-last-guards.log",
+    "informes-org-security.log",
+    "informes-final-functional.log",
+    "informes-build-current.log",
+    "informes-detector.json"
+  ],
+  "limits": [
+    "Meetings use accessible local BOLD calendars; no Google Calendar ingestion.",
+    "Lifecycle elapsed times do not measure effort or establish employee productivity rankings.",
+    "Legacy unobserved history stays unknown.",
+    "Preparations are bounded in-memory navigation recovery, not durable cross-device drafts.",
+    "No distributed capacity benchmark, production verification, commit, push or deployment.",
+    "Saved report sharing never grants source visibility.",
+    "Release notes prepared in pendingReportsReleaseNotes; not published until deployment."
+  ],
+  "validation_environment": "Isolated PostgreSQL acceptance completed. No listener on localhost:55483 or owned reports PostgreSQL process at final cleanup; private configuration retained outside Git.",
+  "deployment_authorization": "User authorized commit, Oracle/Cloudflare deployment, necessary migrations and publication of both release notes on 2026-11-11 America/Caracas. Operational verification recorded separately after rollout."
+}

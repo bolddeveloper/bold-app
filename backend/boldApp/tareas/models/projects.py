@@ -113,3 +113,12 @@ class TaskStatus(UUIDPrimaryKeyModel):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        from rest_framework.exceptions import ValidationError
+        from .tasks import Task
+        previous = TaskStatus.objects.filter(pk=self.pk).values('category','is_final').first()
+        if previous and (previous['category'] != self.category or previous['is_final'] != self.is_final):
+            if Task.all_objects.filter(status_id=self.pk).exists():
+                raise ValidationError('Este estado ya tiene tareas e historial. Crea otro estado y mueve las tareas para cambiar su significado sin alterar métricas anteriores.')
+        return super().save(*args, **kwargs)

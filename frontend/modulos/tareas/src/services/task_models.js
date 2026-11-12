@@ -55,6 +55,7 @@ export const isMyTask = (task, assignmentId) => assignmentId != null && (
     String(task.assignee_id) === String(assignmentId)
     || String(task.created_by_assignment) === String(assignmentId)
     || task.collaborator_ids?.some(id => String(id) === String(assignmentId))
+    || task.phase_participant === true
 );
 export function previewTaskDraft(draft, original, statuses) {
     const status = statuses.find(item => item.label === draft.status && (!item.unitId || item.unitId === draft.unitId));

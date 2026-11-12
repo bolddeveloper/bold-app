@@ -43,11 +43,15 @@ def capture_previous_task_state(sender, instance, **kwargs):
     instance._previous_deleted_at = previous["deleted_at"] if previous else None
     from .pipelines import legacy_status_change
     legacy_status_change(instance)
+    from .execution_service import guard_task_completion
+    guard_task_completion(instance, kwargs.get('update_fields'))
 
 
 # Dispara el evento de webhook correspondiente segun lo que cambio en la tarea.
 @receiver(post_save, sender=Task)
 def dispatch_task_events(sender, instance, created, **kwargs):
+    from .report_realtime import publish_reports_changed
+    publish_reports_changed()
     unit_ids = [instance.unit_id]
     if instance._previous_unit_id and instance._previous_unit_id != instance.unit_id:
         unit_ids.insert(0, instance._previous_unit_id)
@@ -126,6 +130,9 @@ def capture_previous_resource_scope(sender, instance, raw=False, **kwargs):
 def dispatch_resource_changed(sender, instance, created=False, raw=False, **kwargs):
     if raw or (sender is Comment and created):
         return  # comment.created already carries this invalidation
+    if sender in (Project,ProjectMember,TaskFollower,TaskTag,TaskProject):
+        from .report_realtime import publish_reports_changed
+        publish_reports_changed()
     previous = getattr(instance, "_previous_resource_scope", {})
     if sender in TASK_RELATION_EVENTS:
         task_ids = list(dict.fromkeys(value for value in (instance.task_id, previous.get("task_id")) if value))
@@ -155,14 +162,25 @@ for model in (*TASK_RELATION_EVENTS, Project, *PROJECT_RELATIONS, Tag, TaskStatu
 def initialize_pipeline_link(sender, instance, raw=False, **kwargs):
     if not raw:
         from .pipelines import initialize_link
+        fields=('task_id','project_id','pipeline_id','pipeline_stage')
+        previous=TaskProject.objects.filter(pk=instance.pk).values(*fields).first() if instance.pk else None
         initialize_link(instance)
+        instance._pipeline_state_changed=previous is None or any(previous[field]!=getattr(instance,field) for field in fields)
 
 
 @receiver(post_save, sender=TaskProject)
 def synchronize_pipeline_link(sender, instance, raw=False, **kwargs):
     if not raw:
         from .pipelines import sync_task
-        sync_task(instance.task)
+        if getattr(instance,'_pipeline_state_changed',True):
+            sync_task(instance.task)
+        else:
+            # A section/order edit must not reapply a completed project stage
+            # after an execution step reopened the task. Preserve its real state
+            # and the existing updated-at/realtime behavior for metadata edits.
+            with transaction.atomic():
+                task=Task.objects.select_for_update().get(pk=instance.task_id)
+                task.save(update_fields=['updated_at'])
 
 
 @receiver(post_delete, sender=TaskProject)
@@ -170,3 +188,14 @@ def synchronize_removed_pipeline_link(sender, instance, **kwargs):
     if Task.objects.filter(pk=instance.task_id).exists():
         from .pipelines import sync_task
         sync_task(Task.objects.get(pk=instance.task_id))
+
+
+def report_calendar_changed(sender, **kwargs):
+    from .report_realtime import publish_reports_changed
+    publish_reports_changed(scope='calendar')
+
+
+from boldApp.calendario.models import AppCalendar, AppCalendarEvent, CalendarMember
+for model in (AppCalendar,AppCalendarEvent,CalendarMember):
+    post_save.connect(report_calendar_changed,sender=model,dispatch_uid=f'report_calendar_saved_{model.__name__}')
+    post_delete.connect(report_calendar_changed,sender=model,dispatch_uid=f'report_calendar_deleted_{model.__name__}')

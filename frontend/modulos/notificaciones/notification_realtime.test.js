@@ -74,3 +74,27 @@ test("Slack hints use the same session socket without entering private messaging
     socket.listeners.message({data:JSON.stringify({event_version:2,event_type:"slack.changed"})});
     assert.equal(slack.length,1);
 });
+
+
+test("reports opt in reuses the notification socket and survives reconnect",async()=>{
+    const sockets=[],sent=[],reports=[],recovered=[];
+    class Socket{
+        constructor(){this.listeners={};this.readyState=0;sockets.push(this);}
+        addEventListener(name,fn){this.listeners[name]=fn;}
+        send(value){sent.push(JSON.parse(value));}
+        close(){this.readyState=3;}
+    }
+    const jobs=[];
+    const realtime=createNotificationRealtime({WebSocketImpl:Socket,eventTarget:new EventTarget(),random:()=>0,setTimer:(fn,delay)=>{jobs.push({fn,delay});return jobs.length;},clearTimer:()=>{}});
+    realtime.watchReports(true);
+    realtime.connect({assignmentId:"a",getTicket:async()=>({ticket:"fresh"}),onReports:event=>reports.push(event),onReconnect:()=>recovered.push(true)});
+    await new Promise(resolve=>setImmediate(resolve));sockets[0].readyState=1;sockets[0].listeners.open();
+    assert.deepEqual(sent,[{type:'reports.watch',enabled:true}]);
+    sockets[0].listeners.message({data:JSON.stringify({event_version:2,event_type:'reports.changed',payload:{scope:'work'}})});
+    assert.equal(reports.length,1);
+    sockets[0].readyState=3;sockets[0].listeners.close({code:1006});
+    jobs.at(-1).fn();await new Promise(resolve=>setImmediate(resolve));
+    sockets[1].readyState=1;sockets[1].listeners.open();assert.equal(recovered.length,1);assert.equal(sent.length,2);
+    realtime.watchReports(false);assert.deepEqual(sent.at(-1),{type:'reports.watch',enabled:false});
+    realtime.disconnect();assert.equal(sockets.length,2);
+});

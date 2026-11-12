@@ -94,6 +94,15 @@ class SecurityControlTests(TransactionTestCase):
 
         async_to_sync(scenario)()
 
+    def test_reporting_line_changes_invalidate_security_state_without_a_policy_edit(self):
+        subordinate=Position.objects.create(unit=self.unit,job_role=self.assignment.position.job_role)
+        before=security_snapshot(self.session.pk,self.assignment.pk)
+        subordinate.reports_to_position=self.assignment.position
+        subordinate.save(update_fields=['reports_to_position'])
+        after=security_snapshot(self.session.pk,self.assignment.pk)
+        self.assertEqual(before['revision'],after['revision'])
+        self.assertNotEqual(before['state'],after['state'])
+
     def test_daily_and_idle_expiry_close_an_otherwise_idle_socket(self):
         for field in ("expires_at", "idle_expires_at"):
             AuthSession.objects.filter(pk=self.session.id).update(

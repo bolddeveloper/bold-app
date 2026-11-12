@@ -1,3 +1,32 @@
+// Informes y Etapas: entrega del 11 de noviembre de 2026.
+export const reportsReleaseNotes = [{
+    id:'2026-11-11-informes-personales-equipo',date:'2026-11-11',category:'Nueva función',icon:'update',
+    title:'Informes sobre tu trabajo y el de tu equipo',
+    summary:'Construye gráficos con tareas, etapas, proyectos y reuniones de calendarios BOLD; consulta las fuentes y guarda tus informes.',
+    sections:[{title:'Crear y comprobar un informe',items:[
+        'En Informes elige una métrica, las fechas y los filtros. Puedes usar indicadores, barras, líneas temporales, distribuciones y tablas, y abrir los registros que explican el resultado.',
+        'Guarda tus informes entre dispositivos o comparte su configuración con otras personas. Compartir un informe no concede acceso a sus tareas, proyectos ni calendarios.',
+        'Las métricas individuales de equipo requieren supervisión en el organigrama o un permiso específico. Los cálculos muestran su fórmula, los casos conocidos y las limitaciones del historial.',
+    ]},{title:'Fechas, reuniones y actualizaciones',items:[
+        'Se distinguen las fechas de creación, finalización real, objetivo y actividad. El tiempo en un estado no equivale a horas de trabajo efectivo ni genera una clasificación automática de productividad.',
+        'Las reuniones proceden de calendarios BOLD accesibles y pueden vincularse con tareas o proyectos. La duración programada no acredita asistencia; esta función no importa el calendario personal de Google.',
+        'Los cambios actualizan el informe abierto sin aplicar los filtros que estés preparando. También puedes descargar sus fuentes en CSV.',
+    ]}],
+},{
+    id:'2026-11-11-etapas-ejecucion-tareas',date:'2026-11-11',category:'Nueva función',icon:'update',
+    title:'Etapas para coordinar tareas entre personas y departamentos',
+    summary:'Organiza pasos secuenciales o paralelos dentro de una tarea, con responsables, dependencias, criterios y un historial de cambios.',
+    sections:[{title:'Coordinar el proceso',items:[
+        'Abre el detalle de una tarea y entra en Etapas. La coordinación puede definir responsables, departamento, criterios de finalización, fechas objetivo y estimaciones.',
+        'Las dependencias habilitan cada paso cuando corresponde. Sus responsables pueden comenzar, bloquear con un motivo, reanudar y completar su etapa, sin recibir por ello permiso para editar o eliminar toda la tarea.',
+        'Puedes guardar, compartir y reutilizar plantillas. Sus modificaciones no cambian los procesos que ya se crearon a partir de ellas.',
+    ]},{title:'Mantener un seguimiento fiable',items:[
+        'Las etapas obligatorias y sus revisiones deben resolverse antes de finalizar la tarea. Las excepciones exigen un permiso específico y un motivo.',
+        'Reabrir un paso vuelve a retener los pasos dependientes pendientes y exige revisar el trabajo posterior ya terminado, conservando su historial.',
+        'Se registran entregas, reaperturas, responsables y cambios de fechas. Los cambios simultáneos exigen revisar la versión actual antes de sustituir el trabajo de otra persona.',
+    ]}],
+}];
+
 // Entrega comprobada en producción el 7 de noviembre.
 export const supportIntegrationReleaseNotes = [{
     id:"2026-11-07-soporte-bold-contexto-lectura",date:"2026-11-07",category:"Mejoras",icon:"update",
@@ -590,6 +619,7 @@ export function getReleaseNotes() {
 }
 
 export const releaseNotes = [
+    ...reportsReleaseNotes,
     {
         id:"2026-11-07-mcp-persistent-renewal",date:"2026-11-07",category:"Mejoras",icon:"update",
         title:"Conexiones de asistentes con renovación automática",

@@ -44,6 +44,8 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     const notificationRows = useCallback(() => notificationController.current?.getRows() || [], []);
     const setNotificationRead = useCallback((id, read) => notificationController.current?.setRead(id, read) || Promise.resolve(), []);
     const dismissNotification = useCallback(id => notificationController.current?.dismiss(id) || Promise.resolve(), []);
+    const reportRealtime=useRef(null),reportSubscribers=useRef(new Set());
+    const subscribeReports=useCallback(()=>{const key=Symbol('report-view');reportSubscribers.current.add(key);reportRealtime.current?.watchReports(true);return()=>{reportSubscribers.current.delete(key);reportRealtime.current?.watchReports(reportSubscribers.current.size>0);};},[]);
     const clearNotifications = useCallback(() => {
         notificationController.current?.dispose(); notificationController.current = null;
         setNotificationSnapshot({ assignmentId: null, rows: [], error: "" });
@@ -292,6 +294,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
         notificationController.current = store;
         if (getCoreState().securityUncertain) store.invalidate({ uncertain: true }).catch(report);
         const realtime = createNotificationRealtime();
+        reportRealtime.current=realtime;realtime.watchReports(reportSubscribers.current.size>0);
         const chat = createMessagingSession({employeeId: state.account.employee,
             acknowledge: (conversation, ids, status, options) => http.request(`/api/v2/messaging/conversations/${conversation}/receipts/`, {...options, method: "POST", body: {message_ids: ids, state: status}}),
             emit: envelope => {if (mounted) window.dispatchEvent(new CustomEvent("bold:messaging-event", {detail: envelope}));},
@@ -320,6 +323,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
                 }else chat.receive(envelope);
             },
             onSlack: envelope => {if (mounted && !getCoreState().securityUncertain) window.dispatchEvent(new CustomEvent("bold:slack-event", {detail:envelope}));},
+            onReports: envelope => {if(mounted&&!getCoreState().securityUncertain)window.dispatchEvent(new CustomEvent('bold:reports-changed',{detail:envelope.payload}));},
             onControl: envelope => {
                 if (!mounted) return;
                 updateCore({presence: Array.isArray(envelope.payload?.presence?.rows) ? envelope.payload.presence : null});
@@ -340,6 +344,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             mounted = false; sync.dispose(); realtime.disconnect(); store.dispose(); chat.dispose();
             backgroundPush.suspend();
             if (messagingController.current === chat) messagingController.current = null;
+            if (reportRealtime.current === realtime) reportRealtime.current = null;
             soundController.abort(); entrySound.dispose(); stopNotificationSound();
             window.removeEventListener("bold:home-ready", homeEntrance);
             window.removeEventListener("bold:notification-sound-changed", changeSound);
@@ -482,7 +487,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
     }
     const unread = chatAllowed && unreadChats.assignmentId === state.activeAssignment?.id ? unreadChats : {total: 0, byEmployee: {}, byConversation: {}};
     const slackUnread=chatAllowed && unreadChannels.assignmentId===state.activeAssignment?.id ? unreadChannels : {total:0,byChannel:{},ready:false};
-    const value = { ...state, ...http.getSession(), updateProfile, notifications, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, finishSessionEntrance, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
+    const value = { ...state, ...http.getSession(), updateProfile, notifications, reports:{watch:subscribeReports}, slack:{unread:slackUnread}, messaging: {connection: messagingConnection, markDelivered, markRead, unread}, sessionEntrance: enteredFromLogin.current, finishSessionEntrance, setActiveAssignment, refreshDirectory, logout, websocketTicket: coreApi.websocketTicket, mfa: { enabled: mfaEnabled, open: openMfaManagement, assuranceRevision: mfaAssuranceRevision }, permissions: { can } };
     return <CoreContext.Provider value={value}><>{children}<MfaManagementDialog
         open={mfaDialogOpen} enabled={mfaEnabled} busy={mfaManageBusy} error={mfaManageError} setup={mfaManageSetup} recoveryCodes={mfaManageCodes}
         onClose={closeMfaManagement} onStart={startManagedMfa} onConfirm={confirmManagedMfa} onDisable={disableManagedMfa} onTest={logout}

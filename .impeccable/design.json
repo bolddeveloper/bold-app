@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-11T19:26:07Z",
+  "title": "Design System: BOLD 3",
+  "extensions": {
+    "colorMeta": {},
+    "typographyMeta": {
+      "body": {
+        "displayName": "Texto de trabajo",
+        "purpose": "Familia heredada de :root en styles.css; tamaño e interlínea compartidos por Informes y etapas."
+      }
+    },
+    "shadows": [
+      {
+        "name": "calendario-flotante",
+        "value": "0 12px 36px #0002",
+        "purpose": "Sombra del calendario compartido en frontend/modulos/core/shared/date_picker.css; no se aplica a tarjetas de trabajo."
+      }
+    ],
+    "motion": [
+      {
+        "name": "entrada-calendario",
+        "value": "bold_date_enter 160ms ease-out",
+        "purpose": "Entrada existente del calendario compartido; su CSS desactiva animación y transiciones con prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "informes-constructor-compacto",
+        "value": "1100px"
+      },
+      {
+        "name": "informes-columna-unica",
+        "value": "800px"
+      },
+      {
+        "name": "etapas-campos-columna-unica",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón de trabajo",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Tratamiento compartido por acciones de Informes y etapas. Ejemplo de estilo, sin comportamiento de aplicación.",
+      "html": "<button class=\"ds-work-button\" type=\"button\">Actualizar</button>",
+      "css": ".ds-work-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid var(--bold_line);border-radius:0;background:var(--bold_surface);font:inherit;color:var(--bold_text);cursor:pointer}.ds-work-button:hover:not(:disabled){background:var(--bold_hover)}.ds-work-button:disabled{opacity:.55;cursor:default}.ds-work-button:focus-visible{outline:2px solid var(--bold_red);outline-offset:3px}"
+    },
+    {
+      "name": "Acción primaria de trabajo",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción primaria existente de Informes y etapas; el acento permanece vinculado al tema BOLD.",
+      "html": "<button class=\"ds-primary-button\" type=\"button\">Aplicar y calcular</button>",
+      "css": ".ds-primary-button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:1px solid var(--bold_red_dark);border-radius:0;background:var(--bold_red_dark);font:inherit;color:#fff;cursor:pointer}.ds-primary-button:hover:not(:disabled){background:color-mix(in srgb,var(--bold_red_dark) 90%,black)}.ds-primary-button:disabled{opacity:.55;cursor:default}.ds-primary-button:focus-visible{outline:2px solid var(--bold_red);outline-offset:3px}"
+    },
+    {
+      "name": "Campo de consulta",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo textual de Informes; los selectores y fechas reales se reutilizan desde Core.",
+      "html": "<label class=\"ds-field-label\">Nombre del informe<input class=\"ds-text-field\" value=\"Resumen del trabajo\"></label>",
+      "css": ".ds-field-label{display:grid;gap:6px;font-size:13px;color:var(--bold_text)}.ds-text-field{font:inherit;background:var(--bold_surface);color:var(--bold_text);border:1px solid var(--bold_line);border-radius:0;padding:10px 12px;width:100%;min-height:40px;box-sizing:border-box}.ds-text-field::placeholder{color:var(--bold_muted)}.ds-text-field:focus-visible{outline:2px solid var(--bold_red);outline-offset:3px}"
+    },
+    {
+      "name": "Contenedor de resultado",
+      "kind": "card",
+      "refersTo": "result-container",
+      "description": "Superficie de resultado de Informes; ejemplo estructural sin cantidades ni datos ficticios.",
+      "html": "<section class=\"ds-result\"><h3>Resultado del informe</h3><p>La fórmula y los registros de origen acompañan el resultado.</p></section>",
+      "css": ".ds-result{padding:24px;background:var(--bold_surface);color:var(--bold_text);border:1px solid var(--bold_line);border-radius:0;min-width:0}.ds-result h3{margin:0;font-size:16px;line-height:1.4}.ds-result p{margin:8px 0 0;color:var(--bold_muted);font-size:13px;max-width:75ch;overflow-wrap:anywhere}"
+    },
+    {
+      "name": "Colecciones de Informes",
+      "kind": "nav",
+      "description": "Tratamiento de la colección actual. Muestra estados; el ejemplo no implementa navegación.",
+      "html": "<nav class=\"ds-collections\" aria-label=\"Colecciones de informes\"><button type=\"button\" aria-current=\"page\">Mis informes</button><button type=\"button\">Compartidos</button></nav>",
+      "css": ".ds-collections{display:flex;gap:0;border-bottom:1px solid var(--bold_line);overflow-x:auto}.ds-collections button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:12px 18px;background:transparent;border:0;border-radius:0;border-bottom:2px solid transparent;white-space:nowrap;font:inherit;color:var(--bold_text);cursor:pointer}.ds-collections button[aria-current=page]{border-bottom-color:var(--bold_red);font-weight:650}.ds-collections button:hover:not(:disabled){background:var(--bold_hover)}.ds-collections button:focus-visible{outline:2px solid var(--bold_red);outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "",
+    "overview": "Registro descriptivo del sistema existente, cotejado con el código local de Informes y etapas. No introduce un mundo visual nuevo ni convierte la composición de Informes en una regla para otros módulos. La autoridad de paleta y geometría sigue siendo `frontend/modulos/core/design_v3.css`; los valores extraídos del frontmatter describen su tema claro y los patrones reutilizados por esta extensión. Ante cambios posteriores del código, reconciliar este registro con esa fuente.\n\nNo hay una metáfora creativa aprobada que registrar. La orientación confirmada es conservar BOLD 3: superficies delimitadas, geometría general recta y acento corporativo para acciones y estados; los controles compartidos conservan su geometría propia según la cascada existente. El tema oscuro depende de los mismos tokens semánticos redefinidos en `html.theme_dark`; no se deben fijar los valores claros dentro de componentes nuevos.",
+    "keyCharacteristics": [
+      "Paleta semántica compartida entre temas.",
+      "Geometría recta en las superficies de trabajo.",
+      "Controles compartidos de selección y fechas.",
+      "Resultados acompañados por explicación y acceso a fuentes."
+    ],
+    "rules": [],
+    "dos": [
+      "Reutilizar los tokens de BOLD 3 y sus controles compartidos al extender estas superficies.",
+      "Conservar explicación, cobertura y fuentes junto al resultado de un informe.",
+      "Mantener las preparaciones y los resultados aplicados como estados distintos."
+    ],
+    "donts": [
+      "No fijar la paleta clara en componentes que deben responder al tema oscuro.",
+      "No sustituir la identidad BOLD 3 como consecuencia de añadir una función.",
+      "No convertir la composición o los tamaños particulares de Informes en reglas globales."
+    ]
+  }
+}

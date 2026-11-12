@@ -96,5 +96,6 @@ export function createRealtimeChannel({ getTicket, urlForTicket, onMessage = () 
     }
     eventTarget?.addEventListener("online", wake);
     open();
-    return { ready, stop };
+    function send(value){if(stopped||!socket||socket.readyState!==1)return false;socket.send(typeof value==='string'?value:JSON.stringify(value));return true;}
+    return { ready, stop, send };
 }

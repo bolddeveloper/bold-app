@@ -1,0 +1,15 @@
+import {useEffect,useRef,useState} from 'react';
+import {BoldSelect} from '../../core/shared/bold_select.jsx';
+import {reportsApi} from './reports_api.js';
+
+export default function ReportMeetingLinks({event,projects,onClose,onChange}){
+    const eventId=event.event_id||event.id;
+    const [links,setLinks]=useState([]),[tasks,setTasks]=useState([]),[query,setQuery]=useState(''),[kind,setKind]=useState('project'),[target,setTarget]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+    const controller=useRef(new AbortController()),alive=useRef(true);
+    const options=()=>({signal:controller.current.signal});
+    async function reload(){const rows=await reportsApi.meetingLinks(eventId,options());if(alive.current)setLinks(rows.results);}
+    useEffect(()=>{alive.current=true;if(controller.current.signal.aborted)controller.current=new AbortController();reload().catch(problem=>{if(alive.current)setError(problem.message);});return()=>{alive.current=false;controller.current.abort();};},[event.id]);
+    async function search(){setBusy(true);setError('');try{const value=await reportsApi.choices(query,options());if(alive.current)setTasks(value.tasks);}catch(problem){if(alive.current)setError(problem.message);}finally{if(alive.current)setBusy(false);}}
+    async function mutate(row=null){if(busy)return;setBusy(true);setError('');try{const body={event_id:eventId,...(row?row.task_id?{task_id:row.task_id}:{project_id:row.project_id}:kind==='task'?{task_id:target}:{project_id:target})};await (row?reportsApi.unlinkMeeting:reportsApi.linkMeeting)(body,options());if(!alive.current)return;await reload();onChange();}catch(problem){if(alive.current)setError(problem.message);}finally{if(alive.current)setBusy(false);}}
+    return <section className="report_meeting_links" aria-label="Vínculos de reunión"><header><h3>Trabajo relacionado con {event.title}</h3><button type="button" onClick={onClose}>Cerrar vínculos</button></header><p>Este vínculo permite filtrar la reunión. No concede acceso a calendarios ni acredita asistencia.</p>{error&&<p role="alert">{error}</p>}<ul>{links.map(row=><li key={row.id}>{row.name}{row.can_manage&&<button type="button" disabled={busy} onClick={()=>mutate(row)}>Quitar vínculo</button>}</li>)}</ul><div className="report_builder_pair"><label>Vincular con<BoldSelect label="Tipo de trabajo relacionado" value={kind} options={[{value:'project',label:'Proyecto'},{value:'task',label:'Tarea'}]} onValueChange={value=>{setKind(value);setTarget('');}}/></label>{kind==='task'&&<label>Buscar tarea<input type="search" maxLength={120} value={query} onChange={e=>setQuery(e.target.value)}/><button type="button" disabled={busy} onClick={search}>Buscar</button></label>}<label>{kind==='task'?'Tarea':'Proyecto'}<BoldSelect label="Trabajo que se vinculará" value={target} searchable options={[{value:'',label:'Seleccionar'},...(kind==='task'?tasks:projects).map(row=>({value:row.id,label:row.name}))]} onValueChange={setTarget}/></label></div><button type="button" className="report_primary" disabled={!target||busy} onClick={()=>mutate()}>Añadir vínculo</button></section>;
+}

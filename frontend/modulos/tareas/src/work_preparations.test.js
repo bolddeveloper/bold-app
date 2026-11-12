@@ -1,0 +1,4 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {preservePreparation,recoverPreparation,clearPreparations} from './work_preparations.js';
+test('navigation recovery is scoped, cloned, bounded and expires',()=>{clearPreparations();const draft={version:4,rows:[{name:'Revisión'}]};preservePreparation('account:assignment:task',draft,100);draft.version=5;assert.equal(recoverPreparation('account:assignment:task',200).version,4);assert.equal(recoverPreparation('other:assignment:task',200),null);const recovered=recoverPreparation('account:assignment:task',200);recovered.rows[0].name='Otro';assert.equal(recoverPreparation('account:assignment:task',200).rows[0].name,'Revisión');assert.equal(recoverPreparation('account:assignment:task',3600101),null);for(let i=0;i<21;i++)preservePreparation('draft:'+i,{i},100);assert.equal(recoverPreparation('draft:0',100),null);clearPreparations();assert.equal(recoverPreparation('draft:20'),null);});

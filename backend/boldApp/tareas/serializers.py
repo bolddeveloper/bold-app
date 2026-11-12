@@ -171,6 +171,7 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
     image_creation_scope = serializers.ChoiceField(choices=["personal", "project"], write_only=True, required=False)
     voice_notes = VoiceNotesField(required=False)
     attachment_count = serializers.IntegerField(read_only=True)
+    phase_participant = serializers.BooleanField(read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
     status_category = serializers.CharField(source="status.category", read_only=True)
     status_is_final = serializers.BooleanField(source="status.is_final", read_only=True)
@@ -197,7 +198,7 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = "__all__"
-        read_only_fields = ["created_by_assignment", "created_at", "updated_at", "deleted_at", "recurrence_next_date", "recurrence_source", "recurrence_date", "image_origin_set", "image_origin_project_id"]
+        read_only_fields = ["created_by_assignment", "created_at", "completed_at", "updated_at", "deleted_at", "recurrence_next_date", "recurrence_source", "recurrence_date", "image_origin_set", "image_origin_project_id"]
 
     def save(self, **kwargs):
         # Google I/O must finish before creating the task: SQLite otherwise blocks unrelated saves.
@@ -291,7 +292,9 @@ class TaskSerializer(DriveImagesMixin, serializers.ModelSerializer):
             from boldApp.workspace.image_storage import task_path
             task_path(parent)
         origin = parent.image_origin_project_id if parent else project.pk if project and creation_scope == "project" else None
-        task = Task.objects.create(created_by_assignment=assignment, image_origin_project_id=origin, image_origin_set=True, **validated_data)
+        task = Task(created_by_assignment=assignment, image_origin_project_id=origin, image_origin_set=True, **validated_data)
+        task._notification_actor_assignment_id = assignment.pk
+        task.save()
         if follow_creator:
             TaskFollower.objects.create(
                 task=task,

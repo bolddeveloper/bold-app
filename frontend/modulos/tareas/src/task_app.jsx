@@ -91,6 +91,7 @@ import { applyOptimisticTaskStatus, applyPendingTaskChanges, rollbackPendingTask
 import { activeWorkspaceStorageKey, folderPath, readWorkspaces, saveWorkspaces, tasksInWorkspace, toggleWorkspaceItem } from "./services/workspace_store.js";
 import WorkspacesModule from "./workspaces_module.jsx";
 import ReportsModule from "./reports_module.jsx";
+import TaskExecutionPanel from './task_execution.jsx';
 import HomeModule from "./home_module.jsx";
 import { insertUnsectioned, reorderSections, materializePersonalSection, visibleSections, projectSectionOptions, preferredSection, removePersonalSection } from "./section_order.js";
 import {
@@ -1686,6 +1687,8 @@ function CustomDatePicker({ current_day, current_date, on_apply, on_clear, on_cl
 // Right-side task detail sidebar panel (Image 3 of design reference).
 export function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, handle_delete_task, handle_open_edit_task, handle_open_subtask, handle_toggle_subtask, handle_toggle_task, on_close, on_followers_change, on_workspace, selected_task, show_comments = true }) {
     const [detail_view, set_detail_view] = use_state("details");
+    const [execution_task, set_execution_task] = use_state(null);
+    use_effect(()=>{if(detail_view==='execution')set_execution_task(selected_task.id);},[detail_view,selected_task.id]);
     const panel_id = use_id();
     const [comment_text, set_comment_text] = use_state("");
     const [comment_voice_notes, set_comment_voice_notes] = use_state([]);
@@ -1789,7 +1792,7 @@ export function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, 
                 event.preventDefault();
                 tabs[event.key==="Home" ? 0 : event.key==="End" ? tabs.length-1 : (index+(event.key==="ArrowRight" ? 1 : -1)+tabs.length)%tabs.length].click();
             }}>
-                {[{id:"details",label:"Detalles",icon:file_text_icon},{id:"subtasks",label:"Subtareas",icon:layout_list_icon,count:subtasks.length},...(show_comments ? [{id:"comments",label:"Comentarios",icon:message_circle_icon}] : [])].map(tab => <button key={tab.id} id={`${panel_id}-${tab.id}-tab`} type="button" role="tab" aria-selected={detail_view===tab.id} aria-controls={`${panel_id}-${tab.id}`} tabIndex={detail_view===tab.id ? 0 : -1} onClick={event => {set_detail_view(tab.id);event.currentTarget.focus();}}>{render_icon(tab.icon,15)}{tab.label}{tab.count!==undefined && <span>{tab.count}</span>}</button>)}
+                {[{id:"details",label:"Detalles",icon:file_text_icon},{id:"subtasks",label:"Subtareas",icon:layout_list_icon,count:subtasks.length},...(show_comments ? [{id:'execution',label:'Etapas',icon:layout_list_icon},{id:"comments",label:"Comentarios",icon:message_circle_icon}] : [])].map(tab => <button key={tab.id} id={`${panel_id}-${tab.id}-tab`} type="button" role="tab" aria-selected={detail_view===tab.id} aria-controls={`${panel_id}-${tab.id}`} tabIndex={detail_view===tab.id ? 0 : -1} onClick={event => {set_detail_view(tab.id);event.currentTarget.focus();}}>{render_icon(tab.icon,15)}{tab.label}{tab.count!==undefined && <span>{tab.count}</span>}</button>)}
             </div>
             <div className="task_detail_content">
             <section role="tabpanel" id={`${panel_id}-details`} aria-labelledby={`${panel_id}-details-tab`} hidden={detail_view!=="details"} className="task_detail_tab_panel">
@@ -1834,6 +1837,7 @@ export function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, 
             {selected_task.recurrence?.frequency && <small className="task_repeat_summary">Repetición {({daily: "diaria", weekly: "semanal", monthly: "mensual"})[selected_task.recurrence.frequency]} cada {selected_task.recurrence.interval} · Hasta {selected_task.recurrence.until}</small>}
             {is_using_real_backend() && (pagedAttachmentsEnabled() ? <PagedAttachments taskId={selected_task.id} /> : selected_task.attachments?.map(item => <p key={item.id}><a href={/^https?:\/\//i.test(item.url) ? item.url : undefined} target="_blank" rel="noreferrer">{item.name}</a></p>))}
             </section>
+            {show_comments&&<section role="tabpanel" id={`${panel_id}-execution`} aria-labelledby={`${panel_id}-execution-tab`} hidden={detail_view!=='execution'} className="task_detail_tab_panel">{(detail_view==='execution'||execution_task===selected_task.id)&&<TaskExecutionPanel key={selected_task.id} taskId={selected_task.id} active={detail_view==='execution'}/>}</section>}
             <section role="tabpanel" id={`${panel_id}-subtasks`} aria-labelledby={`${panel_id}-subtasks-tab`} hidden={detail_view!=="subtasks"} className="task_detail_tab_panel">
             <div className="detail_subtasks_block">
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -4055,7 +4059,7 @@ function TaskAppContent({ externalModules = {} }) {
     const session = useCore();
     const { active_module, set_active_module, set_is_sidebar_open, open_direct_chat, open_channel, open_profile } = useShell();
     const [slack_task_id, set_slack_task_id] = use_state(null);
-    const task_content_active = requiresTaskData(active_module) || active_module === "slack" && Boolean(slack_task_id);
+    const task_content_active = requiresTaskData(active_module) || ["slack", "reports"].includes(active_module) && Boolean(slack_task_id);
     const task_activity = use_ref(task_content_active);
     task_activity.current = task_content_active;
     const switch_task_activity = use_ref(() => {});
@@ -4618,7 +4622,7 @@ function TaskAppContent({ externalModules = {} }) {
         return () => window.removeEventListener("bold:brand-resource", open);
     }, [sharing_scope, active_module]);
 
-    use_effect(() => { if (active_module !== "slack") set_slack_task_id(null); }, [active_module]);
+    use_effect(() => { if (!["slack", "reports"].includes(active_module)) set_slack_task_id(null); }, [active_module]);
 
     function handle_project_select(project_id) {
         remember_project(project_id);
@@ -5104,6 +5108,7 @@ function TaskAppContent({ externalModules = {} }) {
             retain_realtime_streams(allowedUnits);
             const connections = allowedUnits.map(unitId => connect_realtime_stream({ unitId, assignmentId: session.activeAssignment.id, getTicket: session.websocketTicket,
                 onEvent: event => {
+                    if(["task.execution.changed","task.updated","task.status_changed","task.deleted"].includes(event.event_type)) window.dispatchEvent(new CustomEvent('bold:task-resource-event',{detail:{taskId:event.entity_id}}));
                     if (deferComments && ["comment.created", "comment.changed"].includes(event.event_type)) {
                         notifyCommentViews(event.payload?.tasks || (event.payload?.task ? [event.payload.task] : null));
                         return;
@@ -5118,9 +5123,10 @@ function TaskAppContent({ externalModules = {} }) {
                     if (event.event_type === "catalog.changed") catalogCache.clear();
                     scheduleContent("task-event", resourcesForTaskEvent(event));
                 },
-                onReconnect: () => scheduleContent("socket-reconnect"),
+                onReconnect: () => {scheduleContent("socket-reconnect");window.dispatchEvent(new CustomEvent("bold:task-resource-event",{detail:{recover:true}}));},
                 onError: message => mounted && set_api_error(message) }));
             await Promise.all(connections);
+            if(mounted&&task_activity.current&&!securityUncertain)window.dispatchEvent(new CustomEvent("bold:task-resource-event",{detail:{recover:true}}));
         };
         const activate = () => {
             if (!mounted || !task_activity.current || securityUncertain) return;
@@ -6553,9 +6559,9 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                     schedule_view,
                     set_active_modal,
                     set_schedule_view
-                }) : active_module === "reports" ? <ReportsModule tasks={tasks} projects={projects} parseDueDate={parse_due_date} /> : render_placeholder_module(active_module))}
+                }) : active_module === "reports" ? <ReportsModule onOpenTask={id=>{set_slack_task_id(id);handle_task_select(id);}} onOpenProject={handle_project_select} /> : render_placeholder_module(active_module))}
                 </div>
-                {active_module === "slack" && slack_task_id && (selected_task ?
+                {["slack", "reports"].includes(active_module) && slack_task_id && (selected_task ?
                     <TaskDetailSidebar on_workspace={task => set_workspace_assignment({ type: "task", item: task })} on_followers_change={handle_followers_change} handle_add_comment={handle_add_comment} handle_add_quick_subtask={handle_add_quick_subtask} handle_delete_task={handle_request_delete_task} handle_detail_resize_key_down={handle_detail_resize_key_down} handle_detail_resize_start={handle_detail_resize_start} handle_open_edit_task={handle_open_edit_task} handle_open_subtask={handle_open_subtask} handle_task_select={handle_task_select} handle_toggle_subtask={handle_toggle_subtask} handle_toggle_task={handle_toggle_task} selected_task={selected_task} task_detail_width={task_detail_width} /> :
                     <TaskDrawer class_name="task_detail_sidebar" label="Detalle de tarea" on_close={() => handle_task_select(null)} width={task_detail_width} on_resize_key_down={handle_detail_resize_key_down} on_resize_start={handle_detail_resize_start}>
                         <header className="task_detail_heading"><h2>Detalle de tarea</h2><button type="button" data-drawer-close aria-label="Cerrar detalle de tarea">{render_icon(x_icon,16)}</button></header>

@@ -527,6 +527,32 @@ def resolve_access(
                 context.policy_version,
             )
 
+    if permission.code in {'reports.analytics.run','reports.report.manage'} and own_unit.id == target_unit.id:
+        return _decision(True,'Informes personales sobre datos autorizados.',
+            'personal_reporting_default','assignment',policy_version=context.policy_version)
+    if permission.code == 'reports.team.read':
+        from boldApp.tareas.report_access import structural_team_units
+        if not hasattr(context,'report_team_units'):
+            context.report_team_units=structural_team_units(assignment)
+        if target_unit.id in context.report_team_units:
+            return _decision(True,'Supervisión definida por el organigrama.',
+                'reporting_organizational_supervision','position',policy_version=context.policy_version)
+
+    # Stage responsibility is task-scoped and grants neither task deletion nor
+    # general edits. Explicit role/direct denials above retain priority.
+    if permission.code in {'tasks.execution.manage','tasks.execution.advance'} and resource_id is not None:
+        from .resource_context import resolve_resource_context
+        execution_context = resolve_resource_context(permission, resource_id)
+        if execution_context.get('task_unit_id') == target_unit.id:
+            coordinator = assignment.id in execution_context.get('task_coordinator_assignment_ids', ())
+            participant = assignment.id in execution_context.get('task_phase_assignment_ids', ())
+            if coordinator:
+                edit = Permission.objects.filter(code='tasks.task.update',is_active=True).first()
+                coordinator = bool(edit and resolve_access(assignment,edit,target_unit,resource_id=resource_id).allowed)
+            if coordinator or (permission.code == 'tasks.execution.advance' and participant):
+                return _decision(True,'Responsabilidad explícita en las etapas de esta tarea.',
+                    'task_execution_participant','task_assignment',policy_version=context.policy_version)
+
     # Explicit task collaboration is independent of the employee's job title.
     # All applicable denials above still win; MFA is applied by check_and_log.
     # No resource-less, reassignment or project-management rights are granted.

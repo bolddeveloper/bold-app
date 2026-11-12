@@ -2,7 +2,7 @@ from boldApp.core.resource_context import register_resource_context, register_re
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
-from .models import Task, Project, TaskFollower, ProjectMember, TaskProject
+from .models import Task, Project, TaskFollower, ProjectMember, TaskProject, TaskPhase
 
 
 def participating_projects(assignment, queryset=None):
@@ -35,6 +35,8 @@ def task_authorization_context(resource_id):
     }
     readers = set(editors)
     if not row["deleted_at"]:
+        readers.update(TaskPhase.objects.filter(execution_id=resource_id,archived_at__isnull=True)
+                       .values_list('responsible__id',flat=True))
         readers.add(row["created_by_assignment_id"])
         projects = Project.objects.filter(pk__in=TaskProject.objects.filter(task_id=resource_id).values("project_id"))
         readers.update(ProjectMember.objects.filter(project__in=projects, status="active", removed_at__isnull=True,
@@ -45,6 +47,9 @@ def task_authorization_context(resource_id):
         "task_assignee_assignment_id": None if row["deleted_at"] else row["assignee_assignment_id"],
         "task_unit_id": row["unit_id"],
         "task_reader_assignment_ids": readers,
+        "task_phase_assignment_ids": set(TaskPhase.objects.filter(execution_id=resource_id,archived_at__isnull=True)
+                                         .values_list('responsible__id',flat=True)) if not row['deleted_at'] else set(),
+        "task_coordinator_assignment_ids": {row['created_by_assignment_id'],row['assignee_assignment_id']} if not row['deleted_at'] else set(),
         "task_editor_assignment_ids": editors,
         "task_delete_assignment_ids": set() if row["deleted_at"] else {
             row["created_by_assignment_id"], row["assignee_assignment_id"],
@@ -56,12 +61,13 @@ def task_reader_contexts(tasks, assignment):
     """Load this viewer's explicit task memberships once for the HTTP request."""
     ids = [task.pk for task in tasks]
     followed = set(TaskFollower.objects.filter(task_id__in=ids, assignment=assignment).values_list("task_id", flat=True))
+    phased = set(TaskPhase.objects.filter(execution_id__in=ids,archived_at__isnull=True,responsible=assignment).values_list('execution_id',flat=True))
     projects = Project.objects.filter(
         Q(owner_assignment=assignment) | Q(members__assignment=assignment, members__status="active", members__removed_at__isnull=True)
     )
     invited = set(TaskProject.objects.filter(task_id__in=ids, project__in=projects).values_list("task_id", flat=True))
     return {str(task.pk): {"task_reader_assignment_ids": {assignment.pk} if not task.deleted_at and (
-        assignment.pk in (task.created_by_assignment_id, task.assignee_assignment_id) or task.pk in followed or task.pk in invited
+        assignment.pk in (task.created_by_assignment_id, task.assignee_assignment_id) or task.pk in followed or task.pk in invited or task.pk in phased
     ) else set()} for task in tasks}
 
 
@@ -80,5 +86,6 @@ def project_authorization_context(resource_id):
 
 register_resource_context("tasks", "task", task_authorization_context)
 register_resource_context("tasks", "comment", task_authorization_context)
+register_resource_context("tasks", "execution", task_authorization_context)
 register_resource_context("tasks", "project", project_authorization_context)
 register_resource_access_guard("tasks", "project", project_participation_allows)

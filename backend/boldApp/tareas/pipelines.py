@@ -381,6 +381,8 @@ def assign_stage(view, pipeline, task, stage_id):
         link = TaskProject.objects.filter(task=task, project_id=pipeline.project_id).first()
         if not link:
             raise ValidationError("La tarea no está vinculada a este proyecto.")
+        task._notification_actor_assignment_id=view.request.assignment.pk
+        link.task=task
         link.pipeline = pipeline; link.pipeline_stage = stage["id"]
         link.save(update_fields=["pipeline", "pipeline_stage"])
     else:

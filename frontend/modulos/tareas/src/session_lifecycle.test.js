@@ -37,8 +37,8 @@ test("cached notifications appear immediately and disappear when authorization b
 });
 
 test("sibling views and validated saved navigation do not bootstrap Tareas", () => {
-    for (const module of ["administration", "permissions", "suggestions", "calendar", "messaging", "slack"]) assert.equal(requiresTaskData(module), false);
-    for (const module of ["home", "tasks", "projects", "department_projects", "inbox", "workspaces", "reports"]) assert.equal(requiresTaskData(module), true);
+    for (const module of ["administration", "permissions", "suggestions", "calendar", "messaging", "slack", "reports"]) assert.equal(requiresTaskData(module), false);
+    for (const module of ["home", "tasks", "projects", "department_projects", "inbox", "workspaces"]) assert.equal(requiresTaskData(module), true);
     const navigation = [{ id: "home", default: true }, { id: "suggestions" }];
     assert.equal(entranceModule(navigation, "suggestions"), "suggestions");
     assert.equal(entranceModule(navigation, "administration"), "home");

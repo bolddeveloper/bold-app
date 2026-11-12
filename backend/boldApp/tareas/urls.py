@@ -2,6 +2,8 @@ from .pipelines import PipelineView, PipelineBoardView, PipelineTaskView, TaskPi
 from django.urls import path
 from .workspace_sharing import WorkspaceSharingView
 from .workspace_library import WorkspaceLibraryView
+from .execution_views import ExecutionView, ExecutionTimelineView, ExecutionTemplatesView, ExecutionPeopleView
+from .report_views import ReportsView, ReportPreviewView, ReportsCatalogView, MeetingWorkLinksView, ReportFilterChoicesView
 from .personal_board import PersonalBoardView
 from .draft_grants import TaskDraftGrantView
 from .team import TeamSelfView, TeamDirectoryView, TeamBoardView, TeamMeetingsView, TeamVoiceView
@@ -44,6 +46,15 @@ router.register(r"webhook-endpoints", WebhookEndpointViewSet, basename="webhook-
 router.register(r"webhook-deliveries", WebhookDeliveryViewSet, basename="webhook-delivery")
 
 urlpatterns = [
+    path('reports/', ReportsView.as_view()),
+    path('reports/catalog/', ReportsCatalogView.as_view()),
+    path('reports/filter-choices/', ReportFilterChoicesView.as_view()),
+    path('reports/preview/', ReportPreviewView.as_view()),
+    path('reports/meeting-links/', MeetingWorkLinksView.as_view()),
+    path('task-execution/templates/', ExecutionTemplatesView.as_view()),
+    path('task-execution/<uuid:task_id>/', ExecutionView.as_view()),
+    path('task-execution/<uuid:task_id>/timeline/', ExecutionTimelineView.as_view()),
+    path('task-execution/<uuid:task_id>/people/', ExecutionPeopleView.as_view()),
     path("task-drafts/grant/", TaskDraftGrantView.as_view()),
     path("workspace-library/", WorkspaceLibraryView.as_view()),
     path("task-pipelines/<uuid:task_id>/", TaskPipelinesView.as_view()),

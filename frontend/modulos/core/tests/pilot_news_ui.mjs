@@ -34,6 +34,9 @@ try{
         while(pageButton("Anterior") && !pageButton("Anterior").disabled)await React.act(async()=>pageButton("Anterior").click());
     }
     async function openNote(title){
+        const close=document.querySelector('[aria-label="Cerrar notas de parche"]');
+        if(close)await React.act(async()=>close.click());
+        while(pageButton("Anterior") && !pageButton("Anterior").disabled)await React.act(async()=>pageButton("Anterior").click());
         while(true){
             const card=Array.from(document.querySelectorAll(".bold_news_card")).find(card=>card.querySelector("strong").textContent===title);
             if(card){await React.act(async()=>card.click());return;}
@@ -63,8 +66,10 @@ try{
     await React.act(async()=>root.render(React.createElement(News)));
     assert.equal(document.querySelector('[role="dialog"]'),null);
     await checkPages(releaseNotes);
-    await openNote(releaseNotes[0].title);
+    await openNote(releaseNotes.find(note=>note.id==='2026-11-06-chat-slack-organization-launch').title);
     assert.match(document.querySelector('[role="dialog"]').textContent,/Chat y Slack para toda la organización/);
+    await openNote(releaseNotes[0].title);
+    assert.match(document.querySelector('[role="dialog"]').textContent,/Informes sobre tu trabajo y el de tu equipo/);
     console.log("Release notes: pagination, seven general feature cards, launch, reader navigation and assignment switches passed.");
 }finally{
     if(root){const {act}=await import("react");await act(async()=>root.unmount());}

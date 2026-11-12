@@ -8,6 +8,8 @@ from .tags import Tag, TaskTag
 from .tasks import Task, TaskDependency, TaskProject
 from .webhooks import WebhookDelivery, WebhookEndpoint
 from .workspaces import SharedWorkspaceFolder, PersonalTaskBoard, TeamProfile, TeamTaskShare, WorkspaceLibrary
+from .execution import TaskExecution, TaskPhase, TaskTimelineEvent, TaskTracking, ExecutionCommand, ExecutionTemplate
+from .reports import SavedReport, MeetingWorkLink
 
 
 __all__ = [

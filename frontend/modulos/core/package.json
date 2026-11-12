@@ -20,6 +20,7 @@
         "test:channels-ui": "node tests/channels_ui.mjs && node tests/mentions_ui.mjs && node tests/automations_ui.mjs",
         "test:pages-ui": "node tests/channel_pages_ui.mjs && node tests/page_recovery_ui.mjs && node tests/page_hierarchy_ui.mjs && node tests/page_links_ui.mjs && node tests/page_discussions_ui.mjs && node tests/page_formats_ui.mjs",
         "test:history-ui": "node tests/history_search_ui.mjs && node tests/saved_items_ui.mjs && node tests/resource_library_ui.mjs && node tests/document_media_ui.mjs",
+        "test:reports": "node --test ../tareas/src/execution_data.test.js ../tareas/src/reports_data.test.js ../tareas/src/report_refresh.test.js ../tareas/src/work_preparations.test.js && node tests/reports_browser.mjs",
         "test:header-calendar-ui": "node tests/header_calendar_ui.mjs",
         "test:pilot-news-ui": "node tests/pilot_news_ui.mjs",
         "test:comment-editor-ui": "node tests/comment_editor_ui.mjs",

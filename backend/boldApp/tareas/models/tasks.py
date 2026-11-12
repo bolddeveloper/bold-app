@@ -50,12 +50,25 @@ class Task(UUIDPrimaryKeyModel, SoftDeleteModel):
         indexes = [
             models.Index(fields=["assignee_assignment", "due_date"], name="idx_tasks_assignment_due"),
             models.Index(fields=["unit", "status"], name="idx_tasks_unit_status"),
+            models.Index(fields=['created_at'],name='task_report_created'),
+            models.Index(fields=['completed_at'],name='task_report_completed'),
         ]
         constraints = [models.UniqueConstraint(fields=["recurrence_source", "recurrence_date"], name="unique_task_occurrence")]
 
     def save(self, *args, **kwargs):
         with transaction.atomic():
-            return super().save(*args, **kwargs)
+            if kwargs.get('update_fields') is not None and {'status','status_id'} & set(kwargs['update_fields']):
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'completed_at'}
+            from ..execution_history import task_snapshot, record_task_save
+            previous = Task.all_objects.select_for_update(of=('self',)).select_related('status').filter(pk=self.pk).first()
+            snapshot = task_snapshot(previous) if previous else None
+            result = super().save(*args, **kwargs)
+            # Signals can reconcile contextual pipeline status; use the committed row.
+            current = Task.all_objects.select_related('status', 'assignee_assignment__employee',
+                'assignee_assignment__position__unit').get(pk=self.pk)
+            current._notification_actor_assignment_id = getattr(self, '_notification_actor_assignment_id', None)
+            record_task_save(current, snapshot, created=previous is None)
+            return result
 
     def __str__(self):
         return self.title

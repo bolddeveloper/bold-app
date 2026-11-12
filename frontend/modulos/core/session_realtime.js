@@ -8,15 +8,16 @@ export function notificationWebsocketURL({ ticket, baseUrl = api_base_url }) {
 }
 // The authenticated session/control channel is owned by Core, not a content module.
 export function createNotificationRealtime(dependencies = {}) {
-    let channel = null;
+    let channel = null, reportsWatched = false;
+    function watchReports(enabled){reportsWatched=Boolean(enabled);channel?.send?.({type:'reports.watch',enabled:reportsWatched});}
     function disconnect() { channel?.stop(); channel = null; }
-    function connect({ assignmentId, getTicket, onNotification = () => {}, onMessaging = () => {}, onSlack = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, onState = () => {}, onTerminal = () => {}, baseUrl }) {
+    function connect({ assignmentId, getTicket, onNotification = () => {}, onMessaging = () => {}, onSlack = () => {}, onReports = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, onState = () => {}, onTerminal = () => {}, baseUrl }) {
         disconnect();
         if (!assignmentId || !getTicket) throw new Error("Falta el contexto para recibir notificaciones.");
         channel = createRealtimeChannel({ ...dependencies,
             getTicket: () => getTicket({ assignment: assignmentId, channel: "notifications" }),
             urlForTicket: ticket => notificationWebsocketURL({ ticket: ticket.ticket, baseUrl }),
-            onConnected, onReconnect, onError, onState,
+            onConnected:()=>{if(reportsWatched)watchReports(true);onConnected();}, onReconnect:()=>{if(reportsWatched)watchReports(true);onReconnect();}, onError, onState,
             onTerminal: error => { onTerminal(error); onError("El canal de notificaciones perdió autorización."); },
             onMessage: message => {
                 try {
@@ -25,11 +26,12 @@ export function createNotificationRealtime(dependencies = {}) {
                     if (["notification.created", "notification.invalidated"].includes(event.event_type)) onNotification(event);
                     else if (event.event_type?.startsWith("messaging.")) onMessaging(event);
                     else if (event.event_type === "slack.changed") onSlack(event);
+                    else if (event.event_type === 'reports.changed') onReports(event);
                     else if (["control.ready", "permissions.revision", "assignment.changed"].includes(event.event_type)) onControl(event);
                 } catch { /* Invalid envelope */ }
             },
         });
         return channel.ready;
     }
-    return { connect, disconnect };
+    return { connect, disconnect, watchReports };
 }

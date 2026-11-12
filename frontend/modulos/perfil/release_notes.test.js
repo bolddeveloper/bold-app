@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {reportsReleaseNotes,supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
 
 test("soportebold y MCP se publican juntos tras verificar producción, conservando límites y permisos",()=>{
     const [note]=supportIntegrationReleaseNotes;
@@ -38,7 +38,7 @@ test("la recuperación de invitaciones mantiene los canales autorizados y la rev
 });
 
 test("la renovación MCP explica compatibilidad, plazo y revocación sin ampliar permisos",()=>{
-    const note=releaseNotes[0];
+    const note=releaseNotes.find(row=>row.id==="2026-11-07-mcp-persistent-renewal");
     assert.equal(note.id,"2026-11-07-mcp-persistent-renewal");
     const text=[note.summary,...note.sections.flatMap(section=>section.items)].join(' ');
     assert.match(text,/clientes MCP compatibles/);
@@ -151,4 +151,12 @@ test("el historial publicado conserva sus identificadores para las novedades le�
     for (const id of ["2026-10-08-community-patch", "2026-10-05-major-update", "2026-10-05-shortcuts", "2026-10-05-notifications", "2026-10-05-profile"]) {
         assert.ok(ids.has(id), `Falta la nota histórica ${id}`);
     }
+});
+
+
+test("Informes y Etapas encabezan las novedades con sus límites y sin borradores",()=>{
+    assert.equal(reportsReleaseNotes.length,2);
+    assert.deepEqual(releaseNotes.slice(0,2),reportsReleaseNotes);
+    for(const note of reportsReleaseNotes){assert.equal(note.date,'2026-11-11');assert.ok(releaseNotes.includes(note));assert.doesNotMatch(JSON.stringify(note),/pendiente de autorización|Nota preparada localmente/);}
+    assert.match(reportsReleaseNotes[0].sections.flatMap(section=>section.items).join(' '),/no importa el calendario personal de Google/);
 });

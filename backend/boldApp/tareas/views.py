@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import EmptyResultSet
-from django.db.models import Q, Count, Max
+from django.db.models import Q, Count, Max, Exists, OuterRef
 from django.utils import timezone
 from uuid import UUID
 from rest_framework import status, viewsets
@@ -401,7 +401,9 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
         from .progress import pipeline_progress
         response = super().list(request, *args, **kwargs)
         rows = response.data.get("results", []) if isinstance(response.data, dict) else response.data
-        progress = pipeline_progress([row["id"] for row in rows], self.visible_projects(), request.assignment.employee_id)
+        page_ids = [row['id'] for row in rows]
+        page_projects = Project.objects.filter(task_projects__task_id__in=page_ids).distinct()
+        progress = pipeline_progress(page_ids, self.visible_projects(page_projects), request.assignment.employee_id)
         for row in rows:
             row["pipeline_progress"] = progress.get(str(row["id"]), [])
         return response
@@ -449,7 +451,10 @@ class TaskViewSet(AssignmentScopedViewSetMixin, SoftDeleteViewSetMixin, viewsets
             "created_by_assignment",
             "assignee_assignment",
         )
-        return queryset.annotate(attachment_count=Count("attachments", filter=Q(attachments__deleted_at__isnull=True)))
+        from .models import TaskPhase
+        return queryset.annotate(
+            phase_participant=Exists(TaskPhase.objects.filter(execution_id=OuterRef('pk'),archived_at__isnull=True,responsible=self.request.assignment)),
+            attachment_count=Count("attachments", filter=Q(attachments__deleted_at__isnull=True)))
 
     def perform_create(self, serializer):
         self.require_permission("tasks.task.create", serializer.validated_data["unit"])

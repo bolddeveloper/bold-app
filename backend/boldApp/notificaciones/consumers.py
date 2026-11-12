@@ -131,6 +131,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.security_task = None
         self.presence_task = None
         self.closing = False
+        self.reports_watching = False
         self.security_checked = asyncio.Event()
         self.security_wake = asyncio.Event()
         await self.accept()
@@ -144,6 +145,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_json(backlog)
 
     async def disconnect(self, close_code):
+        if getattr(self,'reports_watching',False):
+            await self.channel_layer.group_discard('reports_watch',self.channel_name)
         self.closing = True
         for task in (getattr(self, "security_task", None), getattr(self, "presence_task", None)):
             if task:
@@ -242,6 +245,34 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def presence_refresh(self, event):
         self.presence_task = None
         await self.send_control()
+
+    async def receive_json(self, content, **kwargs):
+        if not isinstance(content,dict) or content.get('type')!='reports.watch' or type(content.get('enabled')) is not bool:
+            return
+        if self.closing or not await notification_identity_is_active(self.session_id,self.assignment_id):
+            await self.close(code=4401);return
+        from boldApp.tareas.report_realtime import report_assignment_allowed
+        enabled=content['enabled'] and await database_sync_to_async(report_assignment_allowed)(self.assignment_id,self.session_id)
+        if enabled and not self.reports_watching:
+            await self.channel_layer.group_add('reports_watch',self.channel_name)
+        elif not enabled and self.reports_watching:
+            await self.channel_layer.group_discard('reports_watch',self.channel_name)
+        self.reports_watching=enabled
+        await self.send_json(build_event_envelope('reports.subscription','reports',self.assignment_id,{'enabled':enabled}))
+
+    async def report_changed(self,event):
+        if self.closing or not self.reports_watching:return
+        recipients=event.get('recipients')
+        if recipients is not None and str(self.assignment_id) not in recipients:return
+        if not await notification_identity_is_active(self.session_id,self.assignment_id):
+            await self.close(code=4401);return
+        from boldApp.tareas.report_realtime import report_assignment_allowed
+        allowed=await database_sync_to_async(report_assignment_allowed)(self.assignment_id,self.session_id)
+        if not allowed:
+            await self.channel_layer.group_discard('reports_watch',self.channel_name)
+            self.reports_watching=False
+        await self.send_json(build_event_envelope('reports.changed','reports',self.assignment_id,
+            {'scope':event.get('scope','work'),'allowed':allowed}))
 
     async def notification_created(self, event):
         if self.closing:

@@ -30,7 +30,7 @@ export function resourcesForTaskEvent(event) {
     if (!id || !/^[\w-]+$/.test(String(id))) return TASK_RESOURCES;
     if (event.event_type === "comment.created") return [`comments@${id}`];
     if (event.event_type === "task.created") return TASK_RESOURCES.map(resource => `${resource}@${id}`);
-    if (["task.updated", "task.status_changed", "task.deleted"].includes(event.event_type)) return [`tasks@${id}`, `links@${id}`];
+    if (["task.updated", "task.status_changed", "task.deleted", "task.execution.changed"].includes(event.event_type)) return [`tasks@${id}`, `links@${id}`];
     return TASK_RESOURCES;
 }
 

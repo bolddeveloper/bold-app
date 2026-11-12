@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from boldApp.autenticacion.models import AuthSession
 from boldApp.core.models import (AccessGrant, GrantAuthority, GrantAuthorityPermission,
-                                 JobRolePermission, OrganizationalUnit, Permission, PositionAssignment)
+                                 JobRolePermission, OrganizationalUnit, Permission, Position, PositionAssignment)
 from boldApp.permisos.models import PermissionPolicyState
 
 
@@ -40,6 +40,9 @@ def security_snapshot(session_id, assignment_id):
                       .values("id", "permission_id", "effect", "scope_type", "target_unit_id").order_by("id")))
     units = list(OrganizationalUnit.objects.values("id", "parent_unit_id", "sensitivity_level", "is_control_plane", "name", "color_hex", "unit_type").order_by("id"))
     state.append(units)
+    # Supervision can change without editing a role or the policy revision.
+    # Reuse the control lease to purge reports whose org authority was revoked.
+    state.append(list(Position.objects.values('id','reports_to_position_id','unit_id').order_by('id')))
     state.append(list(Permission.objects.values("id", "code", "module_code", "is_active", "risk_level", "requires_step_up_mfa",
                                                "is_delegable").order_by("id")))
     context = hashlib.sha256(json.dumps([assignment, session.user_account.is_superuser,
