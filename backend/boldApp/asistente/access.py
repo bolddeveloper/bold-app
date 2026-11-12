@@ -50,3 +50,8 @@ class AssistantInternalAuthentication(BaseAuthentication):
         if not isinstance(identity, ExecutionIdentity):
             return None
         return validate_session(identity.session, identity.assignment), identity.session
+
+    def authenticate_header(self, request):
+        # Preserve the global HTTP 401 contract previously provided by the
+        # first MCP authenticator. The PWA uses it to recover expired sessions.
+        return 'Bearer'

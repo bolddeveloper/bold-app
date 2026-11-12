@@ -224,6 +224,11 @@ class AssistantTests(TestCase):
         response=client.post('/api/v2/assistant/requests/',{'text':'Una tarea','client_id':str(uuid4())},format='json')
         self.assertEqual(response.status_code,403)
 
+    def test_native_unauthenticated_contract_stays_401(self):
+        response=APIClient().get('/api/v2/reports/catalog/')
+        self.assertEqual(response.status_code,401)
+        self.assertEqual(response['WWW-Authenticate'],'Bearer')
+
     def test_project_task_and_stage_dependencies_use_native_defaults_and_versions(self):
         self.modules=['tasks','projects','execution']
         task=self.step('task','Cadena completa');task['arguments']['project']='$project'
