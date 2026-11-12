@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, ValidationError, PermissionDenied
 from boldApp.core.models import PositionAssignment
 from .views import AssignmentScopedViewSetMixin
 from .models import SavedReport, Task, Project, MeetingWorkLink
@@ -19,6 +19,9 @@ from .report_engine import ReportQuery
 
 class ReportsView(ObjectRequestMixin, AssignmentScopedViewSetMixin, APIView):
     def require_reporting(self, manage=False):
+        from .report_pilot import reports_enabled
+        if not reports_enabled(self.request.assignment):
+            raise PermissionDenied('Informes está en validación con IT. Todavía no está habilitado para este departamento.')
         self.require_permission('reports.report.manage' if manage else 'reports.analytics.run',self.request.assignment.position.unit)
 
     def saved(self, report_id, *, own=False, lock=False):

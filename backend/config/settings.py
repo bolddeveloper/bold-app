@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "boldApp.calendario",
     "boldApp.hojas",
     "boldApp.mcp",
+    "boldApp.asistente",
 ]
 
 
@@ -199,6 +200,7 @@ CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 # Define la configuracion base de Django REST Framework.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "boldApp.asistente.access.AssistantInternalAuthentication",
         "boldApp.mcp.authentication.McpInternalAuthentication",
         "boldApp.autenticacion.authentication.CookieSessionAuthentication",
         "rest_framework.authentication.SessionAuthentication",
@@ -399,3 +401,10 @@ BOLD_SUPPORT_UNIT_ID = os.environ.get('BOLD_SUPPORT_UNIT_ID', '')
 BOLD_SUPPORT_MODEL = os.environ.get('BOLD_SUPPORT_MODEL', 'gpt-6-luna')
 BOLD_SUPPORT_DAILY_LIMIT = int(os.environ.get('BOLD_SUPPORT_DAILY_LIMIT', '100'))
 BOLD_SUPPORT_USER_DAILY_LIMIT = int(os.environ.get('BOLD_SUPPORT_USER_DAILY_LIMIT', '20'))
+
+# Fail closed until the exact IT department identifiers are configured.
+BOLD_ASSISTANT_ENABLED = os.environ.get('BOLD_ASSISTANT_ENABLED', 'false').lower() == 'true'
+BOLD_ASSISTANT_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get('BOLD_ASSISTANT_PILOT_UNIT_IDS', '').split(',') if value.strip())
+
+REPORTS_PILOT_ENABLED = os.environ.get('REPORTS_PILOT_ENABLED', 'false').lower() == 'true'
+REPORTS_PILOT_UNIT_IDS = tuple(value.strip().lower() for value in os.environ.get('REPORTS_PILOT_UNIT_IDS', '').split(',') if value.strip())

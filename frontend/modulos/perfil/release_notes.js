@@ -1,3 +1,6 @@
+import {assistantReleaseNotes} from './release_notes_assistant.js';
+export {assistantReleaseNotes};
+
 // Informes y Etapas: entrega del 11 de noviembre de 2026.
 export const reportsReleaseNotes = [{
     id:'2026-11-11-informes-personales-equipo',date:'2026-11-11',category:'Nueva función',icon:'update',
@@ -614,12 +617,16 @@ export const messagingReleaseNotes = [
     },
 ];
 
-export function getReleaseNotes() {
-    return releaseNotes;
+export function getReleaseNotes(assignment) {
+    return [
+        ...(assignment?.assistant_enabled===true?assistantReleaseNotes:[]),
+        ...(assignment?.reports_enabled===true?[reportsReleaseNotes[0]]:[]),
+        ...releaseNotes,
+    ].sort((a,b)=>b.date.localeCompare(a.date));
 }
 
 export const releaseNotes = [
-    ...reportsReleaseNotes,
+    ...reportsReleaseNotes.slice(1),
     {
         id:"2026-11-07-mcp-persistent-renewal",date:"2026-11-07",category:"Mejoras",icon:"update",
         title:"Conexiones de asistentes con renovación automática",

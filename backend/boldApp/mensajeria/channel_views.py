@@ -377,6 +377,8 @@ class ChannelMessageListView(SlackView):
         form = SendChannelMessage(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
+        from boldApp.asistente.mention_guard import prevent_public_request
+        prevent_public_request(request,values['body'])
         prepared = None
         staged = None
         if values['upload_id']:

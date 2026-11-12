@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {reportsReleaseNotes,supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
+import {assistantReleaseNotes,reportsReleaseNotes,supportIntegrationReleaseNotes,pendingSupportReleaseNotes,pendingMcpReleaseNotes,pendingPilotReleaseNotes,multitaskingReleaseNotes,releaseNotes,messagingReleaseNotes,getReleaseNotes} from "./release_notes.js";
 
 test("soportebold y MCP se publican juntos tras verificar producción, conservando límites y permisos",()=>{
     const [note]=supportIntegrationReleaseNotes;
@@ -154,9 +154,17 @@ test("el historial publicado conserva sus identificadores para las novedades le�
 });
 
 
-test("Informes y Etapas encabezan las novedades con sus límites y sin borradores",()=>{
+test("Informes y asistente solo ofrecen sus notas a las asignaciones habilitadas; Etapas conserva su audiencia",()=>{
     assert.equal(reportsReleaseNotes.length,2);
-    assert.deepEqual(releaseNotes.slice(0,2),reportsReleaseNotes);
-    for(const note of reportsReleaseNotes){assert.equal(note.date,'2026-11-11');assert.ok(releaseNotes.includes(note));assert.doesNotMatch(JSON.stringify(note),/pendiente de autorización|Nota preparada localmente/);}
+    assert.ok(!releaseNotes.includes(reportsReleaseNotes[0]));assert.ok(releaseNotes.includes(reportsReleaseNotes[1]));
+    for(const note of reportsReleaseNotes){assert.equal(note.date,'2026-11-11');assert.doesNotMatch(JSON.stringify(note),/pendiente de autorización|Nota preparada localmente/);}
     assert.match(reportsReleaseNotes[0].sections.flatMap(section=>section.items).join(' '),/no importa el calendario personal de Google/);
+    const pilot=getReleaseNotes({assistant_enabled:true,reports_enabled:true});
+    assert.deepEqual(pilot.slice(0,4),assistantReleaseNotes);
+    assert.ok(pilot.includes(reportsReleaseNotes[0]));
+    for(const assignment of [undefined,{}, {unit_name:'Equipo de IT'}, {account_is_superuser:true}, {assistant_enabled:false,reports_enabled:false}]){
+        const notes=getReleaseNotes(assignment);
+        assert.ok(!notes.some(note=>assistantReleaseNotes.includes(note)||note===reportsReleaseNotes[0]));
+    }
+    assert.equal(new Set(pilot.map(note=>note.id)).size,pilot.length);
 });

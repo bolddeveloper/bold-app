@@ -9,7 +9,7 @@ const dom=new JSDOM('<div id="root"></div>',{url:"http://localhost",pretendToBeV
 for(const key of ["window","document","navigator","HTMLElement","Element","MutationObserver","CustomEvent","Event"])
     Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:true}};
+globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:true,assistant_enabled:true,reports_enabled:true}};
 const server=await createServer({configFile:false,plugins:[{name:"synthetic-news",enforce:"pre",transform(_,id){
     if(id.replaceAll("\\","/").endsWith("/core/core_provider.jsx"))return "export const useCore=()=>globalThis.__pilotNewsCore;";
 }}],resolve:{dedupe:["react","react-dom","lucide-react"]},esbuild:{jsx:"automatic",jsxImportSource:"react"},
@@ -19,7 +19,7 @@ let root;
 try{
     const React=await import("react"),{createRoot}=await import("react-dom/client");
     const {default:News}=await server.ssrLoadModule(`/@fs/${path.resolve("../perfil/news_preferences.jsx").replaceAll("\\","/")}`);
-    const {releaseNotes,messagingReleaseNotes,getReleaseNotes}=await import("../../perfil/release_notes.js");
+    const {releaseNotes,messagingReleaseNotes,getReleaseNotes,assistantReleaseNotes,reportsReleaseNotes}=await import("../../perfil/release_notes.js");
     const pageButton=label=>Array.from(document.querySelectorAll(".bold_news_pagination button")).find(button=>button.textContent.includes(label));
     async function checkPages(notes){
         const titles=[];
@@ -46,7 +46,7 @@ try{
     }
     root=createRoot(document.getElementById("root"));
     await React.act(async()=>root.render(React.createElement(News)));
-    await checkPages(getReleaseNotes({chat_enabled:true}));
+    await checkPages(getReleaseNotes(globalThis.__pilotNewsCore.activeAssignment));
     await openNote(messagingReleaseNotes[0].title);
     assert.match(document.querySelector('[role="dialog"]').textContent,/Borradores recuperables/);
     const next=()=>Array.from(document.querySelectorAll(".bold_news_dialog footer button")).find(button=>button.textContent.includes("Siguiente"));
@@ -69,7 +69,17 @@ try{
     await openNote(releaseNotes.find(note=>note.id==='2026-11-06-chat-slack-organization-launch').title);
     assert.match(document.querySelector('[role="dialog"]').textContent,/Chat y Slack para toda la organización/);
     await openNote(releaseNotes[0].title);
-    assert.match(document.querySelector('[role="dialog"]').textContent,/Informes sobre tu trabajo y el de tu equipo/);
+    assert.ok(document.querySelector('[role="dialog"]').textContent.includes(releaseNotes[0].title));
+    globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:false,assistant_enabled:true,reports_enabled:true}};
+    await React.act(async()=>root.render(React.createElement(News)));
+    await checkPages(getReleaseNotes(globalThis.__pilotNewsCore.activeAssignment));
+    await openNote(assistantReleaseNotes[0].title);
+    assert.match(document.querySelector('[role="dialog"]').textContent,/Piloto IT/);
+    await openNote(reportsReleaseNotes[0].title);
+    globalThis.__pilotNewsCore={activeAssignment:{id:"it",chat_enabled:false,assistant_enabled:false,reports_enabled:false}};
+    await React.act(async()=>root.render(React.createElement(News)));
+    assert.equal(document.querySelector('[role="dialog"]'),null);
+    await checkPages(releaseNotes);
     console.log("Release notes: pagination, seven general feature cards, launch, reader navigation and assignment switches passed.");
 }finally{
     if(root){const {act}=await import("react");await act(async()=>root.unmount());}

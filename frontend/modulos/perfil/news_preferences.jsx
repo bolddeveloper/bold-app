@@ -51,5 +51,5 @@ function NewsContent({releaseNotes}) {
 
 export default function NewsPreferences() {
     const {activeAssignment} = useCore();
-    return <NewsContent key={`${activeAssignment?.id || "none"}:${activeAssignment?.chat_enabled === true}`} releaseNotes={getReleaseNotes(activeAssignment)}/>;
+    return <NewsContent key={`${activeAssignment?.id || "none"}:${activeAssignment?.chat_enabled === true}:${activeAssignment?.assistant_enabled === true}:${activeAssignment?.reports_enabled === true}`} releaseNotes={getReleaseNotes(activeAssignment)}/>;
 }

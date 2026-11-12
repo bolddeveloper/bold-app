@@ -40,6 +40,7 @@ import {hasChatAttention} from '../core/reading_attention.js';
 import MentionPicker from "./mention_picker.jsx";
 import MentionText from "./mention_text.jsx";
 import {chatMentionAtCaret,insertMention} from "./mention_model.js";
+import {routeMention,privateMentionText,openAssistant} from '../asistente/model.js';
 import ChatMentionSuggestions from "./chat_mention_suggestions.jsx";
 
 function Avatar({person, status}) {
@@ -402,6 +403,7 @@ export default function MessagingModule() {
         const id = conversation?.id, body = (edit ? edit.body : drafts[id] || "").trim();
         const file = !edit ? mediaDrafts[id] : null;
         const images = !edit ? queueStore.current[id] || [] : [];
+        if(!edit&&core.activeAssignment?.assistant_enabled){const text=privateMentionText(body);if(text!==null){if(file||images.length){setError('El asistente admite texto y dictado. Retira los adjuntos antes de abrir la petición privada.');return;}openAssistant({text});changeComposer('');return;}}
         if (!id || (!body && !file && !edit?.media && !images.length) || busy.current || loading || recording || imageEditing || mentionPicker || composerRecovery.blocked || edit && !canEditMessage(edit,actorId,Date.now()+offset.current) || !conversation.peer.available) return;
         busy.current = true; setSending(true); setError(""); setNotice(""); setEmojiOpen(false);
         const controller = new AbortController(); writes.current = controller;
@@ -472,6 +474,7 @@ export default function MessagingModule() {
     function chooseMention(person,target){
         const current=mentionLive.current;
         if(!mounted.current || !activeId.current || current.key!==target.key || current.blocked){setMentionPicker(null);setInlineMention(null);return;}
+        if(!edit&&routeMention(person,core.activeAssignment,current.body.slice(0,target.start)+current.body.slice(target.end))){changeComposer('');setMentionPicker(null);setInlineMention(null);return;}
         try{const value=insertMention(current.body,person,target.start,target.end),key=current.key;
             changeComposer(value.text);setMentionPicker(null);setInlineMention(null);requestAnimationFrame(()=>{if(mentionLive.current?.key!==key)return;const field=(edit ? editField:composer).current;field?.focus();field?.setSelectionRange(value.caret,value.caret);});
         }catch(err){setMentionPicker(null);setInlineMention(null);setError(err.message);}
@@ -573,8 +576,8 @@ export default function MessagingModule() {
         </div>
         {emojiOpen && conversation && <ChatEmojiPicker anchorRef={emojiTrigger} recent={recentEmojis} onClose={() => setEmojiOpen(false)} onSelect={emoji => {setRecentEmojis(current => [emoji,...current.filter(value => value!==emoji)].slice(0,24)); changeComposer(((edit ? edit.body : draft) + emoji).slice(0,5000)); setEmojiOpen(false); requestAnimationFrame(() => (edit ? editField : composer).current?.focus());}}/>}
         {enterPreferencesOpen && conversation && <ChatEnterPreferences onClose={() => {setEnterPreferencesOpen(false); requestAnimationFrame(() => (edit ? editField : composer).current?.focus());}}/>}
-        {inlineOpen && conversation && <ChatMentionSuggestions key={`${mentionKey}:${inlineMention.start}`} conversationId={conversation.id} anchorRef={edit ? editField:composer} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,inlineMention)}/>}
-        {mentionPicker && conversation && <MentionPicker key={`${identity}:${conversation.id}`} conversationId={conversation.id} onClose={()=>setMentionPicker(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,mentionPicker)}/>}
+        {inlineOpen && conversation && <ChatMentionSuggestions assistantAssignment={edit?null:core.activeAssignment} key={`${mentionKey}:${inlineMention.start}`} conversationId={conversation.id} anchorRef={edit ? editField:composer} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,inlineMention)}/>}
+        {mentionPicker && conversation && <MentionPicker assistantAssignment={edit?null:core.activeAssignment} key={`${identity}:${conversation.id}`} conversationId={conversation.id} onClose={()=>setMentionPicker(null)} onDenied={denyMention} onSelect={person=>chooseMention(person,mentionPicker)}/>}
         {imageEditing && <Suspense fallback={<p role="status">Abriendo editor de imagen…</p>}><ChatImageEditor file={imageEditing.file} onCancel={() => setImageEditing(null)} onSave={file => {try {updateQueue(imageEditing.conversationId, rows => replaceQueuedImage(rows, imageEditing.imageId, file));} catch (err) {setError(err.message);} setImageEditing(null);}}/></Suspense>}
         {review && <Suspense fallback={<p role="status">Abriendo reenvío…</p>}><ForwardMessageDialog key={`${identity}:${forwardSource.id}`} review={review} api={messagingApi} checkpoint={async()=>{if(!await forwardRecovery.flush())throw Error('No se pudo proteger el reenvío; conservamos los intentos para revisarlos.');}} people={roster.filter(row => eligible.has(String(row.employee_id)) && row.employee_id !== forwardSource.peerId)} forward={review.forward} onClose={() => setForwardSource(null)} onSelectMore={rows => {forwardReviews.current.delete(forwardSource.id);startSelection(rows);}} onDiscarded={result=>{forwardReviews.current.delete(forwardSource.id);exitSelection();setNotice(`Reenvío cerrado: ${result.cancelled} ${result.cancelled===1 ? 'pendiente descartado':'pendientes descartados'}. Mensajes ya publicados conservados: ${result.published}.`);}} onComplete={(result, person) => {forwardReviews.current.delete(forwardSource.id);exitSelection(); setNotice(`${result.confirmed === 1 ? "Mensaje reenviado" : `${result.confirmed} mensajes reenviados`} a ${person.name}.`);}} onSent={(result, person, source) => {
             selectForwardRows(selectedForwardRows.current.filter(row => row.id !== source.id));

@@ -174,6 +174,8 @@ class MessageListView(PrivateChatView):
         if not available(get_object_or_404(people(), pk=peer_id)):
             raise PermissionDenied("Este empleado ya no puede recibir mensajes. Puedes consultar el historial.")
         values = serializer.validated_data
+        from boldApp.asistente.mention_guard import prevent_public_request
+        prevent_public_request(request,values['body'])
         # A forwarding review can retire an uncertain text nonce as well as an
         # attachment. Discard/publication hold this same conversation lock, so
         # a delayed request cannot revive an explicitly stopped intent.

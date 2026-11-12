@@ -60,6 +60,8 @@ def module_for(path):
     first = parts[0]
     if any(part in INTERACTIVE_PARTS for part in parts):
         return None
+    if first == 'assistant':
+        return None  # Interactive approvals cannot be called by a model/MCP client.
     if first == "auth":
         return "profile" if len(parts) > 1 and parts[1] in PROFILE_PATHS else None
     if first == "messaging":

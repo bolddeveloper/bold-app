@@ -22,3 +22,9 @@
 - Durante una petición se permite procesar el archivo en memoria, con límites de tamaño. Los borradores y los archivos para reintentar permanecen en el dispositivo; no introducir colas del servidor que conserven sus bytes.
 - Si Drive no confirma la subida, conservar el archivo en el dispositivo y permitir un reintento explícito con el mismo identificador. No usar almacenamiento local del backend como alternativa.
 - Antes de migrar contenido antiguo, hacer respaldo. Sustituir sus bytes por una referencia solo después de comprobar que Drive conserva el archivo; no borrar datos de Oracle.
+
+# Pilotos vigentes
+
+- El asistente operativo y el módulo Informes permanecen limitados al departamento de IT hasta aprobación expresa para ampliarlos. Mantener las listas de unidades configuradas en `BOLD_ASSISTANT_PILOT_UNIT_IDS` y `REPORTS_PILOT_UNIT_IDS`, con ambos pilotos habilitados en el entorno desplegado.
+- Comprobar el límite en las APIs y los sockets, además de la navegación y las notas de parche. Ser propietario o administrador fuera de IT no concede acceso al piloto.
+- Chat, Slack y las etapas existentes de tareas conservan su disponibilidad habitual; no restringirlos al activar estos dos pilotos.

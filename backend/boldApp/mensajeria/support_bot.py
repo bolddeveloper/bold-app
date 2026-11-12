@@ -32,9 +32,15 @@ def enqueue(message, request):
         return
     if SupportRequest.objects.filter(source=message).exists():
         return
-    today = SupportRequest.objects.filter(created_at__date=timezone.localdate(), admitted=True)
-    reason = 'daily_limit' if today.count() >= settings.BOLD_SUPPORT_DAILY_LIMIT else ''
-    if not reason and today.filter(source__author_id=message.author_id).count() >= settings.BOLD_SUPPORT_USER_DAILY_LIMIT:
+    from boldApp.asistente.models import InferenceGate
+    InferenceGate.objects.select_for_update().get(pk=1)
+    from boldApp.asistente.quotas import daily_window
+    start,end=daily_window()
+    today = SupportRequest.objects.filter(created_at__gte=start,created_at__lt=end, admitted=True)
+    from boldApp.asistente.models import InferenceAttempt
+    operational=InferenceAttempt.objects.filter(created_at__gte=start,created_at__lt=end)
+    reason = 'daily_limit' if today.count()+operational.count() >= settings.BOLD_SUPPORT_DAILY_LIMIT else ''
+    if not reason and today.filter(source__author_id=message.author_id).count()+operational.filter(request__account__employee_id=message.author_id).count() >= settings.BOLD_SUPPORT_USER_DAILY_LIMIT:
         reason = 'user_daily_limit'
     session = request.auth if isinstance(request.auth, AuthSession) else None
     SupportRequest.objects.create(source=message, source_version=message.version, session=session,
@@ -116,7 +122,7 @@ def publish(pk, body, *, reason='', context_digest=None):
     return True
 
 
-def process(pk):
+def _process(pk):
     if not SupportRequest.objects.filter(pk=pk, state='pending').update(
             state='processing', started_at=timezone.now(), model=settings.BOLD_SUPPORT_MODEL):
         return False
@@ -139,6 +145,17 @@ def process(pk):
     return publish(pk, body, context_digest=context_digest)
 
 
+def process(pk):
+    from boldApp.asistente import gate
+    owner=gate.acquire()
+    if not owner:
+        return False
+    try:
+        return _process(pk)
+    finally:
+        gate.release(owner)
+
+
 def drain(limit=10):
     if not settings.BOLD_SUPPORT_ENABLED:
         return 0
@@ -146,4 +163,5 @@ def drain(limit=10):
     SupportRequest.objects.filter(state='processing', started_at__lt=timezone.now()-timedelta(minutes=3)).update(
         state='failed', reason='interrupted', finished_at=timezone.now())
     pending = list(SupportRequest.objects.filter(state='pending').order_by('created_at').values_list('pk', flat=True)[:limit])
-    return sum(process(pk) for pk in pending)
+    from boldApp.asistente.service import drain as drain_assistant
+    return sum(process(pk) for pk in pending)+drain_assistant()

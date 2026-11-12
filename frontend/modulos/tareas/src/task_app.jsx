@@ -1,4 +1,5 @@
 import ProjectOverflow from "./project_overflow.jsx";
+import AssistantHost,{AssistantLauncher} from '../../asistente/assistant_host.jsx';
 import InboxModule from "./inbox_module.jsx";
 import {readInboxFlags} from "./inbox_data.js";
 import {TaskMotion, SectionCollapse} from "./task_motion.jsx";
@@ -1740,6 +1741,7 @@ export function TaskDetailPanel({ handle_add_comment, handle_add_quick_subtask, 
             <div className="detail_top_eyebrow_row">
                 {parent_task ? <button type="button" className="task_parent_link" aria-label={`Volver a tarea principal: ${parent_task.title}`} onClick={() => taskActions.openTask(parent_task.id)} title={parent_task.title}>{render_icon(chevron_left_icon, 15)}<span>Tarea principal: {parent_task.title}</span></button> : <span className="detail_eyebrow_text">Detalle de tarea</span>}
                 <div className="task_detail_actions">
+                    <AssistantLauncher context={{task_id:selected_task.id}} label="Asistente"/>
                     <button
                         type="button"
                         className="detail_action_btn"
@@ -2484,6 +2486,7 @@ export function render_tasks_module(props) {
         <TeamSharingContext.Provider value={props.task_scope === "mine" ? props.team_sharing : null}>
         <section className={`tasks_module bold_tasks${props.task_scope === "project" ? " project_tasks_workspace" : ""}`}>
             <h1 className="task_page_title_sr">{props.task_scope === "mine" ? "Mis tareas" : selected_project.label}</h1>
+            {props.task_scope==='project'&&<AssistantLauncher context={{project_id:selected_project.id}} label="Asistente del proyecto"/>}
 
 
             <div className="task_tabs_row">
@@ -6569,7 +6572,7 @@ sidebarProps={{ handle_module_change, navigationSlots: { tasks: { id: "tasks_wor
                         {real && !refreshing_data && <button type="button" className="secondary_button" onClick={() => {set_api_error("");set_selected_task_id(slack_task_id);refresh.current(["all"]).catch(error => set_api_error(error.message));}}>Reintentar</button>}
                     </TaskDrawer>
                 )}
-        </AppShell></ProjectPreviewContext.Provider></TaskActionsContext.Provider>
+        <AssistantHost/></AppShell></ProjectPreviewContext.Provider></TaskActionsContext.Provider>
     );
 }
 

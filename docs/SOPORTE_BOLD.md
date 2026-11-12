@@ -1,5 +1,7 @@
 # Soporte BOLD en Slack
 
+El piloto operativo privado se configura por separado. Consulte [Asistente operativo](ASISTENTE_OPERATIVO.md) para las dos aprobaciones, acciones autorizadas y laboratorio. Las secciones siguientes describen el soporte de lectura conservado fuera de ese piloto.
+
 El servicio responde a mensajes nuevos dirigidos a **soportebold**, sin distinguir mayúsculas. Al escribir `@soporte` aparece en las sugerencias como **Asistente IA**. El selector inserta `@soportebold@bold.gt` con el formato de referencias existente; el mensaje publicado muestra `@soportebold`. También reconoce el alias corto `@soportebold` y la forma anterior `@soporte bold`.
 
 Las menciones dentro de código o enlaces no lo activan. Responde como **soportebold · Asistente IA** en el hilo original. No procesa mensajes directos, menciones añadidas al editar ni menciones históricas.

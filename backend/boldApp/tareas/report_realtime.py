@@ -21,6 +21,8 @@ def report_assignment_allowed(assignment_id,session_id):
     from boldApp.autenticacion.models import AuthSession
     from boldApp.core.authorization import resolve_access,apply_session_assurance
     assignment=PositionAssignment.objects.select_related('employee__user_account','position__unit').filter(pk=assignment_id).first()
+    from .report_pilot import reports_enabled
+    if not reports_enabled(assignment):return False
     permission=Permission.objects.filter(code='reports.analytics.run',is_active=True).first()
     if not assignment or not permission:return False
     session=AuthSession.objects.filter(pk=session_id,user_account__employee_id=assignment.employee_id).first()

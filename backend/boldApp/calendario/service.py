@@ -20,7 +20,7 @@ def configured():
     return common()
 
 
-def google_request(user, method, path, *, params=None, body=None, base=None):
+def google_request(user, method, path, *, params=None, body=None, base=None, extra_headers=None):
     from boldApp.workspace.google_config import public_connection
     from boldApp.workspace.service import google, Reconnect, GoogleUnavailable
     service = "people" if base == "https://people.googleapis.com" else "tasks" if base == "https://tasks.googleapis.com" else "calendar"
@@ -30,7 +30,8 @@ def google_request(user, method, path, *, params=None, body=None, base=None):
         raise CalendarReconnect("Conecta tu cuenta y autoriza " + grant + " en Conectores.")
     resource = path.removeprefix("/v1") if service == "people" else path.removeprefix("/tasks/v1") if service == "tasks" else path
     try:
-        return google(user, method, resource, api=service, params=params, body=body)
+        options={'extra_headers':extra_headers} if extra_headers else {}
+        return google(user, method, resource, api=service, params=params, body=body, **options)
     except NotFound as error:
         raise ValidationError("El evento ya no existe en Google Calendar.") from error
     except Reconnect as error:

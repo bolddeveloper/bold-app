@@ -324,6 +324,7 @@ export function CoreProvider({ children, mockIdentity, loginTitle = "Bold" }) {
             },
             onSlack: envelope => {if (mounted && !getCoreState().securityUncertain) window.dispatchEvent(new CustomEvent("bold:slack-event", {detail:envelope}));},
             onReports: envelope => {if(mounted&&!getCoreState().securityUncertain)window.dispatchEvent(new CustomEvent('bold:reports-changed',{detail:envelope.payload}));},
+            onAssistant: envelope => {if(mounted&&!getCoreState().securityUncertain)window.dispatchEvent(new CustomEvent('bold:assistant-changed',{detail:envelope}));},
             onControl: envelope => {
                 if (!mounted) return;
                 updateCore({presence: Array.isArray(envelope.payload?.presence?.rows) ? envelope.payload.presence : null});

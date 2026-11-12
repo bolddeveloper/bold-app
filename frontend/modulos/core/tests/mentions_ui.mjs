@@ -48,6 +48,10 @@ try{
     await waitFor(()=>document.querySelector('[role="dialog"]')?.textContent.includes('Solo las personas con acceso a la página'));
     input('Persona');await settle();assert.equal(pageCalls,0);submit();await waitFor(()=>document.querySelector('.slack_task_results button'));
     assert.deepEqual(pageTarget,{channel:'00000000-0000-4000-8000-000000000001',page:pageId});assert.equal(calls,channelCalls);
+    root.render(React.createElement(Picker,{key:'assistant-it',assistantAssignment:{assistant_enabled:true},channelId:'00000000-0000-4000-8000-000000000001',onClose:()=>{},onDenied:()=>denied++,onSelect:person=>selected.push(person)}));
+    await waitFor(()=>document.querySelector('.slack_task_results button')?.textContent.includes('privado'));
+    assert.match(document.querySelector('[role="dialog"]').textContent,/no publica la petición/);
+    document.querySelector('.slack_task_results button').click();assert.equal(selected.at(-1).is_bot,true);
     root.render(React.createElement('p',null,React.createElement(Text,{text:'Hola @person@bold.gt https://example.com',mentions:[person]})));await waitFor(()=>document.querySelector('.messaging_mention'));
     assert.equal(document.querySelector('script'),null);assert.equal(document.querySelector('.messaging_mention').textContent,'@'+person.name);
     assert.equal(document.querySelector('a').rel,'noopener noreferrer');assert.equal(denied,0);

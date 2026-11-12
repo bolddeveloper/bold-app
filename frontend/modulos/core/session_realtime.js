@@ -11,7 +11,7 @@ export function createNotificationRealtime(dependencies = {}) {
     let channel = null, reportsWatched = false;
     function watchReports(enabled){reportsWatched=Boolean(enabled);channel?.send?.({type:'reports.watch',enabled:reportsWatched});}
     function disconnect() { channel?.stop(); channel = null; }
-    function connect({ assignmentId, getTicket, onNotification = () => {}, onMessaging = () => {}, onSlack = () => {}, onReports = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, onState = () => {}, onTerminal = () => {}, baseUrl }) {
+    function connect({ assignmentId, getTicket, onNotification = () => {}, onMessaging = () => {}, onSlack = () => {}, onReports = () => {}, onAssistant = () => {}, onConnected = () => {}, onReconnect = () => {}, onError = () => {}, onControl = () => {}, onState = () => {}, onTerminal = () => {}, baseUrl }) {
         disconnect();
         if (!assignmentId || !getTicket) throw new Error("Falta el contexto para recibir notificaciones.");
         channel = createRealtimeChannel({ ...dependencies,
@@ -27,6 +27,7 @@ export function createNotificationRealtime(dependencies = {}) {
                     else if (event.event_type?.startsWith("messaging.")) onMessaging(event);
                     else if (event.event_type === "slack.changed") onSlack(event);
                     else if (event.event_type === 'reports.changed') onReports(event);
+                    else if (event.event_type === 'assistant.changed') onAssistant(event);
                     else if (["control.ready", "permissions.revision", "assignment.changed"].includes(event.event_type)) onControl(event);
                 } catch { /* Invalid envelope */ }
             },

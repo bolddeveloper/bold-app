@@ -1,0 +1,11 @@
+{
+  "type":"object","additionalProperties":false,
+  "required":["summary","modules","queries","steps","answer","clarification"],
+  "properties":{
+    "summary":{"type":"string"},
+    "modules":{"type":"array","items":{"type":"string","enum":["tasks","projects","execution","calendars","reports"]}},
+    "queries":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["capability","arguments_json"],"properties":{"capability":{"type":"string"},"arguments_json":{"type":"string"}}}},
+    "steps":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","capability","target","arguments_json","depends_on"],"properties":{"id":{"type":"string"},"capability":{"type":"string"},"target":{"type":"string"},"arguments_json":{"type":"string"},"depends_on":{"type":"array","items":{"type":"string"}}}}},
+    "answer":{"type":"string"},"clarification":{"type":"string"}
+  }
+}

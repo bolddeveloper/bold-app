@@ -14,6 +14,7 @@ import {phaseLabels} from './execution_data.js';
 import ReportMeetingLinks from './report_meeting_links.jsx';
 import {preservePreparation,recoverPreparation} from './work_preparations.js';
 import './reports.css';
+import {AssistantLauncher} from '../../asistente/assistant_host.jsx';
 
 function MultiFilter({label,options,value=[],onChange,disabled=false}){
     const [search,setSearch]=useState('');
@@ -97,6 +98,7 @@ function ReportsWorkspace({onOpenTask,onOpenProject}){
     },[Boolean(meta),core.reports?.watch]);
     const applied=result?.definition,changed=applied&&reportKey(definition)!==reportKey(applied);
     return <section className="reports_module reports_app" aria-label="Informes de trabajo">
+        <div className="report_toolbar"><AssistantLauncher label="Asistente privado"/><AssistantLauncher label="Laboratorio de IA" tab="lab"/><AssistantLauncher label="Actividad del asistente" tab="activity"/></div>
         <header className="report_workspace_header"><div><h1>Informes</h1><p>Tareas, etapas, proyectos y reuniones bajo tu alcance.</p>{editing&&<label>Nombre del informe<input value={name} maxLength={120} placeholder="Por ejemplo: Entregas de este mes" onChange={event=>setName(event.target.value)}/></label>}</div><button type="button" className="report_primary" disabled={!meta||saving} onClick={()=>create()}><Plus size={17}/>Crear informe</button></header>
         <nav className="report_collections" aria-label="Colecciones de informes">{[['mine','Mis informes'],['shared','Compartidos conmigo'],...(meta?.team_units.length?[['team','Equipo']]:[])].map(([id,label])=><button type="button" key={id} disabled={!meta} aria-current={collection===id?'page':undefined} onClick={()=>changeCollection(id)}>{label}</button>)}</nav>
         {error&&<div role="alert" className="report_error"><p>{error}</p><button type="button" onClick={()=>meta?(lastQuery.current?execute(lastQuery.current):changeCollection(collection)):window.location.reload()}><RefreshCw size={16}/>Reintentar consulta</button></div>}

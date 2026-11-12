@@ -46,6 +46,7 @@ import {readingScope} from '../core/reading_attention.js';
 import MentionPicker from "./mention_picker.jsx";
 import MentionText from "./mention_text.jsx";
 import {insertMention,chatMentionAtCaret} from "./mention_model.js";
+import {routeMention,privateMentionText,openAssistant} from '../asistente/model.js';
 import MentionSuggestions from "./chat_mention_suggestions.jsx";
 
 import ServerEditor from './server_editor.jsx';
@@ -450,6 +451,7 @@ export default function ChannelModule() {
         if(threadReadOnly)return;
         if (busy.current || recording || composerRecovery.blocked || edit?.conflict || edit?.can_edit===false || !(draft.trim() || draftTask || (!edit && attachments.length) || edit?.media) || !selected?.can_send) return;
         if(startingThread)return;
+        if(!edit&&core.activeAssignment?.assistant_enabled){const text=privateMentionText(draft);if(text!==null){if(attachments.length){setError('El asistente admite texto y dictado. Retira los adjuntos antes de abrir la petición privada.');return;}openAssistant({text,context:{channel_id:selected.id}});changeComposer('');return;}}
         if(!edit && parent && !parent.thread_started_at && threadName.trim() && !await startNamedThread())return;
         if (!edit && attachments.length) {await sendAttachments();return;}
         const snapshot = state.current, currentEdit = edit;
@@ -605,6 +607,7 @@ export default function ChannelModule() {
     function chooseMention(person,target){
         const current=mentionLive.current;
         if(!mounted.current || current.key!==target.key || current.blocked){setMentionPicker(null);setInlineMention(null);return;}
+        if(!edit&&routeMention(person,core.activeAssignment,current.body.slice(0,target.start)+current.body.slice(target.end),{channel_id:selected.id})){changeComposer('');setMentionPicker(null);setInlineMention(null);return;}
         try{const value=insertMention(current.body,person,target.start,target.end),context=current.key;
             changeComposer(value.text);setMentionPicker(null);setInlineMention(null);
             window.requestAnimationFrame(()=>{if(mentionLive.current?.key===context){field.current?.focus();field.current?.setSelectionRange(value.caret,value.caret);}});
@@ -719,8 +722,8 @@ export default function ChannelModule() {
         {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved} onDeleted={serverDeleted}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}
         {taskPicker && selected && <ChannelTaskPicker channelId={selected.id} onClose={()=>setTaskPicker(false)} onSelect={task=>{setTaskDrafts(current=>({...current,[key]:task}));setTaskPicker(false);field.current?.focus();}}/>}
-        {inlineOpen && selected && <MentionSuggestions key={`${mentionKey}:${inlineMention.start}`} channelId={selected.id} anchorRef={field} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={report} onSelect={person=>chooseMention(person,inlineMention)}/>}
-        {mentionPicker && selected && <MentionPicker key={`${identity}:${key}`} channelId={selected.id} onClose={()=>setMentionPicker(null)} onDenied={report} onSelect={person=>chooseMention(person,mentionPicker)}/>}
+        {inlineOpen && selected && <MentionSuggestions assistantAssignment={edit?null:core.activeAssignment} key={`${mentionKey}:${inlineMention.start}`} channelId={selected.id} anchorRef={field} panelRef={inlinePanel} listId={inlineListId} query={inlineMention.query} onActiveChange={setInlineActive} onClose={()=>setInlineMention(null)} onDenied={report} onSelect={person=>chooseMention(person,inlineMention)}/>}
+        {mentionPicker && selected && <MentionPicker assistantAssignment={edit?null:core.activeAssignment} key={`${identity}:${key}`} channelId={selected.id} onClose={()=>setMentionPicker(null)} onDenied={report} onSelect={person=>chooseMention(person,mentionPicker)}/>}
 
         {imageEditor && <Suspense fallback={<div role="status" className="slack_editor_scrim">Abriendo editor…</div>}><ImageEditor file={imageEditor.file} onCancel={()=>setImageEditor(null)} onSave={file=>{if(key!==state.current.key || !mounted.current)return;try{setAttachments(key,replaceQueuedImage(attachments,imageEditor.id,file));setImageEditor(null);field.current?.focus();}catch(err){setError(err.message);}}}/></Suspense>}
         {phoneTarget === key && selected?.can_send && <Suspense fallback={<p role="status">Abriendo transferencia…</p>}><PhoneTransfer key={key} target={{channel_id:selected.id, parent_id:parent?.id || null,max_images:10-images.length}} onFiles={addImages} onClose={()=>setPhoneTarget(null)}/></Suspense>}

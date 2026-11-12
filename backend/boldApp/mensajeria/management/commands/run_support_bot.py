@@ -34,6 +34,11 @@ class Command(BaseCommand):
             raise CommandError('El intervalo mínimo es un segundo.')
         if settings.BOLD_SUPPORT_DAILY_LIMIT < 1 or settings.BOLD_SUPPORT_USER_DAILY_LIMIT < 1:
             raise CommandError('Los límites diarios de soporte deben ser positivos.')
+        if settings.BOLD_ASSISTANT_ENABLED:
+            ids=settings.BOLD_ASSISTANT_PILOT_UNIT_IDS
+            try:valid=bool(ids) and OrganizationalUnit.objects.filter(pk__in=[UUID(value) for value in ids]).count()==len(set(ids))
+            except (ValueError,TypeError):valid=False
+            if not valid:raise CommandError('Configura departamentos válidos explícitos en BOLD_ASSISTANT_PILOT_UNIT_IDS antes de habilitar el piloto.')
         if not settings.DEBUG and (
             settings.CHANNEL_LAYERS['default']['BACKEND'] != 'channels_redis.core.RedisChannelLayer'
             or settings.CACHES['support']['BACKEND'] != 'django.core.cache.backends.redis.RedisCache'
@@ -62,7 +67,7 @@ class Command(BaseCommand):
             self.stdout.write('Configuración y sesión de Codex verificadas. Sin inferencias ni cambios de datos.')
             return
         configure_identity(unit)
-        self.stdout.write('Soporte BOLD activo. Solo lecturas y menciones explícitas; consumo en la cuenta de Codex configurada.')
+        self.stdout.write('Soporte BOLD activo; asistente privado con dos aprobaciones en el piloto configurado.' if settings.BOLD_ASSISTANT_ENABLED else 'Soporte BOLD activo. Solo lecturas y menciones explícitas; consumo en la cuenta de Codex configurada.')
         stopping = Event()
         previous_term = signal.signal(signal.SIGTERM, lambda *_: stopping.set())
         try:
@@ -72,7 +77,7 @@ class Command(BaseCommand):
                     caches['support'].set('worker', timezone.now().timestamp(), 150)
                     completed = drain(limit=1)
                     if completed:
-                        self.stdout.write(f'Respuestas publicadas: {completed}')
+                        self.stdout.write(f'Solicitudes procesadas: {completed}')
                 except Exception:
                     logger.exception('Falló el ciclo de soporte; las inferencias iniciadas no se repiten.')
                     if options['once']:

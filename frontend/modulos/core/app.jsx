@@ -54,7 +54,7 @@ function ApplicationWorkspace() {
     const canManagePermissions = canUseManagementModule("permissions", core.account, core.activeUnit, core.activeAssignment);
     const navigation = [
         {id: "profile", label: "Perfil", icon: "profile", group: "account"},
-        ...baseNavigation,
+        ...baseNavigation.filter(item=>item.id!=='reports'||core.activeAssignment?.reports_enabled===true),
         ...(canChat ? [{id: "messaging", label: "Chat", icon: "messaging", group: "work", unread: hasChatAttention(core.messaging?.unread)}] : []),
         ...(canChat ? [{id: "slack", label: "Slack", icon: "slack", group: "work", unread:hasSlackAttention(core.slack?.unread,core.messaging?.unread)}] : []),
         ...(canSheets ? [{id: "sheets", label: "Sheets", icon: "sheets", group: "work"}] : []),

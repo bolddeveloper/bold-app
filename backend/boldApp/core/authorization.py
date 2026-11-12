@@ -527,10 +527,13 @@ def resolve_access(
                 context.policy_version,
             )
 
+    if permission.code in {'assistant.request.use','assistant.request.execute'} and own_unit.id == target_unit.id:
+        return _decision(True,'Asistente personal; cada acción conserva sus permisos de dominio.',
+            'personal_assistant_default','assignment',policy_version=context.policy_version)
     if permission.code in {'reports.analytics.run','reports.report.manage'} and own_unit.id == target_unit.id:
         return _decision(True,'Informes personales sobre datos autorizados.',
             'personal_reporting_default','assignment',policy_version=context.policy_version)
-    if permission.code == 'reports.team.read':
+    if permission.code in {'reports.team.read','assistant.usage.read'}:
         from boldApp.tareas.report_access import structural_team_units
         if not hasattr(context,'report_team_units'):
             context.report_team_units=structural_team_units(assignment)

@@ -362,3 +362,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def assignment_changed(self, event):
         await self.send_control("assignment.changed")
         self.security_wake.set()
+
+    async def assistant_changed(self, event):
+        if self.closing or not await notification_identity_is_active(self.session_id,self.assignment_id):
+            return
+        await self.send_json({'event_version':2,'event_type':'assistant.changed','request_id':event['request_id']})

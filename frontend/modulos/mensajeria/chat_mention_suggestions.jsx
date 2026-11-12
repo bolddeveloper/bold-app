@@ -5,8 +5,9 @@ import {mentionPeople} from '../tareas/src/mentions.js';
 import {messagingApi} from './messaging_api.js';
 import {channelApi} from './channel_api.js';
 import './mention_suggestions.css';
+import {assistantMentionPeople} from '../asistente/model.js';
 
-export default function ChatMentionSuggestions({conversationId,channelId,anchorRef,panelRef,listId,query,onActiveChange,onSelect,onClose,onDenied}){
+export default function ChatMentionSuggestions({assistantAssignment,conversationId,channelId,anchorRef,panelRef,listId,query,onActiveChange,onSelect,onClose,onDenied}){
     const [people,setPeople]=useState([]),[busy,setBusy]=useState(true),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[index,setIndex]=useState(0);
     const [refine,setRefine]=useState(false),complete=useRef(null);
     const scope=channelId ? `channel:${channelId}`:`chat:${conversationId}`,searchQuery=channelId ? query.trim():'';
@@ -30,7 +31,7 @@ export default function ChatMentionSuggestions({conversationId,channelId,anchorR
         },searchQuery ? 180:0);
         return()=>{clearTimeout(timer);controller.abort();};
     },[scope,searchQuery,attempt]);
-    const rows=mentionPeople(people,query),selected=rows.length ? index%rows.length:0,activeId=rows.length ? `${listId}-${selected}`:undefined;
+    const rows=mentionPeople(assistantMentionPeople(people,assistantAssignment),query),selected=rows.length ? index%rows.length:0,activeId=rows.length ? `${listId}-${selected}`:undefined;
     useEffect(()=>setIndex(0),[query]);
     useLayoutEffect(()=>{onActiveChange(activeId);panelRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({block:'nearest'});return()=>onActiveChange(undefined);},[activeId,onActiveChange,panelRef]);
     useEffect(()=>{
