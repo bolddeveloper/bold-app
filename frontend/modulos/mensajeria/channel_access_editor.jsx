@@ -6,8 +6,6 @@ import ChannelAccessFields from "./channel_access_fields.jsx";
 import {ChannelPicker} from "./channel_picker.jsx";
 import {confirmBold} from "../core/shared/bold_dialog.js";
 
-export {ChannelAccessFields};
-
 export default function ChannelAccessEditor({channel, onClose, onSaved}) {
     const [catalog,setCatalog]=useState([]),[next,setNext]=useState(null),[current,setCurrent]=useState(null);
     const [visibility,setVisibility]=useState("public"),[members,setMembers]=useState([]),[error,setError]=useState("");
@@ -29,7 +27,7 @@ export default function ChannelAccessEditor({channel, onClose, onSaved}) {
     async function save(event){event.preventDefault();if(writing.current || inviting)return;writing.current=true;setSaving(true);setError("");try{const result=await channelApi.setAccess(current.id,{visibility,members:members.map(({employee_id,access})=>({employee_id,access})),version:current.version},{signal:request.current.signal});if(active.current)onSaved(result);}catch(err){if(active.current && err.name!=="AbortError")setError(channelError(err));}finally{writing.current=false;if(active.current)setSaving(false);}}
     return <div className="slack_editor_scrim"><section role="dialog" aria-modal="true" aria-labelledby="slack_access_title" className="slack_editor slack_access_editor">
         <header><h2 id="slack_access_title"><LockKeyhole size={20} aria-hidden="true"/> {current ? `Acceso · #${current.name}` : "Administrar acceso"}</h2><button type="button" disabled={saving || inviting} onClick={onClose} aria-label="Cerrar permisos del canal"><X size={20} aria-hidden="true"/></button></header>
-        <p>Administrar invitaciones no concede lectura de mensajes ni archivos. Los permisos de los responsables se configuran en Permisos → Slack.</p>
+        <p>Quien creó el canal puede cambiar su visibilidad e invitaciones. Para leer el contenido necesita acceso al canal.</p>
         {busy && <p role="status">Cargando configuración…</p>}
         {!channel && <ChannelPicker rows={catalog} value={current} onChange={choose} disabled={busy || saving || inviting} next={next} onMore={more} loading={busy}/>}
         {!current && !busy && !catalog.length && <p>No tienes canales cuyo acceso puedas administrar.</p>}

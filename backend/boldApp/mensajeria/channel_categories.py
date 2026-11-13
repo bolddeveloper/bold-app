@@ -189,7 +189,7 @@ class ChannelCategoryMoveView(SlackView):
         channel = self.channel(channel_id, lock=True)
         if channel.unit_id != getattr(unit, "pk", None) or channel.server_id != getattr(server, "pk", None):
             raise NotFound("El canal no pertenece a este servidor.")
-        self.policy().require("slack.channel.manage", channel.unit, channel.pk)
+        self.policy().require_configuration(channel)
         form = ChannelCategoryInput(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data

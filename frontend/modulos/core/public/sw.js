@@ -67,20 +67,42 @@ self.addEventListener("activate", event => {
     })());
 });
 
+function matches_asset(response, extension) {
+    if (!response?.ok) return false;
+    const mime = response.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
+    return extension === "css" ? mime === "text/css" : /^(application|text)\/(java|ecma)script$/.test(mime || "");
+}
+
 self.addEventListener("fetch", event => {
     const request = event.request;
     if (!should_cache_request(request)) return;
     const navigation = request.mode === "navigate";
+    const asset = !navigation && new URL(request.url).pathname.match(/^\/assets\/[^/]+-[\w-]{8,}\.(js|css)$/)?.[1];
     event.respondWith((async () => {
         const cache = await caches.open(cache_name).catch(() => null);
+        if (asset) {
+            // A hashed URL identifies the same bundle even after a deployment removes it.
+            const cached = await cache?.match(request).catch(() => null);
+            if (matches_asset(cached, asset)) return cached;
+            const releases = await caches.keys().catch(() => []);
+            for (const release of releases.reverse()) {
+                if (release === cache_name || !/^(bold_tasks_shell_|bold_app_shell_)/.test(release)) continue;
+                const previous = await caches.match(request, {cacheName: release}).catch(() => null);
+                if (matches_asset(previous, asset)) return previous;
+            }
+        }
         try {
             const response = await fetch(navigation ? new Request(request, {cache: "no-cache"}) : request);
+            if (asset && response.ok && !matches_asset(response, asset)) {
+                return new Response("Archivo de la aplicación no disponible", {status: 404, headers: {"Cache-Control": "no-store"}});
+            }
             if (cache && response.ok && response.type !== "opaque") {
                 const write = cache.put(navigation ? "/index.html" : request, response.clone()).catch(() => {});
                 event.waitUntil(write);
             }
             return response;
         } catch {
+            if (asset) return new Response("Sin conexión", {status: 504, statusText: "Offline"});
             return await cache?.match(navigation ? "/index.html" : request)
                 || (!navigation && await caches.match(request))
                 || new Response("Sin conexión", {status: 504, statusText: "Offline"});

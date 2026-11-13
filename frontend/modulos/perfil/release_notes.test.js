@@ -160,7 +160,7 @@ test("Informes y asistente solo ofrecen sus notas a las asignaciones habilitadas
     for(const note of reportsReleaseNotes){assert.equal(note.date,'2026-11-11');assert.doesNotMatch(JSON.stringify(note),/pendiente de autorización|Nota preparada localmente/);}
     assert.match(reportsReleaseNotes[0].sections.flatMap(section=>section.items).join(' '),/no importa el calendario personal de Google/);
     const pilot=getReleaseNotes({assistant_enabled:true,reports_enabled:true});
-    assert.deepEqual(pilot.slice(0,4),assistantReleaseNotes);
+    assert.deepEqual(pilot.filter(note=>assistantReleaseNotes.includes(note)),assistantReleaseNotes);
     assert.ok(pilot.includes(reportsReleaseNotes[0]));
     for(const assignment of [undefined,{}, {unit_name:'Equipo de IT'}, {account_is_superuser:true}, {assistant_enabled:false,reports_enabled:false}]){
         const notes=getReleaseNotes(assignment);

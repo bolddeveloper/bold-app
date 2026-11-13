@@ -93,6 +93,7 @@ test("channel errors describe the actual fields without borrowing private-chat m
     assert.match(channelError({status:404}),/canal o hilo/);
     assert.match(channelError({status:0}),/sin duplicarlo/);
     assert.equal(channelError({status:400,fields:{members:["Falta una persona invitada."]}}),"Falta una persona invitada.");
+    assert.equal(channelError({status:400,fields:{access:{visibility:["Elige una visibilidad válida."]}}}),"Elige una visibilidad válida.");
 });
 
 test("channel access management has its own API and invalidates Core unread state on a security revision", async()=>{

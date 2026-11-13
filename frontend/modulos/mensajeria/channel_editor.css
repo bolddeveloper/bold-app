@@ -20,8 +20,8 @@
 :root .slack_module .slack_channel_appearance > summary::-webkit-details-marker {display:none;}
 :root .slack_module .slack_channel_appearance > summary > span {flex:1;font-weight:600;}
 :root .slack_module .slack_channel_appearance > summary > small {font-size:10px;color:var(--bold_muted);}
-:root .slack_module .slack_channel_appearance > summary > svg {transition:transform 160ms ease;}
-:root .slack_module .slack_channel_appearance[open] > summary > svg {transform:rotate(180deg);}
+:root .slack_module .slack_channel_appearance > summary > svg:last-child {transition:transform 160ms ease;}
+:root .slack_module .slack_channel_appearance[open] > summary > svg:last-child {transform:rotate(180deg);}
 :root .slack_module .slack_channel_appearance > div {display:grid;gap:10px;padding:0 10px 10px;}
 :root .slack_module .slack_channel_editor textarea {min-height:58px;max-height:130px;resize:vertical;}
 :root .slack_module .slack_channel_editor .slack_color_field {display:flex;flex-direction:column;align-items:stretch;gap:7px;}
@@ -51,4 +51,4 @@
     :root .slack_module .slack_channel_editor .slack_color_options {grid-template-columns:repeat(4,minmax(0,1fr));}
     :root .slack_module .slack_channel_editor .slack_color_option {min-height:44px;}
 }
-@media(prefers-reduced-motion:reduce) {:root .slack_module .slack_channel_appearance > summary > svg {transition:none;}}
+@media(prefers-reduced-motion:reduce) {:root .slack_module .slack_channel_appearance > summary > svg:last-child {transition:none;}}

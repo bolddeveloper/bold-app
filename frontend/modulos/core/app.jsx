@@ -15,7 +15,7 @@ import { team_members } from "../tareas/src/data/task_data.js";
 import { canUseManagementModule } from "./core_models.js";
 import {hasChatAttention,hasSlackAttention} from './reading_attention.js';
 
-import {lazy, Suspense, useEffect, useState} from "react";
+import {Component, lazy, Suspense, useEffect, useState} from "react";
 import {takePhoneEntry, watchPhoneEntry} from "../mensajeria/phone_transfer_api.js";
 const initialPhoneEntry = takePhoneEntry();
 const PhoneUploadPage = lazy(() => import("../mensajeria/phone_upload_page.jsx"));
@@ -23,6 +23,26 @@ import {sheetsCache} from "../hojas/sheets_cache.js";
 const MessagingModule = lazy(() => import("../mensajeria/messaging_module.jsx"));
 const ChannelModule = lazy(() => import("../mensajeria/channel_module.jsx"));
 const SheetsModule = lazy(() => import("../hojas/sheets_module.jsx"));
+
+class SlackErrorBoundary extends Component {
+    state = { failed: false };
+
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+
+    componentDidCatch(error) {
+        console.error("Error al abrir Slack.", error);
+    }
+
+    render() {
+        if (!this.state.failed) return this.props.children;
+        return <div className="app_error_fallback">
+            <strong role="alert">No se pudo abrir Slack.</strong>
+            <button type="button" onClick={() => window.location.reload()}>Recargar BOLD</button>
+        </div>;
+    }
+}
 
 const baseNavigation = [
     { id: "home", label: "Inicio", icon: "home", default: true, group: "work" },
@@ -65,7 +85,7 @@ function ApplicationWorkspace() {
         welcomeConnection: <GoogleConnection/>,
         profile: <ProfileModule/>,
         ...(canChat ? {messaging: <Suspense fallback={<p role="status">Cargando chat…</p>}><MessagingModule key={permissionContext}/></Suspense>} : {}),
-        ...(canChat ? {slack: <Suspense fallback={<p role="status">Cargando canales…</p>}><ChannelModule key={permissionContext}/></Suspense>} : {}),
+        ...(canChat ? {slack: <SlackErrorBoundary key={permissionContext}><Suspense fallback={<p role="status">Cargando canales…</p>}><ChannelModule/></Suspense></SlackErrorBoundary>} : {}),
         calendar: <CalendarModule key="calendar" />,
         docs: <WorkspaceModule key="docs" mode="docs" />,
         drive: <WorkspaceModule key="drive" mode="drive" />,

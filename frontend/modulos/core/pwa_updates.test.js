@@ -123,3 +123,31 @@ test("SW activation requires a message, claims clients and bounds only BOLD cach
     listeners.activate(event); await pending; assert.equal(claimed, 1);
     assert.deepEqual(deleted, ["bold_tasks_shell_v1"]);
 });
+
+test("SW serves the cached Slack bundle after a release and rejects HTML for missing hashed scripts", async () => {
+    const listeners = {};
+    let oldBundle = true, networkCalls = 0;
+    const javascript = () => new Response("export default {}", {headers: {"Content-Type": "text/javascript"}});
+    const cache = {match: async () => new Response("<html>Wrong cached response</html>", {headers: {"Content-Type": "text/html"}}), put: async () => assert.fail("HTML must never be cached as a script")};
+    const context = {URL, Request, Response,
+        self: {location: {origin: "https://bold.example"}, addEventListener: (name, fn) => {listeners[name] = fn;}},
+        caches: {open: async () => cache, keys: async () => ["bold_app_shell_v4_previous", "unrelated"],
+            match: async (_, {cacheName}) => {
+                assert.equal(cacheName, "bold_app_shell_v4_previous");
+                return oldBundle ? javascript() : undefined;
+            }},
+        fetch: async () => {networkCalls++;return new Response("<html>App shell</html>", {headers: {"Content-Type": "text/html"}});},
+    };
+    vm.runInNewContext(readFileSync(new URL("./public/sw.js", import.meta.url), "utf8"), context);
+    const request = new Request("https://bold.example/assets/channel_module-OldBuild.js");
+    Object.defineProperty(request, "destination", {value: "script"});
+    let result;
+    const event = {request, respondWith: promise => {result = promise;}, waitUntil: () => {}};
+    listeners.fetch(event);
+    assert.equal(await (await result).text(), "export default {}");
+    assert.equal(networkCalls, 0);
+    oldBundle = false;
+    listeners.fetch(event);
+    assert.equal((await result).status, 404);
+    assert.equal(networkCalls, 1);
+});

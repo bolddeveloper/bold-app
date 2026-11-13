@@ -36,6 +36,8 @@ def boundary_allows(assignment, permission, target_unit, resource_id, context):
     channel = channel_context(assignment, resource_id, context)
     if not channel or channel["deleted_at"] or target_unit.pk != (channel["unit_id"] or assignment.position.unit_id):
         return False
+    if permission.code == "slack.channel.access" and channel["creator__employee_id"] != assignment.employee_id:
+        return False
     if channel.get("server_id"):
         access = channel.get("server_access")
         if access not in ("read", "write"):
@@ -43,7 +45,7 @@ def boundary_allows(assignment, permission, target_unit, resource_id, context):
         if permission.code in {"slack.channel.manage", "slack.channel.access"}:
             return channel["server__creator__employee_id"] == assignment.employee_id
         return permission.code in {"slack.channel.read", "slack.page.read", "slack.template.read", "slack.page_comment.read", "slack.automation.read"} or access == "write"
-    # Management can be scoped to a department without inviting the manager.
+    # A creator can restore invitations without gaining implicit content access.
     if permission.code == "slack.channel.access":
         return True
     access = channel["access"]

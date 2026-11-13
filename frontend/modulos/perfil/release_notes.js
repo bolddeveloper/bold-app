@@ -626,6 +626,20 @@ export function getReleaseNotes(assignment) {
 }
 
 export const releaseNotes = [
+    {
+        id:"2026-11-13-slack-entry-recovery",date:"2026-11-13",category:"Correcciones",icon:"update",
+        title:"Slack recupera la vista y reúne los ajustes de canal",
+        summary:"Slack te lleva a un servidor con canales disponibles. Quien creó un canal puede ajustar su acceso desde la configuración.",
+        sections:[{title:"Abrir canales y recuperar la vista",items:[
+            "Busca servidores de otros departamentos en la barra de Slack. Ahí aparecen los canales públicos y los canales a los que te invitaron, según el acceso de tu asignación.",
+            "Pulsa Reintentar si falla la lista de servidores o canales. Si falla la vista de Slack, puedes volver a Inicio desde el menú o usar Recargar BOLD.",
+            "Si sigues usando una versión anterior durante una actualización, BOLD puede abrir los archivos de esa versión que conserva en el dispositivo.",
+        ]},{title:"Configurar quién ve un canal",items:[
+            "Si creaste un canal de texto, abre Configurar canal y despliega Visibilidad e invitaciones. Elige entre todos los empleados con Chat habilitado, el departamento del canal o solo personas invitadas.",
+            "Puedes dar a cada persona acceso para leer y participar, solo lectura o sin acceso. Guarda la visibilidad junto con el nombre, la descripción y el color.",
+            "Solo quien creó el canal puede cambiar su configuración. Los canales de un servidor privado usan las invitaciones de ese servidor.",
+        ]}],
+    },
     ...reportsReleaseNotes.slice(1),
     {
         id:"2026-11-07-mcp-persistent-renewal",date:"2026-11-07",category:"Mejoras",icon:"update",

@@ -10,13 +10,13 @@ from rest_framework.response import Response
 from boldApp.administrativo.services import record_system_event
 from boldApp.core.models import Employee
 from boldApp.core.signals import dispatch_authorization_invalidation
-from .channel_access_views import AccessMember, validate_access
+from .channel_access_views import validate_access
 from .channel_events import publish_channel
 from .channel_people import with_identity, person_data
 from .channel_views import SlackView, ChannelPages
 from .channel_search import channel_matches
 from .models import PrivateServer, PrivateServerMember, ChannelAccessEpoch
-from .serializers import StrictInputSerializer
+from .serializers import AccessMember, StrictInputSerializer
 from .views import Conflict
 
 

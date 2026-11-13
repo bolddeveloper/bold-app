@@ -95,7 +95,8 @@ export function channelError(error) {
     if (error?.status === 404) return "Este canal o hilo ya no está disponible para tu asignación activa.";
     if (error?.status === 429) return "Demasiadas acciones seguidas. Conservamos el texto; espera antes de reintentar.";
     const fields = error?.fields;
-    const detail = (Array.isArray(fields) ? fields:[fields?.detail,fields?.name,fields?.title,fields?.thread_title,fields?.description,fields?.unit_id,fields?.server_id,fields?.image,fields?.version,fields?.visibility,fields?.members,fields?.body,fields?.file,fields?.non_field_errors].flat()).find(value => typeof value === "string" && value.length <= 500);
+    const access = fields?.access;
+    const detail = (Array.isArray(fields) ? fields:[fields?.detail,fields?.name,fields?.title,fields?.thread_title,fields?.description,fields?.unit_id,fields?.server_id,fields?.image,fields?.version,fields?.visibility,fields?.members,access?.visibility,access?.members,access?.non_field_errors,fields?.body,fields?.file,fields?.non_field_errors].flat()).find(value => typeof value === "string" && value.length <= 500);
     if (detail) return detail;
     if (error?.status === 403) return "Tu asignación activa no permite esta acción en Slack.";
     if (error?.status === 409) return "El contenido cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a guardar.";

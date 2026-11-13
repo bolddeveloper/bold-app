@@ -21,8 +21,11 @@ globalThis.__channelsCore = core;
 globalThis.__channelsShell = {open_direct_chat:person => opens.push(person.employee_id),set_active_module:module => opens.push(module)};
 const channelId="00000000-0000-4000-8000-000000000001", departmentId="00000000-0000-4000-8000-000000000002";
 const department={id:departmentId,name:"IT",color:"#4760A8",can_create:true,can_edit_icon:true};
-let channel={id:channelId,name:"General",description:"Contexto del equipo",department,version:1,activity_version:2,can_manage:true,can_manage_access:true,can_send:true,archived_at:null,visibility:"public"};
-let accessMembers=[],accessReads=0,accessWrites=0,peopleQueries=[];
+const homeDepartment={id:"00000000-0000-4000-8000-000000000003",name:"Diseño"};
+core.activeAssignment.unitId=homeDepartment.id;
+let channel={id:channelId,name:"General",description:"Contexto del equipo",department,version:1,activity_version:2,can_manage:true,can_configure:true,can_manage_access:true,can_send:true,archived_at:null,visibility:"public"};
+let accessMembers=[],accessReads=0,accessWrites=0,peopleQueries=[],channelUpdates=[];
+const invitee={employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado",avatar_url:null,departments:[department]};
 let mentionQueries=[],mentionSignals=[],mentionDelay=null,mentionFailure=null,mentionRefine=false;
 const makeMessage=(id,body,parent=null,author="me") => ({id,body,parent_id:parent,channel_id:channelId,sequence:Number(id),version:1,author:{employee_id:author,name:author === "me" ? "Mi cuenta" : "Colega"},department:{name:author === "me" ? "IT" : "Marketing",color:"#9250A3"},created_at:new Date().toISOString(),editable_until:new Date(Date.now()+600000).toISOString(),can_edit:author === "me",reply_count:0});
 let rows=[makeMessage("1","Guía https://example.com <script>no ejecutar</script>",null,"peer"),makeMessage("2","Mi mensaje")];
@@ -38,7 +41,7 @@ const channelSnapshot=()=>({...channel,activity_version:rows.at(-1)?.sequence ||
 const confirmed=new Map();
 let privateServers=[],serverCreates=[],iconWrites=[],personalServerOrder=[];
 const categoryScopes=new Map(),categoryMoves=[],channelCategoryMoves=[],categoryCreations=[];let categoryCreateFails=false,categoryDeleteFails=false;const categoryEdits=[],categoryDeletes=[];
-let categoryReadFailure=null,channelReadFailure=null;
+let categoryReadFailure=null,channelReadFailure=null,departmentReadFailure=null,serverReadFailure=null;
 const categoryKey=scope=>scope.server ? 'server:'+scope.server:scope.unit;
 const categoryCatalog=scope=>({scope:categoryKey(scope),can_manage:true,results:(categoryScopes.get(categoryKey(scope)) || []).map(row=>({...row}))});
 const preferenceAttempts=[],preferenceConfirmed=new Map();let preferenceFails=false;
@@ -57,16 +60,22 @@ globalThis.__channelsApi={
     saveServerOrder:async order=>{personalServerOrder=[...order];return {slack_server_order:order};},
     serverIcon:async()=>({avatar_url:null,icon_version:0,can_edit_icon:true}),
     updateServerIcon:async(kind,id,values)=>{iconWrites.push({kind,id,values});return {avatar_url:null,icon_version:1,can_edit_icon:true};},
-    servers:async()=>({results:privateServers}),
+    servers:async()=>{if(serverReadFailure)throw serverReadFailure;return {results:privateServers};},
     createServer:async values=>{serverCreates.push(values);const row={id:'00000000-0000-4000-8000-000000000055',...values,private:true,can_manage:true,can_create:true,version:1};privateServers.push(row);return row;},
     server:async id=>({...privateServers.find(row=>row.id===id),members:[]}),
-    departments:async () => {calls++; return {results:[department],can_create_independent:true};},
-    people:async (filters,options,next)=>{peopleQueries.push(filters);const person={employee_id:"00000000-0000-4000-8000-000000000021",name:"Colega invitado",avatar_url:null,departments:[department]};return {results:next ? [{...person,employee_id:"00000000-0000-4000-8000-000000000022",name:"Segunda colega"}] : [person],departments:[{...department,count:2}],next:filters.department && !next ? `/api/v2/messaging/channels/people/?channel=${channel.id}&department=${departmentId}&cursor=two` : null};},
+    departments:async () => {calls++;if(departmentReadFailure)throw departmentReadFailure;return {results:[department,homeDepartment],can_create_independent:true};},
+    people:async (filters,options,next)=>{peopleQueries.push(filters);return {results:next ? [{...invitee,employee_id:"00000000-0000-4000-8000-000000000022",name:"Segunda colega"}] : [invitee],departments:[{...department,count:2}],next:filters.department && !next ? `/api/v2/messaging/channels/people/?channel=${channel.id}&department=${departmentId}&cursor=two` : null};},
     mentionPeople:async(_,query,options)=>{mentionQueries.push(query);mentionSignals.push(options?.signal);if(mentionFailure)throw mentionFailure;if(mentionDelay)return mentionDelay;return {results:[{employee_id:'peer',name:'Colega',email:'peer@bold.gt',token:'@peer@bold.gt'},{employee_id:'other',name:'Otra persona',email:'other@bold.gt',token:'@other@bold.gt'}].filter(row=>!query || row.name.toLowerCase().includes(query.toLowerCase()) || row.email.includes(query)),refine:mentionRefine};},
     managed:async()=>({results:[channel],next:null}),
-    access:async()=>{accessReads++;return {...channel,members:accessMembers};},
+    access:async()=>{accessReads++;return {...channel,members:accessMembers.map(row=>row.employee_id===invitee.employee_id ? {...invitee,...row}:row)};},
     setAccess:async(_,values)=>{accessWrites++;accessMembers=values.members;channel={...channel,visibility:values.visibility,version:channel.version+1};return {...channel,members:accessMembers};},
-    list:async archived => {calls++; return {results:!channelReadFailure && !channelDeleted && (!channel.archived_at || archived) ? [channelSnapshot()] : [],next:null};},
+    list:async (archived,_next,_options,{unit,server}={}) => {
+        calls++;
+        const available=!channelReadFailure && !channelDeleted && (!channel.archived_at || archived);
+        const scope=channel.department?.id || 'independent';
+        const visible=available && (!unit || unit===scope && !channel.server) && (!server || server===channel.server?.id);
+        return {results:visible ? [channelSnapshot()] : [],departments:visible && channel.department ? [channel.department] : [],next:null};
+    },
     deleteChannel:async(id,version,options)=>{channelDeletes.push({id,version,options});if(channelDeleteFails)throw {status:409,fields:{detail:'El canal cambió. Actualiza su configuración antes de eliminarlo.'}};channelDeleted=true;},
     detail:async()=>{deepLoads++;if(channelReadFailure)throw channelReadFailure;return channelSnapshot();},
     message:async(_,id)=>({message:threadProjection(rows.find(row=>row.id===id))}),
@@ -99,7 +108,13 @@ globalThis.__channelsApi={
     },
     media:async (_,id)=>{mediaDownloads++;assert.ok(rows.find(row=>row.id===id)?.media);return new Blob(["private-pixels"],{type:"image/webp"});},
     edit:async (_,id,values) => {const index=rows.findIndex(row => row.id === id); rows[index]={...rows[index],body:values.body,version:rows[index].version+1,edited_at:new Date().toISOString()}; return {message:rows[index]};},
-    update:async (_,values) => {channel={...channel,...values,version:channel.version+1,...("archived" in values ? {archived_at:values.archived ? new Date().toISOString() : null,can_send:!values.archived} : {})}; return channel;},
+    update:async (_,values) => {
+        channelUpdates.push(values);
+        const {access,...settings}=values;
+        if(access) accessMembers=access.members;
+        channel={...channel,...settings,visibility:access?.visibility || channel.visibility,version:channel.version+1,...("archived" in values ? {archived_at:values.archived ? new Date().toISOString() : null,can_send:!values.archived} : {})};
+        return channel;
+    },
     create:async values => {channelCreates.push(values);channel={...channel,id:`00000000-0000-4000-8000-${String(channelCreates.length+2).padStart(12,'0')}`,name:values.name,description:values.description,category_id:values.category_id || null,department:values.unit_id ? department : null,server:values.server_id ? privateServers.find(row=>row.id===values.server_id):null,version:1}; return channel;},
 };
 const replacements=[
@@ -127,9 +142,16 @@ const threadOption=()=>[...document.querySelectorAll('.messaging_message_menu:no
 const input=(field,text) => {const prototype=field instanceof dom.window.HTMLTextAreaElement ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype,"value").set.call(field,text); field.dispatchEvent(new Event("input",{bubbles:true}));};
 const submit=()=>document.querySelector(".slack_composer").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
 try {
+    departmentReadFailure={status:503};
     root.render(React.createElement(Channels));
     await waitFor(()=>document.querySelector(".slack_sidebar nav button"));
-    assert.equal(document.querySelectorAll('.slack_rail_channel').length,2,'departments and the legacy independent group appear as servers');
+    assert.equal(document.querySelector('.slack_sidebar h1').textContent,'IT','the catalog opens the server of an authorized public channel when departments fail');
+    assert.equal(document.querySelectorAll('.slack_rail_channel').length,2,'authorized channel scopes still appear in the rail');
+    assert.ok(button('Reintentar'),'the partial catalog exposes a retry');
+    departmentReadFailure=null;
+    button('Reintentar').click();
+    await waitFor(()=>document.querySelector('[aria-label="Abrir servidor Diseño"]') && !button('Reintentar'));
+    assert.equal(document.querySelector('.slack_sidebar h1').textContent,'IT','an empty active department does not hide authorized channels');
     document.querySelector('.slack_sidebar nav button').click();
     await waitFor(()=>document.querySelectorAll(".slack_active_conversation .slack_message").length===2);
     document.querySelector('.slack_channel_item').dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await settle();
@@ -151,6 +173,13 @@ try {
     window.dispatchEvent(new CustomEvent('bold:messaging-reconnect'));
     await waitFor(()=>document.querySelector('[aria-label="Abrir servidor Invitación recibida"]'));
     assert.ok(document.querySelector('.slack_active_conversation'),'receiving a server invitation does not close the current channel');
+    serverReadFailure={status:503};
+    window.dispatchEvent(new CustomEvent('bold:messaging-reconnect'));
+    await waitFor(()=>button('Reintentar'));
+    assert.ok(document.querySelector('[aria-label="Abrir servidor Invitación recibida"]'),'a transient catalog failure keeps the last authorized server list');
+    assert.ok(document.querySelector('.slack_active_conversation'));
+    serverReadFailure=null;
+    button('Reintentar').click();await waitFor(()=>!button('Reintentar'));
     channelReadFailure={status:404};categoryReadFailure={status:403};
     window.dispatchEvent(new CustomEvent('bold:slack-event',{detail:{payload:{kind:'channel.categories_changed',scope:departmentId}}}));
     await waitFor(()=>!document.querySelector('.slack_active_conversation'));
@@ -506,18 +535,41 @@ try {
     document.querySelector('.slack_sidebar nav button').click();await waitFor(()=>document.querySelector('#slack_message'));
     document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>document.querySelector('.slack_editor'));
     assert.equal(document.querySelector('.slack_editor select'),null,'editing an independent channel does not dereference its missing department');
-    document.querySelector('[aria-label="Cerrar configuración"]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
+    const visibilityDisclosure=[...document.querySelectorAll('.slack_editor summary')].find(node=>node.textContent.includes('Visibilidad e invitaciones'));
+    visibilityDisclosure.click();
+    await waitFor(()=>document.querySelector('.slack_editor .slack_access_fields select'));
+    const inlineVisibility=document.querySelector('.slack_editor .slack_access_fields select');
+    assert.deepEqual([...inlineVisibility.options].map(option=>option.value),['public','private']);
+    inlineVisibility.value='private';inlineVisibility.dispatchEvent(new Event('change',{bubbles:true}));
+    button('Invitar personas').click();await waitFor(()=>document.querySelector('[aria-label="Añadir a Colega invitado"]'));
+    document.querySelector('[aria-label="Añadir a Colega invitado"]').click();await settle();
+    input(document.querySelector('.slack_channel_editor textarea'),'Descripción y acceso');await settle();
+    const updatesBefore=channelUpdates.length;
+    button('Guardar cambios').click();await waitFor(()=>!document.querySelector('.slack_editor'));
+    assert.equal(channelUpdates.length,updatesBefore+1);
+    assert.equal(channelUpdates.at(-1).description,'Descripción y acceso');
+    assert.deepEqual(channelUpdates.at(-1).access,{visibility:'private',members:[{employee_id:invitee.employee_id,access:'write'}]});
+    assert.equal(accessWrites,0,'settings and invitations use the same write');
+
+    channel={...channel,can_configure:false,can_manage_access:false};
+    document.querySelector('[aria-label="Actualizar canales"]').click();
+    await waitFor(()=>!document.querySelector('[aria-label="Configurar canal"]') && !document.querySelector('.slack_channel_move'));
+    assert.equal(document.querySelector('[aria-label="Privacidad e invitaciones"]'),null);
+    assert.ok(document.querySelector('#slack_message'),'an invited writer can still participate');
+    channel={...channel,can_configure:true,can_manage_access:true};
+    document.querySelector('[aria-label="Actualizar canales"]').click();
+    await waitFor(()=>document.querySelector('[aria-label="Configurar canal"]'));
     // Invitation management is separate from opening a readable channel.
+    const readsBefore=accessReads;
     button('Administrar acceso').click();await waitFor(()=>document.querySelector('.slack_access_catalog button'));
     document.querySelector('.slack_access_catalog button').click();await waitFor(()=>document.querySelector('.slack_access_catalog [data-picker-option]'));
     document.querySelector('.slack_access_catalog [data-picker-option]').click();await waitFor(()=>document.querySelector('.slack_access_fields'));
-    assert.equal(accessReads,1);
-    const privacy=document.querySelector('.slack_access_fields select');privacy.value='private';privacy.dispatchEvent(new Event('change',{bubbles:true}));
+    assert.equal(accessReads,readsBefore+1);
+    assert.equal(document.querySelector('.slack_access_fields select').value,'private');
     button('Invitar personas').click();
-    await waitFor(()=>document.querySelector('[aria-label="Añadir a Colega invitado"]'));
+    await waitFor(()=>document.querySelector('[aria-label="Colega invitado, ya añadido"]'));
     assert.ok(peopleQueries.length>0);
     assert.match(document.querySelector('.slack_access_candidates').textContent,/IT/);
-    document.querySelector('[aria-label="Añadir a Colega invitado"]').click();await settle();
     const escape=new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true});
     document.querySelector('.slack_access_candidates').dispatchEvent(escape);await settle();
     assert.ok(document.querySelector('.slack_access_editor'),'Escape closes the dropdown, not the parent editor');
@@ -565,6 +617,10 @@ try {
     document.querySelector('.slack_channel_editor button[type=submit]').click();await waitFor(()=>!document.querySelector('.slack_editor'));
     assert.equal(channelCreates.at(-1).server_id,privateServers[0].id);assert.equal(channelCreates.at(-1).unit_id,null);
     assert.equal(channelCreates.at(-1).visibility,'private');
+    document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>document.querySelector('.slack_channel_editor'));
+    assert.match(document.querySelector('.slack_channel_editor').textContent,/usa las invitaciones del servidor privado/);
+    assert.equal(document.querySelector('.slack_channel_editor .slack_access_fields'),null);
+    button('Cancelar').click();await waitFor(()=>!document.querySelector('.slack_channel_editor'));
     await waitFor(()=>!document.querySelector('[aria-label="Hilos del canal"]').disabled);
     document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(()=>button('Crear'));
     button('Crear').click();await waitFor(()=>document.querySelector('.slack_thread_create'));
@@ -660,9 +716,11 @@ try {
     menuItem('Confirmar eliminación').click();await waitFor(()=>document.querySelector('.slack_thread_readonly')?.textContent.includes('Eliminados'));
     await openThreadMenu();menuItem('Restaurar hilo').click();await waitFor(()=>document.querySelector('.slack_thread_readonly')?.textContent.includes('cerrado'));
     await openThreadMenu();menuItem('Reabrir hilo').click();await waitFor(()=>!document.querySelector('#slack_message').disabled);
-    document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(()=>document.querySelector('.slack_catalog_card'));
-    document.querySelector('.slack_thread_filters button[aria-pressed=false]').click();await settle();
-    [...document.querySelectorAll('.slack_catalog_card')].find(node=>node.textContent.includes('Nuevo nombre del hilo')).dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await waitFor(()=>menu());
+    const renamedThread=()=>[...document.querySelectorAll('.slack_catalog_card')].find(node=>node.textContent.includes('Nuevo nombre del hilo'));
+    document.querySelector('[aria-label="Hilos del canal"]').click();await waitFor(renamedThread);
+    button('Activos').click();
+    await waitFor(()=>button('Activos').getAttribute('aria-pressed')==='true' && renamedThread());
+    renamedThread().dispatchEvent(new dom.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await waitFor(()=>menu());
     menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'End',bubbles:true}));assert.equal(document.activeElement.textContent.trim(),'Volver al hilo');
     menu().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await waitFor(()=>!menu());
     document.querySelector('[aria-label="Configurar canal"]').click();await waitFor(()=>button('Eliminar canal'));

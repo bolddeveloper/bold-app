@@ -67,13 +67,27 @@ class DepartmentChannelTests(TestCase):
         self.assertFalse(history.data["results"][0]["can_edit"])
         self.assertEqual(DirectConversation.objects.count(), 0)
 
-    def test_any_employee_can_manage_but_restrictions_are_configurable(self):
-        self.client = self.as_person(self.bob)
-        response = self.client.patch(self.url, {"name": "Organización", "version": 1}, format="json")
+    def test_only_creator_can_configure_the_channel(self):
+        for person in (self.bob, self.owner):
+            peer = self.as_person(person)
+            detail = peer.get(self.url).data
+            self.assertTrue(detail["can_manage"])
+            self.assertTrue(detail["can_send"])
+            self.assertFalse(detail["can_configure"])
+            self.assertFalse(detail["can_manage_access"])
+            for settings in ({"name": "No"}, {"archived": True}, {"access": {"visibility": "department", "members": []}}):
+                self.assertEqual(peer.patch(self.url, {"version": 1, **settings}, format="json").status_code, 403)
+            self.assertEqual(peer.delete(self.url, {"version": 1}, format="json").status_code, 403)
+
+        other_assignment = PositionAssignment.objects.create(employee=self.alice.employee,
+            position=Position.objects.create(unit=self.marketing, job_role=self.role))
+        creator = self.as_person(other_assignment)
+        self.assertTrue(creator.get(self.url).data["can_configure"])
+        response = creator.patch(self.url, {"name": "Organización", "version": 1}, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         self.deny("slack.channel.manage")
-        self.assertFalse(self.client.get(self.url).data["can_manage"])
-        self.assertEqual(self.client.patch(self.url, {"version": 2, "name": "No"}, format="json").status_code, 403)
+        self.assertFalse(creator.get(self.url).data["can_configure"])
+        self.assertEqual(creator.patch(self.url, {"version": 2, "name": "No"}, format="json").status_code, 403)
         self.assertEqual(DepartmentChannel.objects.get(pk=self.channel_id).name, "Organización")
 
     def test_default_permission_is_visible_to_core_and_unknown_stays_denied(self):

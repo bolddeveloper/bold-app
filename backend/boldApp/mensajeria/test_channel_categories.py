@@ -47,6 +47,8 @@ class ChannelCategoryTests(TestCase):
         second = self.create_category("Segunda").data["results"][1]
         third = self.create_category("Tercera").data["results"][2]
         source = self.send("Conservar mensaje").data["message"]
+        peer = self.as_person(self.bob)
+        self.assertEqual(peer.put(self.url + "category/" + self.scope(), {"category_id": first["id"], "version": 1}, format="json").status_code, 403)
         moved = self.client.put(self.url + "category/" + self.scope(), {"category_id": first["id"], "version": 1}, format="json")
         self.assertEqual(moved.status_code, 200, moved.data)
         self.assertEqual(moved.data["channel"]["category_id"], first["id"])

@@ -55,3 +55,12 @@ class ChannelPolicy:
                 resource_id=resource_id, resource_type="channel", request=self.request).allowed
         if not allowed:
             raise PermissionDenied("Tu asignación activa no permite esta acción en Slack.")
+
+    def can_configure(self, channel):
+        return channel.creator.employee_id == self.assignment.employee_id and self.allows(
+            "slack.channel.manage", channel.unit, channel.pk)
+
+    def require_configuration(self, channel):
+        if channel.creator.employee_id != self.assignment.employee_id:
+            raise PermissionDenied("Solo quien creó el canal puede modificar su configuración.")
+        self.require("slack.channel.manage", channel.unit, channel.pk)

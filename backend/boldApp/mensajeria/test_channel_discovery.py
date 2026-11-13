@@ -65,14 +65,15 @@ class ChannelDiscoveryTests(TestCase):
         self.assertEqual({row["id"] for row in bob["departments"]}, {str(self.it.pk), str(self.marketing.pk)})
         self.assertEqual(self.client.get(self.root+"people/", {"channel": self.channel_id, "department": "bad"}).status_code, 400)
 
-    def test_rich_invited_members_and_catalog_do_not_grant_private_reading(self):
+    def test_creator_catalog_shows_rich_members_without_requiring_read_access(self):
         created = self.client.post(self.root, {"name": "Privado", "visibility": "private", "color": "#9250A3"}, format="json")
         url = self.root+created.data["id"]+"/"
-        owner = self.as_person(self.owner)
-        data = owner.get(url+"access/").data
+        self.assertEqual(self.client.patch(url+"access/", {"version": 1, "visibility": "private",
+            "members": [{"employee_id": str(self.bob.employee_id), "access": "read"}]}, format="json").status_code, 200)
+        data = self.client.get(url+"access/").data
         self.assertEqual(data["color"], "#9250A3")
-        self.assertEqual(data["members"][0]["departments"][0]["name"], "IT")
-        self.assertEqual(owner.get(url+"messages/").status_code, 404)
-        managed = owner.get(self.root+"managed/").data["results"]
+        self.assertEqual(data["members"][0]["departments"][0]["name"], "Marketing")
+        self.assertEqual(self.client.get(url+"messages/").status_code, 404)
+        managed = self.client.get(self.root+"managed/").data["results"]
         self.assertEqual(next(row for row in managed if row["id"]==created.data["id"])["color"], "#9250A3")
         self.assertEqual(self.as_person(self.bob).get(self.root+"people/", {"channel": created.data["id"]}).status_code, 404)

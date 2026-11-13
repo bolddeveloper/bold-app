@@ -9,7 +9,7 @@ from boldApp.core.models import JobRole, JobRolePermission, Permission
 from boldApp.administrativo.models import SystemAuditEvent
 from . import test_channels as base
 from .channel_events import channel_event
-from .models import ChannelAccessRule, ChannelMessage, DepartmentChannel
+from .models import ChannelAccessEpoch, ChannelAccessRule, ChannelMessage, DepartmentChannel
 
 
 @override_settings(MESSAGING_PILOT_ENABLED=False)
@@ -52,9 +52,8 @@ class ChannelPrivacyTests(TestCase):
             for code in ("slack.channel.read", "slack.message.create", "slack.channel.manage"):
                 decision = resolve_access(person, Permission.objects.get(code=code), person.position.unit, resource_id=channel["id"])
                 self.assertFalse(decision.allowed)
-        # Owner can administer invitations, but the metadata projection contains
-        # no history, files, descriptions, activity or unread information.
-        data = self.as_person(self.owner).get(url+"access/")
+            self.assertEqual(peer.get(url+"access/").status_code, 404)
+        data = self.client.get(url+"access/")
         self.assertEqual(data.status_code, 200)
         self.assertEqual(set(data.data), {"id", "name", "department", "color", "visibility", "version", "members"})
 
@@ -108,32 +107,52 @@ class ChannelPrivacyTests(TestCase):
 
     def test_creator_can_remove_self_without_retaining_implicit_read(self):
         channel,url=self.private(members=self.rules((self.bob,"write")))
-        self.assertEqual(self.access(url,"private",self.rules((self.bob,"write"))).status_code,200)
+        response = self.client.patch(url, {"version": 1, "name": "Solo invitados",
+            "access": {"visibility": "private", "members": self.rules((self.bob,"write"))}}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data, {"id": channel["id"], "name": "Solo invitados",
+            "visibility": "private", "version": 2, "access_only": True})
         self.assertEqual(self.client.get(url).status_code,404)
         self.assertEqual(self.client.get(url+"access/").status_code,200)
         self.assertIn(channel["id"],[row["id"] for row in self.client.get(self.root+"managed/").data["results"]])
 
-    def test_access_management_is_scoped_explicit_and_not_a_read_grant(self):
+    def test_access_administration_requires_creator_even_with_an_explicit_role(self):
         head=self.identity("head",self.it)
         role=JobRole.objects.create(title="Responsable designado")
         head.position.job_role=role;head.position.save()
-        other=self.identity("external-head",self.marketing)
-        other.position.job_role=role;other.position.save()
         channel,url=self.private(unit_id=str(self.it.pk))
         manager=self.as_person(head)
-        self.assertEqual(manager.get(url+"access/").status_code,404)
-        rule=JobRolePermission.objects.create(job_role=role,permission=Permission.objects.get(code="slack.channel.access"),effect="allow",scope_type="own_unit")
-        self.assertEqual(manager.get(url+"access/").status_code,200)
-        self.assertEqual(manager.get(url).status_code,404)
-        independent,independent_url=self.private(name="Sin autoridad departamental")
-        self.assertEqual(manager.get(independent_url+"access/").status_code,404,"own-unit authority does not apply to independent channels")
-        self.assertEqual(self.as_person(other).get(url+"access/").status_code,404)
-        self.assertEqual(self.access(url,"private",self.rules((self.alice,"write"),(self.bob,"read")),client=manager).status_code,200)
-        self.assertEqual(manager.get(url).status_code,404)
-        rule.effect="deny";rule.save()
-        self.assertEqual(manager.get(url+"access/").status_code,404)
+        JobRolePermission.objects.create(job_role=role,permission=Permission.objects.get(code="slack.channel.access"),effect="allow",scope_type="global")
+        for peer in (manager, self.as_person(self.owner)):
+            self.assertEqual(peer.get(url).status_code,404)
+            self.assertEqual(peer.get(url+"access/").status_code,404)
+            self.assertEqual(self.access(url,"public",[],client=peer).status_code,404)
+            self.assertNotIn(channel["id"], [row["id"] for row in peer.get(self.root+"managed/").data["results"]])
         self.deny("slack.channel.access")
         self.assertEqual(self.client.get(url+"access/").status_code,404,"an explicit deny also restricts the creator")
+
+    def test_configuration_saves_access_and_appearance_atomically(self):
+        peer = self.as_person(self.bob)
+        owner = self.as_person(self.owner)
+        self.assertEqual(self.client.post(self.root, {"unit_id": str(self.it.pk), "name": "En uso"}, format="json").status_code, 201)
+        values = {"version": 1, "name": "En uso", "color": "#9250A3",
+            "access": {"visibility": "private", "members": self.rules((self.alice, "write"), (self.bob, "read"))}}
+        self.assertEqual(self.client.patch(self.url, values, format="json").status_code, 409)
+        self.assertEqual(owner.get(self.url).data["name"], "General")
+        self.assertFalse(ChannelAccessRule.objects.filter(channel_id=self.channel_id).exists())
+        self.assertFalse(ChannelAccessEpoch.objects.filter(employee_id=self.owner.employee_id).exists())
+
+        response = self.client.patch(self.url, {**values, "name": "Investigación"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual((response.data["name"], response.data["color"], response.data["visibility"], response.data["version"]),
+            ("Investigación", "#9250A3", "private", 2))
+        self.assertTrue(response.data["can_configure"])
+        self.assertFalse(peer.get(self.url).data["can_send"])
+        self.assertEqual(owner.get(self.url).status_code, 404)
+        self.assertGreater(ChannelAccessEpoch.objects.get(employee_id=self.owner.employee_id).revision, 0)
+        self.assertTrue(SystemAuditEvent.objects.filter(event_type="slack.channel.access_changed", target_id=self.channel_id).exists())
+        self.assertEqual(self.client.patch(self.url, {**values, "access": {"visibility": "public", "members": []}}, format="json").status_code, 409)
+        self.assertEqual(owner.get(self.url).status_code, 404)
 
     def test_access_input_is_strict_atomic_versioned_and_has_a_reader(self):
         channel,url=self.private()

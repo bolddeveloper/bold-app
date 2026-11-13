@@ -30,7 +30,8 @@ import "./chat_panels_v3.css";
 import ComposerOptions from "./composer_options.jsx";
 import MessageActions from "./chat_message_actions.jsx";
 import ChannelTaskPicker from "./channel_task_picker.jsx";
-import ChannelAccessEditor, {ChannelAccessFields} from "./channel_access_editor.jsx";
+import ChannelAccessEditor from "./channel_access_editor.jsx";
+import ChannelAccessFields from "./channel_access_fields.jsx";
 import {SearchField} from "./channel_picker.jsx";
 import ChannelColorField from "./channel_color_field.jsx";
 import {channelMatches, channelColor,channelServerKey,channelServerFilters} from "./channel_discovery.js";
@@ -61,31 +62,61 @@ function Department({value}) {
     return <span className="slack_department" style={{"--department-color":/^#[0-9a-f]{6}$/i.test(value.color) ? value.color : "var(--bold_red_dark)"}}>{value.name}</span>;
 }
 
-function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved, onDelete}) {
+function ChannelEditor({channel, scope, departments, canCreateIndependent, onClose, onSaved, onDelete, onConflict}) {
     const [unit, setUnit] = useState(channel ? channel.department?.id || "" : scope ? scope.departmentId || "" : canCreateIndependent ? "" : departments.find(row => row.can_create)?.id || "");
     const [name, setName] = useState(channel?.name || ""), [description, setDescription] = useState(channel?.description || "");
     const [color,setColor]=useState(channel?.color || ""),[inviting,setInviting]=useState(false);
-    const [visibility,setVisibility]=useState(scope?.private ? "private":scope?.departmentId ? "department":"public"),[members,setMembers]=useState([]);
+    const [visibility,setVisibility]=useState(channel?.visibility || (scope?.private ? "private":scope?.departmentId ? "department":"public")),[members,setMembers]=useState([]);
+    const [access,setAccess]=useState(null),[accessLoading,setAccessLoading]=useState(false),[accessError,setAccessError]=useState("");
     const [busy, setBusy] = useState(false), [error, setError] = useState("");
+    const canEditAccess = channel?.can_manage_access === true && !channel.server;
     const active = useRef(true), request = useRef(null), sending = useRef(false),nameField=useRef(null);
     useEffect(() => {active.current = true; return () => {active.current = false; request.current?.abort();};}, []);
     useDialog(true, ".slack_editor", () => {if (!sending.current && !inviting) onClose();});
     useEffect(()=>{nameField.current?.focus();},[]);
+    async function loadAccess() {
+        if (!canEditAccess || accessLoading || sending.current) return;
+        const controller = new AbortController();
+        request.current = controller;
+        setAccessLoading(true); setAccessError("");
+        try {
+            const result = await channelApi.access(channel.id, {signal: controller.signal});
+            if (controller.signal.aborted) return;
+            if (!Array.isArray(result?.members)) {
+                setAccessError("No se pudo cargar la visibilidad del canal.");
+                return;
+            }
+            setAccess(result); setVisibility(result.visibility); setMembers(result.members);
+        } catch (err) {
+            if (!controller.signal.aborted) setAccessError(err.status ? channelError(err) : "No se pudo cargar la visibilidad del canal.");
+        } finally {
+            if (!controller.signal.aborted) setAccessLoading(false);
+        }
+    }
     async function save(event) {
         event.preventDefault();
-        if (sending.current || inviting) return;
+        if (sending.current || inviting || accessLoading || (channel && !channel.can_configure)) return;
         sending.current = true; setBusy(true); setError("");
         request.current = new AbortController();
         try {
             const options = {signal:request.current.signal};
-            const result = channel ? await channelApi.update(channel.id, {name, description, color, version:channel.version}, options)
-                : await channelApi.create({unit_id:unit || null,...(scope?.private ? {server_id:scope.serverId}:{}),...(scope?.categoryId ? {category_id:scope.categoryId}:{}), name, description,color,visibility,members:members.map(({employee_id,access})=>({employee_id,access}))}, options);
+            const rules = members.map(({employee_id,access})=>({employee_id,access}));
+            const accessChanged = canEditAccess && access && (access.visibility !== visibility || access.members.length !== rules.length ||
+                access.members.some(({employee_id,access}, index) => employee_id !== rules[index].employee_id || access !== rules[index].access));
+            const result = channel ? await channelApi.update(channel.id, {
+                name, description, color, version:channel.version, ...(accessChanged ? {access:{visibility,members:rules}} : {}),
+            }, options) : await channelApi.create({unit_id:unit || null,...(scope?.private ? {server_id:scope.serverId}:{}),...(scope?.categoryId ? {category_id:scope.categoryId}:{}), name, description,color,visibility,members:rules}, options);
             if (active.current) onSaved(result);
-        } catch (err) {if (active.current && err.name !== "AbortError") setError(channelError(err));}
+        } catch (err) {
+            if (active.current && err.name !== "AbortError") {
+                if (channel && err.status === 409) onConflict();
+                setError(channelError(err));
+            }
+        }
         finally {sending.current = false; if (active.current) setBusy(false);}
     }
     async function remove() {
-        if (sending.current || inviting || !channel?.can_manage) return;
+        if (sending.current || inviting || accessLoading || !channel?.can_configure) return;
         sending.current = true; setBusy(true); setError("");
         const controller = new AbortController(); request.current = controller;
         try {
@@ -94,7 +125,7 @@ function ChannelEditor({channel, scope, departments, canCreateIndependent, onClo
         finally {sending.current = false; if (active.current) setBusy(false);}
     }
     return <div className="slack_editor_scrim"><section role="dialog" aria-modal="true" aria-labelledby="slack_editor_title" className={`slack_editor slack_channel_editor ${channel ? 'is_editing':''}`}>
-        <header><div><h2 id="slack_editor_title"><Hash size={18} aria-hidden="true"/>{channel ? "Configurar canal" : "Crear canal"}</h2><p>{scope ? <>En <strong>{scope.name}</strong>{scope.categoryId ? ' · Categoría seleccionada':''}</> : channel ? 'Nombre, descripción y apariencia.':'Conversa y comparte archivos con tu equipo.'}</p></div><button type="button" onClick={onClose} disabled={busy || inviting} aria-label="Cerrar configuración"><X aria-hidden="true" size={18}/></button></header>
+        <header><div><h2 id="slack_editor_title"><Hash size={18} aria-hidden="true"/>{channel ? "Configurar canal" : "Crear canal"}</h2><p>{scope ? <>En <strong>{scope.name}</strong>{scope.categoryId ? ' · Categoría seleccionada':''}</> : canEditAccess ? 'Nombre, apariencia y acceso.' : channel ? 'Nombre, descripción y apariencia.':'Conversa y comparte archivos con tu equipo.'}</p></div><button type="button" onClick={onClose} disabled={busy || inviting} aria-label="Cerrar configuración"><X aria-hidden="true" size={18}/></button></header>
         <form onSubmit={save} aria-busy={busy}>
             <div className="slack_channel_editor_body"><fieldset disabled={busy || inviting}>
                 {!channel && !scope && <label>Departamento<select value={unit} onChange={event => {setUnit(event.target.value);if(!event.target.value && visibility==="department")setVisibility("private");}} required={!canCreateIndependent}>{canCreateIndependent && <option value="">Sin departamento</option>}{departments.filter(row => row.can_create).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select>{canCreateIndependent && <small>Elige «Sin departamento» para un espacio independiente.</small>}</label>}
@@ -103,11 +134,22 @@ function ChannelEditor({channel, scope, departments, canCreateIndependent, onClo
                     <label>Descripción<textarea rows={2} placeholder="¿Para qué usarán este canal?" value={description} onChange={event => setDescription(event.target.value)} maxLength={500}/></label>
                     <ChannelColorField value={color} onChange={setColor} department={channel?.department || departments.find(row=>row.id===unit)}/>
                 </div></details>
+                {canEditAccess && <details className="slack_channel_appearance" onToggle={event=>{
+                    if (event.target === event.currentTarget && event.currentTarget.open && !access && !accessError) loadAccess();
+                }}>
+                    <summary><LockKeyhole size={15} aria-hidden="true"/><span>Visibilidad e invitaciones</span><ChevronDown size={15} aria-hidden="true"/></summary>
+                    <div>
+                        {accessLoading && <p role="status">Cargando accesos…</p>}
+                        {accessError && <p role="alert" className="slack_error">{accessError} <button type="button" onClick={loadAccess}>Reintentar</button></p>}
+                        {access && <ChannelAccessFields compact unit={unit} channelId={channel.id} visibility={visibility} members={members} onVisibility={setVisibility} onMembers={setMembers} onBusyChange={setInviting} disabled={busy}/>}
+                    </div>
+                </details>}
+                {channel?.server && <p className="slack_server_hint"><LockKeyhole size={15} aria-hidden="true"/>Este canal usa las invitaciones del servidor privado.</p>}
                 {!channel && scope?.private && <p className="slack_server_hint"><LockKeyhole size={15} aria-hidden="true"/> Solo las personas del servidor pueden entrar. Sus permisos se heredan.</p>}
                 {!channel && !scope?.private && <ChannelAccessFields compact unit={unit} visibility={visibility} members={members} onVisibility={setVisibility} onMembers={setMembers} onBusyChange={setInviting} disabled={busy}/>}
             </fieldset></div>
             {error && <p className="slack_error" role="alert">{error}</p>}
-            <footer className="slack_channel_editor_footer">{channel?.can_manage && <button type="button" className="slack_delete_channel" disabled={busy || inviting} onClick={remove}><Trash2 size={15} aria-hidden="true"/>Eliminar canal</button>}<button type="button" disabled={busy || inviting} onClick={onClose}>Cancelar</button><button type="submit" className="slack_primary" disabled={busy || inviting || !name.trim() || (!channel && !unit && !scope?.private && !canCreateIndependent)}>{busy ? "Procesando…" : channel ? 'Guardar cambios':'Crear canal'}</button></footer>
+            <footer className="slack_channel_editor_footer">{channel?.can_configure && <button type="button" className="slack_delete_channel" disabled={busy || inviting || accessLoading} onClick={remove}><Trash2 size={15} aria-hidden="true"/>Eliminar canal</button>}<button type="button" disabled={busy || inviting} onClick={onClose}>Cancelar</button><button type="submit" className="slack_primary" disabled={busy || inviting || accessLoading || !name.trim() || (!channel && !unit && !scope?.private && !canCreateIndependent)}>{busy ? "Procesando…" : channel ? 'Guardar cambios':'Crear canal'}</button></footer>
         </form>
     </section></div>;
 }
@@ -126,9 +168,12 @@ export default function ChannelModule() {
     async function changeTab(tab){if(tab!==channelTab && await mayLeavePage()){setChannelTab(tab);pageDirtyChanged(false);}}
     const allowed = core.activeAssignment?.chat_enabled === true && !core.securityUncertain;
     const [departments, setDepartments] = useState([]), [channels, setChannels] = useState([]), [channelNext, setChannelNext] = useState(null);
+    const [readableScopes, setReadableScopes] = useState({departments: [], servers: [], initial: ""});
+    const [catalogError, setCatalogError] = useState(false), indexRefresh = useRef(null);
     const [canCreateIndependent, setCanCreateIndependent] = useState(false);
     const [selected, setSelected] = useState(null), [messages, setMessages] = useState([]), [older, setOlder] = useState(null);
-    const [parent, setParent] = useState(null), [query, setQuery] = useState(""), [department, setDepartment] = useState("");
+    const [parent, setParent] = useState(null), [query, setQuery] = useState(""), [chosenDepartment, setDepartment] = useState("");
+    const department = chosenDepartment || readableScopes.initial;
     const [catalogRequest,setCatalogRequest]=useState(0);
     const [catalogOpen,setCatalogOpen]=useState(false),[threadName,setThreadName]=useState(''),[startingThread,setStartingThread]=useState(false);
     const threadStart=useRef(null);
@@ -213,10 +258,15 @@ export default function ChannelModule() {
         setDrafts({});setTaskDrafts({});setTaskPicker(false);setMediaDrafts({});mediaState.current={};setImageEditor(null);setActiveImage(null);setServerEditor(null);setIconEditor(null);retries.current.clear();
         editCache.current.clear();
     }
+    function clearCatalog() {
+        setDepartments([]);setServers([]);setServerNext(null);setCanCreateIndependent(false);
+        setReadableScopes({departments: [], servers: [], initial: ""});
+        setDepartment("");
+    }
     async function report(err) {
         if (!mounted.current || err.name === "AbortError") return;
         setError(channelError(err));
-        if (err.status === 401) {clearPrivateState();setServers([]);return;}
+        if (err.status === 401) {clearPrivateState();clearCatalog();return;}
         const snapshot=state.current,signal=reads.current?.signal;
         if (![403,404].includes(err.status) || !snapshot.selected) return;
         const current=()=>mounted.current && !signal?.aborted && snapshot.identity===state.current.identity && snapshot.key===state.current.key;
@@ -227,7 +277,7 @@ export default function ChannelModule() {
         } catch (denied) {
             if (!current() || denied.name === "AbortError") return;
             clearPrivateState();
-            if (denied.status===401)setServers([]);
+            if (denied.status===401)clearCatalog();
             else refresh.current?.request();
         }
     }
@@ -259,10 +309,56 @@ export default function ChannelModule() {
         if (!current()) return;
         setChannels(current=>page.results.map(row=>mergeChannelDetails(current.find(old=>old.id===row.id),row))); setChannelNext(page.next);
     }
+    async function loadIndex(signal) {
+        const identitySnapshot = state.current.identity;
+        const options = {signal, timeoutMs: 12_000};
+        const [units, personal, readable] = await Promise.allSettled([
+            channelApi.departments(options),
+            channelApi.servers(options),
+            channelApi.list(false, null, options),
+        ]);
+        if (signal.aborted || !mounted.current || identitySnapshot !== state.current.identity) return;
+        const results = [units, personal, readable];
+        const expired = results.find(result => result.reason?.status === 401);
+        if (expired) {report(expired.reason);return;}
+        const hasRows = result => Array.isArray(result.value?.results);
+        const denied = result => [403, 404].includes(result.reason?.status);
+        setCatalogError(results.some(result => !hasRows(result) && result.reason?.name !== "AbortError"));
+        const unitRows = hasRows(units) ? units.value.results : [];
+        if (hasRows(units) || denied(units)) {
+            setDepartments(unitRows);
+            setCanCreateIndependent(hasRows(units) && units.value.can_create_independent === true);
+        }
+        if (hasRows(personal) || denied(personal)) {
+            setServers(hasRows(personal) ? personal.value.results : []);
+            setServerNext(hasRows(personal) ? personal.value.next ?? null : null);
+        }
+        const own = core.activeAssignment?.unitId;
+        const fallback = unitRows.find(row => row.id === own)?.id || unitRows[0]?.id || "independent";
+        if (!hasRows(readable)) {
+            setReadableScopes(current => denied(readable) ? {departments: [], servers: [], initial: fallback}
+                : {...current, initial: current.initial || fallback});
+            return;
+        }
+        const rows = readable.value.results;
+        const scopes = Array.isArray(readable.value.departments) ? readable.value.departments : rows.flatMap(row => row.department ? [row.department] : []);
+        const first = rows.find(row => row.visibility === "public") || rows[0];
+        // Start with the active department only when its channels are readable.
+        const initial = scopes.some(row => row.id === own) ? own : first ? channelServerKey(first) : fallback;
+        setReadableScopes({departments: scopes.filter(row => row.id !== "independent"), servers: rows.flatMap(row => row.server ? [row.server] : []), initial});
+    }
     async function reloadCatalog(next=null){
         if(serverLoading)return;
         const controller=new AbortController(),snapshot=state.current.identity;setServerLoading(true);
-        try{const page=await channelApi.servers({signal:controller.signal},next);if(mounted.current && snapshot===state.current.identity){setServers(current=>next ? [...new Map([...current,...page.results].map(row=>[row.id,row])).values()]:page.results);setServerNext(page.next);if(!next)await refresh.current?.request();}}
+        try{
+            if (!next) {
+                await indexRefresh.current?.request();
+                if (mounted.current && snapshot === state.current.identity) await refresh.current?.request();
+                return;
+            }
+            const page=await channelApi.servers({signal:controller.signal},next);
+            if(mounted.current && snapshot===state.current.identity){setServers(current=>[...new Map([...current,...page.results].map(row=>[row.id,row])).values()]);setServerNext(page.next);}
+        }
         catch(err){if(mounted.current && snapshot===state.current.identity)report(err);}
         finally{if(mounted.current && snapshot===state.current.identity)setServerLoading(false);}
     }
@@ -274,14 +370,14 @@ export default function ChannelModule() {
             setDepartment(`server:${row.id}`);setChannels([]);setChannelNext(null);setQuery('');setExplorerOpen(true);
         }else{
             clearPrivateState();
-            try{const page=await channelApi.servers();if(mounted.current && snapshot===state.current.identity){setServers(page.results);setServerNext(page.next);await refresh.current?.request();}}
-            catch(err){if(mounted.current && snapshot===state.current.identity)report(err);}
+            if(mounted.current && snapshot===state.current.identity)await reloadCatalog();
         }
     }
     async function serverDeleted(id){
         const snapshot=state.current.identity;
         setServerEditor(null);
         setServers(current=>current.filter(row=>row.id!==id));
+        setReadableScopes(current=>({...current,servers:current.servers.filter(row=>row.id!==id)}));
         if(state.current.department===`server:${id}` || state.current.selected?.server?.id===id){
             pageDirtyChanged(false);
             await select(null);
@@ -290,6 +386,7 @@ export default function ChannelModule() {
             setDepartment(departments.find(row=>row.id===core.activeAssignment?.unitId)?.id || departments[0]?.id || 'independent');
         }
         setNotice('Servidor privado eliminado.');
+        indexRefresh.current?.request();
     }
     async function loadMessages(signal, next = null) {
         const snapshot = state.current;
@@ -308,20 +405,18 @@ export default function ChannelModule() {
     }
     useEffect(() => {
         mounted.current = true;
-        clearPrivateState();setDepartment("");setServers([]);setServerNext(null);setServerLoading(false);
-        if (!allowed) {setChannels([]); setDepartments([]);setServers([]); setCanCreateIndependent(false); return () => {mounted.current = false;};}
-        const indexRefresh=createChannelRefresh(signal=>Promise.all([
-            channelApi.departments({signal}).then(page=>{if(!signal.aborted){setDepartments(page.results);setDepartment(current=>current || page.results.find(row=>row.id===core.activeAssignment?.unitId)?.id || page.results[0]?.id || "independent");setCanCreateIndependent(page.can_create_independent===true);}}),
-            channelApi.servers({signal}).then(page=>{if(!signal.aborted){setServers(page.results);setServerNext(page.next);}}),
-        ]),report);
-        indexRefresh.request();
+        clearPrivateState();clearCatalog();setCatalogError(false);setServerLoading(false);
+        if (!allowed) return () => {mounted.current = false;};
+        const index = createChannelRefresh(loadIndex, report);
+        indexRefresh.current = index;
+        index.request();
         refresh.current = createChannelRefresh(async signal => {await load(signal); await loadMessages(signal);}, report);
         const reactionRefresh=createChannelRefresh(signal=>loadMessages(signal),report);
         const organizationRefresh=createChannelRefresh(signal=>load(signal),report);
         refresh.current.request();
         const update = event => {
             const channel = event.detail?.payload;
-            if(!channel || channel.kind==='channel.access_changed')indexRefresh.request();
+            if(!channel || ['channel.access_changed','channel.created','channel.updated'].includes(channel.kind))index.request();
             if(channel?.kind==='channel.categories_changed'){if(channel.scope===state.current.department)organizationRefresh.request();return;}
             if(channel?.kind?.startsWith("page.") || channel?.kind==='automation.changed')return;
             if(channel?.kind==='reactions.updated'){
@@ -333,7 +428,7 @@ export default function ChannelModule() {
         window.addEventListener("bold:slack-event", update);
         window.addEventListener("bold:messaging-reconnect", update);
         window.addEventListener("bold:slack-collection-change", update);
-        return () => {mounted.current = false; indexRefresh.dispose(); reads.current?.abort(); writes.current?.abort();followWrite.current?.abort();threadFollowWrite.current?.abort(); openingTask.current?.abort();refresh.current?.dispose();reactionRefresh.dispose();organizationRefresh.dispose();
+        return () => {mounted.current = false; index.dispose();indexRefresh.current=null; reads.current?.abort(); writes.current?.abort();followWrite.current?.abort();threadFollowWrite.current?.abort(); openingTask.current?.abort();refresh.current?.dispose();reactionRefresh.dispose();organizationRefresh.dispose();
             threadStart.current?.abort();window.removeEventListener("bold:slack-collection-change", update);window.removeEventListener("bold:slack-event", update); window.removeEventListener("bold:messaging-reconnect", update);};
     }, [allowed, core.authorizationRevision,core.account?.id,core.activeAssignment?.id]);
     useEffect(() => {
@@ -545,7 +640,7 @@ export default function ChannelModule() {
         } finally {busy.current=false;if(mounted.current){setSending(false);setStagedUpload(null);}}
     }
     async function archive() {
-        if (busy.current || recording) return;
+        if (busy.current || recording || !selected?.can_configure) return;
         busy.current = true; setSending(true); setError("");const controller=new AbortController();writes.current=controller;const channelId=selected.id;
         try {
             const updated = await channelApi.update(channelId, {archived:!selected.archived_at,version:selected.version}, {signal:controller.signal});
@@ -565,7 +660,7 @@ export default function ChannelModule() {
         refresh.current?.request();
     }
     async function removeChannel(row,{signal}={}) {
-        if(busy.current || recording || !row.can_manage || signal?.aborted)return false;
+        if(busy.current || recording || !row.can_configure || signal?.aborted)return false;
         const snapshot=state.current.identity;
         busy.current=true;setSending(true);setError('');
         try {
@@ -575,6 +670,21 @@ export default function ChannelModule() {
         finally {busy.current=false;if(mounted.current)setSending(false);}
         if(mounted.current && !signal?.aborted && snapshot===state.current.identity)await channelDeleted(row.id);
         return true;
+    }
+    function channelSaved(row) {
+        setEditor(null);
+        if (row.access_only) {
+            if (state.current.selected?.id === row.id) {
+                clearPrivateState();
+                setExplorerOpen(true);
+            }
+            else setChannels(current => current.filter(item => item.id !== row.id));
+            indexRefresh.current?.request();
+        } else {
+            setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));
+            select(row);
+        }
+        refresh.current?.request();
     }
     async function openTask(task) {
         if (!task?.available || openingTask.current) return;
@@ -617,14 +727,16 @@ export default function ChannelModule() {
     if (!allowed) return <section className="slack_module"><p role="status">Slack requiere una sesión autorizada y permisos de acceso. Si cambiaste de cargo, vuelve a comprobar tu sesión.</p></section>;
     const groups=[...new Map([
         ...departments.map(row=>({...row,departmentId:row.id})),
+        ...readableScopes.departments.filter(row=>!departments.some(unit=>unit.id===row.id)).map(row=>({...row,departmentId:row.id})),
         ...servers.map(row=>({...row,id:`server:${row.id}`,serverId:row.id})),
+        ...readableScopes.servers.filter(row=>!servers.some(server=>server.id===row.id)).map(row=>({...row,id:`server:${row.id}`,serverId:row.id})),
         ...(selected?.server && !servers.some(row=>row.id===selected.server.id) ? [{...selected.server,id:`server:${selected.server.id}`,serverId:selected.server.id}]:[]),
         {id:'independent',name:'Independientes',can_create:canCreateIndependent},
     ].map(row=>[row.id,row])).values()];
     const activeServer=groups.find(row=>row.id===department) || groups[0];
     const matchingChannels=channels.filter(row=>channelServerKey(row)===activeServer?.id && channelMatches(row.name,query));
     async function chooseServer(row){
-        if(row.id===department){setExplorerOpen(true);return;}
+        if(row.id===department){setDepartment(row.id);setExplorerOpen(true);return;}
         if(await select(null)===false)return false;
         setChannels([]);setChannelNext(null);setDepartment(row.id);setQuery('');setExplorerOpen(true);
     }
@@ -641,6 +753,7 @@ export default function ChannelModule() {
         <aside id="slack_channel_browser" className="slack_sidebar" aria-label="Departamentos y canales" inert={sidebarLocked ? true:undefined} onKeyDown={event=>{if(event.key==='Escape' && selected){event.stopPropagation();hideExplorer();}}}>
             <header><div><h1 title={activeServer?.name}>{activeServer?.name || "Slack"}</h1>{activeServer?.private && <small>Privado</small>}</div>{activeServer?.can_edit_icon && <button type="button" aria-label="Cambiar imagen del servidor" title="Cambiar imagen del servidor" disabled={sending || recording} onClick={()=>setIconEditor(activeServer)}><ImagePlus size={17}/></button>}{activeServer?.private && activeServer.can_manage && <button type="button" aria-label="Configurar servidor" title="Invitaciones y configuración" onClick={()=>setServerEditor({...activeServer,id:activeServer.serverId})}><Settings2 size={17}/></button>}<button type="button" aria-label="Ocultar canales" title="Ocultar canales" onClick={hideExplorer}><PanelLeftClose size={18} aria-hidden="true"/></button></header>
             <div className="slack_channel_search"><span className="slack_field_label">Buscar canal</span><SearchField label="Buscar canal" value={query} onChange={setQuery} placeholder="Nombre del canal"/></div>
+            {catalogError && <p className="slack_error" role="alert">No se pudo cargar todo el catálogo de Slack. <button type="button" disabled={serverLoading} onClick={()=>reloadCatalog()}>Reintentar</button></p>}
             <details className="slack_filters"><summary><ListFilter size={15} aria-hidden="true"/>Filtrar canales</summary><div><label className="slack_archive_filter"><input type="checkbox" checked={archived} onChange={event=>setArchived(event.target.checked)}/> Incluir archivados</label></div></details>
             <ChannelCategories key={`${identity}:${activeServer?.id}`} server={activeServer} channels={matchingChannels} selectedId={selected?.id} loading={loading} query={query} disabled={sending || recording} unreadFor={unreadFor} onSelect={select} onCreateChannel={createInServer} onConfigureChannel={row=>setEditor({channel:row})} onDeleteChannel={removeChannel} onDenied={report} onChannelChanged={row=>{setChannels(current=>current.map(item=>item.id===row.id ? mergeChannelDetails(item,row):item));setSelected(current=>current?.id===row.id ? mergeChannelDetails(current,row):current);}}/>
             {channelNext && <button type="button" disabled={loading} onClick={async () => {setLoading(true);const controller=reads.current,querySnapshot=query,serverSnapshot=department;try {const page = await channelApi.list(archived,channelNext,{signal:controller.signal},{...channelServerFilters(serverSnapshot),...(query ? {q:query}:{})}); if (!controller.signal.aborted && mounted.current && querySnapshot===state.current.query && serverSnapshot===state.current.department) {setChannels(current => [...new Map([...current,...page.results].map(row => [row.id,row])).values()]); setChannelNext(page.next);}} catch(err) {if(!controller.signal.aborted)report(err);} finally {if (mounted.current && !controller.signal.aborted) setLoading(false);}}}>Cargar más canales</button>}
@@ -654,7 +767,7 @@ export default function ChannelModule() {
         </aside>
         <main className="slack_main" inert={iconEditor || serverEditor || libraryOpen || historyOpen || editor || accessEditor || taskPicker || imageEditor || mentionPicker ? true : undefined}>
 
-            <header className="slack_header"><button type="button" className="slack_back" aria-label="Ver canales" disabled={sending || recording} onClick={() => setExplorerOpen(true)}><ArrowLeft size={20} aria-hidden="true"/></button><div>{selected ? <><h2># {selected.name}</h2><Department value={selected.server || selected.department}/><p title={selected.description || ""}>{selected.description || "Comparte contexto y mantén las conversaciones organizadas."}</p></> : <><h2>El trabajo, en conversación</h2><p>Elige un canal o crea uno para tu departamento.</p></>}</div>{selected && <ChannelCatalog key={`${identity}:${selected.id}`} channel={selected} disabled={sending || recording || startingThread} onThread={openCatalogThread} onMessage={message=>setHistoryOpen({target:{kind:"channel",channel_id:selected.id,message_id:message.id,parent_id:message.parent_id}})} onDenied={report} onOpenChange={setCatalogOpen} openRequest={catalogRequest} onThreadChange={messageChanged} onRead={applyPersonalState}/>}{selected?.can_manage_access && <button type="button" className="slack_privacy" aria-label="Privacidad e invitaciones" title="Privacidad e invitaciones" disabled={sending || recording} onClick={manageAccess}><LockKeyhole size={17} aria-hidden="true"/></button>}<button type="button" className="slack_desktop_action" aria-label="Actualizar canales" onClick={()=>reloadCatalog()}><RefreshCw size={18} aria-hidden="true"/></button>{selected?.can_manage && <><button type="button" className="slack_desktop_action" aria-label="Configurar canal" disabled={sending || recording} onClick={() => setEditor({channel:selected})}><Settings2 size={18} aria-hidden="true"/></button><button type="button" className="slack_desktop_action" aria-label={selected.archived_at ? "Restaurar canal" : "Archivar canal"} disabled={sending || recording} onClick={archive}><Archive size={18} aria-hidden="true"/></button></>}<details className="slack_mobile_menu"><summary aria-label="Opciones del canal"><MoreHorizontal size={20} aria-hidden="true"/></summary><div role="group" aria-label="Acciones del canal">{selected && <button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;setLibraryOpen({id:selected.id,title:`# ${selected.name}`,parent:channelTab==="messages" ? parent?.id:null,identity});}}><Paperclip size={17} aria-hidden="true"/>Archivos y enlaces</button>}{selected?.can_manage_access && <button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest('details').open=false;manageAccess();}}><LockKeyhole size={17} aria-hidden="true"/>Privacidad e invitaciones</button>}<button type="button" onClick={event=>{event.currentTarget.closest("details").open=false;reloadCatalog();}}><RefreshCw size={17} aria-hidden="true"/>Actualizar canales</button>{selected?.can_manage && <><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;setEditor({channel:selected});}}><Settings2 size={17} aria-hidden="true"/>Configurar canal</button><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;archive();}}><Archive size={17} aria-hidden="true"/>{selected.archived_at ? "Restaurar canal" : "Archivar canal"}</button></>}</div></details></header>
+            <header className="slack_header"><button type="button" className="slack_back" aria-label="Ver canales" disabled={sending || recording} onClick={() => setExplorerOpen(true)}><ArrowLeft size={20} aria-hidden="true"/></button><div>{selected ? <><h2># {selected.name}</h2><Department value={selected.server || selected.department}/><p title={selected.description || ""}>{selected.description || "Comparte contexto y mantén las conversaciones organizadas."}</p></> : <><h2>El trabajo, en conversación</h2><p>Elige un canal o crea uno para tu departamento.</p></>}</div>{selected && <ChannelCatalog key={`${identity}:${selected.id}`} channel={selected} disabled={sending || recording || startingThread} onThread={openCatalogThread} onMessage={message=>setHistoryOpen({target:{kind:"channel",channel_id:selected.id,message_id:message.id,parent_id:message.parent_id}})} onDenied={report} onOpenChange={setCatalogOpen} openRequest={catalogRequest} onThreadChange={messageChanged} onRead={applyPersonalState}/>}{(selected?.server ? selected.server.can_manage : selected?.can_manage_access) && <button type="button" className="slack_privacy" aria-label="Privacidad e invitaciones" title="Privacidad e invitaciones" disabled={sending || recording} onClick={manageAccess}><LockKeyhole size={17} aria-hidden="true"/></button>}<button type="button" className="slack_desktop_action" aria-label="Actualizar canales" onClick={()=>reloadCatalog()}><RefreshCw size={18} aria-hidden="true"/></button>{selected?.can_configure && <><button type="button" className="slack_desktop_action" aria-label="Configurar canal" disabled={sending || recording} onClick={() => setEditor({channel:selected})}><Settings2 size={18} aria-hidden="true"/></button><button type="button" className="slack_desktop_action" aria-label={selected.archived_at ? "Restaurar canal" : "Archivar canal"} disabled={sending || recording} onClick={archive}><Archive size={18} aria-hidden="true"/></button></>}<details className="slack_mobile_menu"><summary aria-label="Opciones del canal"><MoreHorizontal size={20} aria-hidden="true"/></summary><div role="group" aria-label="Acciones del canal">{selected && <button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;setLibraryOpen({id:selected.id,title:`# ${selected.name}`,parent:channelTab==="messages" ? parent?.id:null,identity});}}><Paperclip size={17} aria-hidden="true"/>Archivos y enlaces</button>}{(selected?.server ? selected.server.can_manage : selected?.can_manage_access) && <button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest('details').open=false;manageAccess();}}><LockKeyhole size={17} aria-hidden="true"/>Privacidad e invitaciones</button>}<button type="button" onClick={event=>{event.currentTarget.closest("details").open=false;reloadCatalog();}}><RefreshCw size={17} aria-hidden="true"/>Actualizar canales</button>{selected?.can_configure && <><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;setEditor({channel:selected});}}><Settings2 size={17} aria-hidden="true"/>Configurar canal</button><button type="button" disabled={sending || recording} onClick={event=>{event.currentTarget.closest("details").open=false;archive();}}><Archive size={17} aria-hidden="true"/>{selected.archived_at ? "Restaurar canal" : "Archivar canal"}</button></>}</div></details></header>
             {!selected && <section className="slack_welcome"><Hash size={34} aria-hidden="true"/><h3>Un espacio para cada conversación</h3><p>Elige un servidor de la barra y abre uno de sus canales de texto para ver mensajes y páginas.</p><div><button type="button" onClick={()=>setExplorerOpen(true)}><Search size={16} aria-hidden="true"/>Explorar canales</button>{activeServer?.can_create && <button type="button" className="slack_primary" disabled={sending || recording} onClick={createInServer}><Plus size={16} aria-hidden="true"/>Crear un canal</button>}</div></section>}
             {error && <p role="alert" className="slack_error">{error}</p>}
             {notice && <p role="status" className="slack_notice">{notice}</p>}
@@ -717,7 +830,7 @@ export default function ChannelModule() {
                 </section>
             </div>}
         </main>
-        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onDelete={removeChannel} onSaved={row => {setEditor(null); if(!row.access_only){setChannels(current=>[...current.filter(item=>item.id!==row.id),mergeChannelDetails(current.find(item=>item.id===row.id),row)].sort((a,b)=>a.name.localeCompare(b.name,"es")));select(row);}refresh.current?.request();}}/>}
+        {editor && <ChannelEditor channel={editor.channel} scope={editor.scope} departments={departments} canCreateIndependent={canCreateIndependent} onClose={() => setEditor(null)} onDelete={removeChannel} onSaved={channelSaved} onConflict={()=>refresh.current?.request()}/>}
         {iconEditor && <ServerIconEditor server={iconEditor} onClose={()=>setIconEditor(null)} onSaved={value=>{const row=iconEditor;setIconEditor(null);if(row.private){setServers(current=>current.map(item=>item.id===row.serverId ? {...item,...value}:item));setSelected(current=>current?.server?.id===row.serverId ? {...current,server:{...current.server,...value}}:current);}else setDepartments(current=>current.map(item=>item.id===row.id ? {...item,...value}:item));}}/>}
         {serverEditor && <ServerEditor server={serverEditor.create ? null:serverEditor} onClose={()=>setServerEditor(null)} onSaved={serverSaved} onDeleted={serverDeleted}/>}
         {accessEditor && <ChannelAccessEditor channel={accessEditor.channel} onClose={()=>setAccessEditor(null)} onSaved={()=>{clearPrivateState();setNotice("Acceso guardado. Selecciona de nuevo un canal para verificar tus permisos actuales.");refresh.current?.request();}}/>}

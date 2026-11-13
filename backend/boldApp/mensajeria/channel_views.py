@@ -21,7 +21,7 @@ from .channel_unread import channel_states, thread_counts, unread_messages
 from .channel_notifications import notify_channel_message, mark_channel_notices_read, mark_unfollowed_notices_read
 from .media import BoundedUpload, MAX_BYTES, media_data, private_media_response
 from .models import PrivateServer, DepartmentChannel, ChannelAccessRule, ChannelMessage, ChannelReadState, ChannelSubscription, ChannelThreadReadState
-from .serializers import StrictInputSerializer, StagedMessageInput, EditMessageSerializer
+from .serializers import AccessMember, ChannelAccessSettings, StrictInputSerializer, StagedMessageInput, EditMessageSerializer
 from .views import PrivateChatView, Conflict
 from .channel_search import channel_matches
 from .page_content import page_card, prime_page_cards
@@ -48,6 +48,7 @@ class UpdateChannel(StrictInputSerializer):
     description = serializers.CharField(max_length=500, allow_blank=True, required=False)
     color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", max_length=7, allow_blank=True, required=False)
     archived = serializers.BooleanField(required=False)
+    access = ChannelAccessSettings(required=False)
     version = serializers.IntegerField(min_value=1)
 
     def validate(self, data):
@@ -120,6 +121,7 @@ def channel_data(channel, policy):
             "version": channel.version, "activity_version": channel.activity_version,
             "created_at": channel.created_at, "updated_at": channel.updated_at,
             "can_manage": policy.allows("slack.channel.manage", channel.unit, channel.pk),
+            "can_configure": policy.can_configure(channel),
             "can_manage_access": policy.allows("slack.channel.access", channel.unit, channel.pk),
             "can_send": not channel.archived_at and policy.allows("slack.message.create", channel.unit, channel.pk),
             "can_read_automations": settings.MESSAGING_AUTOMATIONS_ENABLED and policy.allows('slack.automation.read', channel.unit, channel.pk),
@@ -243,7 +245,7 @@ class ChannelListView(SlackView):
         unit = get_object_or_404(OrganizationalUnit.objects.select_for_update(), pk=values["unit_id"]) if values["unit_id"] else None
         self.policy().require("slack.channel.read", unit)
         self.policy().require("slack.channel.create", unit)
-        from .channel_access_views import AccessMember, validate_access
+        from .channel_access_views import validate_access
         member_form = AccessMember(data=values["members"], many=True)
         member_form.is_valid(raise_exception=True)
         members = member_form.validated_data
@@ -281,12 +283,20 @@ class ChannelDetailView(SlackView):
     @transaction.atomic
     def patch(self, request, channel_id):
         channel = self.channel(channel_id, lock=True)
-        self.policy().require("slack.channel.manage", channel.unit, channel.pk)
+        policy = self.policy()
+        policy.require_configuration(channel)
         form = UpdateChannel(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
         if values["version"] != channel.version:
-            raise Conflict("Otro empleado modificó el canal. Actualízalo antes de volver a guardar.")
+            raise Conflict("El canal cambió. Cierra esta configuración y vuelve a abrirla para cargar la última versión.")
+        access_before = None
+        if "access" in values:
+            from .channel_access_views import change_channel_access, publish_access_change
+            policy.require("slack.channel.access", channel.unit, channel.pk)
+            before, changed = change_channel_access(channel, values["access"])
+            if changed:
+                access_before = before
         for key in ("name", "description", "color"):
             if key in values:
                 setattr(channel, key, values[key])
@@ -296,16 +306,23 @@ class ChannelDetailView(SlackView):
         channel.updated_at = timezone.now()
         try:
             with transaction.atomic():
-                channel.save(update_fields=["name", "description", "color", "archived_at", "version", "updated_at"])
+                channel.save(update_fields=["name", "description", "color", "archived_at", "visibility", "version", "updated_at"])
         except IntegrityError:
             raise Conflict("Ya existe un canal con ese nombre en el departamento.")
-        publish_channel(channel, "channel.updated")
-        return Response(channel_data(channel, self.policy()))
+        if access_before is not None:
+            publish_access_change(channel, request, access_before)
+            policy.prime([channel])
+        else:
+            publish_channel(channel, "channel.updated")
+        if not policy.allows("slack.channel.read", channel.unit, channel.pk):
+            return Response({"id": str(channel.pk), "name": channel.name, "visibility": channel.visibility,
+                "version": channel.version, "access_only": True})
+        return Response(channel_data(channel, policy))
 
     @transaction.atomic
     def delete(self, request, channel_id):
         channel = self.channel(channel_id, lock=True)
-        self.policy().require("slack.channel.manage", channel.unit, channel.pk)
+        self.policy().require_configuration(channel)
         form = DeleteChannel(data=request.data)
         form.is_valid(raise_exception=True)
         if form.validated_data["version"] != channel.version:

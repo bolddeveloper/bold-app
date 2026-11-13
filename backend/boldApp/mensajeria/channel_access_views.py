@@ -13,20 +13,13 @@ from boldApp.core.signals import dispatch_authorization_invalidation
 from .channel_events import publish_channel
 from .channel_views import SlackView, ChannelPages, department_data
 from .models import DepartmentChannel, ChannelAccessRule, ChannelAccessEpoch
-from .serializers import StrictInputSerializer
+from .serializers import ChannelAccessSettings
 from .views import Conflict
 from .channel_people import with_identity, person_data
 from rest_framework.pagination import CursorPagination
 
 
-class AccessMember(StrictInputSerializer):
-    employee_id = serializers.UUIDField()
-    access = serializers.ChoiceField(choices=["read", "write", "blocked"])
-
-
-class ChannelAccessInput(StrictInputSerializer):
-    visibility = serializers.ChoiceField(choices=["public", "department", "private"])
-    members = AccessMember(many=True, max_length=200)
+class ChannelAccessInput(ChannelAccessSettings):
     version = serializers.IntegerField(min_value=1)
 
 
@@ -82,6 +75,31 @@ def invalidate_access(channel, before, after):
     transaction.on_commit(dispatch_authorization_invalidation)
 
 
+def change_channel_access(channel, values):
+    if channel.server_id:
+        raise ValidationError("Este canal hereda las invitaciones de su servidor. Adminístralas desde el servidor.")
+    validate_access(values["visibility"], values["members"], channel.unit_id)
+    before = access_data(channel)
+    old_rules = {row["employee_id"]: row["access"] for row in before["members"]}
+    new_rules = {str(row["employee_id"]): row["access"] for row in values["members"]}
+    if channel.visibility == values["visibility"] and old_rules == new_rules:
+        return before, False
+    # The caller holds the same channel lock as message sends and edits.
+    channel.access_rules.all().delete()
+    ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=channel, **row) for row in values["members"]])
+    channel.visibility = values["visibility"]
+    return before, True
+
+
+def publish_access_change(channel, request, before):
+    after = access_data(channel)
+    record_system_event("slack.channel.access_changed", request, module_code="slack", unit=channel.unit,
+        target_type="slack_channel", target_id=channel.pk, changes={"before": before, "after": after})
+    invalidate_access(channel, before, after)
+    publish_channel(channel, "channel.access_changed")
+    return after
+
+
 class ChannelAccessView(SlackView):
     def managed_channel(self, channel_id, *, lock=False):
         rows = DepartmentChannel.objects.select_related("unit")
@@ -106,32 +124,21 @@ class ChannelAccessView(SlackView):
         values = form.validated_data
         if values["version"] != channel.version:
             raise Conflict("El canal cambió. Actualiza su configuración antes de guardar.")
-        validate_access(values["visibility"], values["members"], channel.unit_id)
-        before = access_data(channel)
-        if channel.visibility == values["visibility"] and {row["employee_id"]: row["access"] for row in before["members"]} == {
-                str(row["employee_id"]): row["access"] for row in values["members"]}:
+        before, changed = change_channel_access(channel, values)
+        if not changed:
             return Response(before)
-        # The same channel row is locked by sends/edits. Access revocation and
-        # message writes therefore serialize on PostgreSQL, not on client timing.
-        channel.access_rules.all().delete()
-        ChannelAccessRule.objects.bulk_create([ChannelAccessRule(channel=channel, **row) for row in values["members"]])
-        channel.visibility = values["visibility"]
         channel.version += 1
         channel.updated_at = timezone.now()
         channel.save(update_fields=["visibility", "version", "updated_at"])
-        after = access_data(channel)
-        record_system_event("slack.channel.access_changed", request, module_code="slack", unit=channel.unit,
-            target_type="slack_channel", target_id=channel.pk, changes={"before": before, "after": after})
-        invalidate_access(channel, before, after)
-        publish_channel(channel, "channel.access_changed")
-        return Response(after)
+        return Response(publish_access_change(channel, request, before))
 
 
 class ChannelManagementView(SlackView):
     def get(self, request):
         # This catalog exposes access settings, never message bodies, previews,
         # files, activity counters or unread state to an uninvited manager.
-        rows = DepartmentChannel.objects.filter(server__isnull=True).select_related("unit", "creator").order_by("name", "id")
+        rows = DepartmentChannel.objects.filter(server__isnull=True, deleted_at__isnull=True,
+            creator__employee_id=self.actor()).select_related("unit", "creator").order_by("name", "id")
         policy = self.policy()
         candidates = list(rows)
         policy.prime(candidates)

@@ -11,6 +11,16 @@ class StrictInputSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
+class AccessMember(StrictInputSerializer):
+    employee_id = serializers.UUIDField()
+    access = serializers.ChoiceField(choices=["read", "write", "blocked"])
+
+
+class ChannelAccessSettings(StrictInputSerializer):
+    visibility = serializers.ChoiceField(choices=["public", "department", "private"])
+    members = AccessMember(many=True, max_length=200)
+
+
 class OpenConversationSerializer(StrictInputSerializer):
     employee_id = serializers.UUIDField()
 
