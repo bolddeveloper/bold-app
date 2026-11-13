@@ -6,9 +6,9 @@ export function mentionPeople(people, query = "") {
     const clean = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
     const needle = clean(query.trim()), seen = new Set();
     return people.filter(person => {
-        const email = person.email?.toLowerCase();
+        const key = person.privateAssistant ? person.employee_id : person.email?.toLowerCase();
         const aliases=Array.isArray(person.aliases) ? person.aliases.join(' '):'';
-        if (!email || seen.has(email) || !clean(`${person.name} ${email} ${aliases}`).includes(needle)) return false;
-        seen.add(email); return true;
+        if (!key || seen.has(key) || !clean(`${person.name} ${person.email || ''} ${aliases}`).includes(needle)) return false;
+        seen.add(key); return true;
     }).slice(0, 6);
 }

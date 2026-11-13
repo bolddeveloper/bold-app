@@ -118,6 +118,10 @@ test("channel API uses authenticated bounded endpoints and never supplies author
     assert.match(calls[2][0],/\/tasks\/\?q=Revisi%C3%B3n$/);
     await api.task(parent);
     assert.equal(calls[3][0],`/api/v2/tasks/${parent}/`);
+    await api.send(channel,{body:'@soportebold Resume el canal',client_id:parent,parent_id:null});
+    assert.equal(calls[4][1].body.support_in_channel,true);
+    await api.send(channel,{body:'`@soportebold`',client_id:parent,parent_id:null});
+    assert.equal(calls[5][1].body.support_in_channel,undefined);
 });
 
 test("channel refresh coalesces bursts, preserves a trailing event and never polls while idle", async () => {
@@ -147,9 +151,10 @@ test("channel media stages only the file, publishes JSON and keeps authenticated
     assert.deepEqual(calls[2][1].body,{body:'Contexto',client_id:parent,upload_id:channel});
     await api.media(channel,parent);
     assert.deepEqual(calls[3],[`/api/v2/messaging/channels/${channel}/messages/${parent}/media/`,{responseType:"blob"}]);
-    await api.sendMedia(channel,{body:"",client_id:parent,parent_id:channel,task_id:parent},file);
+    await api.sendMedia(channel,{body:"@soportebold Revisa la captura",client_id:parent,parent_id:channel,task_id:parent},file);
     assert.equal(calls[6][1].body.parent_id,channel);
     assert.equal(calls[6][1].body.task_id,parent);
+    assert.equal(calls[6][1].body.support_in_channel,true);
 });
 
 test("channel refresh aborts old identity work and stops after error without automatic retries", async () => {

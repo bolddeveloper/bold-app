@@ -2,12 +2,17 @@ import {http} from "../core/http_client.js";
 import {newestReactions} from './reaction_model.js';
 import {createStagedMediaSender} from './staged_media.js';
 import {createMediaDiscarder} from './discard_media.js';
+import {supportMentionText} from '../asistente/model.js';
 
 const root = "/api/v2/messaging/channels/";
 const id = value => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || "")) throw Error("Identificador de canal no válido.");
     return value;
 };
+
+function channelMessageValues(values) {
+    return supportMentionText(values.body || '') === null ? values : {...values,support_in_channel:true};
+}
 
 export function channelPage(collection, next, filters = {}) {
     const params = new URLSearchParams(filters);
@@ -71,8 +76,8 @@ export function createChannelApi(client = http) {
         messages: (channel, parent, next, options) => client.request(channelPage(messages(channel), next, parent ? {parent:id(parent)} : {}), options),
         tasks: (channel, query, next, options, purpose) => client.request(channelPage(detail(channel)+"tasks/",next,{q:query,...(purpose==="page" ? {purpose:"page"}:{})}),options),
         task: (task, options) => client.request(`/api/v2/tasks/${id(task)}/`,options),
-        send: (channel, values, options) => client.request(messages(channel), {...options, method:"POST", body:values}),
-        sendMedia:(channel,values,file,options)=>sendMedia('channel',id(channel),values,file,options),
+        send: (channel, values, options) => client.request(messages(channel), {...options, method:"POST", body:channelMessageValues(values)}),
+        sendMedia:(channel,values,file,options)=>sendMedia('channel',id(channel),channelMessageValues(values),file,options),
         discardMedia:(channel,clientId,options)=>discard('channel',id(channel),clientId,options),
         media: (channel, message, options) => client.request(messages(channel) + id(message) + "/media/", {...options, responseType:"blob"}),
         edit: (channel, message, values, options) => client.request(messages(channel) + id(message) + "/", {...options, method:"PATCH", body:values}),
@@ -96,7 +101,7 @@ export function channelError(error) {
     if (error?.status === 429) return "Demasiadas acciones seguidas. Conservamos el texto; espera antes de reintentar.";
     const fields = error?.fields;
     const access = fields?.access;
-    const detail = (Array.isArray(fields) ? fields:[fields?.detail,fields?.name,fields?.title,fields?.thread_title,fields?.description,fields?.unit_id,fields?.server_id,fields?.image,fields?.version,fields?.visibility,fields?.members,access?.visibility,access?.members,access?.non_field_errors,fields?.body,fields?.file,fields?.non_field_errors].flat()).find(value => typeof value === "string" && value.length <= 500);
+    const detail = (Array.isArray(fields) ? fields:[fields?.detail,fields?.name,fields?.title,fields?.thread_title,fields?.description,fields?.unit_id,fields?.server_id,fields?.image,fields?.version,fields?.visibility,fields?.members,access?.visibility,access?.members,access?.non_field_errors,fields?.body,fields?.assistant_private,fields?.file,fields?.non_field_errors].flat()).find(value => typeof value === "string" && value.length <= 500);
     if (detail) return detail;
     if (error?.status === 403) return "Tu asignación activa no permite esta acción en Slack.";
     if (error?.status === 409) return "El contenido cambió en otra ventana. Conservamos tu texto; actualiza antes de volver a guardar.";

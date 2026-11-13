@@ -4,20 +4,20 @@ export const fields={title:'Título',summary:'Título',description:'Descripción
 export const busyStates=new Set(['intent_queued','intent_processing','prepare_queued','preparing','execute_queued','executing']);
 Object.assign(fields,{start_date:'Fecha de inicio',end_date:'Fecha de cierre',color_hex:'Color del proyecto',metric:'Métrica',group_by:'Agrupación',from:'Desde',to:'Hasta',timezone:'Zona horaria',filters:'Filtros',scope:'Alcance',date_basis:'Fecha de referencia',visualization:'Visualización',include_subtasks:'Incluir subtareas',assignments:'Personas',projects:'Proyectos',units:'Departamentos',statuses:'Estados',tasks:'Tareas'});
 export function openAssistant(detail={}){globalThis.window?.dispatchEvent(new CustomEvent('bold:assistant-open',{detail}));}
-export function privateMentionText(body){
-    const literals=/```[\s\S]*?```|`[^`\n]*`|[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+|mailto:\S+/g;
+export function supportMentionText(body){
+    const literals=/```[\s\S]*?```|`[^`\n]*`|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+|mailto:\S+/gi;
     const clean=body.replace(literals,match=>' '.repeat(match.length));
     const match=/(?<![\w@.+%-])(?:@soporte[ \t]+bold|@soportebold(?:@bold\.gt)?)(?![\w@%+-]|\.[\w])/i.exec(clean);
     return match?(body.slice(0,match.index)+body.slice(match.index+match[0].length)).trim():null;
 }
 export function routeMention(person,assignment,body,context={}){
-    if(!person?.is_bot||!assignment?.assistant_enabled)return false;
+    if(!person?.privateAssistant||!assignment?.assistant_enabled)return false;
     openAssistant({text:body,context});return true;
 }
 export function supportsDictation(){return Boolean(globalThis.SpeechRecognition||globalThis.webkitSpeechRecognition);}
 export function assistantMentionPeople(rows,assignment){
     if(!assignment?.assistant_enabled)return rows;
-    return [...rows.filter(row=>!row.is_bot),{employee_id:'assistant-private',is_bot:true,name:'soportebold · privado',email:'soportebold@bold.gt',token:'@soportebold@bold.gt'}];
+    return [...rows,{employee_id:'assistant-private',is_bot:true,privateAssistant:true,name:'soportebold · privado',aliases:['Soporte BOLD','soportebold privado']}];
 }
 export function startDictation({onText,onError,onEnd}){
     const Recognition=globalThis.SpeechRecognition||globalThis.webkitSpeechRecognition;

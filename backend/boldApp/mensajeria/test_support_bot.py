@@ -124,6 +124,31 @@ class SupportTests(TestCase):
         saved = next(row for row in history if row['id']==source['id'])
         self.assertEqual(saved['mentions'], source['mentions'])
 
+    def test_channel_support_routes_in_the_private_pilot_only_with_explicit_channel_intent(self):
+        with override_settings(BOLD_ASSISTANT_ENABLED=True, BOLD_ASSISTANT_PILOT_UNIT_IDS=(str(self.it.pk),)):
+            body = BOT_TOKEN + ' ¿Qué tareas tenemos?'
+            legacy = self.send(body)
+            self.assertEqual(legacy.status_code, 400)
+            self.assertIn('assistant_private', legacy.data)
+            self.assertFalse(ChannelMessage.objects.exists())
+            self.assertFalse(SupportRequest.objects.exists())
+
+            root = self.send(body, support_in_channel=True)
+            self.assertEqual(root.status_code, 201, root.data)
+            root_id = root.data['message']['id']
+            retry = self.client.post(self.url+'messages/', {
+                'body': body, 'support_in_channel': True, 'client_id': root.data['message']['client_id'],
+            }, format='json')
+            self.assertEqual(retry.status_code, 200, retry.data)
+            thread = self.send('Conversación abierta', thread_title='Ayuda').data['message']
+            reply = self.send('@soportebold Resume el hilo', parent_id=thread['id'], support_in_channel=True)
+            self.assertEqual(reply.status_code, 201, reply.data)
+            self.assertEqual(SupportRequest.objects.count(), 2)
+            self.assertEqual(drain(), 2)
+            self.assertIsNone(SupportRequest.objects.get(source_id=root_id).reply.parent_id)
+            self.assertEqual(str(SupportRequest.objects.get(source_id=reply.data['message']['id']).reply.parent_id), thread['id'])
+            self.assertEqual(self.model.call_count, 2)
+
     def test_bot_suggestion_does_not_bypass_channel_access_or_disabled_support(self):
         with override_settings(BOLD_SUPPORT_ENABLED=False):
             response = self.client.get(self.url+'mention-people/', {'q':'soporte'})

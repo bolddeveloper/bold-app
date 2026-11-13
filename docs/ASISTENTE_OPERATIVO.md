@@ -1,6 +1,6 @@
 # Asistente operativo privado de BOLD
 
-El asistente prepara propuestas privadas y ejecuta exclusivamente la revisión aprobada por el empleado. Codex interpreta texto y devuelve JSON; BOLD conserva la autorización y llama a sus servicios existentes con la sesión y asignación del solicitante. Esta entrega se activa mediante un piloto de departamentos explícitos, inicialmente IT. El soporte de lectura anterior continúa disponible fuera del piloto.
+El asistente prepara propuestas privadas y ejecuta exclusivamente la revisión aprobada por el empleado. Codex interpreta texto y devuelve JSON. BOLD conserva la autorización y llama a sus servicios existentes con la sesión y asignación del solicitante. El piloto se activa para departamentos explícitos, inicialmente IT. En Slack, el bot de lectura está disponible para quienes pueden escribir en el canal.
 
 ## Activación
 
@@ -8,7 +8,7 @@ El asistente prepara propuestas privadas y ejecuta exclusivamente la revisión a
 2. Mantener la configuración de [Soporte BOLD](SOPORTE_BOLD.md), su sesión de ChatGPT en Codex y su worker. Se requiere `BOLD_SUPPORT_ENABLED=true`; no se utiliza una clave de API.
 3. Configurar `BOLD_ASSISTANT_ENABLED=true` y `BOLD_ASSISTANT_PILOT_UNIT_IDS=UUID_IT`. Para mantener también Informes restringido a IT, configurar `REPORTS_PILOT_ENABLED=true` y `REPORTS_PILOT_UNIT_IDS=UUID_IT`. Se aceptan varios IDs separados por comas, pero no se añaden departamentos por su nombre. Sin IDs no se concede acceso, tampoco al propietario.
 4. Ejecutar `python manage.py run_support_bot --check` y reiniciar los procesos del entorno. El chequeo comprueba configuración y sesión sin inferir ni ejecutar propuestas. En desarrollo el ASGI existente atiende la cola; en producción se mantiene un único servicio de soporte y Redis compartido. No iniciar un segundo servicio local sin necesidad.
-5. Acceder con una asignación de IT. Abrir el asistente desde Informes, una tarea o proyecto, o seleccionar `@soportebold` en Chat/Slack. La petición pasa al espacio privado antes de publicarse. Clientes antiguos que intenten publicarla reciben un rechazo y conservan su borrador.
+5. Acceder con una asignación de IT. Abrir el asistente desde Informes, una tarea o un proyecto, o seleccionar **soportebold · privado** en Chat o Slack. En Slack, la opción **soportebold** inserta la mención para que el bot de lectura responda en el canal o hilo al enviarla. Los clientes antiguos conservan la protección para las menciones al asistente.
 
 Compose transmite las variables de ambos pilotos a los servicios existentes. No crea recursos adicionales de Cloudflare ni habilita facturación API. Desactivar la bandera detiene el acceso y el procesamiento operativo; no elimina solicitudes ni revierte cambios ya aplicados.
 

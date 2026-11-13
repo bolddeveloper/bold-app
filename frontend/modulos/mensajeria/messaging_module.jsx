@@ -40,7 +40,7 @@ import {hasChatAttention} from '../core/reading_attention.js';
 import MentionPicker from "./mention_picker.jsx";
 import MentionText from "./mention_text.jsx";
 import {chatMentionAtCaret,insertMention} from "./mention_model.js";
-import {routeMention,privateMentionText,openAssistant} from '../asistente/model.js';
+import {routeMention,supportMentionText,openAssistant} from '../asistente/model.js';
 import ChatMentionSuggestions from "./chat_mention_suggestions.jsx";
 
 function Avatar({person, status}) {
@@ -403,7 +403,7 @@ export default function MessagingModule() {
         const id = conversation?.id, body = (edit ? edit.body : drafts[id] || "").trim();
         const file = !edit ? mediaDrafts[id] : null;
         const images = !edit ? queueStore.current[id] || [] : [];
-        if(!edit&&core.activeAssignment?.assistant_enabled){const text=privateMentionText(body);if(text!==null){if(file||images.length){setError('El asistente admite texto y dictado. Retira los adjuntos antes de abrir la petición privada.');return;}openAssistant({text});changeComposer('');return;}}
+        if(!edit&&core.activeAssignment?.assistant_enabled){const text=supportMentionText(body);if(text!==null){if(file||images.length){setError('El asistente admite texto y dictado. Retira los adjuntos antes de abrir la petición privada.');return;}openAssistant({text});changeComposer('');return;}}
         if (!id || (!body && !file && !edit?.media && !images.length) || busy.current || loading || recording || imageEditing || mentionPicker || composerRecovery.blocked || edit && !canEditMessage(edit,actorId,Date.now()+offset.current) || !conversation.peer.available) return;
         busy.current = true; setSending(true); setError(""); setNotice(""); setEmojiOpen(false);
         const controller = new AbortController(); writes.current = controller;

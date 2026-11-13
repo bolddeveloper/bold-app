@@ -100,7 +100,7 @@ export function createStagedMediaSender(client,{events=globalThis.window,setTime
         if(row.state==='attached')return confirmed(row.message_id);
         stage('publishing',{id:row.id});
         const body={client_id:values.client_id,body:values.body,upload_id:row.id};
-        if(kind==='channel')for(const key of ['parent_id','task_id'])if(values[key]!=null)body[key]=values[key];
+        if(kind==='channel')for(const key of ['parent_id','task_id','support_in_channel'])if(values[key]!=null)body[key]=values[key];
         const result=await request(base+'messages/',{method:'POST',body});
         signal?.throwIfAborted();
         return result;

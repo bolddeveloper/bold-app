@@ -1,21 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assistantMentionPeople,privateMentionText,routeMention,startDictation} from './model.js';
-test('support references route privately only for the configured pilot',()=>{
-    const people=[{employee_id:'one',name:'Ana'},{employee_id:'bot',is_bot:true,name:'soportebold'}];
-    assert.equal(assistantMentionPeople(people,{assistant_enabled:false}),people);
-    const pilot=assistantMentionPeople(people,{assistant_enabled:true});
-    assert.equal(pilot.filter(row=>row.is_bot).length,1);
-    assert.equal(pilot.at(-1).employee_id,'assistant-private');
-    assert.equal(routeMention({is_bot:true},{assistant_enabled:false},'Una tarea'),false);
+import {assistantMentionPeople,supportMentionText,routeMention,startDictation} from './model.js';
+import {mentionPeople} from '../tareas/src/mentions.js';
+test('channel support and the private assistant are separate choices within the pilot',()=>{
+    const bot={employee_id:'bot',is_bot:true,name:'soportebold',email:'soportebold@bold.gt',token:'@soportebold@bold.gt'};
+    const people=[{employee_id:'one',name:'Ana',email:'ana@bold.gt'},bot];
+    const outside={assistant_enabled:false},inside={assistant_enabled:true};
+    assert.equal(assistantMentionPeople(people,outside),people);
+    const [channel,privateAssistant]=mentionPeople(assistantMentionPeople(people,inside),'soportebold');
+    assert.equal(channel,bot);
+    assert.equal(privateAssistant.employee_id,'assistant-private');
+    assert.equal(privateAssistant.token,undefined);
+    assert.equal(routeMention(channel,inside,'Una tarea'),false);
+    assert.equal(routeMention(privateAssistant,outside,'Una tarea'),false);
 });
 test('literal support mentions are detected without following quoted text or links',()=>{
-    assert.equal(privateMentionText('@soportebold Crea dos tareas'),'Crea dos tareas');
-    assert.equal(privateMentionText('Consulta @soporte bold mañana'),'Consulta  mañana');
-    assert.equal(privateMentionText('`@soportebold no ejecutar`'),null);
-    assert.equal(privateMentionText('https://example.org/@soportebold'),null);
-    assert.equal(privateMentionText('usuario@soportebold.gt'),null);
-    assert.equal(privateMentionText('@soportebold@bold.gt resume'),'resume');
+    assert.equal(supportMentionText('@soportebold Crea dos tareas'),'Crea dos tareas');
+    assert.equal(supportMentionText('Consulta @soporte bold mañana'),'Consulta  mañana');
+    assert.equal(supportMentionText('`@soportebold no ejecutar`'),null);
+    assert.equal(supportMentionText('https://example.org/@soportebold'),null);
+    assert.equal(supportMentionText('usuario@soportebold.gt'),null);
+    assert.equal(supportMentionText('@soportebold@bold.gt resume'),'resume');
 });
 test('dictation yields editable text and never submits an action',()=>{
     let instance,text='',ended=false;

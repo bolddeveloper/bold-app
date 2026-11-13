@@ -47,7 +47,7 @@ import {readingScope} from '../core/reading_attention.js';
 import MentionPicker from "./mention_picker.jsx";
 import MentionText from "./mention_text.jsx";
 import {insertMention,chatMentionAtCaret} from "./mention_model.js";
-import {routeMention,privateMentionText,openAssistant} from '../asistente/model.js';
+import {routeMention} from '../asistente/model.js';
 import MentionSuggestions from "./chat_mention_suggestions.jsx";
 
 import ServerEditor from './server_editor.jsx';
@@ -546,7 +546,6 @@ export default function ChannelModule() {
         if(threadReadOnly)return;
         if (busy.current || recording || composerRecovery.blocked || edit?.conflict || edit?.can_edit===false || !(draft.trim() || draftTask || (!edit && attachments.length) || edit?.media) || !selected?.can_send) return;
         if(startingThread)return;
-        if(!edit&&core.activeAssignment?.assistant_enabled){const text=privateMentionText(draft);if(text!==null){if(attachments.length){setError('El asistente admite texto y dictado. Retira los adjuntos antes de abrir la petición privada.');return;}openAssistant({text,context:{channel_id:selected.id}});changeComposer('');return;}}
         if(!edit && parent && !parent.thread_started_at && threadName.trim() && !await startNamedThread())return;
         if (!edit && attachments.length) {await sendAttachments();return;}
         const snapshot = state.current, currentEdit = edit;
@@ -717,6 +716,7 @@ export default function ChannelModule() {
     function chooseMention(person,target){
         const current=mentionLive.current;
         if(!mounted.current || current.key!==target.key || current.blocked){setMentionPicker(null);setInlineMention(null);return;}
+        if(person.privateAssistant && attachments.length){setError('Retira los adjuntos antes de abrir el asistente privado.');setMentionPicker(null);setInlineMention(null);return;}
         if(!edit&&routeMention(person,core.activeAssignment,current.body.slice(0,target.start)+current.body.slice(target.end),{channel_id:selected.id})){changeComposer('');setMentionPicker(null);setInlineMention(null);return;}
         try{const value=insertMention(current.body,person,target.start,target.end),context=current.key;
             changeComposer(value.text);setMentionPicker(null);setInlineMention(null);

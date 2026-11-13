@@ -60,6 +60,7 @@ class UpdateChannel(StrictInputSerializer):
 class SendChannelMessage(StagedMessageInput):
     client_id = serializers.UUIDField()
     body = serializers.CharField(max_length=5000, allow_blank=True)
+    support_in_channel = serializers.BooleanField(required=False, default=False)
     parent_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     task_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     page_id = serializers.UUIDField(required=False, allow_null=True, default=None)
@@ -394,8 +395,10 @@ class ChannelMessageListView(SlackView):
         form = SendChannelMessage(data=request.data)
         form.is_valid(raise_exception=True)
         values = form.validated_data
-        from boldApp.asistente.mention_guard import prevent_public_request
-        prevent_public_request(request,values['body'])
+        if not values["support_in_channel"]:
+            # Older clients use the same mention to address the private assistant.
+            from boldApp.asistente.mention_guard import prevent_public_request
+            prevent_public_request(request, values["body"])
         prepared = None
         staged = None
         if values['upload_id']:

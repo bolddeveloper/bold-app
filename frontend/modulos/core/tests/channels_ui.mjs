@@ -442,6 +442,41 @@ try {
     assert.equal(document.querySelector('#slack_message').value,abandonedMedia.values.body);assert.ok(document.querySelector('.messaging_image_queue'));
     channelApi.sendMedia=normalMedia;submit();await waitFor(()=>!document.querySelector('.messaging_image_queue'));
     assert.notEqual(mediaAttempts.at(-1).values.client_id,abandonedMedia.values.client_id);assert.equal(mediaAttempts.at(-1).file,abandonedMedia.file);
+
+    const normalMentions=channelApi.mentionPeople, privateOpens=[];
+    const rememberPrivate=event=>privateOpens.push(event.detail);
+    window.addEventListener('bold:assistant-open',rememberPrivate);
+    core.activeAssignment.assistant_enabled=true;
+    channelApi.mentionPeople=async(_,query)=>({
+        results:'soportebold'.includes(query) ? [{employee_id:'support',name:'soportebold',email:'soportebold@bold.gt',token:'@soportebold@bold.gt',is_bot:true}] : [],
+        refine:false,
+    });
+    const supportField=document.querySelector('#slack_message'), beforeSupport=sends;
+    const supportOptions=()=>document.querySelectorAll('.messaging_mention_suggestions [role=option]');
+    input(supportField,'@soportebold');await waitFor(()=>supportOptions().length===2);
+    assert.match(supportOptions()[0].textContent,/Responde aquí al enviar/);
+    assert.match(supportOptions()[1].textContent,/Abrir asistente privado/);
+    supportOptions()[0].click();await waitFor(()=>!supportOptions().length);
+    assert.equal(supportField.value,'@soportebold@bold.gt ');
+    assert.equal(sends,beforeSupport,'choosing a channel mention only inserts it');
+    assert.equal(privateOpens.length,0);
+    input(supportField,'@soportebold@bold.gt ¿Qué acordamos?');await settle();submit();
+    await waitFor(()=>sends===beforeSupport+1 && !supportField.value);
+    assert.equal(rows.at(-1).parent_id,null);
+    assert.equal(privateOpens.length,0);
+    input(supportField,'@soportebold resume la conversación');
+    await waitFor(()=>document.querySelector('.messaging_mention_suggestions [aria-busy="false"]') && !supportOptions().length);
+    supportField.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    await waitFor(()=>sends===beforeSupport+2 && !supportField.value);
+    assert.equal(rows.at(-1).body,'@soportebold resume la conversación');
+    input(supportField,'Revisa mi tarea @soportebold');await waitFor(()=>supportOptions().length===2);
+    supportOptions()[1].click();await waitFor(()=>privateOpens.length===1 && !supportField.value);
+    assert.deepEqual(privateOpens[0],{text:'Revisa mi tarea ',context:{channel_id:channelId}});
+    assert.equal(sends,beforeSupport+2,'choosing the private assistant never publishes to Slack');
+    window.removeEventListener('bold:assistant-open',rememberPrivate);
+    core.activeAssignment.assistant_enabled=false;
+    channelApi.mentionPeople=normalMentions;
+
     // A notification opens an authorized root/thread through Shell's target,
     // not a blind injection of the notification's content into the view.
     const hiddenReply=makeMessage(String(rows.length+1),'Respuesta pendiente','1','peer');rows.push(hiddenReply);
